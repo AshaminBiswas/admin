@@ -1,0 +1,145 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --bg-main: #FDFDF4;
+    --bg-card: #FFFFFF;
+    --bg-input: #F7F7EB;
+    --border-color: #E2E2D3;
+    --text-main: #18181B;
+    --text-muted: #52525B;
+  }
+
+  html.dark {
+    --bg-main: #09090B;
+    --bg-card: #18181B;
+    --bg-input: #09090B;
+    --border-color: #27272A;
+    --text-main: #FAFAFA;
+    --text-muted: #A1A1AA;
+  }
+
+  body, html {
+    font-family: 'Poppins', 'Nunito', sans-serif;
+    background-color: var(--bg-main);
+    color: var(--text-main);
+    overflow-x: hidden;
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+}
+
+/* =========================================================
+   LIGHT MODE OVERRIDES (#FDFDF4 Background)
+   ========================================================= */
+html:not(.dark) {
+  background-color: #FDFDF4 !important;
+  color: #18181B !important;
+}
+
+html:not(.dark) body {
+  background-color: #FDFDF4 !important;
+  color: #18181B !important;
+}
+
+/* Background Hex Overrides in Light Mode */
+html:not(.dark) .bg-\[\#09090B\],
+html:not(.dark) .bg-\[\#09090B\]\/90,
+html:not(.dark) .bg-\[\#09090B\]\/80 {
+  background-color: #F7F7EB !important;
+}
+
+html:not(.dark) .bg-\[\#18181B\] {
+  background-color: #FFFFFF !important;
+}
+
+html:not(.dark) .bg-\[\#1F1929\] {
+  background-color: #F5F5E9 !important;
+}
+
+html:not(.dark) .bg-\[\#27272A\] {
+  background-color: #EBEBE0 !important;
+}
+
+html:not(.dark) .bg-\[\#27272A\]\/80,
+html:not(.dark) .bg-\[\#27272A\]\/50 {
+  background-color: rgba(235, 235, 224, 0.7) !important;
+}
+
+/* Border Overrides in Light Mode */
+html:not(.dark) .border-\[\#27272A\],
+html:not(.dark) .border-\[\#27272A\]\/80,
+html:not(.dark) .border-\[\#27272A\]\/50 {
+  border-color: #E2E2D3 !important;
+}
+
+html:not(.dark) .divide-\[\#27272A\] > :not([hidden]) ~ :not([hidden]) {
+  border-color: #E2E2D3 !important;
+}
+
+/* Text Overrides in Light Mode */
+html:not(.dark) .text-\[\#FAFAFA\] {
+  color: #18181B !important;
+}
+
+html:not(.dark) .text-\[\#A1A1AA\] {
+  color: #52525B !important;
+}
+
+html:not(.dark) .text-\[\#71717A\] {
+  color: #71717A !important;
+}
+
+html:not(.dark) input,
+html:not(.dark) select,
+html:not(.dark) textarea {
+  background-color: #F7F7EB !important;
+  color: #18181B !important;
+  border-color: #E2E2D3 !important;
+}
+
+html:not(.dark) input::placeholder {
+  color: #71717A !important;
+}
+
+/* Table Hover Overrides in Light Mode */
+html:not(.dark) tr.hover\:bg-\[\#27272A\]\/50:hover,
+html:not(.dark) tr.hover\:bg-[#27272A]\/50:hover {
+  background-color: #F5F5E9 !important;
+}
+
+/* Recharts / SVG axis text colors in Light Mode */
+html:not(.dark) .recharts-cartesian-axis-tick-value {
+  fill: #52525B !important;
+}
+
+.font-serif {
+  font-family: 'Poppins', 'Nunito', sans-serif !important;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-main);
+}
+::-webkit-scrollbar-thumb {
+  background: #8B5CF6;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #A855F7;
+}
+
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}

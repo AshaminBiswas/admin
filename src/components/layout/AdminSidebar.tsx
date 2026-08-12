@@ -1,0 +1,208 @@
+import React, { useState } from "react";
+import {
+  LayoutDashboard,
+  BarChart3,
+  Package,
+  ShoppingCart,
+  FileText,
+  Calendar,
+  ShieldAlert,
+  KeyRound,
+  Users,
+  Boxes,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Layers,
+  Image as ImageIcon,
+  ShoppingBag,
+  FolderTree,
+  CreditCard,
+  FileCode,
+  Ticket,
+  HelpCircle,
+  Home,
+  Receipt,
+  Truck,
+  Bell,
+  DollarSign,
+  Star,
+  Search,
+  Upload,
+  UserCheck,
+  Sliders,
+  Heart,
+  Navigation,
+} from "lucide-react";
+import { useAdminAuth } from "../../context/AdminAuthContext";
+import { AdminView } from "../../types/admin";
+
+interface NavItem {
+  id: AdminView;
+  label: string;
+  category: string;
+  icon: React.ReactNode;
+  badge?: string | number;
+}
+
+interface AdminSidebarProps {
+  isCollapsed?: boolean;
+  onToggleCollapse?: () => void;
+}
+
+export function AdminSidebar({ isCollapsed = false, onToggleCollapse }: AdminSidebarProps) {
+  const { currentView, setCurrentView } = useAdminAuth();
+  const [navSearch, setNavSearch] = useState("");
+
+  const ALL_NAV_ITEMS: NavItem[] = [
+    // Core & Intelligence
+    { id: "dashboard", label: "Dashboard", category: "Core & Intelligence", icon: <LayoutDashboard size={18} /> },
+    { id: "reports", label: "Reports & BI", category: "Core & Intelligence", icon: <BarChart3 size={18} />, badge: "XLS" },
+    { id: "search", label: "Search Index", category: "Core & Intelligence", icon: <Search size={18} /> },
+    { id: "notification", label: "Notifications", category: "Core & Intelligence", icon: <Bell size={18} />, badge: "2" },
+
+    // Catalog & Stock
+    { id: "products", label: "Products Catalog", category: "Catalog & Stock", icon: <Package size={18} />, badge: "5" },
+    { id: "categories", label: "Categories", category: "Catalog & Stock", icon: <FolderTree size={18} /> },
+    { id: "varients", label: "Variants & SKUs", category: "Catalog & Stock", icon: <Sliders size={18} /> },
+    { id: "inventory", label: "Inventory Stock", category: "Catalog & Stock", icon: <Boxes size={18} />, badge: "Alert" },
+    { id: "allocation", label: "Stock Allocation", category: "Catalog & Stock", icon: <Layers size={18} /> },
+    { id: "upload", label: "Media Uploads", category: "Catalog & Stock", icon: <Upload size={18} /> },
+
+    // Sales & Fulfillment
+    { id: "orders", label: "Orders", category: "Sales & Fulfillment", icon: <ShoppingCart size={18} />, badge: "4" },
+    { id: "checkouts", label: "Checkout Sessions", category: "Sales & Fulfillment", icon: <CreditCard size={18} /> },
+    { id: "cart", label: "Shopping Carts", category: "Sales & Fulfillment", icon: <ShoppingBag size={18} /> },
+    { id: "quotes", label: "B2B Quotes", category: "Sales & Fulfillment", icon: <FileText size={18} />, badge: "2" },
+    { id: "appointments", label: "Appointments", category: "Sales & Fulfillment", icon: <Calendar size={18} /> },
+    { id: "enquiries", label: "Enquiries", category: "Sales & Fulfillment", icon: <HelpCircle size={18} /> },
+    { id: "invoice", label: "Invoices & GST", category: "Sales & Fulfillment", icon: <Receipt size={18} /> },
+
+    // Customers & Access
+    { id: "users", label: "Users & Customers", category: "Customers & Access", icon: <UserCheck size={18} /> },
+    { id: "roles", label: "Roles & RBAC", category: "Customers & Access", icon: <Users size={18} />, badge: "New" },
+    { id: "auth", label: "Auth & Audits", category: "Customers & Access", icon: <ShieldAlert size={18} /> },
+    { id: "reviews", label: "Reviews & Ratings", category: "Customers & Access", icon: <Star size={18} /> },
+    { id: "wishlist", label: "Saved Wishlists", category: "Customers & Access", icon: <Heart size={18} /> },
+
+    // Storefront & CMS
+    { id: "cms", label: "CMS Pages", category: "Storefront & CMS", icon: <FileCode size={18} /> },
+    { id: "homepage", label: "Homepage Builder", category: "Storefront & CMS", icon: <Home size={18} /> },
+    { id: "banner", label: "Banners & Hero", category: "Storefront & CMS", icon: <ImageIcon size={18} /> },
+    { id: "coupons", label: "Coupons & Promos", category: "Storefront & CMS", icon: <Ticket size={18} /> },
+
+    // Logistics & Operations
+    { id: "shippings", label: "Shipping Zones", category: "Logistics & Operations", icon: <Navigation size={18} /> },
+    { id: "logistics", label: "Logistics Partners", category: "Logistics & Operations", icon: <Truck size={18} /> },
+    { id: "payment", label: "Payment Gateways", category: "Logistics & Operations", icon: <DollarSign size={18} /> },
+    { id: "settings", label: "System Settings", category: "Logistics & Operations", icon: <KeyRound size={18} /> },
+  ];
+
+  const filteredItems = ALL_NAV_ITEMS.filter(
+    (item) =>
+      item.label.toLowerCase().includes(navSearch.toLowerCase()) ||
+      item.id.toLowerCase().includes(navSearch.toLowerCase()) ||
+      item.category.toLowerCase().includes(navSearch.toLowerCase())
+  );
+
+  // Group items by category
+  const categories = Array.from(new Set(filteredItems.map((i) => i.category)));
+
+  return (
+    <aside
+      className={`h-full bg-white dark:bg-[#18181B] border-r border-slate-200 dark:border-[#27272A] flex flex-col flex-shrink-0 z-40 transition-all duration-300 ease-in-out ${
+        isCollapsed ? "w-20" : "w-72"
+      }`}
+    >
+      {/* Brand Header */}
+      <div className={`p-4 border-b border-slate-200 dark:border-[#27272A] flex items-center justify-between h-16 ${isCollapsed ? "justify-center" : ""}`}>
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-tr-xl rounded-bl-xl bg-[#8B5CF6] text-white flex items-center justify-center font-extrabold text-xl shadow-lg shadow-[#8B5CF6]/20 flex-shrink-0">
+            <Boxes size={22} />
+          </div>
+        </div>
+
+        {onToggleCollapse && (
+          <button
+            type="button"
+            onClick={onToggleCollapse}
+            title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+            className="text-slate-500 dark:text-[#A1A1AA] hover:text-[#8B5CF6] p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-[#27272A] transition-colors"
+          >
+            {isCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+          </button>
+        )}
+      </div>
+
+      {/* Nav Search Filter */}
+      {!isCollapsed && (
+        <div className="px-3 my-2">
+          <div className="relative">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-[#A1A1AA]" />
+            <input
+              type="text"
+              placeholder="Search 30 models..."
+              value={navSearch}
+              onChange={(e) => setNavSearch(e.target.value)}
+              className="w-full pl-9 pr-3 py-1.5 rounded-lg bg-slate-100 dark:bg-[#09090B] border border-slate-200 dark:border-[#27272A] text-xs text-slate-900 dark:text-[#FAFAFA] placeholder-slate-400 dark:placeholder-[#71717A] focus:outline-none focus:border-[#8B5CF6]"
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Navigation List - Scrollable without scrollbar */}
+      <nav className="flex-1 px-3 space-y-4 overflow-y-auto no-scrollbar py-2">
+        {categories.map((cat) => {
+          const itemsInCat = filteredItems.filter((i) => i.category === cat);
+          if (itemsInCat.length === 0) return null;
+
+          return (
+            <div key={cat} className="space-y-1">
+              {!isCollapsed && (
+                <p className="px-2 text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-[#71717A] mb-1">
+                  {cat}
+                </p>
+              )}
+              {itemsInCat.map((item) => {
+                const isActive = currentView === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setCurrentView(item.id)}
+                    title={isCollapsed ? `${item.label} (${item.category})` : undefined}
+                    className={`w-full flex items-center py-2 rounded-tr-xl rounded-bl-xl text-xs font-semibold transition-all duration-150 group relative ${
+                      isCollapsed ? "justify-center px-2" : "justify-between px-3"
+                    } ${
+                      isActive
+                        ? "bg-[#8B5CF6] text-white shadow-md shadow-[#8B5CF6]/25 font-bold"
+                        : "text-slate-600 dark:text-[#A1A1AA] hover:bg-slate-100 dark:hover:bg-[#27272A] hover:text-slate-900 dark:hover:text-[#FAFAFA]"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <span className={isActive ? "text-white" : "text-[#8B5CF6] group-hover:scale-110 transition-transform"}>
+                        {item.icon}
+                      </span>
+                      {!isCollapsed && <span className="truncate">{item.label}</span>}
+                    </div>
+                    {!isCollapsed && item.badge && (
+                      <span
+                        className={`text-[9px] font-bold px-1.5 py-0.2 rounded-full ${
+                          isActive ? "bg-slate-900 dark:bg-[#09090B] text-white" : "bg-[#8B5CF6]/15 text-[#8B5CF6] dark:bg-[#8B5CF6]/20 dark:text-[#A855F7]"
+                        }`}
+                      >
+                        {item.badge}
+                      </span>
+                    )}
+                    {isCollapsed && item.badge && (
+                      <span className="w-2 h-2 rounded-full bg-[#8B5CF6] absolute top-1.5 right-1.5" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          );
+        })}
+      </nav>
+    </aside>
+  );
+}
