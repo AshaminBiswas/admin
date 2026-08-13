@@ -3,7 +3,7 @@ import { ShieldCheck, Lock, Mail, ArrowRight, AlertCircle, KeyRound, ArrowLeft, 
 import { useAdminAuth } from "../context/AdminAuthContext";
 
 export function AdminLoginPage() {
-  const { login, verify2FA, pending2FA, cancel2FA } = useAdminAuth();
+  const { login, verify2FA, pending2FA, cancel2FA, sessionNotice, clearSessionNotice } = useAdminAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -26,6 +26,7 @@ export function AdminLoginPage() {
     e.preventDefault();
     setErrorMsg("");
     setSuccessMsg("");
+    clearSessionNotice();
 
     if (!email.trim() || !password.trim()) {
       setErrorMsg("Please provide both admin email and password.");
@@ -50,6 +51,7 @@ export function AdminLoginPage() {
     e.preventDefault();
     setErrorMsg("");
     setSuccessMsg("");
+    clearSessionNotice();
 
     const codeToVerify = useBackupCode
       ? backupCode.trim()
@@ -111,6 +113,22 @@ export function AdminLoginPage() {
             {pending2FA ? "Two-Factor Verification Required" : "Executive Admin Portal & Storefront Controller"}
           </p>
         </div>
+
+        {sessionNotice && (
+          <div className="p-3 rounded-tr-xl rounded-bl-xl bg-amber-950/60 border border-amber-500/30 text-amber-300 text-xs flex items-center justify-between gap-2 shadow-lg">
+            <div className="flex items-center gap-2">
+              <AlertCircle size={16} className="text-amber-400 flex-shrink-0" />
+              <span>{sessionNotice}</span>
+            </div>
+            <button
+              onClick={clearSessionNotice}
+              className="text-amber-400 hover:text-amber-200 font-bold px-1"
+              title="Dismiss"
+            >
+              ✕
+            </button>
+          </div>
+        )}
 
         {errorMsg && (
           <div className="p-3 rounded-tr-xl rounded-bl-xl bg-red-950/60 border border-red-500/30 text-red-300 text-xs flex items-center gap-2">
@@ -274,8 +292,7 @@ export function AdminLoginPage() {
         )}
 
         <div className="p-3 bg-[#09090B] rounded-tr-xl rounded-bl-xl border border-[#27272A] text-center text-xs text-[#A1A1AA]">
-          <p className="font-semibold text-[#A855F7] mb-1">Connected Live API:</p>
-          <code className="text-[11px] text-[#FAFAFA] font-mono">https://prc-backend-6sw7.onrender.com/api/v1</code>
+          <p className="font-semibold text-[#A855F7]">Connected Live API PRC</p>
         </div>
       </div>
     </div>

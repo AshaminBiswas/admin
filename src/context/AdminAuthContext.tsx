@@ -9,9 +9,14 @@ import {
   proactiveTokenRefresh,
   getTokenExpiresInMs,
   PROACTIVE_REFRESH_MS,
+  IDLE_TIMEOUT_MS,
+  MAX_SESSION_MS,
+  getSessionAgeMs,
+  isSessionExpired,
 } from "../api/adminApi";
 
 const VIEW_STORAGE_KEY = "prc_admin_current_view";
+const SESSION_NOTICE_KEY = "prc_admin_session_notice";
 
 interface AdminAuthContextType {
   adminUser: AdminUser | null;
@@ -20,11 +25,13 @@ interface AdminAuthContextType {
   pending2FA: boolean;
   mfaToken: string | null;
   currentView: AdminView;
+  sessionNotice: string | null;
+  clearSessionNotice: () => void;
   setCurrentView: (view: AdminView) => void;
   login: (e: string, p: string) => Promise<{ success: boolean; requires2FA?: boolean; message?: string }>;
   verify2FA: (code: string) => Promise<{ success: boolean; message?: string }>;
   cancel2FA: () => void;
-  logout: () => Promise<void>;
+  logout: (notice?: string) => Promise<void>;
   refreshUserProfile: () => Promise<void>;
 }
 
@@ -34,8 +41,8 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
   const [adminUser, setAdminUser] = useState<AdminUser | null>(() => {
     const token = getAdminToken();
     const storedUser = getStoredAdminUser();
-    if (token && storedUser) return storedUser;
-    if (token) {
+    if (token && storedUser && !isSessionExpired()) return storedUser;
+    if (token && !isSessionExpired()) {
       return {
         id: "admin-1",
         email: "admin@prchardware.com",
@@ -53,55 +60,54 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [pending2FA, setPending2FA] = useState(false);
   const [mfaToken, setMfaToken] = useState<string | null>(null);
+  const [sessionNotice, setSessionNoticeState] = useState<string | null>(() => {
+    return localStorage.getItem(SESSION_NOTICE_KEY);
+  });
 
   const [currentView, setCurrentViewState] = useState<AdminView>(() => {
     const saved = localStorage.getItem(VIEW_STORAGE_KEY);
     return (saved as AdminView) || "dashboard";
   });
 
-  // Ref to the proactive refresh timer so we can clear/reset it
+  // Timers
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const maxSessionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const setCurrentView = (view: AdminView) => {
     setCurrentViewState(view);
     localStorage.setItem(VIEW_STORAGE_KEY, view);
   };
 
+  const clearSessionNotice = () => {
+    setSessionNoticeState(null);
+    localStorage.removeItem(SESSION_NOTICE_KEY);
+  };
+
+  const setNotice = (noticeMsg: string) => {
+    setSessionNoticeState(noticeMsg);
+    localStorage.setItem(SESSION_NOTICE_KEY, noticeMsg);
+  };
+
   // ─── Proactive Token Refresh Timer ──────────────────────────────────────────
-  // Schedules a silent token refresh BEFORE the access token expires.
-  // - On login: fires at 59 minutes
-  // - On page reload: calculates remaining time and fires accordingly
-  // - On each successful refresh: reschedules for another 59 minutes
   const scheduleProactiveRefresh = useCallback((delayMs?: number) => {
-    // Clear any existing timer
     if (refreshTimerRef.current) {
       clearTimeout(refreshTimerRef.current);
       refreshTimerRef.current = null;
     }
 
     const refreshToken = getAdminRefreshToken();
-    if (!refreshToken) return; // Nothing to refresh if no refresh token
+    if (!refreshToken) return;
 
-    // Calculate delay: use provided value, or compute from stored expiry
-    let delay = delayMs ?? (getTokenExpiresInMs() - 60_000); // fire 60s before expiry
-
-    // Clamp: if token already expired or expires in < 30s, refresh immediately
+    let delay = delayMs ?? (getTokenExpiresInMs() - 60_000);
     if (delay < 30_000) delay = 0;
-
-    // Cap at PROACTIVE_REFRESH_MS (59 min) to avoid overshooting
     if (delay > PROACTIVE_REFRESH_MS) delay = PROACTIVE_REFRESH_MS;
-
-    console.info(
-      `[PRC Admin] Token refresh scheduled in ${Math.round(delay / 1000 / 60)} min ${Math.round((delay / 1000) % 60)} sec`
-    );
 
     refreshTimerRef.current = setTimeout(async () => {
       const success = await proactiveTokenRefresh();
       if (success) {
-        // Reschedule for next cycle (59 minutes from now)
         scheduleProactiveRefresh(PROACTIVE_REFRESH_MS);
       } else {
-        // Refresh token expired — log out gracefully
         console.warn("[PRC Admin] Proactive refresh failed — session ended.");
         clearAdminTokens();
         setAdminUser(null);
@@ -109,12 +115,72 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
     }, delay);
   }, []);
 
-  // Clear timer on unmount
-  useEffect(() => {
-    return () => {
-      if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
-    };
+  // ─── Logout ──────────────────────────────────────────────────────────────────
+  const logout = useCallback(async (notice?: string) => {
+    if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+    if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+    if (maxSessionTimerRef.current) clearTimeout(maxSessionTimerRef.current);
+
+    await adminAuthService.logout();
+    clearAdminTokens();
+    localStorage.removeItem(VIEW_STORAGE_KEY);
+    setAdminUser(null);
+    setPending2FA(false);
+    setMfaToken(null);
+
+    if (notice) {
+      setNotice(notice);
+    }
   }, []);
+
+  // ─── Idle Timer & 60-min Max Lifetime Handlers ────────────────────────────────
+  const resetIdleTimer = useCallback(() => {
+    if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+    if (!adminUser) return;
+
+    idleTimerRef.current = setTimeout(() => {
+      console.warn("[PRC Admin] 10 minutes of inactivity detected — logging out.");
+      logout("You were automatically logged out due to 10 minutes of inactivity.");
+    }, IDLE_TIMEOUT_MS);
+  }, [adminUser, logout]);
+
+  useEffect(() => {
+    if (!adminUser) {
+      if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+      if (maxSessionTimerRef.current) clearTimeout(maxSessionTimerRef.current);
+      return;
+    }
+
+    // 1. Check if 60-minute hard limit reached
+    if (isSessionExpired()) {
+      console.warn("[PRC Admin] 60-minute maximum session lifetime limit reached — logging out.");
+      logout("Session expired after 60 minutes. Please sign in again.");
+      return;
+    }
+
+    // 2. Schedule timer for 60-minute session cap
+    const sessionAge = getSessionAgeMs();
+    const remainingSessionMs = Math.max(0, MAX_SESSION_MS - sessionAge);
+    maxSessionTimerRef.current = setTimeout(() => {
+      console.warn("[PRC Admin] 60-minute session lifetime reached — logging out.");
+      logout("Session expired after 60 minutes. Please sign in again.");
+    }, remainingSessionMs);
+
+    // 3. Setup activity listeners for 10-minute idle logout
+    const activityEvents = ["mousemove", "keydown", "mousedown", "touchstart", "scroll", "click"];
+    const handleUserActivity = () => {
+      resetIdleTimer();
+    };
+
+    resetIdleTimer();
+    activityEvents.forEach((evt) => window.addEventListener(evt, handleUserActivity, { passive: true }));
+
+    return () => {
+      if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+      if (maxSessionTimerRef.current) clearTimeout(maxSessionTimerRef.current);
+      activityEvents.forEach((evt) => window.removeEventListener(evt, handleUserActivity));
+    };
+  }, [adminUser, resetIdleTimer, logout]);
 
   // ─── Session Hydration on Mount ──────────────────────────────────────────────
   useEffect(() => {
@@ -122,16 +188,17 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
       const token = getAdminToken();
       const storedUser = getStoredAdminUser();
 
-      if (!token) {
-        setAdminUser(null);
+      if (!token || isSessionExpired()) {
+        if (isSessionExpired()) {
+          logout("Session expired after 60 minutes. Please sign in again.");
+        } else {
+          setAdminUser(null);
+        }
         setIsLoading(false);
         return;
       }
 
-      // Populate from localStorage immediately (instant UI)
       if (storedUser) setAdminUser(storedUser);
-
-      // Schedule proactive refresh based on stored expiry
       scheduleProactiveRefresh();
 
       try {
@@ -160,7 +227,7 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
       }
     }
     checkSession();
-  }, [scheduleProactiveRefresh]);
+  }, [scheduleProactiveRefresh, logout]);
 
   // ─── Refresh User Profile ────────────────────────────────────────────────────
   const refreshUserProfile = async () => {
@@ -180,6 +247,7 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
 
   // ─── Login ───────────────────────────────────────────────────────────────────
   const login = async (email: string, pass: string) => {
+    clearSessionNotice();
     const res = await adminAuthService.login(email, pass);
 
     if (res.success && res.requires2FA) {
@@ -193,7 +261,6 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem("prc_admin_user_session", JSON.stringify(res.user));
       setPending2FA(false);
       setMfaToken(null);
-      // Start the 59-minute proactive refresh timer from now
       scheduleProactiveRefresh(PROACTIVE_REFRESH_MS);
       return { success: true, message: res.message };
     }
@@ -203,6 +270,7 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
 
   // ─── Verify 2FA ──────────────────────────────────────────────────────────────
   const verify2FA = async (code: string) => {
+    clearSessionNotice();
     if (!mfaToken) {
       return { success: false, message: "Authentication session expired. Please sign in again." };
     }
@@ -213,7 +281,6 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem("prc_admin_user_session", JSON.stringify(res.user));
       setPending2FA(false);
       setMfaToken(null);
-      // Start the 59-minute proactive refresh timer after successful 2FA
       scheduleProactiveRefresh(PROACTIVE_REFRESH_MS);
       return { success: true, message: res.message };
     }
@@ -222,21 +289,6 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
 
   // ─── Cancel 2FA ──────────────────────────────────────────────────────────────
   const cancel2FA = () => {
-    setPending2FA(false);
-    setMfaToken(null);
-  };
-
-  // ─── Logout ──────────────────────────────────────────────────────────────────
-  const logout = async () => {
-    // Cancel the proactive refresh timer
-    if (refreshTimerRef.current) {
-      clearTimeout(refreshTimerRef.current);
-      refreshTimerRef.current = null;
-    }
-    await adminAuthService.logout();
-    clearAdminTokens();
-    localStorage.removeItem(VIEW_STORAGE_KEY);
-    setAdminUser(null);
     setPending2FA(false);
     setMfaToken(null);
   };
@@ -250,6 +302,8 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
         pending2FA,
         mfaToken,
         currentView,
+        sessionNotice,
+        clearSessionNotice,
         setCurrentView,
         login,
         verify2FA,

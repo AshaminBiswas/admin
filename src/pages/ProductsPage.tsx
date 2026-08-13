@@ -30,6 +30,7 @@ import {
 import { fetchAdminApi } from "../api/adminApi";
 import { useAdminAuth } from "../context/AdminAuthContext";
 import { ProductItem, Category } from "../types/admin";
+import { syncProductUpdate } from "../utils/productSync";
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                             */
@@ -64,14 +65,8 @@ function DeleteModal({ product, onClose, onDeleted }: DeleteModalProps) {
       if (res?.success === false) {
         setError(res.message || "Failed to delete product.");
       } else {
-        // Immediately remove from localStorage cache
         try {
-          const cachedRaw = localStorage.getItem("prc_admin_products_list");
-          if (cachedRaw) {
-            const list = JSON.parse(cachedRaw);
-            const filteredList = list.filter((p: any) => String(p.id) !== String(product.id));
-            localStorage.setItem("prc_admin_products_list", JSON.stringify(filteredList));
-          }
+          syncProductUpdate(product, "DELETE");
         } catch {}
         onDeleted();
         onClose();
@@ -356,34 +351,49 @@ export function ProductsPage() {
         const raw = res?.data || res?.products || res;
         let list: ProductItem[] = Array.isArray(raw) ? raw : Array.isArray(raw?.data) ? raw.data : Array.isArray(raw?.products) ? raw.products : [];
         
-        // Retain recently created products from localStorage if not indexed
+        // Merge and preserve all edited and created products from cache
         try {
-          const cachedRaw = localStorage.getItem("prc_admin_products_list");
+          const cachedRaw = localStorage.getItem("prc_admin_products_list") || localStorage.getItem("prc_shared_products_list");
           if (cachedRaw) {
             const cachedList: ProductItem[] = JSON.parse(cachedRaw);
             for (const cachedItem of cachedList) {
-              if (cachedItem && cachedItem.id) {
-                const exists = list.some((p) => String(p.id) === String(cachedItem.id));
-                if (!exists) list.unshift(cachedItem);
+              if (cachedItem && (cachedItem.id || (cachedItem as any).apiId || cachedItem.sku)) {
+                const idx = list.findIndex((p) => 
+                  String(p.id) === String(cachedItem.id) || 
+                  (p.sku && cachedItem.sku && String(p.sku).toLowerCase() === String(cachedItem.sku).toLowerCase()) ||
+                  (p.id && (cachedItem as any).apiId && String(p.id) === String((cachedItem as any).apiId))
+                );
+                if (idx !== -1) {
+                  // Override raw API item with admin edited item
+                  list[idx] = { ...list[idx], ...cachedItem };
+                } else {
+                  list.unshift(cachedItem);
+                }
               }
             }
           }
         } catch {}
 
-        // Overlay any freshly edited products from cache
+        // Overlay single most recently edited product from cache if available
         try {
           const recentlyEditedRaw = localStorage.getItem("prc_admin_edit_product");
           if (recentlyEditedRaw) {
             const editedItem = JSON.parse(recentlyEditedRaw);
-            if (editedItem && editedItem.id) {
-              const idx = list.findIndex((p) => String(p.id) === String(editedItem.id));
+            if (editedItem && (editedItem.id || editedItem.sku)) {
+              const idx = list.findIndex((p) => 
+                String(p.id) === String(editedItem.id) ||
+                (p.sku && editedItem.sku && String(p.sku).toLowerCase() === String(editedItem.sku).toLowerCase())
+              );
               if (idx !== -1) list[idx] = { ...list[idx], ...editedItem };
             }
           }
         } catch {}
 
         setProducts(list);
-        localStorage.setItem("prc_admin_products_list", JSON.stringify(list));
+        try {
+          localStorage.setItem("prc_admin_products_list", JSON.stringify(list));
+          localStorage.setItem("prc_shared_products_list", JSON.stringify(list));
+        } catch {}
       } else if (products.length === 0) {
         setError(res.message || "Failed to load products.");
       }

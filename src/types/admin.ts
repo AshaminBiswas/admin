@@ -185,8 +185,13 @@ export interface AuditLogItem {
   adminEmail: string;
   action: string;
   entity: string;
+  category?: 'AUTH' | 'CATALOG' | 'SALES' | 'SYSTEM' | string;
+  severity?: 'INFO' | 'SECURITY' | 'CRITICAL' | 'SUCCESS';
   details: string;
   createdAt: string;
+  ipAddress?: string;
+  userAgent?: string;
+  payload?: Record<string, any>;
 }
 
 export type AdminView =

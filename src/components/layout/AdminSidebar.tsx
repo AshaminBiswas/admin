@@ -32,6 +32,7 @@ import {
   Sliders,
   Heart,
   Navigation,
+  X,
 } from "lucide-react";
 import { useAdminAuth } from "../../context/AdminAuthContext";
 import { AdminView } from "../../types/admin";
@@ -47,9 +48,16 @@ interface NavItem {
 interface AdminSidebarProps {
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
+  isMobileOpen?: boolean;
+  onCloseMobile?: () => void;
 }
 
-export function AdminSidebar({ isCollapsed = false, onToggleCollapse }: AdminSidebarProps) {
+export function AdminSidebar({
+  isCollapsed = false,
+  onToggleCollapse,
+  isMobileOpen = false,
+  onCloseMobile,
+}: AdminSidebarProps) {
   const { currentView, setCurrentView } = useAdminAuth();
   const [navSearch, setNavSearch] = useState("");
 
@@ -104,31 +112,56 @@ export function AdminSidebar({ isCollapsed = false, onToggleCollapse }: AdminSid
       item.category.toLowerCase().includes(navSearch.toLowerCase())
   );
 
-  // Group items by category
   const categories = Array.from(new Set(filteredItems.map((i) => i.category)));
 
-  return (
+  const handleNavClick = (viewId: AdminView) => {
+    setCurrentView(viewId);
+    if (onCloseMobile) onCloseMobile();
+  };
+
+  const navContent = (
     <aside
       className={`h-full bg-white dark:bg-[#18181B] border-r border-slate-200 dark:border-[#27272A] flex flex-col flex-shrink-0 z-40 transition-all duration-300 ease-in-out ${
         isCollapsed ? "w-20" : "w-72"
       }`}
     >
       {/* Brand Header */}
-      <div className={`p-4 border-b border-slate-200 dark:border-[#27272A] flex items-center justify-between h-16 ${isCollapsed ? "justify-center" : ""}`}>
+      <div
+        className={`p-4 border-b border-slate-200 dark:border-[#27272A] flex items-center justify-between h-16 ${
+          isCollapsed ? "justify-center" : ""
+        }`}
+      >
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-tr-xl rounded-bl-xl bg-[#8B5CF6] text-white flex items-center justify-center font-extrabold text-xl shadow-lg shadow-[#8B5CF6]/20 flex-shrink-0">
             <Boxes size={22} />
           </div>
+          {!isCollapsed && (
+            <span className="font-extrabold text-sm text-slate-900 dark:text-[#FAFAFA] tracking-tight">
+              PRC ADMIN
+            </span>
+          )}
         </div>
 
+        {/* Desktop Collapse Button */}
         {onToggleCollapse && (
           <button
             type="button"
             onClick={onToggleCollapse}
             title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
-            className="text-slate-500 dark:text-[#A1A1AA] hover:text-[#8B5CF6] p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-[#27272A] transition-colors"
+            className="hidden md:flex text-slate-500 dark:text-[#A1A1AA] hover:text-[#8B5CF6] p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-[#27272A] transition-colors"
           >
             {isCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+          </button>
+        )}
+
+        {/* Mobile Close Button */}
+        {onCloseMobile && (
+          <button
+            type="button"
+            onClick={onCloseMobile}
+            className="md:hidden text-slate-500 dark:text-[#A1A1AA] p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-[#27272A]"
+          >
+            <X size={20} />
           </button>
         )}
       </div>
@@ -149,7 +182,7 @@ export function AdminSidebar({ isCollapsed = false, onToggleCollapse }: AdminSid
         </div>
       )}
 
-      {/* Navigation List - Scrollable without scrollbar */}
+      {/* Navigation List */}
       <nav className="flex-1 px-3 space-y-4 overflow-y-auto no-scrollbar py-2">
         {categories.map((cat) => {
           const itemsInCat = filteredItems.filter((i) => i.category === cat);
@@ -168,7 +201,7 @@ export function AdminSidebar({ isCollapsed = false, onToggleCollapse }: AdminSid
                   <button
                     key={item.id}
                     type="button"
-                    onClick={() => setCurrentView(item.id)}
+                    onClick={() => handleNavClick(item.id)}
                     title={isCollapsed ? `${item.label} (${item.category})` : undefined}
                     className={`w-full flex items-center py-2 rounded-tr-xl rounded-bl-xl text-xs font-semibold transition-all duration-150 group relative ${
                       isCollapsed ? "justify-center px-2" : "justify-between px-3"
@@ -187,7 +220,9 @@ export function AdminSidebar({ isCollapsed = false, onToggleCollapse }: AdminSid
                     {!isCollapsed && item.badge && (
                       <span
                         className={`text-[9px] font-bold px-1.5 py-0.2 rounded-full ${
-                          isActive ? "bg-slate-900 dark:bg-[#09090B] text-white" : "bg-[#8B5CF6]/15 text-[#8B5CF6] dark:bg-[#8B5CF6]/20 dark:text-[#A855F7]"
+                          isActive
+                            ? "bg-slate-900 dark:bg-[#09090B] text-white"
+                            : "bg-[#8B5CF6]/15 text-[#8B5CF6] dark:bg-[#8B5CF6]/20 dark:text-[#A855F7]"
                         }`}
                       >
                         {item.badge}
@@ -204,5 +239,25 @@ export function AdminSidebar({ isCollapsed = false, onToggleCollapse }: AdminSid
         })}
       </nav>
     </aside>
+  );
+
+  return (
+    <>
+      {/* Desktop Persistent Sidebar */}
+      <div className="hidden md:block h-full">{navContent}</div>
+
+      {/* Mobile Slide-Over Drawer with Backdrop */}
+      {isMobileOpen && (
+        <div className="fixed inset-0 z-50 md:hidden flex">
+          <div
+            className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity"
+            onClick={onCloseMobile}
+          />
+          <div className="relative z-50 h-full w-72 max-w-[80vw]">
+            {navContent}
+          </div>
+        </div>
+      )}
+    </>
   );
 }

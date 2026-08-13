@@ -2,14 +2,16 @@ import { fetchAdminApi } from "./adminApi";
 
 export interface EnquiryItem {
   id: string;
+  trackingId?: string;
   name: string;
   email: string;
   phone?: string;
   companyName?: string;
   subject: string;
   message: string;
-  status: "NEW" | "IN_PROGRESS" | "RESOLVED" | "CLOSED";
+  status: "OPEN" | "NEW" | "IN_PROGRESS" | "RESOLVED" | "CLOSED";
   adminNotes?: string;
+  notes?: string;
   createdAt: string;
 }
 
@@ -29,7 +31,7 @@ export const enquiriesService = {
     });
   },
 
-  async updateEnquiry(id: string, payload: { status?: string; adminNotes?: string }) {
+  async updateEnquiry(id: string, payload: { status?: string; adminNotes?: string; notes?: string }) {
     return await fetchAdminApi<EnquiryItem>(`/enquiries/${id}`, {
       method: "PATCH",
       body: JSON.stringify(payload),

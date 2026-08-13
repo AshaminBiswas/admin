@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useAdminAuth } from "../context/AdminAuthContext";
 import { fetchAdminApi } from "../api/adminApi";
 import { MediaPickerModal } from "../components/MediaPickerModal";
+import { syncProductUpdate } from "../utils/productSync";
 import {
   ChevronLeft,
   Package,
@@ -261,79 +262,91 @@ export function EditProductPage() {
       }
     });
 
-    const payload = {
+    const cleanPayload: Record<string, any> = {
       name: name.trim(),
-      sku: sku.trim(),
-      description: description.trim(),
-      shortDesc: shortDesc.trim(),
+      sku: sku.trim() || undefined,
+      description: description.trim() || undefined,
+      shortDesc: shortDesc.trim() || undefined,
       categoryId: categoryId || undefined,
-      
-      price: Number(price),
+      price: Number(price) || 0,
       salePrice: salesPrice ? Number(salesPrice) : undefined,
       offerPrice: offerPrice ? Number(offerPrice) : undefined,
-      
-      stock: Number(stock),
+      stock: Number(stock) || 0,
       reorderLevel: reorderLevel ? Number(reorderLevel) : undefined,
-      
       thumbnail: thumbnail.trim() || undefined,
+      image: thumbnail.trim() || (images.split(",").map(i => i.trim()).filter(Boolean)[0]) || undefined,
       images: images.split(",").map(i => i.trim()).filter(Boolean),
-      
       status,
       isVisible,
       isFeatured,
       isInOffer,
-      
-      manufacturerInfo: {
+      manufacturerInfo: (mfgGenericName || mfgName || mfgAddress) ? {
         "Generic Name": mfgGenericName.trim(),
-        "Country of Origin": mfgCountry.trim(),
+        "Country of Origin": mfgCountry.trim() || "India",
         manufacturerName: mfgName.trim(),
         manufacturerAddress: mfgAddress.trim()
-      },
-      
+      } : undefined,
       compatibleFor: compatibleFor.split(",").map(c => c.trim()).filter(Boolean),
-      warranty: warranty.trim(),
+      warranty: warranty.trim() || undefined,
       weight: weight ? Number(weight) : undefined,
-      
       dimensions: (dimLength && dimWidth && dimHeight) ? {
         length: Number(dimLength),
         width: Number(dimWidth),
         height: Number(dimHeight),
         unit: dimUnit
       } : undefined,
-      
       attributes: Object.keys(attrsObj).length > 0 ? attrsObj : undefined,
       colours: colours.split(",").map(c => c.trim()).filter(Boolean),
       tags: tags.split(",").map(t => t.trim()).filter(Boolean),
-      
-      seo: {
+      seo: (metaTitle || metaDescription) ? {
         metaTitle: metaTitle.trim(),
         metaDescription: metaDescription.trim()
-      }
+      } : undefined
     };
+
+    // Strip undefined keys
+    Object.keys(cleanPayload).forEach(key => {
+      if (cleanPayload[key] === undefined) {
+        delete cleanPayload[key];
+      }
+    });
 
     setLoading(true);
     try {
-      const res = await fetchAdminApi(`/products/${initialProduct?.id}`, {
+      let res = await fetchAdminApi(`/products/${initialProduct?.id}`, {
         method: "PATCH",
-        body: JSON.stringify(payload)
+        body: JSON.stringify(cleanPayload)
       });
 
+      // If item is not in backend database yet (404), persist it via POST
+      if (res?.success === false && (res?.error?.code === "NOT_FOUND" || res?.statusCode === 404 || res?.message?.includes("not found"))) {
+        res = await fetchAdminApi(`/products`, {
+          method: "POST",
+          body: JSON.stringify(cleanPayload)
+        });
+      }
+
       if (res?.success === false) {
-        setError(res.message || "Failed to update product");
+        setError(res?.error?.message || res?.message || "Failed to update product in database");
       } else {
         try {
-          const updatedProduct = res?.data || res?.product || { ...initialProduct, ...payload };
+          const apiData = res?.data && typeof res.data === "object" && res.data.name ? res.data : {};
+          const updatedProduct = {
+            ...initialProduct,
+            ...apiData,
+            ...cleanPayload,
+            id: apiData.id || initialProduct?.id,
+            salesPrice: salesPrice ? Number(salesPrice) : undefined,
+            salePrice: salesPrice ? Number(salesPrice) : undefined,
+            offerPrice: offerPrice ? Number(offerPrice) : undefined,
+            price: Number(price),
+            originalPrice: Number(price),
+            stock: Number(stock),
+            image: thumbnail.trim() || (images.split(",").map(i => i.trim()).filter(Boolean)[0]) || initialProduct?.image,
+            thumbnail: thumbnail.trim() || initialProduct?.thumbnail
+          };
           localStorage.setItem("prc_admin_edit_product", JSON.stringify(updatedProduct));
-          
-          const cachedListRaw = localStorage.getItem("prc_admin_products_list");
-          if (cachedListRaw) {
-            const list = JSON.parse(cachedListRaw);
-            const idx = list.findIndex((p: any) => String(p.id) === String(updatedProduct.id));
-            if (idx !== -1) {
-              list[idx] = updatedProduct;
-              localStorage.setItem("prc_admin_products_list", JSON.stringify(list));
-            }
-          }
+          syncProductUpdate(updatedProduct, "UPDATE");
         } catch (e) {}
 
         setCurrentView("products");

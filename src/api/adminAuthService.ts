@@ -1,19 +1,29 @@
 import { fetchAdminApi, setAdminTokens, clearAdminTokens, getAdminRefreshToken } from "./adminApi";
 import { AdminUser, TwoFactorLoginResult, TwoFactorSetupData, CreateAdminPayload, CreatedAdminResult } from "../types/admin";
+import { logAdminActivity } from "./auditService";
 
 const TWO_FACTOR_STORAGE_KEY = "prc_admin_2fa_enabled";
 const TWO_FACTOR_SECRET_KEY = "prc_admin_2fa_secret";
 const CREATED_ADMINS_STORAGE_KEY = "prc_created_admins_list";
 
+// In-memory store for pending MFA login sessions
+const pendingMfaSessions = new Map<string, {
+  accessToken?: string;
+  refreshToken?: string;
+  user?: AdminUser;
+}>();
+
 export function isLocal2FAEnabled(): boolean {
-  return localStorage.getItem(TWO_FACTOR_STORAGE_KEY) === "true";
+  const val = localStorage.getItem(TWO_FACTOR_STORAGE_KEY);
+  if (val === "false") return false;
+  return true; // Enforced by default for Executive Admin Console security
 }
 
 export function setLocal2FAEnabled(enabled: boolean) {
   if (enabled) {
     localStorage.setItem(TWO_FACTOR_STORAGE_KEY, "true");
   } else {
-    localStorage.removeItem(TWO_FACTOR_STORAGE_KEY);
+    localStorage.setItem(TWO_FACTOR_STORAGE_KEY, "false");
   }
 }
 
@@ -111,31 +121,34 @@ export const adminAuthService = {
     if (res.success && res.data) {
       const backendRequires2FA = res.data.requires2FA || res.data.twoFactorRequired;
       const local2FA = isLocal2FAEnabled();
+      const accessToken = res.data.accessToken || "demo_access_token";
+      const refreshToken = res.data.refreshToken || "demo_refresh_token";
+      const rawUser = res.data.user || res.data;
+      const user: AdminUser = {
+        id: rawUser.id || "admin-1",
+        email: rawUser.email || cleanEmail,
+        firstName: rawUser.firstName || "Executive",
+        lastName: rawUser.lastName || "Admin",
+        role: rawUser.role || "super_admin",
+        isTwoFactorEnabled: local2FA,
+      };
+
+      const mfaToken = res.data.mfaToken || `temp_mfa_${Date.now()}`;
+      pendingMfaSessions.set(mfaToken, { accessToken, refreshToken, user });
 
       if (backendRequires2FA || local2FA) {
         return {
           success: true,
           requires2FA: true,
-          mfaToken: res.data.mfaToken || `temp_mfa_${Date.now()}`,
+          mfaToken,
           message: "2FA authentication challenge required.",
         };
       }
 
-      const accessToken = res.data.accessToken || "demo_access_token";
-      const refreshToken = res.data.refreshToken || "demo_refresh_token";
-      const user = res.data.user || res.data;
-
-      setAdminTokens(accessToken, refreshToken);
+      setAdminTokens(accessToken, refreshToken, user);
       return {
         success: true,
-        user: {
-          id: user.id || "admin-1",
-          email: user.email || cleanEmail,
-          firstName: user.firstName || "Executive",
-          lastName: user.lastName || "Admin",
-          role: user.role || "super_admin",
-          isTwoFactorEnabled: local2FA,
-        },
+        user,
         message: "Admin authentication successful!",
       };
     }
@@ -147,27 +160,35 @@ export const adminAuthService = {
     );
 
     if (matchedCreatedAdmin || (cleanEmail === "admin@prchardware.com" && password === "AdminPass123!")) {
-      const is2FA = true;
+      const is2FA = isLocal2FAEnabled();
+      const user: AdminUser = matchedCreatedAdmin ? matchedCreatedAdmin.user : {
+        id: "admin-1",
+        email: "admin@prchardware.com",
+        firstName: "Executive",
+        lastName: "Admin",
+        role: "super_admin",
+        isTwoFactorEnabled: true,
+      };
+      const mfaToken = `temp_mfa_demo_${Date.now()}`;
+      pendingMfaSessions.set(mfaToken, {
+        accessToken: "demo_admin_access_token",
+        refreshToken: "demo_admin_refresh_token",
+        user,
+      });
+
       if (is2FA) {
         return {
           success: true,
           requires2FA: true,
-          mfaToken: `temp_mfa_demo_${Date.now()}`,
+          mfaToken,
           message: "Enter 6-digit Authenticator code to finalize login.",
         };
       }
 
-      setAdminTokens("demo_admin_access_token", "demo_admin_refresh_token");
+      setAdminTokens("demo_admin_access_token", "demo_admin_refresh_token", user);
       return {
         success: true,
-        user: matchedCreatedAdmin ? matchedCreatedAdmin.user : {
-          id: "admin-1",
-          email: "admin@prchardware.com",
-          firstName: "Executive",
-          lastName: "Admin",
-          role: "super_admin",
-          isTwoFactorEnabled: true,
-        },
+        user,
         message: "Executive authorization granted.",
       };
     }
@@ -191,17 +212,18 @@ export const adminAuthService = {
       };
     }
 
+    const pendingSession = pendingMfaSessions.get(mfaToken);
+
     // 1. Try the PUBLIC /auth/2fa/login endpoint (no access token required)
-    //    This was specifically created for the mid-login 2FA challenge flow.
     const res = await fetchAdminApi("/auth/2fa/login", {
       method: "POST",
       body: JSON.stringify({ mfaToken, code: cleanCode }),
     });
 
     if (res.success) {
-      const accessToken = res.data?.accessToken || getAdminRefreshToken() || "demo_access_token";
-      const refreshToken = res.data?.refreshToken || getAdminRefreshToken() || "demo_refresh_token";
-      const user = res.data?.user;
+      const accessToken = res.data?.accessToken || pendingSession?.accessToken || getAdminRefreshToken() || "demo_access_token";
+      const refreshToken = res.data?.refreshToken || pendingSession?.refreshToken || getAdminRefreshToken() || "demo_refresh_token";
+      const user = res.data?.user || pendingSession?.user;
       const verifiedUser: AdminUser = {
         id: user?.id || "admin-1",
         email: user?.email || "admin@prchardware.com",
@@ -212,6 +234,7 @@ export const adminAuthService = {
       };
 
       setAdminTokens(accessToken, refreshToken, verifiedUser);
+      pendingMfaSessions.delete(mfaToken);
       return {
         success: true,
         user: verifiedUser,
@@ -240,7 +263,7 @@ export const adminAuthService = {
     const isBackupMatch = validBackupCodes.includes(cleanCode.toUpperCase()) || validBackupCodes.includes(cleanCode);
 
     if (isLiveTOTPMatch || isTestOTPMatch || isBackupMatch) {
-      const verifiedUser: AdminUser = {
+      const verifiedUser: AdminUser = pendingSession?.user || {
         id: "admin-1",
         email: "admin@prchardware.com",
         firstName: "Executive",
@@ -248,7 +271,22 @@ export const adminAuthService = {
         role: "super_admin",
         isTwoFactorEnabled: true,
       };
-      setAdminTokens("demo_admin_access_token_2fa", "demo_admin_refresh_token_2fa", verifiedUser);
+      const accessToken = pendingSession?.accessToken || "demo_admin_access_token_2fa";
+      const refreshToken = pendingSession?.refreshToken || "demo_admin_refresh_token_2fa";
+
+      setAdminTokens(accessToken, refreshToken, verifiedUser);
+      pendingMfaSessions.delete(mfaToken);
+
+      logAdminActivity({
+        action: "2FA_VERIFIED",
+        entity: "AUTH",
+        category: "AUTH",
+        severity: "SECURITY",
+        details: `Executive 2FA passcode verified for '${verifiedUser.email}'.`,
+        adminEmail: verifiedUser.email,
+        payload: { method: isBackupMatch ? "EMERGENCY_BACKUP_CODE" : "TOTP_RFC6238" },
+      });
+
       return {
         success: true,
         user: verifiedUser,
@@ -388,16 +426,57 @@ export const adminAuthService = {
   async disable2FA(passwordOrCode: string): Promise<{ success: boolean; message?: string }> {
     const cleanCode = passwordOrCode.trim();
     if (!cleanCode) {
-      return { success: false, message: "Please provide your admin password or 2FA code to confirm." };
+      return { success: false, message: "Please provide your admin password or 2FA authenticator code to confirm." };
     }
 
-    await fetchAdminApi("/auth/2fa/disable", {
+    // 1. Try backend API first
+    const res = await fetchAdminApi("/auth/2fa/disable", {
       method: "POST",
-      body: JSON.stringify({ code: cleanCode }),
+      body: JSON.stringify({ password: cleanCode, code: cleanCode }),
     });
 
-    setLocal2FAEnabled(false);
-    return { success: true, message: "Two-Factor Authentication has been disabled." };
+    if (res.success) {
+      setLocal2FAEnabled(false);
+      return { success: true, message: res.message || "Two-Factor Authentication has been disabled." };
+    }
+
+    // 2. Local Fallback Credential & 2FA Validation
+    // Check A: Is it a valid Admin Password?
+    const createdAdmins = getStoredCreatedAdmins();
+    const isPasswordMatch =
+      cleanCode === "AdminPass123!" ||
+      createdAdmins.some((a) => a.pass === cleanCode);
+
+    // Check B: Is it a valid 6-digit TOTP / OTP code?
+    const activeSecret = localStorage.getItem(TWO_FACTOR_SECRET_KEY) || "PRCHEXECUT7X9K3M2P";
+    const currentTOTP = await generateTOTPCode(activeSecret, 0);
+    const prevTOTP = await generateTOTPCode(activeSecret, -1);
+    const nextTOTP = await generateTOTPCode(activeSecret, 1);
+    const validLocalOTP = localStorage.getItem("prc_admin_valid_otp") || "123456";
+
+    const isLiveTOTPMatch = cleanCode === currentTOTP || cleanCode === prevTOTP || cleanCode === nextTOTP;
+    const isTestOTPMatch = cleanCode === validLocalOTP || cleanCode === "123456";
+
+    // Check C: Is it a valid 8-digit Emergency Backup Code?
+    const validBackupCodes = [
+      "9821-4432", "98214432",
+      "1209-8876", "12098876",
+      "5543-9012", "55439012",
+      "7761-3210", "77613210",
+      "4412-9981", "44129981",
+      "6671-2244", "66712244",
+    ];
+    const isBackupMatch = validBackupCodes.includes(cleanCode.toUpperCase()) || validBackupCodes.includes(cleanCode);
+
+    if (isPasswordMatch || isLiveTOTPMatch || isTestOTPMatch || isBackupMatch) {
+      setLocal2FAEnabled(false);
+      return { success: true, message: "Two-Factor Authentication has been disabled." };
+    }
+
+    return {
+      success: false,
+      message: "Invalid admin password or authenticator OTP code! Two-Factor Authentication remains active for security.",
+    };
   },
 
   async getProfile(): Promise<{ success: boolean; user?: AdminUser }> {

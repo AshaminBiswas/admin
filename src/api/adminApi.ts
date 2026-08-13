@@ -6,9 +6,11 @@ const ADMIN_TOKEN_KEY = "prc_admin_access_token";
 const ADMIN_REFRESH_TOKEN_KEY = "prc_admin_refresh_token";
 const ADMIN_USER_SESSION_KEY = "prc_admin_user_session";
 const ADMIN_TOKEN_EXPIRY_KEY = "prc_admin_token_expiry";
+const ADMIN_SESSION_START_KEY = "prc_admin_session_start";
 
-// Session duration: 60 minutes. Proactive refresh fires at 59 minutes.
-const SESSION_DURATION_MS = 60 * 60 * 1000; // 60 min
+// Session duration: 60 minutes max lifetime. 10 minutes idle logout. Proactive refresh at 59 minutes.
+export const MAX_SESSION_MS = 60 * 60 * 1000; // 60 min hard cap
+export const IDLE_TIMEOUT_MS = 10 * 60 * 1000; // 10 min inactivity timeout
 export const PROACTIVE_REFRESH_MS = 59 * 60 * 1000; // 59 min
 
 export function getAdminToken(): string | null {
@@ -28,22 +30,39 @@ export function getStoredAdminUser(): any | null {
   }
 }
 
+/** Returns ms elapsed since this login session started. */
+export function getSessionAgeMs(): number {
+  const start = localStorage.getItem(ADMIN_SESSION_START_KEY);
+  if (!start) return 0;
+  return Math.max(0, Date.now() - parseInt(start, 10));
+}
+
+/** Returns true if current session has reached 60 minutes lifetime. */
+export function isSessionExpired(): boolean {
+  const start = localStorage.getItem(ADMIN_SESSION_START_KEY);
+  if (!start) return false;
+  return getSessionAgeMs() >= MAX_SESSION_MS;
+}
+
 /** Returns ms until the stored access token expires. Negative = already expired. */
 export function getTokenExpiresInMs(): number {
   const expiry = localStorage.getItem(ADMIN_TOKEN_EXPIRY_KEY);
-  if (!expiry) return SESSION_DURATION_MS; // assume fresh if unknown
+  if (!expiry) return MAX_SESSION_MS; // assume fresh if unknown
   return parseInt(expiry, 10) - Date.now();
 }
 
 export function setAdminTokens(accessToken: string, refreshToken: string, user?: any) {
   if (accessToken) {
     localStorage.setItem(ADMIN_TOKEN_KEY, accessToken);
-    // Record when this access token was issued — assume 60-min TTL
-    localStorage.setItem(ADMIN_TOKEN_EXPIRY_KEY, String(Date.now() + SESSION_DURATION_MS));
+    // Record when this access token was issued — 60-min TTL
+    localStorage.setItem(ADMIN_TOKEN_EXPIRY_KEY, String(Date.now() + MAX_SESSION_MS));
   }
   if (refreshToken) localStorage.setItem(ADMIN_REFRESH_TOKEN_KEY, refreshToken);
   if (user) {
     localStorage.setItem(ADMIN_USER_SESSION_KEY, JSON.stringify(user));
+  }
+  if (!localStorage.getItem(ADMIN_SESSION_START_KEY)) {
+    localStorage.setItem(ADMIN_SESSION_START_KEY, String(Date.now()));
   }
 }
 
@@ -52,6 +71,7 @@ export function clearAdminTokens() {
   localStorage.removeItem(ADMIN_REFRESH_TOKEN_KEY);
   localStorage.removeItem(ADMIN_USER_SESSION_KEY);
   localStorage.removeItem(ADMIN_TOKEN_EXPIRY_KEY);
+  localStorage.removeItem(ADMIN_SESSION_START_KEY);
 }
 
 // ─── Access Token Refresh Queue & Lock ────────────────────────────────────────

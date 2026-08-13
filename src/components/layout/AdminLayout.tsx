@@ -32,8 +32,11 @@ import { ModelManagementPage } from "../../pages/ModelManagementPage";
 export function AdminLayout() {
   const { currentView } = useAdminAuth();
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isMobileOpen, setIsMobileOpen] = useState(false);
 
   const toggleSidebar = () => setIsCollapsed((prev) => !prev);
+  const toggleMobileSidebar = () => setIsMobileOpen((prev) => !prev);
+  const closeMobileSidebar = () => setIsMobileOpen(false);
 
   const renderCurrentView = () => {
     switch (currentView) {
@@ -210,15 +213,26 @@ export function AdminLayout() {
   };
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-[#FDFDF4] dark:bg-[#09090B] text-[#18181B] dark:text-[#FAFAFA] transition-colors">
-      {/* Fixed Sticky Sidebar */}
-      <AdminSidebar isCollapsed={isCollapsed} onToggleCollapse={toggleSidebar} />
+    <div className="flex h-screen w-screen overflow-hidden bg-[#FDFDF4] dark:bg-[#09090B] text-[#18181B] dark:text-[#FAFAFA] transition-colors relative">
+      {/* Sidebar with Desktop + Mobile Support */}
+      <AdminSidebar
+        isCollapsed={isCollapsed}
+        onToggleCollapse={toggleSidebar}
+        isMobileOpen={isMobileOpen}
+        onCloseMobile={closeMobileSidebar}
+      />
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col h-full min-w-0 overflow-hidden">
-        <AdminHeader isCollapsed={isCollapsed} onToggleCollapse={toggleSidebar} />
-        <main className="flex-1 p-6 overflow-y-auto min-h-0">
-          {renderCurrentView()}
+      <div className="flex-1 flex flex-col h-full min-w-0 overflow-hidden w-full">
+        <AdminHeader
+          isCollapsed={isCollapsed}
+          onToggleCollapse={toggleSidebar}
+          onToggleMobile={toggleMobileSidebar}
+        />
+        <main className="flex-1 p-3 sm:p-4 md:p-6 overflow-y-auto overflow-x-hidden min-h-0 w-full">
+          <div className="max-w-7xl mx-auto space-y-6 w-full min-w-0">
+            {renderCurrentView()}
+          </div>
         </main>
       </div>
     </div>

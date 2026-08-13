@@ -12,6 +12,7 @@ import {
   Clock,
   Sun,
   Moon,
+  Menu,
 } from "lucide-react";
 import { useAdminAuth } from "../../context/AdminAuthContext";
 import { useTheme } from "../../context/ThemeContext";
@@ -19,9 +20,10 @@ import { useTheme } from "../../context/ThemeContext";
 interface AdminHeaderProps {
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
+  onToggleMobile?: () => void;
 }
 
-export function AdminHeader({ isCollapsed, onToggleCollapse }: AdminHeaderProps) {
+export function AdminHeader({ isCollapsed, onToggleCollapse, onToggleMobile }: AdminHeaderProps) {
   const { currentView, setCurrentView, logout, adminUser } = useAdminAuth();
   const { theme, toggleTheme } = useTheme();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -42,12 +44,13 @@ export function AdminHeader({ isCollapsed, onToggleCollapse }: AdminHeaderProps)
     switch (currentView) {
       case "dashboard": return "Executive Operations Dashboard";
       case "analytics": return "Business Analytics & Growth Performance";
-      case "reports": return "Financial Reports & Table Data Exports (Excel & PDF)";
+      case "reports": return "Financial Reports & Table Data Exports";
       case "admins": return "Executive Admin Users & Role Assignment";
       case "products": return "Hardware Products & SKU Inventory Catalog";
       case "orders": return "Customer Orders & B2B Fulfillment Control";
       case "quotes": return "B2B Bulk Price Quotations & Approvals";
       case "appointments": return "Installation & Repair Service Appointments";
+      case "enquiries": return "Customer Enquiries & Ticket Management";
       case "audit": return "System Security & Audit Activity Logs";
       case "settings": return "Security & Two-Factor Authentication (2FA)";
       default: return "PRC Admin Console";
@@ -75,20 +78,29 @@ export function AdminHeader({ isCollapsed, onToggleCollapse }: AdminHeaderProps)
   const displayInitial = adminUser?.firstName ? adminUser.firstName[0].toUpperCase() : "E";
 
   return (
-    <header className="h-16 bg-white dark:bg-[#18181B] border-b border-slate-200 dark:border-[#27272A] px-6 flex items-center justify-between flex-shrink-0 sticky top-0 z-30 shadow-sm dark:shadow-md transition-colors">
-      {/* Left: Page Title */}
-      <div className="flex items-center gap-4">
-        <div>
-          <h2 className="text-lg font-bold text-slate-900 dark:text-[#FAFAFA] font-serif tracking-tight">
-            {getViewTitle()}
-          </h2>
-        </div>
+    <header className="h-16 bg-white dark:bg-[#18181B] border-b border-slate-200 dark:border-[#27272A] px-4 md:px-6 flex items-center justify-between flex-shrink-0 sticky top-0 z-30 shadow-sm dark:shadow-md transition-colors w-full min-w-0">
+      {/* Left: Mobile Menu Toggle & Page Title */}
+      <div className="flex items-center gap-3 min-w-0">
+        {onToggleMobile && (
+          <button
+            type="button"
+            onClick={onToggleMobile}
+            className="md:hidden text-slate-600 dark:text-[#A1A1AA] hover:text-[#8B5CF6] p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-[#27272A]"
+            aria-label="Toggle Mobile Menu"
+          >
+            <Menu size={20} />
+          </button>
+        )}
+
+        <h2 className="text-sm md:text-lg font-bold text-slate-900 dark:text-[#FAFAFA] font-serif tracking-tight truncate">
+          {getViewTitle()}
+        </h2>
       </div>
 
       {/* Right: Actions & Profile Avatar */}
-      <div className="flex items-center gap-3 sm:gap-4">
+      <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
         {/* Search */}
-        <div className="relative hidden lg:block w-64">
+        <div className="relative hidden lg:block w-56 xl:w-64">
           <input
             type="text"
             placeholder="Search orders, SKUs..."
@@ -119,14 +131,14 @@ export function AdminHeader({ isCollapsed, onToggleCollapse }: AdminHeaderProps)
         </a>
 
         {/* Interactive Profile Avatar Button & Dropdown Menu */}
-        <div className="relative pl-3 border-l border-slate-200 dark:border-[#27272A]" ref={dropdownRef}>
+        <div className="relative pl-2 md:pl-3 border-l border-slate-200 dark:border-[#27272A]" ref={dropdownRef}>
           <button
             type="button"
             onClick={() => setIsProfileOpen((prev) => !prev)}
-            className="flex items-center gap-2 p-1 rounded-full hover:bg-slate-100 dark:hover:bg-[#27272A] transition-all focus:outline-none"
+            className="flex items-center gap-1.5 p-1 rounded-full hover:bg-slate-100 dark:hover:bg-[#27272A] transition-all focus:outline-none"
             title="Account Profile & Settings"
           >
-            <div className="w-9 h-9 rounded-full bg-[#8B5CF6]/20 border-2 border-[#8B5CF6] flex items-center justify-center text-[#8B5CF6] dark:text-[#FAFAFA] font-black text-sm shadow-md shadow-[#8B5CF6]/20 hover:scale-105 transition-transform">
+            <div className="w-8 h-8 md:w-9 md:h-9 rounded-full bg-[#8B5CF6]/20 border-2 border-[#8B5CF6] flex items-center justify-center text-[#8B5CF6] dark:text-[#FAFAFA] font-black text-xs md:text-sm shadow-md shadow-[#8B5CF6]/20 hover:scale-105 transition-transform">
               {displayInitial}
             </div>
             <ChevronDown
@@ -139,7 +151,7 @@ export function AdminHeader({ isCollapsed, onToggleCollapse }: AdminHeaderProps)
 
           {/* Profile Dropdown Modal */}
           {isProfileOpen && (
-            <div className="absolute right-0 mt-3 w-80 rounded-2xl bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] shadow-2xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+            <div className="absolute right-0 mt-3 w-72 sm:w-80 rounded-2xl bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] shadow-2xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
               {/* Header Info */}
               <div className="p-4 bg-gradient-to-r from-purple-50 to-white dark:from-[#1F1929] dark:to-[#18181B] border-b border-slate-200 dark:border-[#27272A] flex items-center gap-3">
                 <div className="w-12 h-12 rounded-full bg-[#8B5CF6] text-white flex items-center justify-center font-black text-lg shadow-lg shadow-[#8B5CF6]/30">
@@ -189,7 +201,7 @@ export function AdminHeader({ isCollapsed, onToggleCollapse }: AdminHeaderProps)
 
               {/* Actions Section */}
               <div className="p-2 space-y-1 bg-slate-50 dark:bg-[#09090B]">
-                {/* Theme Switcher inside Profile Dropdown */}
+                {/* Theme Switcher */}
                 <button
                   type="button"
                   onClick={toggleTheme}
