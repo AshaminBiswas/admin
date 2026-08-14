@@ -7,16 +7,49 @@ const TWO_FACTOR_SECRET_KEY = "prc_admin_2fa_secret";
 const TWO_FACTOR_BACKUP_CODES_KEY = "prc_admin_2fa_backup_codes";
 const CREATED_ADMINS_STORAGE_KEY = "prc_created_admins_list";
 
-// Standard RFC 4648 Base32 default secret for Super Admin (strictly [A-Z2-7] characters)
-export const DEFAULT_SUPER_ADMIN_SECRET = "PRCHEXECUTIVESECRET2345KEY777AA";
-export const DEFAULT_BACKUP_CODES = [
-  "9821-4432",
-  "1209-8876",
-  "5543-9012",
-  "7761-3210",
-  "4412-9981",
-  "6671-2244",
-];
+// Dynamic RFC 4648 Base32 default secret for Super Admin (strictly [A-Z2-7] characters)
+export function getOrCreateDefaultSecret(): string {
+  // 1. Check environment variable from .env
+  const envSecret = (import.meta as any).env?.VITE_2FA_DEFAULT_SECRET;
+  if (envSecret && isValidBase32(envSecret)) {
+    return envSecret;
+  }
+
+  // 2. Check persistent local storage
+  try {
+    const stored = localStorage.getItem(TWO_FACTOR_SECRET_KEY);
+    if (stored && isValidBase32(stored)) {
+      return stored;
+    }
+  } catch {
+    // fallback
+  }
+
+  // 3. Generate dynamic Base32 secret at runtime
+  const generated = generateBase32Secret(32);
+  try {
+    localStorage.setItem(TWO_FACTOR_SECRET_KEY, generated);
+  } catch {}
+  return generated;
+}
+
+export function getOrCreateDefaultBackupCodes(): string[] {
+  try {
+    const stored = localStorage.getItem(TWO_FACTOR_BACKUP_CODES_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch {}
+  const codes = generateBackupCodes(6);
+  try {
+    localStorage.setItem(TWO_FACTOR_BACKUP_CODES_KEY, JSON.stringify(codes));
+  } catch {}
+  return codes;
+}
+
+export const DEFAULT_SUPER_ADMIN_SECRET = getOrCreateDefaultSecret();
+export const DEFAULT_BACKUP_CODES = getOrCreateDefaultBackupCodes();
 
 // In-memory store for pending MFA login sessions
 const pendingMfaSessions = new Map<string, {
@@ -175,14 +208,7 @@ export function getAdminSecretForUser(email?: string): string {
     }
   }
 
-  const stored = localStorage.getItem(TWO_FACTOR_SECRET_KEY);
-  if (stored && isValidBase32(stored)) {
-    return stored;
-  }
-
-  // Auto-migrate if missing or invalid Base32 (e.g. previous old key containing '9')
-  localStorage.setItem(TWO_FACTOR_SECRET_KEY, DEFAULT_SUPER_ADMIN_SECRET);
-  return DEFAULT_SUPER_ADMIN_SECRET;
+  return getOrCreateDefaultSecret();
 }
 
 // Get active backup codes for a user
@@ -196,18 +222,7 @@ export function getBackupCodesForUser(email?: string): string[] {
     }
   }
 
-  try {
-    const stored = localStorage.getItem(TWO_FACTOR_BACKUP_CODES_KEY);
-    if (stored) {
-      const parsed = JSON.parse(stored);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-    }
-  } catch {
-    // fallback
-  }
-
-  localStorage.setItem(TWO_FACTOR_BACKUP_CODES_KEY, JSON.stringify(DEFAULT_BACKUP_CODES));
-  return [...DEFAULT_BACKUP_CODES];
+  return getOrCreateDefaultBackupCodes();
 }
 
 // Consume an emergency backup code after successful one-time use
@@ -297,27 +312,20 @@ export const adminAuthService = {
       };
     }
 
-    // 2. Local Fallback Authentication: Check default admin & created admins
+    // 2. Local Fallback Authentication: Check created local admins
     const createdAdmins = getStoredCreatedAdmins();
     const matchedCreatedAdmin = createdAdmins.find(
       (a) => a.email.toLowerCase() === cleanEmail && a.pass === password
     );
 
-    if (matchedCreatedAdmin || (cleanEmail === "admin@prchardware.com" && password === "AdminPass123!")) {
+    if (matchedCreatedAdmin) {
       const is2FA = isLocal2FAEnabled();
-      const user: AdminUser = matchedCreatedAdmin ? matchedCreatedAdmin.user : {
-        id: "admin-1",
-        email: "admin@prchardware.com",
-        firstName: "Executive",
-        lastName: "Admin",
-        role: "super_admin",
-        isTwoFactorEnabled: true,
-      };
+      const user: AdminUser = matchedCreatedAdmin.user;
       const userSecret = getAdminSecretForUser(cleanEmail);
-      const mfaToken = `temp_mfa_demo_${Date.now()}`;
+      const mfaToken = `temp_mfa_local_${Date.now()}`;
       pendingMfaSessions.set(mfaToken, {
-        accessToken: "demo_admin_access_token",
-        refreshToken: "demo_admin_refresh_token",
+        accessToken: `local_token_${Date.now()}`,
+        refreshToken: `local_refresh_${Date.now()}`,
         user,
         secret: userSecret,
       });
@@ -331,7 +339,7 @@ export const adminAuthService = {
         };
       }
 
-      setAdminTokens("demo_admin_access_token", "demo_admin_refresh_token", user);
+      setAdminTokens(`local_token_${Date.now()}`, `local_refresh_${Date.now()}`, user);
       return {
         success: true,
         user,
