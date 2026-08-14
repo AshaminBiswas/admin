@@ -194,6 +194,32 @@ export interface AuditLogItem {
   payload?: Record<string, any>;
 }
 
+/* ─── Roles & Permissions ──────────────────────────────────────────────────── */
+
+export interface Permission {
+  id: string;
+  name: string;
+  slug: string;
+  description?: string;
+}
+
+export interface PermissionGroup {
+  module: string;
+  permissions: Permission[];
+}
+
+export interface Role {
+  id: string;
+  name: string;
+  slug: string;
+  description?: string;
+  isSystem: boolean;
+  userCount: number;
+  permissions?: Permission[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export type AdminView =
   | 'allocation'
   | 'appointments'
@@ -231,4 +257,40 @@ export type AdminView =
   | 'wishlist'
   | 'analytics'
   | 'audit'
-  | 'admins';
+  | 'admins'
+  | 'b2b-pricing';
+
+/* ─── B2B Customer Custom Pricing ─────────────────────────────────────────── */
+
+export interface B2BCustomerPricingItem {
+  productId: string;
+  name: string;
+  slug: string;
+  sku: string;
+  thumbnail: string | null;
+  categoryName: string;
+  categoryId: string | null;
+  standardPrice: number;
+  hasCustomPrice: boolean;
+  customPrice: number | null;
+  minQuantity: number;
+  notes: string | null;
+  discountPercent: number;
+  customPriceId: string | null;
+  updatedAt: string | null;
+}
+
+export interface B2BCustomerPricingMatrix {
+  customer: {
+    id: string;
+    email: string;
+    name: string;
+    companyName?: string | null;
+    gstin?: string | null;
+    phone?: string | null;
+    role: string;
+  };
+  totalProducts: number;
+  customPricesCount: number;
+  items: B2BCustomerPricingItem[];
+}

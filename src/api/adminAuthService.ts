@@ -4,13 +4,26 @@ import { logAdminActivity } from "./auditService";
 
 const TWO_FACTOR_STORAGE_KEY = "prc_admin_2fa_enabled";
 const TWO_FACTOR_SECRET_KEY = "prc_admin_2fa_secret";
+const TWO_FACTOR_BACKUP_CODES_KEY = "prc_admin_2fa_backup_codes";
 const CREATED_ADMINS_STORAGE_KEY = "prc_created_admins_list";
+
+// Standard RFC 4648 Base32 default secret for Super Admin (strictly [A-Z2-7] characters)
+export const DEFAULT_SUPER_ADMIN_SECRET = "PRCHEXECUTIVESECRET2345KEY777AA";
+export const DEFAULT_BACKUP_CODES = [
+  "9821-4432",
+  "1209-8876",
+  "5543-9012",
+  "7761-3210",
+  "4412-9981",
+  "6671-2244",
+];
 
 // In-memory store for pending MFA login sessions
 const pendingMfaSessions = new Map<string, {
   accessToken?: string;
   refreshToken?: string;
   user?: AdminUser;
+  secret?: string;
 }>();
 
 export function isLocal2FAEnabled(): boolean {
@@ -27,25 +40,43 @@ export function setLocal2FAEnabled(enabled: boolean) {
   }
 }
 
-// Local storage helpers for created admin accounts
-function getStoredCreatedAdmins(): Array<{ email: string; pass: string; user: AdminUser; setup?: TwoFactorSetupData }> {
-  try {
-    const raw = localStorage.getItem(CREATED_ADMINS_STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
+// ─── Base32 Utilities (RFC 4648 Compliant) ──────────────────────────────────
+export function isValidBase32(secret: string): boolean {
+  if (!secret || typeof secret !== "string") return false;
+  const cleaned = secret.toUpperCase().replace(/[\s-]+/g, "");
+  return cleaned.length >= 16 && /^[A-Z2-7]+$/.test(cleaned);
 }
 
-function saveCreatedAdmin(item: { email: string; pass: string; user: AdminUser; setup?: TwoFactorSetupData }) {
-  const list = getStoredCreatedAdmins();
-  const filtered = list.filter((a) => a.email.toLowerCase() !== item.email.toLowerCase());
-  filtered.push(item);
-  localStorage.setItem(CREATED_ADMINS_STORAGE_KEY, JSON.stringify(filtered));
+export function generateBase32Secret(length = 32): string {
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+  let secret = "";
+  const cryptoObj = typeof window !== "undefined" ? window.crypto : (globalThis as any).crypto;
+  if (cryptoObj && cryptoObj.getRandomValues) {
+    const randomBytes = new Uint8Array(length);
+    cryptoObj.getRandomValues(randomBytes);
+    for (let i = 0; i < length; i++) {
+      secret += alphabet[randomBytes[i] % alphabet.length];
+    }
+  } else {
+    for (let i = 0; i < length; i++) {
+      secret += alphabet[Math.floor(Math.random() * alphabet.length)];
+    }
+  }
+  return secret;
+}
+
+export function generateBackupCodes(count = 6): string[] {
+  const codes: string[] = [];
+  for (let i = 0; i < count; i++) {
+    const p1 = Math.floor(1000 + Math.random() * 9000).toString();
+    const p2 = Math.floor(1000 + Math.random() * 9000).toString();
+    codes.push(`${p1}-${p2}`);
+  }
+  return codes;
 }
 
 // Base32 Decoder for RFC 6238 TOTP Authenticator Keys
-function base32ToBytes(base32: string): Uint8Array {
+export function base32ToBytes(base32: string): Uint8Array {
   const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
   const cleaned = base32.toUpperCase().replace(/[^A-Z2-7]/g, "");
   let bits = "";
@@ -62,10 +93,12 @@ function base32ToBytes(base32: string): Uint8Array {
   return bytes;
 }
 
-// Real-time RFC 6238 TOTP Code Generator for Google Authenticator / Authy
-async function generateTOTPCode(secretBase32: string, timeStepOffset = 0): Promise<string> {
+// ─── Real-time RFC 6238 TOTP Code Generator for Google Authenticator / Authy ──
+export async function generateTOTPCode(secretBase32: string, timeStepOffset = 0): Promise<string> {
   try {
-    if (!window.crypto || !window.crypto.subtle) return "";
+    const cryptoObj = typeof window !== "undefined" ? window.crypto : (globalThis as any).crypto;
+    if (!cryptoObj || !cryptoObj.subtle) return "";
+
     const keyBytes = base32ToBytes(secretBase32);
     if (keyBytes.length === 0) return "";
 
@@ -76,7 +109,7 @@ async function generateTOTPCode(secretBase32: string, timeStepOffset = 0): Promi
     const view = new DataView(buffer);
     view.setUint32(4, timeStep, false);
 
-    const cryptoKey = await window.crypto.subtle.importKey(
+    const cryptoKey = await cryptoObj.subtle.importKey(
       "raw",
       keyBytes,
       { name: "HMAC", hash: "SHA-1" },
@@ -84,21 +117,127 @@ async function generateTOTPCode(secretBase32: string, timeStepOffset = 0): Promi
       ["sign"]
     );
 
-    const signature = await window.crypto.subtle.sign("HMAC", cryptoKey, buffer);
+    const signature = await cryptoObj.subtle.sign("HMAC", cryptoKey, buffer);
     const hmac = new Uint8Array(signature);
 
-    const offset = hmac[hmac.length - 1] & 0xf;
-    const binary =
-      ((hmac[offset] & 0x7f) << 24) |
-      ((hmac[offset + 1] & 0xff) << 16) |
-      ((hmac[offset + 2] & 0xff) << 8) |
-      (hmac[offset + 3] & 0xff);
+    const offset = hmac[hmac.length - 1] & 0x0f;
+    const dv = new DataView(hmac.buffer, hmac.byteOffset, hmac.byteLength);
+    const binary = dv.getUint32(offset, false) & 0x7fffffff;
 
     const otp = (binary % 1000000).toString().padStart(6, "0");
     return otp;
-  } catch {
+  } catch (err) {
+    console.error("[PRC Admin Auth] Error calculating TOTP code:", err);
     return "";
   }
+}
+
+// Verify TOTP code against secret with +/- 60s clock drift window
+export async function verifyTOTPCode(secretBase32: string, candidateCode: string): Promise<boolean> {
+  const cleanCode = candidateCode.trim().replace(/[\s-]+/g, "");
+  if (!/^\d{6}$/.test(cleanCode)) return false;
+
+  const offsets = [0, -1, 1, -2, 2];
+  for (const offset of offsets) {
+    const expected = await generateTOTPCode(secretBase32, offset);
+    if (expected && expected === cleanCode) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// ─── Local storage helpers for created admin accounts ────────────────────────
+export function getStoredCreatedAdmins(): Array<{ email: string; pass: string; user: AdminUser; setup?: TwoFactorSetupData }> {
+  try {
+    const raw = localStorage.getItem(CREATED_ADMINS_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveCreatedAdmin(item: { email: string; pass: string; user: AdminUser; setup?: TwoFactorSetupData }) {
+  const list = getStoredCreatedAdmins();
+  const filtered = list.filter((a) => a.email.toLowerCase() !== item.email.toLowerCase());
+  filtered.push(item);
+  localStorage.setItem(CREATED_ADMINS_STORAGE_KEY, JSON.stringify(filtered));
+}
+
+// Get active TOTP secret for a user (with auto-migration if corrupt)
+export function getAdminSecretForUser(email?: string): string {
+  const cleanEmail = email?.trim().toLowerCase();
+  if (cleanEmail) {
+    const createdAdmins = getStoredCreatedAdmins();
+    const matched = createdAdmins.find((a) => a.email.toLowerCase() === cleanEmail);
+    if (matched?.setup?.secret && isValidBase32(matched.setup.secret)) {
+      return matched.setup.secret;
+    }
+  }
+
+  const stored = localStorage.getItem(TWO_FACTOR_SECRET_KEY);
+  if (stored && isValidBase32(stored)) {
+    return stored;
+  }
+
+  // Auto-migrate if missing or invalid Base32 (e.g. previous old key containing '9')
+  localStorage.setItem(TWO_FACTOR_SECRET_KEY, DEFAULT_SUPER_ADMIN_SECRET);
+  return DEFAULT_SUPER_ADMIN_SECRET;
+}
+
+// Get active backup codes for a user
+export function getBackupCodesForUser(email?: string): string[] {
+  const cleanEmail = email?.trim().toLowerCase();
+  if (cleanEmail) {
+    const createdAdmins = getStoredCreatedAdmins();
+    const matched = createdAdmins.find((a) => a.email.toLowerCase() === cleanEmail);
+    if (matched?.setup?.backupCodes && matched.setup.backupCodes.length > 0) {
+      return matched.setup.backupCodes;
+    }
+  }
+
+  try {
+    const stored = localStorage.getItem(TWO_FACTOR_BACKUP_CODES_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch {
+    // fallback
+  }
+
+  localStorage.setItem(TWO_FACTOR_BACKUP_CODES_KEY, JSON.stringify(DEFAULT_BACKUP_CODES));
+  return [...DEFAULT_BACKUP_CODES];
+}
+
+// Consume an emergency backup code after successful one-time use
+export function consumeBackupCode(email: string, code: string): boolean {
+  const cleanCode = code.replace(/[\s-]+/g, "").toUpperCase();
+  const cleanEmail = email.trim().toLowerCase();
+
+  // 1. Check created admins
+  const createdAdmins = getStoredCreatedAdmins();
+  const matchedAdminIdx = createdAdmins.findIndex((a) => a.email.toLowerCase() === cleanEmail);
+  if (matchedAdminIdx !== -1 && createdAdmins[matchedAdminIdx].setup?.backupCodes) {
+    const codes = createdAdmins[matchedAdminIdx].setup!.backupCodes;
+    const matchIdx = codes.findIndex((c) => c.replace(/[\s-]+/g, "").toUpperCase() === cleanCode);
+    if (matchIdx !== -1) {
+      codes.splice(matchIdx, 1);
+      localStorage.setItem(CREATED_ADMINS_STORAGE_KEY, JSON.stringify(createdAdmins));
+      return true;
+    }
+  }
+
+  // 2. Check main stored backup codes
+  const currentCodes = getBackupCodesForUser();
+  const matchIdx = currentCodes.findIndex((c) => c.replace(/[\s-]+/g, "").toUpperCase() === cleanCode);
+  if (matchIdx !== -1) {
+    currentCodes.splice(matchIdx, 1);
+    localStorage.setItem(TWO_FACTOR_BACKUP_CODES_KEY, JSON.stringify(currentCodes));
+    return true;
+  }
+
+  return false;
 }
 
 export const adminAuthService = {
@@ -124,17 +263,22 @@ export const adminAuthService = {
       const accessToken = res.data.accessToken || "demo_access_token";
       const refreshToken = res.data.refreshToken || "demo_refresh_token";
       const rawUser = res.data.user || res.data;
+      // role can be a string slug OR an object { id, name, slug } from the API
+      const resolvedRole = typeof rawUser.role === "object" && rawUser.role !== null
+        ? (rawUser.role.slug ?? rawUser.role.name ?? "super_admin")
+        : (rawUser.role ?? "super_admin");
       const user: AdminUser = {
         id: rawUser.id || "admin-1",
         email: rawUser.email || cleanEmail,
         firstName: rawUser.firstName || "Executive",
         lastName: rawUser.lastName || "Admin",
-        role: rawUser.role || "super_admin",
+        role: resolvedRole,
         isTwoFactorEnabled: local2FA,
       };
 
+      const userSecret = getAdminSecretForUser(cleanEmail);
       const mfaToken = res.data.mfaToken || `temp_mfa_${Date.now()}`;
-      pendingMfaSessions.set(mfaToken, { accessToken, refreshToken, user });
+      pendingMfaSessions.set(mfaToken, { accessToken, refreshToken, user, secret: userSecret });
 
       if (backendRequires2FA || local2FA) {
         return {
@@ -169,11 +313,13 @@ export const adminAuthService = {
         role: "super_admin",
         isTwoFactorEnabled: true,
       };
+      const userSecret = getAdminSecretForUser(cleanEmail);
       const mfaToken = `temp_mfa_demo_${Date.now()}`;
       pendingMfaSessions.set(mfaToken, {
         accessToken: "demo_admin_access_token",
         refreshToken: "demo_admin_refresh_token",
         user,
+        secret: userSecret,
       });
 
       if (is2FA) {
@@ -203,7 +349,7 @@ export const adminAuthService = {
     mfaToken: string,
     code: string
   ): Promise<{ success: boolean; user?: AdminUser; message?: string }> {
-    const cleanCode = code.trim().replace(/\s+/g, "");
+    const cleanCode = code.trim().replace(/[\s-]+/g, "");
 
     if (!cleanCode) {
       return {
@@ -213,90 +359,75 @@ export const adminAuthService = {
     }
 
     const pendingSession = pendingMfaSessions.get(mfaToken);
+    const userEmail = pendingSession?.user?.email || "admin@prchardware.com";
+    const activeSecret = pendingSession?.secret || getAdminSecretForUser(userEmail);
 
-    // 1. Try the PUBLIC /auth/2fa/login endpoint (no access token required)
-    const res = await fetchAdminApi("/auth/2fa/login", {
-      method: "POST",
-      body: JSON.stringify({ mfaToken, code: cleanCode }),
+    // 1. Strictly verify the candidate code against RFC 6238 TOTP Authenticator Key FIRST
+    const isLiveTOTPMatch = await verifyTOTPCode(activeSecret, cleanCode);
+
+    // 2. Check Emergency Backup Codes (One-Time Use)
+    const validBackupCodes = getBackupCodesForUser(userEmail);
+    const isBackupMatch = validBackupCodes.some(
+      (b) => b.replace(/[\s-]+/g, "").toUpperCase() === cleanCode.toUpperCase()
+    );
+
+    // STRICT SECURITY GATE: If code does NOT match real TOTP or backup code, REJECT IMMEDIATELY!
+    if (!isLiveTOTPMatch && !isBackupMatch) {
+      return {
+        success: false,
+        message: "Invalid 2FA Security Passcode! Please check your Google Authenticator app for the current 6-digit code or enter a valid backup code.",
+      };
+    }
+
+    // 3. Optional: Sync with backend /auth/2fa/login if available
+    let remoteAccessToken = "";
+    let remoteRefreshToken = "";
+    try {
+      const res = await fetchAdminApi("/auth/2fa/login", {
+        method: "POST",
+        body: JSON.stringify({ mfaToken, code: cleanCode }),
+      });
+      if (res.success && res.data) {
+        remoteAccessToken = res.data.accessToken || "";
+        remoteRefreshToken = res.data.refreshToken || "";
+      }
+    } catch {
+      // offline fallback
+    }
+
+    // 4. Grant verified access
+    const verifiedUser: AdminUser = pendingSession?.user || {
+      id: "admin-1",
+      email: userEmail,
+      firstName: "Executive",
+      lastName: "Admin",
+      role: "super_admin",
+      isTwoFactorEnabled: true,
+    };
+    const accessToken = remoteAccessToken || pendingSession?.accessToken || "demo_admin_access_token_2fa";
+    const refreshToken = remoteRefreshToken || pendingSession?.refreshToken || "demo_admin_refresh_token_2fa";
+
+    if (isBackupMatch) {
+      consumeBackupCode(userEmail, cleanCode);
+    }
+
+    setAdminTokens(accessToken, refreshToken, verifiedUser);
+    pendingMfaSessions.delete(mfaToken);
+
+    logAdminActivity({
+      action: "2FA_VERIFIED",
+      entity: "AUTH",
+      category: "AUTH",
+      severity: "SECURITY",
+      details: `Executive 2FA passcode verified for '${verifiedUser.email}'.`,
+      adminEmail: verifiedUser.email,
+      payload: { method: isBackupMatch ? "EMERGENCY_BACKUP_CODE" : "TOTP_RFC6238" },
     });
 
-    if (res.success) {
-      const accessToken = res.data?.accessToken || pendingSession?.accessToken || getAdminRefreshToken() || "demo_access_token";
-      const refreshToken = res.data?.refreshToken || pendingSession?.refreshToken || getAdminRefreshToken() || "demo_refresh_token";
-      const user = res.data?.user || pendingSession?.user;
-      const verifiedUser: AdminUser = {
-        id: user?.id || "admin-1",
-        email: user?.email || "admin@prchardware.com",
-        firstName: user?.firstName || "Executive",
-        lastName: user?.lastName || "Admin",
-        role: user?.role || "super_admin",
-        isTwoFactorEnabled: true,
-      };
-
-      setAdminTokens(accessToken, refreshToken, verifiedUser);
-      pendingMfaSessions.delete(mfaToken);
-      return {
-        success: true,
-        user: verifiedUser,
-        message: "2FA Verification successful!",
-      };
-    }
-
-    // 2. Real-Time TOTP Code Calculation Fallback (RFC 6238 for Google Authenticator / Authy)
-    const activeSecret = localStorage.getItem(TWO_FACTOR_SECRET_KEY) || "PRCHEXECUT7X9K3M2P";
-    const currentTOTP = await generateTOTPCode(activeSecret, 0);
-    const prevTOTP = await generateTOTPCode(activeSecret, -1);
-    const nextTOTP = await generateTOTPCode(activeSecret, 1);
-
-    const validLocalOTP = localStorage.getItem("prc_admin_valid_otp") || "123456";
-    const validBackupCodes = [
-      "9821-4432", "98214432",
-      "1209-8876", "12098876",
-      "5543-9012", "55439012",
-      "7761-3210", "77613210",
-      "4412-9981", "44129981",
-      "6671-2244", "66712244",
-    ];
-
-    const isLiveTOTPMatch = cleanCode === currentTOTP || cleanCode === prevTOTP || cleanCode === nextTOTP;
-    const isTestOTPMatch = cleanCode === validLocalOTP || cleanCode === "123456";
-    const isBackupMatch = validBackupCodes.includes(cleanCode.toUpperCase()) || validBackupCodes.includes(cleanCode);
-
-    if (isLiveTOTPMatch || isTestOTPMatch || isBackupMatch) {
-      const verifiedUser: AdminUser = pendingSession?.user || {
-        id: "admin-1",
-        email: "admin@prchardware.com",
-        firstName: "Executive",
-        lastName: "Admin",
-        role: "super_admin",
-        isTwoFactorEnabled: true,
-      };
-      const accessToken = pendingSession?.accessToken || "demo_admin_access_token_2fa";
-      const refreshToken = pendingSession?.refreshToken || "demo_admin_refresh_token_2fa";
-
-      setAdminTokens(accessToken, refreshToken, verifiedUser);
-      pendingMfaSessions.delete(mfaToken);
-
-      logAdminActivity({
-        action: "2FA_VERIFIED",
-        entity: "AUTH",
-        category: "AUTH",
-        severity: "SECURITY",
-        details: `Executive 2FA passcode verified for '${verifiedUser.email}'.`,
-        adminEmail: verifiedUser.email,
-        payload: { method: isBackupMatch ? "EMERGENCY_BACKUP_CODE" : "TOTP_RFC6238" },
-      });
-
-      return {
-        success: true,
-        user: verifiedUser,
-        message: isBackupMatch ? "Authenticated via Emergency Backup Code!" : "2FA Security Passcode Verified!",
-      };
-    }
-
     return {
-      success: false,
-      message: "Invalid 2FA Security Passcode! Please check your Google Authenticator app for the current 6-digit code or enter a valid backup code.",
+      success: true,
+      user: verifiedUser,
+      message: isBackupMatch ? "Authenticated via Emergency Backup Code!" : "2FA Security Passcode Verified!",
     };
   },
 
@@ -317,22 +448,17 @@ export const adminAuthService = {
       body: JSON.stringify(bodyData),
     });
 
-    const secret = "PRCHEXECUT7X9K3M2P";
-    const appName = encodeURIComponent("PRC Hardware Executive");
-    const account = encodeURIComponent(payload.email);
-    const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=otpauth://totp/${appName}:${account}?secret=${secret}&issuer=${appName}`;
+    const secret = generateBase32Secret(32);
+    const appName = "PRC Hardware";
+    const account = payload.email.trim();
+    const otpauthUri = `otpauth://totp/${encodeURIComponent(appName)}:${encodeURIComponent(account)}?secret=${secret}&issuer=${encodeURIComponent(appName)}&algorithm=SHA1&digits=6&period=30`;
+    const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(otpauthUri)}`;
+    const backupCodes = generateBackupCodes(6);
 
     const twoFactorSetup: TwoFactorSetupData = {
       secret,
       qrCodeUrl,
-      backupCodes: [
-        "9821-4432",
-        "1209-8876",
-        "5543-9012",
-        "7761-3210",
-        "4412-9981",
-        "6671-2244",
-      ],
+      backupCodes,
     };
 
     const createdUser: AdminUser = {
@@ -370,113 +496,105 @@ export const adminAuthService = {
       res = await fetchAdminApi("/auth/2fa/generate", { method: "POST" });
     }
 
-    if (res.success && res.data) {
-      if (res.data.secret) {
-        localStorage.setItem(TWO_FACTOR_SECRET_KEY, res.data.secret);
-      }
+    if (res.success && res.data?.secret && isValidBase32(res.data.secret)) {
+      localStorage.setItem(TWO_FACTOR_SECRET_KEY, res.data.secret);
       return { success: true, data: res.data };
     }
 
-    // Fallback QR & Setup details
-    const secret = "PRCH-EXECUT-7X9K-3M2P";
-    const appName = encodeURIComponent("PRC Hardware Executive");
-    const account = encodeURIComponent("admin@prchardware.com");
-    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=otpauth://totp/${appName}:${account}?secret=${secret}&issuer=${appName}`;
+    // Generate fresh cryptographically valid Base32 secret & backup codes
+    const secret = generateBase32Secret(32);
+    const appName = "PRC Hardware";
+    const account = "admin@prchardware.com";
+    const otpauthUri = `otpauth://totp/${encodeURIComponent(appName)}:${encodeURIComponent(account)}?secret=${secret}&issuer=${encodeURIComponent(appName)}&algorithm=SHA1&digits=6&period=30`;
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(otpauthUri)}`;
+    const backupCodes = generateBackupCodes(6);
 
     localStorage.setItem(TWO_FACTOR_SECRET_KEY, secret);
+    localStorage.setItem(TWO_FACTOR_BACKUP_CODES_KEY, JSON.stringify(backupCodes));
 
     return {
       success: true,
       data: {
         secret,
         qrCodeUrl: qrUrl,
-        backupCodes: [
-          "9821-4432",
-          "1209-8876",
-          "5543-9012",
-          "7761-3210",
-          "4412-9981",
-          "6671-2244",
-        ],
+        backupCodes,
       },
     };
   },
 
   async confirmEnable2FA(code: string): Promise<{ success: boolean; message?: string }> {
-    const cleanCode = code.trim().replace(/\s+/g, "");
+    const cleanCode = code.trim().replace(/[\s-]+/g, "");
     if (!/^\d{6}$/.test(cleanCode)) {
       return { success: false, message: "Please enter a valid 6-digit confirmation code." };
     }
 
-    let res = await fetchAdminApi("/auth/2fa/enable", {
-      method: "POST",
-      body: JSON.stringify({ code: cleanCode }),
-    });
+    // Strict local verification against the active secret during setup FIRST
+    const activeSecret = getAdminSecretForUser("admin@prchardware.com");
+    const isCodeValid = await verifyTOTPCode(activeSecret, cleanCode);
 
-    if (res.success) {
-      setLocal2FAEnabled(true);
-      return { success: true, message: res.message || "Two-Factor Authentication activated on your admin account!" };
+    if (!isCodeValid) {
+      return {
+        success: false,
+        message: "Invalid verification code! The 6-digit code did not match your Authenticator app. Please ensure your device clock is accurate and enter the current code.",
+      };
     }
 
-    localStorage.setItem("prc_admin_valid_otp", cleanCode);
+    // Call backend to sync state if available
+    try {
+      await fetchAdminApi("/auth/2fa/enable", {
+        method: "POST",
+        body: JSON.stringify({ code: cleanCode }),
+      });
+    } catch {
+      // offline fallback
+    }
+
     setLocal2FAEnabled(true);
-    return { success: true, message: "Two-Factor Authentication is now active on your admin account!" };
+    return { success: true, message: "Two-Factor Authentication is now verified and active on your admin account!" };
   },
 
   async disable2FA(passwordOrCode: string): Promise<{ success: boolean; message?: string }> {
-    const cleanCode = passwordOrCode.trim();
-    if (!cleanCode) {
+    const cleanStr = passwordOrCode.trim();
+    if (!cleanStr) {
       return { success: false, message: "Please provide your admin password or 2FA authenticator code to confirm." };
     }
 
-    // 1. Try backend API first
-    const res = await fetchAdminApi("/auth/2fa/disable", {
-      method: "POST",
-      body: JSON.stringify({ password: cleanCode, code: cleanCode }),
-    });
-
-    if (res.success) {
-      setLocal2FAEnabled(false);
-      return { success: true, message: res.message || "Two-Factor Authentication has been disabled." };
-    }
-
-    // 2. Local Fallback Credential & 2FA Validation
-    // Check A: Is it a valid Admin Password?
+    // 1. Local Credential & 2FA Validation FIRST
     const createdAdmins = getStoredCreatedAdmins();
     const isPasswordMatch =
-      cleanCode === "AdminPass123!" ||
-      createdAdmins.some((a) => a.pass === cleanCode);
+      cleanStr === "AdminPass123!" ||
+      createdAdmins.some((a) => a.pass === cleanStr);
 
-    // Check B: Is it a valid 6-digit TOTP / OTP code?
-    const activeSecret = localStorage.getItem(TWO_FACTOR_SECRET_KEY) || "PRCHEXECUT7X9K3M2P";
-    const currentTOTP = await generateTOTPCode(activeSecret, 0);
-    const prevTOTP = await generateTOTPCode(activeSecret, -1);
-    const nextTOTP = await generateTOTPCode(activeSecret, 1);
-    const validLocalOTP = localStorage.getItem("prc_admin_valid_otp") || "123456";
+    const activeSecret = getAdminSecretForUser("admin@prchardware.com");
+    const isLiveTOTPMatch = await verifyTOTPCode(activeSecret, cleanStr);
 
-    const isLiveTOTPMatch = cleanCode === currentTOTP || cleanCode === prevTOTP || cleanCode === nextTOTP;
-    const isTestOTPMatch = cleanCode === validLocalOTP || cleanCode === "123456";
+    const validBackupCodes = getBackupCodesForUser("admin@prchardware.com");
+    const isBackupMatch = validBackupCodes.some(
+      (b) => b.replace(/[\s-]+/g, "").toUpperCase() === cleanStr.replace(/[\s-]+/g, "").toUpperCase()
+    );
 
-    // Check C: Is it a valid 8-digit Emergency Backup Code?
-    const validBackupCodes = [
-      "9821-4432", "98214432",
-      "1209-8876", "12098876",
-      "5543-9012", "55439012",
-      "7761-3210", "77613210",
-      "4412-9981", "44129981",
-      "6671-2244", "66712244",
-    ];
-    const isBackupMatch = validBackupCodes.includes(cleanCode.toUpperCase()) || validBackupCodes.includes(cleanCode);
-
-    if (isPasswordMatch || isLiveTOTPMatch || isTestOTPMatch || isBackupMatch) {
-      setLocal2FAEnabled(false);
-      return { success: true, message: "Two-Factor Authentication has been disabled." };
+    if (!isPasswordMatch && !isLiveTOTPMatch && !isBackupMatch) {
+      return {
+        success: false,
+        message: "Invalid admin password or authenticator OTP code! Two-Factor Authentication remains active for security.",
+      };
     }
 
-    return {
-      success: false,
-      message: "Invalid admin password or authenticator OTP code! Two-Factor Authentication remains active for security.",
-    };
+    // 2. Call backend to sync if available
+    try {
+      await fetchAdminApi("/auth/2fa/disable", {
+        method: "POST",
+        body: JSON.stringify({ password: cleanStr, code: cleanStr }),
+      });
+    } catch {
+      // offline fallback
+    }
+
+    if (isBackupMatch) {
+      consumeBackupCode("admin@prchardware.com", cleanStr);
+    }
+    setLocal2FAEnabled(false);
+    return { success: true, message: "Two-Factor Authentication has been disabled." };
   },
 
   async getProfile(): Promise<{ success: boolean; user?: AdminUser }> {
@@ -484,6 +602,10 @@ export const adminAuthService = {
     const local2FA = isLocal2FAEnabled();
 
     if (res.success && res.data) {
+      const resRole = res.data.role;
+      const resolvedRole = typeof resRole === "object" && resRole !== null
+        ? (resRole.slug ?? resRole.name ?? "super_admin")
+        : (resRole ?? "super_admin");
       return {
         success: true,
         user: {
@@ -491,7 +613,7 @@ export const adminAuthService = {
           email: res.data.email,
           firstName: res.data.firstName || "Executive",
           lastName: res.data.lastName || "Admin",
-          role: res.data.role || "super_admin",
+          role: resolvedRole,
           isTwoFactorEnabled: local2FA,
         },
       };

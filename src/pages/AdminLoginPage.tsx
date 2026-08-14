@@ -57,8 +57,13 @@ export function AdminLoginPage() {
       ? backupCode.trim()
       : otpDigits.join("");
 
-    if (!codeToVerify) {
-      setErrorMsg(useBackupCode ? "Please enter an 8-character emergency backup code." : "Please enter the complete 6-digit authenticator code.");
+    if (!useBackupCode && codeToVerify.length !== 6) {
+      setErrorMsg("Please enter the complete 6-digit authenticator code from your app.");
+      return;
+    }
+
+    if (useBackupCode && !codeToVerify) {
+      setErrorMsg("Please enter an 8-digit emergency backup code (e.g. 9821-4432).");
       return;
     }
 

@@ -259,3 +259,175 @@ export async function fetchAdminApi<T = any>(
     };
   }
 }
+
+/* ─── Roles & Permissions API ───────────────────────────────────────────────── */
+export const rolesApi = {
+  /** GET /roles — list all roles with user counts */
+  list: () => fetchAdminApi<any[]>('/roles'),
+
+  /** GET /roles/:id — get role detail with permissions array */
+  getById: (id: string) => fetchAdminApi<any>(`/roles/${id}`),
+
+  /** POST /roles — create new role */
+  create: (payload: { name: string; description?: string; permissions?: string[] }) =>
+    fetchAdminApi('/roles', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  /** PATCH /roles/:id — update role name / description */
+  update: (id: string, payload: { name?: string; description?: string }) =>
+    fetchAdminApi(`/roles/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+
+  /** DELETE /roles/:id */
+  delete: (id: string) =>
+    fetchAdminApi(`/roles/${id}`, { method: 'DELETE' }),
+
+  /** PATCH /roles/:id/permissions — replace full permission set */
+  updatePermissions: (id: string, permissions: string[]) =>
+    fetchAdminApi(`/roles/${id}/permissions`, {
+      method: 'PATCH',
+      body: JSON.stringify({ permissions }),
+    }),
+
+  /** GET /roles/permissions — list all permissions grouped by module */
+  listPermissions: () => fetchAdminApi<any[]>('/roles/permissions'),
+};
+
+/* ─── Users & Profile API ────────────────────────────────────────────────────── */
+export const usersApi = {
+  /** GET /users — list users with optional query filters */
+  list: (params?: { page?: number; limit?: number; search?: string; status?: string; role?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.page) query.append('page', String(params.page));
+    if (params?.limit) query.append('limit', String(params.limit));
+    if (params?.search) query.append('search', params.search);
+    if (params?.status) query.append('status', params.status);
+    if (params?.role) query.append('role', params.role);
+    const qs = query.toString();
+    return fetchAdminApi<any>(`/users${qs ? `?${qs}` : ''}`);
+  },
+
+  /** GET /users/:id — get user details */
+  getById: (id: string) => fetchAdminApi<any>(`/users/${id}`),
+
+  /** POST /users — create new user/admin/b2b */
+  create: (payload: {
+    email: string;
+    password: string;
+    firstName: string;
+    lastName: string;
+    phone?: string;
+    companyName?: string;
+    gstin?: string;
+    roleId: string;
+    status?: 'ACTIVE' | 'INACTIVE';
+    mustChangePassword?: boolean;
+    sendWelcomeEmail?: boolean;
+  }) =>
+    fetchAdminApi<any>('/users', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  /** PATCH /users/:id — update user details */
+  update: (
+    id: string,
+    payload: {
+      firstName?: string;
+      lastName?: string;
+      phone?: string;
+      companyName?: string;
+      gstin?: string;
+      status?: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED';
+      roleId?: string;
+    }
+  ) =>
+    fetchAdminApi<any>(`/users/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+
+  /** DELETE /users/:id — delete user */
+  delete: (id: string) =>
+    fetchAdminApi<any>(`/users/${id}`, {
+      method: 'DELETE',
+    }),
+
+  /** PATCH /users/profile — update current logged-in user profile */
+  updateProfile: (payload: {
+    firstName?: string;
+    lastName?: string;
+    phone?: string;
+    companyName?: string;
+    gstin?: string;
+  }) =>
+    fetchAdminApi<any>('/users/profile', {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+
+  /** PATCH /users/avatar — update avatar */
+  updateAvatar: (avatar: string) =>
+    fetchAdminApi<any>('/users/avatar', {
+      method: 'PATCH',
+      body: JSON.stringify({ avatar }),
+    }),
+
+  /** GET /users/:id/roles */
+  getUserRoles: (id: string) => fetchAdminApi<any>(`/users/${id}/roles`),
+
+  /** PATCH /users/:id/roles */
+  updateUserRoles: (id: string, roleIds: string[]) =>
+    fetchAdminApi<any>(`/users/${id}/roles`, {
+      method: 'PATCH',
+      body: JSON.stringify({ roleIds }),
+    }),
+};
+
+/* ─── B2B Custom Pricing API ─────────────────────────────────────────────────── */
+export const b2bPricingApi = {
+  /** GET /b2b-pricing/customer/:userId — get all catalog products with custom pricing */
+  getCustomerPricing: (userId: string) =>
+    fetchAdminApi<any>(`/b2b-pricing/customer/${userId}`),
+
+  /** POST /b2b-pricing/customer/:userId — set/update single product custom price */
+  setProductPrice: (
+    userId: string,
+    payload: { productId: string; price: number; minQuantity?: number; notes?: string }
+  ) =>
+    fetchAdminApi<any>(`/b2b-pricing/customer/${userId}`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  /** POST /b2b-pricing/customer/:userId/bulk — bulk update custom prices */
+  bulkSetPrices: (
+    userId: string,
+    prices: Array<{ productId: string; price: number; minQuantity?: number; notes?: string }>
+  ) =>
+    fetchAdminApi<any>(`/b2b-pricing/customer/${userId}/bulk`, {
+      method: 'POST',
+      body: JSON.stringify({ prices }),
+    }),
+
+  /** POST /b2b-pricing/customer/:userId/discount — apply flat % discount */
+  applyFlatDiscount: (
+    userId: string,
+    payload: { discountPercent: number; categoryId?: string; minQuantity?: number }
+  ) =>
+    fetchAdminApi<any>(`/b2b-pricing/customer/${userId}/discount`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  /** DELETE /b2b-pricing/customer/:userId/:productId — revert product to retail price */
+  deleteProductPrice: (userId: string, productId: string) =>
+    fetchAdminApi<any>(`/b2b-pricing/customer/${userId}/${productId}`, {
+      method: 'DELETE',
+    }),
+};
+

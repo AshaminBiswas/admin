@@ -13,6 +13,7 @@ import { QuotesPage } from "../../pages/QuotesPage";
 import { AppointmentsPage } from "../../pages/AppointmentsPage";
 import { AuditPage } from "../../pages/AuditPage";
 import { AdminManagementPage } from "../../pages/AdminManagementPage";
+import { RolesPage } from "../../pages/RolesPage";
 import { AdminSecuritySettings } from "../settings/AdminSecuritySettings";
 
 // New specialized pages
@@ -28,11 +29,13 @@ import { ReviewsPage } from "../../pages/ReviewsPage";
 import { UsersPage } from "../../pages/UsersPage";
 import { ShippingsPage } from "../../pages/ShippingsPage";
 import { ModelManagementPage } from "../../pages/ModelManagementPage";
+import { B2BPricingPage } from "../../pages/B2BPricingPage";
 
 export function AdminLayout() {
-  const { currentView } = useAdminAuth();
+  const { currentView, setCurrentView } = useAdminAuth();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const [b2bTargetCustomerId, setB2bTargetCustomerId] = useState<string | undefined>();
 
   const toggleSidebar = () => setIsCollapsed((prev) => !prev);
   const toggleMobileSidebar = () => setIsMobileOpen((prev) => !prev);
@@ -147,8 +150,23 @@ export function AdminLayout() {
 
       // 4. Customers & Access
       case "users":
-        return <UsersPage />;
+        return (
+          <UsersPage
+            onNavigateB2BPricing={(custId) => {
+              setB2bTargetCustomerId(custId);
+              setCurrentView("b2b-pricing");
+            }}
+          />
+        );
+      case "b2b-pricing":
+        return (
+          <B2BPricingPage
+            initialCustomerId={b2bTargetCustomerId}
+            onNavigateUsers={() => setCurrentView("users")}
+          />
+        );
       case "roles":
+        return <RolesPage />;
       case "admins":
         return <AdminManagementPage />;
       case "auth":

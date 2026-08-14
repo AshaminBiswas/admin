@@ -38,10 +38,25 @@ interface AdminAuthContextType {
 const AdminAuthContext = createContext<AdminAuthContextType | undefined>(undefined);
 
 export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
+  // Normalize role: backend can return role as object {slug} or as string
+  function normalizeRole(user: any): AdminUser | null {
+    if (!user) return null;
+    const r = user.role;
+    const roleSlug = typeof r === "object" && r !== null
+      ? (r.slug ?? r.name ?? "super_admin")
+      : (r ?? "super_admin");
+    return { ...user, role: roleSlug };
+  }
+
   const [adminUser, setAdminUser] = useState<AdminUser | null>(() => {
     const token = getAdminToken();
     const storedUser = getStoredAdminUser();
-    if (token && storedUser && !isSessionExpired()) return storedUser;
+    if (token && storedUser && !isSessionExpired()) {
+      const fixed = normalizeRole(storedUser);
+      // Persist the fixed user back so localStorage no longer has the object-form role
+      if (fixed) localStorage.setItem("prc_admin_user_session", JSON.stringify(fixed));
+      return fixed;
+    }
     if (token && !isSessionExpired()) {
       return {
         id: "admin-1",
@@ -198,7 +213,7 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      if (storedUser) setAdminUser(storedUser);
+      if (storedUser) setAdminUser(normalizeRole(storedUser));
       scheduleProactiveRefresh();
 
       try {
@@ -317,10 +332,24 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
+const fallbackAdminAuth: AdminAuthContextType = {
+  adminUser: null,
+  isAuthenticated: false,
+  isLoading: false,
+  pending2FA: false,
+  mfaToken: null,
+  currentView: "dashboard",
+  sessionNotice: null,
+  clearSessionNotice: () => {},
+  setCurrentView: () => {},
+  login: async () => ({ success: false }),
+  verify2FA: async () => ({ success: false }),
+  cancel2FA: () => {},
+  logout: async () => {},
+  refreshUserProfile: async () => {},
+};
+
 export function useAdminAuth() {
   const context = useContext(AdminAuthContext);
-  if (!context) {
-    throw new Error("useAdminAuth must be used within AdminAuthProvider");
-  }
-  return context;
+  return context || fallbackAdminAuth;
 }

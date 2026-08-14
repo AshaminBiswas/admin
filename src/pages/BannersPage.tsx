@@ -20,20 +20,20 @@ import { getAdminToken, API_BASE_URL, fetchAdminApi } from "../api/adminApi";
 import { BannerItem } from "../types/admin";
 
 const POSITIONS = [
-  { id: "HERO_SLIDER", label: "Hero Slider", desc: "Main Homepage Banner", desktop: "1920x1080 (16:9)", mobile: "750x1000 (3:4)" },
-  { id: "HOME_UPCOMING", label: "Home Upcoming", desc: "Upcoming Collections", desktop: "1920x800", mobile: "750x800" },
-  { id: "BESTSELLERS_TOP", label: "Bestsellers Top", desc: "Above Bestsellers", desktop: "1920x600", mobile: "750x600" },
-  { id: "BESTSELLERS_MID", label: "Bestsellers Mid", desc: "Inside Bestsellers", desktop: "1200x400", mobile: "750x400" },
-  { id: "NEW_ARRIVALS_TOP", label: "New Arrivals Top", desc: "Above New Arrivals", desktop: "1920x600", mobile: "750x600" },
-  { id: "NEW_ARRIVALS_MID", label: "New Arrivals Mid", desc: "Inside New Arrivals", desktop: "1200x400", mobile: "750x400" },
-  { id: "OFFERS_TOP", label: "Offers Top", desc: "Offers Page Header", desktop: "1920x600", mobile: "750x600" },
-  { id: "OFFERS_SIDE", label: "Offers Side", desc: "Offers Page Sidebar", desktop: "400x800", mobile: "400x800" },
-  { id: "SHOP_BY_AESTHETIC", label: "Shop By Aesthetic", desc: "Aesthetic Section", desktop: "1920x1080", mobile: "750x1000" },
-  { id: "CUBICLE_COLLECTION", label: "Cubicle Collection", desc: "Category Header", desktop: "1920x600", mobile: "750x600" },
-  { id: "LOCKER_COLLECTION", label: "Locker Collection", desc: "Category Header", desktop: "1920x600", mobile: "750x600" },
-  { id: "ABOUT_HERO", label: "About Hero", desc: "About Us Header", desktop: "1920x800", mobile: "750x800" },
-  { id: "CONTACT_HERO", label: "Contact Hero", desc: "Contact Us Header", desktop: "1920x800", mobile: "750x800" },
-  { id: "FAQ_HERO", label: "FAQ Hero", desc: "FAQ Page Header", desktop: "1920x800", mobile: "750x800" },
+  { id: "HERO_SLIDER", label: "Hero Slider", desc: "Main Homepage Banner", desktop: "1920 × 720 px (8:3 / 2.67:1)", tablet: "1024 × 383 px (8:3 / 2.67:1)", mobile: "750 × 280 px (8:3 / 2.67:1)" },
+  { id: "HOME_UPCOMING", label: "Home Upcoming", desc: "Upcoming Collections Slider", desktop: "1920 × 600 px (3.2:1)", tablet: "1024 × 400 px (2.5:1)", mobile: "750 × 400 px (1.875:1)" },
+  { id: "BESTSELLERS_TOP", label: "Bestsellers Top", desc: "Above Bestsellers Header", desktop: "1920 × 600 px (3.2:1)", tablet: "1024 × 450 px", mobile: "750 × 500 px" },
+  { id: "BESTSELLERS_MID", label: "Bestsellers Mid", desc: "Inside Bestsellers In-Feed", desktop: "1920 × 500 px (3.8:1)", tablet: "1024 × 350 px", mobile: "750 × 400 px" },
+  { id: "NEW_ARRIVALS_TOP", label: "New Arrivals Top", desc: "Above New Arrivals Header", desktop: "1920 × 600 px (3.2:1)", tablet: "1024 × 450 px", mobile: "750 × 500 px" },
+  { id: "NEW_ARRIVALS_MID", label: "New Arrivals Mid", desc: "Inside New Arrivals In-Feed", desktop: "1920 × 500 px (3.8:1)", tablet: "1024 × 350 px", mobile: "750 × 400 px" },
+  { id: "OFFERS_TOP", label: "Offers Top", desc: "Offers Page Top Header", desktop: "1920 × 600 px (3.2:1)", tablet: "1024 × 450 px", mobile: "750 × 500 px" },
+  { id: "OFFERS_SIDE", label: "Offers Side", desc: "Offers Page Sticky Sidebar", desktop: "600 × 900 px (2:3)", tablet: "600 × 900 px (2:3)", mobile: "600 × 900 px (2:3)" },
+  { id: "SHOP_BY_AESTHETIC", label: "Shop By Aesthetic", desc: "Aesthetic Section Grid Cards", desktop: "800 × 1000 px (4:5)", tablet: "600 × 750 px (4:5)", mobile: "500 × 625 px (4:5)" },
+  { id: "CUBICLE_COLLECTION", label: "Cubicle Collection", desc: "Cubicle Category Header", desktop: "1920 × 600 px (3.2:1)", tablet: "1024 × 450 px", mobile: "750 × 450 px" },
+  { id: "LOCKER_COLLECTION", label: "Locker Collection", desc: "Locker Category Header", desktop: "1920 × 600 px (3.2:1)", tablet: "1024 × 450 px", mobile: "750 × 450 px" },
+  { id: "ABOUT_HERO", label: "About Hero", desc: "About Us Page Header", desktop: "1920 × 500 px (3.8:1)", tablet: "1024 × 400 px", mobile: "750 × 450 px" },
+  { id: "CONTACT_HERO", label: "Contact Hero", desc: "Contact Us Page Header", desktop: "1920 × 500 px (3.8:1)", tablet: "1024 × 400 px", mobile: "750 × 450 px" },
+  { id: "FAQ_HERO", label: "FAQ Hero", desc: "FAQ Page Header", desktop: "1920 × 500 px (3.8:1)", tablet: "1024 × 400 px", mobile: "750 × 450 px" },
 ];
 
 const INITIAL_FORM = {
@@ -289,20 +289,28 @@ export function BannersPage() {
           </div>
           
           {activePosDef && (
-            <div className="flex items-center gap-6 bg-slate-50 dark:bg-[#09090B] p-4 rounded-xl border border-slate-200 dark:border-[#27272A]">
+            <div className="flex flex-wrap items-center gap-4 sm:gap-6 bg-slate-50 dark:bg-[#09090B] p-4 rounded-xl border border-slate-200 dark:border-[#27272A]">
               <div className="flex items-center gap-3">
                 <Monitor className="text-slate-400 dark:text-[#71717A]" size={20} />
                 <div>
-                  <div className="text-[10px] text-slate-500 dark:text-[#A1A1AA] uppercase">Desktop Target</div>
-                  <div className="text-sm font-semibold">{activePosDef.desktop}</div>
+                  <div className="text-[10px] text-slate-500 dark:text-[#A1A1AA] uppercase font-bold">Desktop Target</div>
+                  <div className="text-xs sm:text-sm font-semibold">{activePosDef.desktop}</div>
                 </div>
               </div>
-              <div className="w-px h-8 bg-slate-200 dark:bg-[#27272A]"></div>
+              <div className="hidden sm:block w-px h-8 bg-slate-200 dark:bg-[#27272A]"></div>
+              <div className="flex items-center gap-3">
+                <Tablet className="text-slate-400 dark:text-[#71717A]" size={20} />
+                <div>
+                  <div className="text-[10px] text-slate-500 dark:text-[#A1A1AA] uppercase font-bold">Tablet Target</div>
+                  <div className="text-xs sm:text-sm font-semibold">{activePosDef.tablet}</div>
+                </div>
+              </div>
+              <div className="hidden sm:block w-px h-8 bg-slate-200 dark:bg-[#27272A]"></div>
               <div className="flex items-center gap-3">
                 <Smartphone className="text-slate-400 dark:text-[#71717A]" size={20} />
                 <div>
-                  <div className="text-[10px] text-slate-500 dark:text-[#A1A1AA] uppercase">Mobile Target</div>
-                  <div className="text-sm font-semibold">{activePosDef.mobile}</div>
+                  <div className="text-[10px] text-slate-500 dark:text-[#A1A1AA] uppercase font-bold">Mobile Target</div>
+                  <div className="text-xs sm:text-sm font-semibold">{activePosDef.mobile}</div>
                 </div>
               </div>
             </div>

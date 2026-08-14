@@ -83,8 +83,8 @@ export function EditProductPage() {
   const [dimHeight, setDimHeight] = useState("");
   const [dimUnit, setDimUnit] = useState("mm");
   
-  // Custom Attributes (Dynamic Key-Value)
-  const [attributes, setAttributes] = useState<{key: string, value: string}[]>([{key: "", value: ""}]);
+  // Custom Attributes (Dynamic Key-Value with Boolean Dropdown Defaulting to False)
+  const [attributes, setAttributes] = useState<{key: string, value: string}[]>([{key: "", value: "false"}]);
 
   // Arrays
   const [colours, setColours] = useState("");
@@ -144,8 +144,16 @@ export function EditProductPage() {
         }
         
         if (prod.attributes && Object.keys(prod.attributes).length > 0) {
-          const attrs = Object.entries(prod.attributes).map(([k, v]) => ({key: k, value: String(v)}));
+          const attrs = Object.entries(prod.attributes).map(([k, v]) => {
+            const vStr = String(v).toLowerCase();
+            return {
+              key: k,
+              value: vStr === "true" ? "true" : (vStr === "false" ? "false" : String(v))
+            };
+          });
           setAttributes(attrs);
+        } else {
+          setAttributes([{key: "", value: "false"}]);
         }
         
         if (Array.isArray(prod.colours)) setColours(prod.colours.join(", "));
@@ -184,11 +192,11 @@ export function EditProductPage() {
     setAttributes(newAttrs);
   };
 
-  const addAttribute = () => setAttributes([...attributes, {key: "", value: ""}]);
+  const addAttribute = () => setAttributes([...attributes, {key: "", value: "false"}]);
   const removeAttribute = (index: number) => {
     const newAttrs = [...attributes];
     newAttrs.splice(index, 1);
-    if (newAttrs.length === 0) newAttrs.push({key: "", value: ""});
+    if (newAttrs.length === 0) newAttrs.push({key: "", value: "false"});
     setAttributes(newAttrs);
   };
 
@@ -255,10 +263,11 @@ export function EditProductPage() {
     if (metaTitle && metaTitle.length > 70) return setError("Meta Title should not exceed 70 characters");
     if (metaDescription && metaDescription.length > 160) return setError("Meta Description should not exceed 160 characters");
 
-    const attrsObj: Record<string, string> = {};
+    const attrsObj: Record<string, any> = {};
     attributes.forEach(attr => {
-      if (attr.key.trim() && attr.value.trim()) {
-        attrsObj[attr.key.trim()] = attr.value.trim();
+      if (attr.key.trim()) {
+        const valTrimmed = (attr.value || "false").trim().toLowerCase();
+        attrsObj[attr.key.trim()] = valTrimmed === "true" ? true : (valTrimmed === "false" ? false : attr.value.trim());
       }
     });
 
@@ -523,18 +532,47 @@ export function EditProductPage() {
 
           {/* Custom Attributes */}
           <div className={sectionContainerClass}>
-            <h4 className={sectionTitleClass}><Settings size={16} className="text-slate-500" />Custom Attributes</h4>
+            <div className="flex items-center justify-between mb-3">
+              <h4 className={sectionTitleClass}><Settings size={16} className="text-slate-500" />Custom Attributes</h4>
+              <span className="text-xs text-slate-400">Select boolean value (defaults to False)</span>
+            </div>
             <div className="space-y-3">
               {attributes.map((attr, idx) => (
                 <div key={idx} className="flex items-center gap-3">
-                  <input type="text" value={attr.key} onChange={(e) => handleAttributeChange(idx, 'key', e.target.value)} placeholder="Attribute (e.g. Material)" className={inputClass} />
-                  <input type="text" value={attr.value} onChange={(e) => handleAttributeChange(idx, 'value', e.target.value)} placeholder="Value (e.g. Solid Brass)" className={inputClass} />
-                  <button type="button" onClick={() => removeAttribute(idx)} className="p-2.5 text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-xl transition-colors">
+                  <div className="flex-1">
+                    <input
+                      type="text"
+                      value={attr.key}
+                      onChange={(e) => handleAttributeChange(idx, 'key', e.target.value)}
+                      placeholder="Attribute Name (e.g. Waterproof, Scratch Resistant)"
+                      className={inputClass}
+                    />
+                  </div>
+                  <div className="w-44 sm:w-52 flex-shrink-0">
+                    <select
+                      value={attr.value || "false"}
+                      onChange={(e) => handleAttributeChange(idx, 'value', e.target.value)}
+                      className={`${inputClass} font-semibold cursor-pointer`}
+                    >
+                      <option value="false">False (No)</option>
+                      <option value="true">True (Yes)</option>
+                    </select>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeAttribute(idx)}
+                    className="p-2.5 text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-xl transition-colors flex-shrink-0"
+                    title="Remove attribute"
+                  >
                     <X size={16} />
                   </button>
                 </div>
               ))}
-              <button type="button" onClick={addAttribute} className="text-xs font-bold text-[#8B5CF6] hover:underline">
+              <button
+                type="button"
+                onClick={addAttribute}
+                className="text-xs font-bold text-[#8B5CF6] hover:underline flex items-center gap-1 mt-1"
+              >
                 + Add Another Attribute
               </button>
             </div>
