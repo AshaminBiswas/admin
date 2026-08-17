@@ -321,7 +321,7 @@ export function QuotesPage() {
       <div className="flex flex-wrap items-center justify-between gap-4 p-5 rounded-2xl bg-[#18181B] border border-[#27272A] shadow-md">
         <div>
           <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#A855F7] bg-[#A855F7]/10 px-2.5 py-0.5 rounded border border-[#A855F7]/20">
-            Pacific Commercial Operations
+            PRC Commercial Operations
           </span>
           <h2 className="text-xl font-bold font-serif text-[#FAFAFA] mt-1">
             B2B Bulk Quotation (RFQ) Console
@@ -942,7 +942,7 @@ export function QuotesPage() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 text-emerald-400 font-bold text-sm">
                       <ShieldCheck size={18} />
-                      <span>Pacific Cryptographic Signature & QR</span>
+                      <span>PRC Cryptographic Signature & QR</span>
                     </div>
                     <button
                       type="button"
@@ -1089,7 +1089,7 @@ export function QuotesPage() {
             </div>
 
             <p className="text-xs text-[#A1A1AA]">
-              Verify the cryptographic HMAC-SHA256 signature and tamper integrity of any quotation issued by Pacific Products & Solutions.
+              Verify the cryptographic HMAC-SHA256 signature and tamper integrity of any quotation issued by PRC Hardware.
             </p>
 
             <form onSubmit={handleRunVerify} className="flex gap-2">
