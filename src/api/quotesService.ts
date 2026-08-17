@@ -1,4 +1,4 @@
-import { fetchAdminApi } from "./adminApi";
+import { fetchAdminApi, API_BASE_URL, getAdminToken } from "./adminApi";
 
 export interface AdminQuoteLineItem {
   id?: string;
@@ -242,5 +242,39 @@ export const quotesService = {
     } catch {
       return [];
     }
+  },
+
+  /**
+   * Download official Quotation PDF by ID
+   */
+  async downloadQuotePdf(id: string, referenceNo = "quote"): Promise<void> {
+    const token = getAdminToken();
+    const url = `${API_BASE_URL}/quotes/${id}/pdf`;
+    const response = await fetch(url, {
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      let msg = `Failed to download PDF (HTTP ${response.status})`;
+      try {
+        const json = JSON.parse(errText);
+        if (json?.message) msg = json.message;
+      } catch {}
+      throw new Error(msg);
+    }
+
+    const blob = await response.blob();
+    const blobUrl = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = blobUrl;
+    const safeRef = String(referenceNo).replace(/[\/\\]/g, '-');
+    a.download = `Quotation-${safeRef}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(blobUrl);
   },
 };

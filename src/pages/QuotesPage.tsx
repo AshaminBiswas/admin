@@ -3,7 +3,7 @@ import {
   FileText, Search, RefreshCw, CheckCircle2, XCircle,
   Clock, AlertCircle, Trash2, Eye, ShieldCheck, QrCode,
   Edit3, Plus, ExternalLink, Calendar, Filter, X, Check,
-  Building2, ArrowRight
+  Building2, ArrowRight, Download
 } from "lucide-react";
 import {
   quotesService,
@@ -70,6 +70,9 @@ export function QuotesPage() {
   // Soft Delete Confirmation Modal
   const [quoteToDelete, setQuoteToDelete] = useState<AdminQuoteDetail | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // PDF Download Tracking
+  const [downloadingPdfId, setDownloadingPdfId] = useState<string | null>(null);
 
   // Load Quotes
   const fetchQuotes = async () => {
@@ -270,6 +273,22 @@ export function QuotesPage() {
       setErrorMsg(err?.message || "Failed to delete quotation.");
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  // Download Official PDF
+  const handleDownloadPdf = async (q: AdminQuoteDetail, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setDownloadingPdfId(q.id);
+    setErrorMsg("");
+    try {
+      await quotesService.downloadQuotePdf(q.id, q.referenceNo || q.quoteNumber);
+      setSuccessMsg(`✔ Downloaded official quotation PDF for ${q.referenceNo}`);
+      setTimeout(() => setSuccessMsg(""), 3000);
+    } catch (err: any) {
+      setErrorMsg(err?.message || "Failed to download quotation PDF.");
+    } finally {
+      setDownloadingPdfId(null);
     }
   };
 
@@ -551,6 +570,20 @@ export function QuotesPage() {
                       <div className="flex items-center justify-end gap-1.5">
                         <button
                           type="button"
+                          onClick={(e) => handleDownloadPdf(q, e)}
+                          disabled={downloadingPdfId === q.id}
+                          className="bg-[#27272A] hover:bg-emerald-600 text-[#FAFAFA] hover:text-white font-bold text-xs px-2.5 py-1.5 rounded-lg transition-all flex items-center gap-1 disabled:opacity-50"
+                          title="Download Official Quotation PDF"
+                        >
+                          {downloadingPdfId === q.id ? (
+                            <RefreshCw size={13} className="animate-spin text-emerald-400" />
+                          ) : (
+                            <Download size={13} />
+                          )}
+                          <span className="hidden sm:inline">PDF</span>
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => handleOpenDetail(q.id)}
                           className="bg-[#27272A] hover:bg-[#8B5CF6] hover:text-white text-[#FAFAFA] font-bold text-xs px-3 py-1.5 rounded-lg transition-all flex items-center gap-1"
                         >
@@ -614,13 +647,29 @@ export function QuotesPage() {
                   {selectedQuote.projectName}
                 </h3>
               </div>
-              <button
-                type="button"
-                onClick={() => setIsDetailOpen(false)}
-                className="p-1 text-[#A1A1AA] hover:text-[#FAFAFA] rounded-lg"
-              >
-                <X size={20} />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleDownloadPdf(selectedQuote)}
+                  disabled={downloadingPdfId === selectedQuote.id}
+                  className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 shadow disabled:opacity-50"
+                  title="Download Official PDF"
+                >
+                  {downloadingPdfId === selectedQuote.id ? (
+                    <RefreshCw size={13} className="animate-spin" />
+                  ) : (
+                    <Download size={13} />
+                  )}
+                  <span>Download PDF</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsDetailOpen(false)}
+                  className="p-1.5 text-[#A1A1AA] hover:text-[#FAFAFA] hover:bg-[#27272A] rounded-lg transition-colors"
+                >
+                  <X size={18} />
+                </button>
+              </div>
             </div>
 
             {detailLoading ? (
@@ -907,25 +956,40 @@ export function QuotesPage() {
                   </div>
 
                   {selectedQuote.digitalSignature ? (
-                    <div className="flex items-center gap-4 bg-slate-950/60 p-4 rounded-xl border border-slate-800">
-                      {selectedQuote.qrCodeData && (
-                        <img
-                          src={selectedQuote.qrCodeData}
-                          alt="QR Seal"
-                          className="w-20 h-20 bg-white p-1 rounded-lg"
-                        />
-                      )}
-                      <div className="space-y-1 text-xs">
-                        <p className="font-bold text-[#FAFAFA]">
-                          Signed By: <span className="text-emerald-400">{selectedQuote.signedBy}</span>
-                        </p>
-                        <p className="text-[#A1A1AA] text-[11px]">
-                          Timestamp: {selectedQuote.signedAt ? new Date(selectedQuote.signedAt).toLocaleString("en-IN") : "N/A"}
-                        </p>
-                        <p className="font-mono text-[10px] text-[#71717A] truncate max-w-[280px]">
-                          SHA256: {selectedQuote.digitalSignature}
-                        </p>
+                    <div className="flex flex-wrap items-center justify-between gap-4 bg-slate-950/60 p-4 rounded-xl border border-slate-800">
+                      <div className="flex items-center gap-4">
+                        {selectedQuote.qrCodeData && (
+                          <img
+                            src={selectedQuote.qrCodeData}
+                            alt="QR Seal"
+                            className="w-20 h-20 bg-white p-1 rounded-lg shrink-0"
+                          />
+                        )}
+                        <div className="space-y-1 text-xs">
+                          <p className="font-bold text-[#FAFAFA]">
+                            Signed By: <span className="text-emerald-400">{selectedQuote.signedBy}</span>
+                          </p>
+                          <p className="text-[#A1A1AA] text-[11px]">
+                            Timestamp: {selectedQuote.signedAt ? new Date(selectedQuote.signedAt).toLocaleString("en-IN") : "N/A"}
+                          </p>
+                          <p className="font-mono text-[10px] text-[#71717A] truncate max-w-[280px]">
+                            SHA256: {selectedQuote.digitalSignature}
+                          </p>
+                        </div>
                       </div>
+                      <button
+                        type="button"
+                        onClick={() => handleDownloadPdf(selectedQuote)}
+                        disabled={downloadingPdfId === selectedQuote.id}
+                        className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-3.5 py-2 rounded-xl transition-all shadow flex items-center gap-1.5 ml-auto disabled:opacity-50"
+                      >
+                        {downloadingPdfId === selectedQuote.id ? (
+                          <RefreshCw size={14} className="animate-spin" />
+                        ) : (
+                          <Download size={14} />
+                        )}
+                        <span>Download Official PDF</span>
+                      </button>
                     </div>
                   ) : (
                     <p className="text-xs text-indigo-200">
