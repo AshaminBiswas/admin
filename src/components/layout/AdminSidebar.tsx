@@ -135,8 +135,8 @@ export function AdminSidebar({
         }`}
       >
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-tr-xl rounded-bl-xl bg-[#8B5CF6] text-white flex items-center justify-center font-extrabold text-xl shadow-lg shadow-[#8B5CF6]/20 flex-shrink-0">
-            <Boxes size={22} />
+          <div className="w-9 h-9 rounded-xl bg-slate-900 border border-slate-700/60 p-1 flex items-center justify-center shadow-md flex-shrink-0">
+            <img src="/logo.png" alt="PRC Logo" className="w-full h-full object-contain" />
           </div>
           {!isCollapsed && (
             <span className="font-extrabold text-sm text-slate-900 dark:text-[#FAFAFA] tracking-tight">
