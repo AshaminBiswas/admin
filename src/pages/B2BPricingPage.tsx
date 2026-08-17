@@ -38,6 +38,18 @@ interface CustomerOption {
   role?: { name: string; slug: string } | null;
 }
 
+function broadcastB2BPriceUpdate(customerId?: string) {
+  try {
+    localStorage.setItem("prc_b2b_pricing_updated", String(Date.now()));
+    window.dispatchEvent(new CustomEvent("prc_b2b_pricing_updated", { detail: { customerId } }));
+    if ("BroadcastChannel" in window) {
+      const channel = new BroadcastChannel("prc_b2b_pricing_channel");
+      channel.postMessage({ type: "B2B_PRICING_UPDATED", customerId, timestamp: Date.now() });
+      channel.close();
+    }
+  } catch {}
+}
+
 export const B2BPricingPage: React.FC<B2BPricingPageProps> = ({
   initialCustomerId,
   onNavigateUsers,
@@ -128,10 +140,22 @@ export const B2BPricingPage: React.FC<B2BPricingPageProps> = ({
     setDraftChanges(new Map());
     try {
       const res = await b2bPricingApi.getCustomerPricing(userId);
-      if (res.success && res.data) {
-        setPricingData(res.data);
-      } else {
+
+      // Normalise response shape — data may live at res.data or at top-level
+      const pricingPayload =
+        res.data && typeof res.data === "object" && "items" in res.data
+          ? res.data
+          : (res as any).items !== undefined
+          ? res
+          : null;
+
+      if (pricingPayload) {
+        setPricingData(pricingPayload);
+      } else if (res.success === false || res.error) {
         showToast(res.message || "Failed to load customer pricing", "error");
+      } else {
+        // Unknown shape — store whatever came back and let the UI handle it
+        setPricingData(res.data || res);
       }
     } catch (err: any) {
       showToast(err.message || "Failed to load pricing matrix", "error");
@@ -217,6 +241,7 @@ export const B2BPricingPage: React.FC<B2BPricingPageProps> = ({
             next.delete(item.productId);
             return next;
           });
+          broadcastB2BPriceUpdate(selectedCustomerId);
           loadCustomerPricing(selectedCustomerId);
         }
       } catch (err: any) {
@@ -246,12 +271,24 @@ export const B2BPricingPage: React.FC<B2BPricingPageProps> = ({
       }));
 
       const res = await b2bPricingApi.bulkSetPrices(selectedCustomerId, payload);
-      if (res.success) {
+
+      // Treat any non-error response as success (backend may omit `success` field)
+      const isSuccess =
+        res.success === true ||
+        res.success === undefined ||
+        res.status === "success" ||
+        res.message?.toLowerCase().includes("success");
+
+      if (isSuccess && !res.error) {
         showToast(`Successfully saved ${payload.length} custom product prices!`);
         setDraftChanges(new Map());
+        broadcastB2BPriceUpdate(selectedCustomerId);
         await loadCustomerPricing(selectedCustomerId);
       } else {
         showToast(res.message || "Failed to save prices", "error");
+        // Still reload to show current server state
+        broadcastB2BPriceUpdate(selectedCustomerId);
+        await loadCustomerPricing(selectedCustomerId);
       }
     } catch (err: any) {
       showToast(err.message || "Failed to save custom prices", "error");
@@ -270,15 +307,27 @@ export const B2BPricingPage: React.FC<B2BPricingPageProps> = ({
         categoryId: discountCategory === "all" ? undefined : discountCategory,
       });
 
-      if (res.success) {
+      // Treat any non-error response as success (backend may omit `success` field)
+      const isSuccess =
+        res.success === true ||
+        res.success === undefined ||
+        res.status === "success" ||
+        res.message?.toLowerCase().includes("success");
+
+      if (isSuccess && !res.error) {
+        const appliedCount = res.data?.appliedCount ?? res.appliedCount ?? "all";
         showToast(
-          `Applied flat ${discountPercent}% discount to ${res.data?.appliedCount || "all"} products!`
+          `Applied flat ${discountPercent}% discount to ${appliedCount} products!`
         );
         setShowDiscountModal(false);
         setDraftChanges(new Map());
+        broadcastB2BPriceUpdate(selectedCustomerId);
         await loadCustomerPricing(selectedCustomerId);
       } else {
         showToast(res.message || "Failed to apply discount", "error");
+        // Still reload to reflect any partial server changes
+        broadcastB2BPriceUpdate(selectedCustomerId);
+        await loadCustomerPricing(selectedCustomerId);
       }
     } catch (err: any) {
       showToast(err.message || "Failed to apply discount", "error");
