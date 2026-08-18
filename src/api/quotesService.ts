@@ -57,6 +57,7 @@ export interface AdminQuoteDetail {
   discountTotal?: number;
   taxTotal: number;
   grandTotal: number;
+  advancePercentage?: number | null;
   notes?: string | null;
   adminNotes?: string | null;
   termsAccepted: boolean;
@@ -183,6 +184,7 @@ export const quotesService = {
         rate: number;
       }>;
       shippingCost?: number | null;
+      advancePercentage?: number | null;
       notes?: string | null;
       adminNotes?: string | null;
     }
@@ -201,6 +203,7 @@ export const quotesService = {
     id: string,
     payload: {
       shippingCost?: number | null;
+      advancePercentage?: number | null;
       adminNotes?: string | null;
     } = {}
   ): Promise<AdminQuoteDetail> {

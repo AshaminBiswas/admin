@@ -45,6 +45,7 @@ export function QuotesPage() {
   const [isEditingItems, setIsEditingItems] = useState(false);
   const [editItems, setEditItems] = useState<AdminQuoteLineItem[]>([]);
   const [editShippingCost, setEditShippingCost] = useState<string>("");
+  const [editAdvancePercentage, setEditAdvancePercentage] = useState<string>("30");
   const [savingItems, setSavingItems] = useState(false);
 
   // Product Picker in Line Item Editor
@@ -122,6 +123,7 @@ export function QuotesPage() {
       setSelectedQuote(data);
       setEditItems(data.items || []);
       setEditShippingCost(data.shippingCost !== null && data.shippingCost !== undefined ? String(data.shippingCost) : "");
+      setEditAdvancePercentage(data.advancePercentage !== null && data.advancePercentage !== undefined ? String(data.advancePercentage) : "30");
       setIsEditingItems(false);
     } catch {
       setErrorMsg("Failed to load quotation details.");
@@ -182,6 +184,7 @@ export function QuotesPage() {
     setErrorMsg("");
     try {
       const shippingNum = editShippingCost.trim() !== "" ? parseFloat(editShippingCost) : null;
+      const advanceNum = editAdvancePercentage.trim() !== "" ? parseFloat(editAdvancePercentage) : null;
       const updated = await quotesService.updateQuoteItems(selectedQuote.id, {
         items: editItems.map((i) => ({
           productId: i.productId,
@@ -191,10 +194,11 @@ export function QuotesPage() {
           rate: i.rate,
         })),
         shippingCost: shippingNum,
+        advancePercentage: advanceNum,
       });
       setSelectedQuote(updated);
       setIsEditingItems(false);
-      setSuccessMsg("Line items and pricing successfully updated!");
+      setSuccessMsg("Line items, pricing and advance terms successfully updated!");
       setTimeout(() => setSuccessMsg(""), 3000);
       fetchQuotes();
     } catch (err: any) {
@@ -245,11 +249,13 @@ export function QuotesPage() {
     setErrorMsg("");
     try {
       const shippingNum = editShippingCost.trim() !== "" ? parseFloat(editShippingCost) : null;
+      const advanceNum = editAdvancePercentage.trim() !== "" ? parseFloat(editAdvancePercentage) : null;
       const updated = await quotesService.digitallySignQuote(selectedQuote.id, {
         shippingCost: shippingNum,
+        advancePercentage: advanceNum,
       });
       setSelectedQuote(updated);
-      setSuccessMsg("✔ Quotation digitally signed with HMAC-SHA256 and QR code generated!");
+      setSuccessMsg("✔ Quotation digitally signed with HMAC-SHA256, advance terms locked, and QR code generated!");
       setTimeout(() => setSuccessMsg(""), 4000);
       fetchQuotes();
     } catch (err: any) {
@@ -936,6 +942,49 @@ export function QuotesPage() {
                       <span className="font-mono text-[#A855F7] text-base">
                         ₹{(isEditingItems ? editGrandTotal : selectedQuote.grandTotal).toLocaleString("en-IN")}
                       </span>
+                    </div>
+
+                    {/* Advance Payment Terms Configured by Admin */}
+                    <div className="flex items-center justify-between text-xs pt-2 border-t border-[#27272A]/70 bg-[#18181B] p-2.5 rounded-lg">
+                      <div className="flex flex-col">
+                        <span className="text-amber-400 font-bold flex items-center gap-1">
+                          <span>Advance Required</span>
+                        </span>
+                        <span className="text-[10px] text-[#A1A1AA]">Initial PO deposit required from customer</span>
+                      </div>
+                      {isEditingItems ? (
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="number"
+                            min="1"
+                            max="100"
+                            value={editAdvancePercentage}
+                            placeholder="30"
+                            onChange={(e) => setEditAdvancePercentage(e.target.value)}
+                            className="w-16 px-2 py-0.5 bg-[#09090B] border border-amber-500/50 rounded text-right text-xs font-mono font-bold text-amber-300"
+                          />
+                          <span className="text-xs text-amber-400 font-bold">%</span>
+                        </div>
+                      ) : (
+                        <div className="text-right">
+                          <span className="font-mono font-bold text-amber-300 bg-amber-950/60 px-2 py-0.5 rounded border border-amber-500/30 text-xs">
+                            {selectedQuote.advancePercentage !== null && selectedQuote.advancePercentage !== undefined
+                              ? `${selectedQuote.advancePercentage}%`
+                              : "30% (Standard)"}
+                          </span>
+                          <span className="block font-mono text-[10px] text-[#A1A1AA] mt-0.5">
+                            ₹{Math.round(
+                              ((isEditingItems ? editGrandTotal : selectedQuote.grandTotal) *
+                                ((selectedQuote.advancePercentage !== null && selectedQuote.advancePercentage !== undefined
+                                  ? selectedQuote.advancePercentage
+                                  : 30) /
+                                  100)) *
+                                100
+                            ) / 100}{" "}
+                            Advance
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
