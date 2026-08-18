@@ -56,7 +56,8 @@ export interface AdminPoAuditLog {
   performedByName?: string | null;
   details?: any;
   ipAddress?: string | null;
-  createdAt: string;
+  performedAt?: string;
+  createdAt?: string;
 }
 
 export interface AdminPurchaseOrder {
@@ -249,6 +250,7 @@ export async function adminUpdatePurchaseOrder(
     deliveryAddress?: any;
     billingAddress?: any;
     advancePercentage?: number;
+    shippingCost?: number;
     adminNotes?: string;
   }
 ): Promise<any> {

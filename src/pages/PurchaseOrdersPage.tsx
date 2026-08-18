@@ -90,6 +90,7 @@ export function PurchaseOrdersPage() {
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editPoRef, setEditPoRef] = useState('');
   const [editAdvancePercentage, setEditAdvancePercentage] = useState<number>(30);
+  const [editShippingCost, setEditShippingCost] = useState<number>(0);
   const [editDeliveryDate, setEditDeliveryDate] = useState('');
   const [editDeliveryInstructions, setEditDeliveryInstructions] = useState('');
   const [editAttentionTo, setEditAttentionTo] = useState('');
@@ -231,6 +232,7 @@ export function PurchaseOrdersPage() {
   function openEditModal(po: AdminPurchaseOrder) {
     setEditPoRef(po.customerPoReferenceNumber || '');
     setEditAdvancePercentage(Number(po.advancePercentage) || 30);
+    setEditShippingCost(Number(po.shippingCost) || 0);
     setEditDeliveryDate(
       po.requestedDeliveryDate ? new Date(po.requestedDeliveryDate).toISOString().slice(0, 10) : ''
     );
@@ -253,6 +255,7 @@ export function PurchaseOrdersPage() {
       await adminUpdatePurchaseOrder(selectedPoId, {
         customerPoReferenceNumber: editPoRef.trim() || undefined,
         advancePercentage: Number(editAdvancePercentage),
+        shippingCost: Number(editShippingCost),
         requestedDeliveryDate: editDeliveryDate || null,
         deliveryInstructions: editDeliveryInstructions.trim() || null,
         deliveryAddress: {
@@ -530,25 +533,25 @@ export function PurchaseOrdersPage() {
 
       {/* PO Detail Drawer / Modal */}
       {selectedPoId && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex justify-end">
-          <div className="w-full max-w-3xl bg-white h-full shadow-2xl overflow-y-auto flex flex-col">
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex justify-end">
+          <div className="w-full max-w-3xl bg-[#18181B] text-[#FAFAFA] border-l border-[#27272A] h-full shadow-2xl overflow-y-auto flex flex-col">
             
             {/* Modal Header */}
-            <div className="p-6 bg-slate-900 text-white flex items-center justify-between sticky top-0 z-10">
+            <div className="p-6 bg-[#09090B] text-[#FAFAFA] flex items-center justify-between sticky top-0 z-10 border-b border-[#27272A]">
               <div>
                 <div className="flex items-center space-x-2">
                   <span className="text-xs text-amber-400 font-bold tracking-wider uppercase">Purchase Order Audit</span>
-                  <span className="bg-slate-800 text-slate-300 text-[10px] px-2 py-0.5 rounded font-mono">
+                  <span className="bg-[#27272A] text-amber-300 border border-[#3F3F46] text-[10px] px-2 py-0.5 rounded font-mono font-bold">
                     {selectedPo?.status}
                   </span>
                 </div>
-                <h2 className="text-xl font-bold font-mono text-white mt-1">
+                <h2 className="text-xl font-bold font-mono text-[#FAFAFA] mt-1">
                   {selectedPo?.poNumber || 'Loading...'}
                 </h2>
               </div>
               <button
                 onClick={() => setSelectedPoId(null)}
-                className="p-2 rounded-lg bg-slate-800 text-slate-400 hover:text-white"
+                className="p-2 rounded-lg bg-[#27272A] text-[#A1A1AA] hover:text-[#FAFAFA] hover:bg-[#3F3F46] transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -556,20 +559,20 @@ export function PurchaseOrdersPage() {
 
             {detailLoading || !selectedPo ? (
               <div className="p-12 text-center flex-1 flex flex-col items-center justify-center">
-                <div className="w-8 h-8 border-4 border-slate-900 border-t-transparent rounded-full animate-spin mb-2"></div>
-                <p className="text-xs text-slate-500 font-bold">Loading Order Information...</p>
+                <div className="w-8 h-8 border-4 border-amber-400 border-t-transparent rounded-full animate-spin mb-2"></div>
+                <p className="text-xs text-[#A1A1AA] font-bold">Loading Order Information...</p>
               </div>
             ) : (
-              <div className="p-6 space-y-6 flex-1 text-xs">
+              <div className="p-6 space-y-6 flex-1 text-xs text-[#FAFAFA]">
                 
                 {/* Action Bar */}
-                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 flex flex-wrap items-center justify-between gap-3">
+                <div className="bg-[#09090B] p-4 rounded-2xl border border-[#27272A] flex flex-wrap items-center justify-between gap-3">
                   <div className="flex items-center space-x-2">
                     <button
                       onClick={() => openEditModal(selectedPo)}
-                      className="bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 font-bold px-3 py-2 rounded-xl transition-all flex items-center space-x-1.5 shadow-sm text-xs"
+                      className="bg-[#27272A] hover:bg-[#3F3F46] text-amber-400 border border-[#3F3F46] font-bold px-3 py-2 rounded-xl transition-all flex items-center space-x-1.5 shadow-sm text-xs"
                     >
-                      <Pencil className="w-3.5 h-3.5 text-amber-700" />
+                      <Pencil className="w-3.5 h-3.5 text-amber-400" />
                       <span>Edit PO Details</span>
                     </button>
 
@@ -584,7 +587,7 @@ export function PurchaseOrdersPage() {
                     {selectedPo.packingList && (
                       <button
                         onClick={() => downloadAdminPackingListPdf(selectedPo.id, selectedPo.poNumber)}
-                        className="bg-emerald-700 text-white font-bold px-3 py-2 rounded-xl hover:bg-emerald-800 transition-all flex items-center space-x-1.5 shadow-sm text-xs"
+                        className="bg-emerald-700 text-white font-bold px-3 py-2 rounded-xl hover:bg-emerald-600 transition-all flex items-center space-x-1.5 shadow-sm text-xs"
                       >
                         <Download className="w-3.5 h-3.5" />
                         <span>Packing List PDF</span>
@@ -593,7 +596,7 @@ export function PurchaseOrdersPage() {
                     {selectedPo.invoice && (
                       <button
                         onClick={() => handleDownloadInvoice(selectedPo.id, selectedPo.invoice?.invoiceNumber)}
-                        className="bg-slate-900 text-white font-bold px-3 py-2 rounded-xl hover:bg-slate-800 transition-all flex items-center space-x-1.5 shadow-sm text-xs"
+                        className="bg-purple-700 text-white font-bold px-3 py-2 rounded-xl hover:bg-purple-600 transition-all flex items-center space-x-1.5 shadow-sm text-xs"
                       >
                         <Receipt className="w-3.5 h-3.5" />
                         <span>Download Tax Invoice</span>
@@ -606,13 +609,13 @@ export function PurchaseOrdersPage() {
                       <>
                         <button
                           onClick={() => setRejectModalOpen(true)}
-                          className="bg-red-50 text-red-700 border border-red-200 font-bold px-3 py-2 rounded-xl hover:bg-red-100 text-xs"
+                          className="bg-red-950/60 text-red-300 border border-red-800 font-bold px-3 py-2 rounded-xl hover:bg-red-900/60 text-xs transition-colors"
                         >
                           Reject Receipt
                         </button>
                         <button
                           onClick={() => setAckModalOpen(true)}
-                          className="bg-blue-600 text-white font-bold px-4 py-2 rounded-xl hover:bg-blue-700 shadow-sm text-xs"
+                          className="bg-blue-600 text-white font-bold px-4 py-2 rounded-xl hover:bg-blue-500 shadow-sm text-xs transition-colors"
                         >
                           Acknowledge Payment
                         </button>
@@ -622,7 +625,7 @@ export function PurchaseOrdersPage() {
                     {(selectedPo.status === 'PAYMENT_ACKNOWLEDGED' || selectedPo.status === 'PAYMENT_RECEIPT_SUBMITTED') && (
                       <button
                         onClick={() => setVerifyModalOpen(true)}
-                        className="bg-emerald-700 text-white font-bold px-4 py-2 rounded-xl hover:bg-emerald-800 shadow-sm flex items-center space-x-1.5 text-xs"
+                        className="bg-emerald-700 text-white font-bold px-4 py-2 rounded-xl hover:bg-emerald-600 shadow-sm flex items-center space-x-1.5 text-xs transition-colors"
                       >
                         <ShieldCheck className="w-4 h-4" />
                         <span>Digitally Verify & Generate Packing List</span>
@@ -632,7 +635,7 @@ export function PurchaseOrdersPage() {
                     {['PACKING_LIST_GENERATED', 'PAYMENT_VERIFIED'].includes(selectedPo.status) && (
                       <button
                         onClick={() => setDispatchModalOpen(true)}
-                        className="bg-blue-700 text-white font-bold px-4 py-2 rounded-xl hover:bg-blue-800 shadow-sm flex items-center space-x-1.5 text-xs"
+                        className="bg-blue-700 text-white font-bold px-4 py-2 rounded-xl hover:bg-blue-600 shadow-sm flex items-center space-x-1.5 text-xs transition-colors"
                       >
                         <Truck className="w-4 h-4" />
                         <span>Record Dispatch & Generate Invoice</span>
@@ -643,7 +646,7 @@ export function PurchaseOrdersPage() {
                       <button
                         onClick={() => handleRegenerateInvoice(selectedPo.id)}
                         disabled={regeneratingInvoice}
-                        className="bg-orange-600 text-white font-bold px-4 py-2 rounded-xl hover:bg-orange-700 shadow-sm flex items-center space-x-1.5 text-xs"
+                        className="bg-orange-600 text-white font-bold px-4 py-2 rounded-xl hover:bg-orange-500 shadow-sm flex items-center space-x-1.5 text-xs"
                       >
                         <RefreshCw className={`w-4 h-4 ${regeneratingInvoice ? 'animate-spin' : ''}`} />
                         <span>{regeneratingInvoice ? 'Regenerating...' : 'Retry Invoice Generation'}</span>
@@ -653,34 +656,46 @@ export function PurchaseOrdersPage() {
                 </div>
 
                 {/* Primary Reference Card */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200 font-mono">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-[#09090B] p-4 rounded-xl border border-[#27272A] font-mono">
                   <div>
-                    <span className="text-[10px] text-slate-500 uppercase block font-sans">Quotation No.</span>
-                    <span className="font-bold text-slate-900">{selectedPo.quotationNumber}</span>
+                    <span className="text-[10px] text-[#A1A1AA] uppercase block font-sans">Quotation No.</span>
+                    <span className="font-bold text-[#FAFAFA]">{selectedPo.quotationNumber}</span>
                   </div>
                   <div>
-                    <span className="text-[10px] text-slate-500 uppercase block font-sans">Customer PO Ref</span>
-                    <span className="font-bold text-slate-900">{selectedPo.customerPoReferenceNumber || 'N/A'}</span>
+                    <span className="text-[10px] text-[#A1A1AA] uppercase block font-sans">Customer PO Ref</span>
+                    <span className="font-bold text-[#FAFAFA]">{selectedPo.customerPoReferenceNumber || 'N/A'}</span>
                   </div>
                   <div>
-                    <span className="text-[10px] text-slate-500 uppercase block font-sans">Total Amount</span>
-                    <span className="font-bold text-slate-900">₹{Number(selectedPo.totalAmount).toLocaleString('en-IN')}</span>
+                    <span className="text-[10px] text-[#A1A1AA] uppercase block font-sans">Total Amount</span>
+                    <span className="font-bold text-[#FAFAFA]">₹{Number(selectedPo.totalAmount).toLocaleString('en-IN')}</span>
                   </div>
                   <div>
-                    <span className="text-[10px] text-slate-500 uppercase block font-sans">Advance Required ({selectedPo.advancePercentage}%)</span>
-                    <span className="font-bold text-amber-800">₹{Number(selectedPo.advanceAmount).toLocaleString('en-IN')}</span>
+                    <span className="text-[10px] text-[#A1A1AA] uppercase block font-sans">Advance Required ({selectedPo.advancePercentage}%)</span>
+                    <span className="font-bold text-amber-400">₹{Number(selectedPo.advanceAmount).toLocaleString('en-IN')}</span>
                   </div>
+                  {Number(selectedPo.shippingCost) > 0 && (
+                    <div className="col-span-2">
+                      <span className="text-[10px] text-[#A1A1AA] uppercase block font-sans">Shipping / Freight Included</span>
+                      <span className="font-bold text-blue-400">₹{Number(selectedPo.shippingCost).toLocaleString('en-IN')}</span>
+                    </div>
+                  )}
+                  {Number(selectedPo.balanceAmount) > 0 && (
+                    <div className="col-span-2">
+                      <span className="text-[10px] text-[#A1A1AA] uppercase block font-sans">Balance Payable on Dispatch</span>
+                      <span className="font-bold text-emerald-400">₹{Number(selectedPo.balanceAmount).toLocaleString('en-IN')}</span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Active Receipt Verification Panel */}
-                <div className="bg-slate-900 text-white p-5 rounded-2xl space-y-4">
-                  <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div className="bg-[#09090B] text-[#FAFAFA] p-5 rounded-2xl space-y-4 border border-[#27272A]">
+                  <div className="flex items-center justify-between border-b border-[#27272A] pb-3">
                     <div className="flex items-center space-x-2">
                       <ShieldCheck className="w-5 h-5 text-amber-400" />
-                      <h3 className="font-bold text-sm">Customer Payment Receipt</h3>
+                      <h3 className="font-bold text-sm text-[#FAFAFA]">Customer Payment Receipt</h3>
                     </div>
                     {activeReceipt && (
-                      <span className="text-[10px] font-extrabold px-2 py-0.5 rounded bg-slate-800 text-amber-300 font-mono">
+                      <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded bg-[#27272A] text-amber-300 border border-[#3F3F46] font-mono">
                         {activeReceipt.status} (v{activeReceipt.version})
                       </span>
                     )}
@@ -688,35 +703,35 @@ export function PurchaseOrdersPage() {
 
                   {activeReceipt ? (
                     <div className="space-y-3 text-xs">
-                      <div className="grid grid-cols-2 gap-2 text-slate-300">
+                      <div className="grid grid-cols-2 gap-2 text-[#A1A1AA]">
                         <div>
-                          <span className="text-[10px] text-slate-500 block">Uploaded File:</span>
-                          <span className="font-bold text-white">{activeReceipt.originalFileName}</span>
+                          <span className="text-[10px] text-[#A1A1AA] block">Uploaded File:</span>
+                          <span className="font-bold text-[#FAFAFA]">{activeReceipt.originalFileName}</span>
                         </div>
                         <div>
-                          <span className="text-[10px] text-slate-500 block">File Size & MIME:</span>
-                          <span>{(activeReceipt.fileSizeBytes / 1024).toFixed(1)} KB ({activeReceipt.mimeType})</span>
+                          <span className="text-[10px] text-[#A1A1AA] block">File Size & MIME:</span>
+                          <span className="text-[#FAFAFA]">{(activeReceipt.fileSizeBytes / 1024).toFixed(1)} KB ({activeReceipt.mimeType})</span>
                         </div>
                         <div className="col-span-2">
-                          <span className="text-[10px] text-slate-500 block">Tamper-Proof SHA-256 Digest:</span>
+                          <span className="text-[10px] text-[#A1A1AA] block">Tamper-Proof SHA-256 Digest:</span>
                           <span className="font-mono text-[10px] text-emerald-400 break-all">{activeReceipt.fileHash}</span>
                         </div>
                         {activeReceipt.paymentReference && (
                           <div>
-                            <span className="text-[10px] text-slate-500 block">Bank UTR / Reference:</span>
+                            <span className="text-[10px] text-[#A1A1AA] block">Bank UTR / Reference:</span>
                             <span className="font-mono font-bold text-amber-400">{activeReceipt.paymentReference}</span>
                           </div>
                         )}
                         {activeReceipt.amountReceived && (
                           <div>
-                            <span className="text-[10px] text-slate-500 block">Amount Acknowledged:</span>
+                            <span className="text-[10px] text-[#A1A1AA] block">Amount Acknowledged:</span>
                             <span className="font-mono font-bold text-emerald-400">₹{Number(activeReceipt.amountReceived).toLocaleString('en-IN')}</span>
                           </div>
                         )}
                       </div>
 
                       {/* Payment View / Download Actions */}
-                      <div className="flex items-center space-x-2 pt-2 border-t border-slate-800">
+                      <div className="flex items-center space-x-2 pt-2 border-t border-[#27272A]">
                         <button
                           type="button"
                           onClick={() => handleViewReceipt(selectedPo.id, selectedPo.poNumber)}
@@ -728,7 +743,7 @@ export function PurchaseOrdersPage() {
                         <button
                           type="button"
                           onClick={() => handleDownloadReceipt(selectedPo.id, selectedPo.poNumber)}
-                          className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold px-3 py-1.5 rounded-lg flex items-center space-x-1.5 text-xs transition-colors"
+                          className="bg-[#27272A] hover:bg-[#3F3F46] text-[#FAFAFA] border border-[#3F3F46] font-bold px-3 py-1.5 rounded-lg flex items-center space-x-1.5 text-xs transition-colors"
                         >
                           <Download className="w-3.5 h-3.5" />
                           <span>Download File</span>
@@ -736,38 +751,38 @@ export function PurchaseOrdersPage() {
                       </div>
                     </div>
                   ) : (
-                    <p className="text-slate-400 text-xs">No payment receipt submitted yet by the customer.</p>
+                    <p className="text-[#A1A1AA] text-xs">No payment receipt submitted yet by the customer.</p>
                   )}
                 </div>
 
                 {/* Dispatch & Logistics Details Card */}
                 {selectedPo.dispatch && (
-                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
-                    <div className="flex items-center justify-between border-b border-slate-200 pb-2">
-                      <div className="flex items-center space-x-2 text-slate-900 font-bold">
-                        <Truck className="w-4 h-4 text-blue-600" />
+                  <div className="bg-[#09090B] p-4 rounded-xl border border-[#27272A] space-y-3">
+                    <div className="flex items-center justify-between border-b border-[#27272A] pb-2">
+                      <div className="flex items-center space-x-2 text-[#FAFAFA] font-bold">
+                        <Truck className="w-4 h-4 text-blue-400" />
                         <span>Shipment & Dispatch Details</span>
                       </div>
-                      <span className="text-[10px] font-mono font-bold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded">
+                      <span className="text-[10px] font-mono font-bold text-blue-400 bg-blue-950/60 border border-blue-800 px-2 py-0.5 rounded">
                         DISPATCHED
                       </span>
                     </div>
-                    <div className="grid grid-cols-3 gap-2 text-slate-700">
+                    <div className="grid grid-cols-3 gap-2 text-[#A1A1AA]">
                       <div>
-                        <span className="text-[10px] text-slate-400 block">Logistics Carrier</span>
-                        <span className="font-bold text-slate-900">{selectedPo.dispatch.carrierName}</span>
+                        <span className="text-[10px] text-[#A1A1AA] block">Logistics Carrier</span>
+                        <span className="font-bold text-[#FAFAFA]">{selectedPo.dispatch.carrierName}</span>
                       </div>
                       <div>
-                        <span className="text-[10px] text-slate-400 block">AWB / Tracking No</span>
-                        <span className="font-mono font-bold text-amber-700">{selectedPo.dispatch.trackingNumber || 'Pending'}</span>
+                        <span className="text-[10px] text-[#A1A1AA] block">AWB / Tracking No</span>
+                        <span className="font-mono font-bold text-amber-400">{selectedPo.dispatch.trackingNumber || 'Pending'}</span>
                       </div>
                       <div>
-                        <span className="text-[10px] text-slate-400 block">Dispatched Date</span>
-                        <span className="font-bold text-slate-900">{new Date(selectedPo.dispatch.dispatchedAt).toLocaleDateString('en-IN')}</span>
+                        <span className="text-[10px] text-[#A1A1AA] block">Dispatched Date</span>
+                        <span className="font-bold text-[#FAFAFA]">{new Date(selectedPo.dispatch.dispatchedAt).toLocaleDateString('en-IN')}</span>
                       </div>
                       {selectedPo.dispatch.dispatchNotes && (
-                        <div className="col-span-3 text-[11px] text-slate-500 pt-1">
-                          <strong>Notes:</strong> {selectedPo.dispatch.dispatchNotes}
+                        <div className="col-span-3 text-[11px] text-[#A1A1AA] pt-1">
+                          <strong className="text-[#FAFAFA]">Notes:</strong> {selectedPo.dispatch.dispatchNotes}
                         </div>
                       )}
                     </div>
@@ -776,48 +791,48 @@ export function PurchaseOrdersPage() {
 
                 {/* Commercial Tax Invoice Card */}
                 {selectedPo.invoice && (
-                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
-                    <div className="flex items-center justify-between border-b border-slate-200 pb-2">
-                      <div className="flex items-center space-x-2 text-slate-900 font-bold">
-                        <Receipt className="w-4 h-4 text-purple-600" />
+                  <div className="bg-[#09090B] p-4 rounded-xl border border-[#27272A] space-y-3">
+                    <div className="flex items-center justify-between border-b border-[#27272A] pb-2">
+                      <div className="flex items-center space-x-2 text-[#FAFAFA] font-bold">
+                        <Receipt className="w-4 h-4 text-purple-400" />
                         <span>Commercial Tax Invoice</span>
                       </div>
                       <button
                         onClick={() => handleDownloadInvoice(selectedPo.id, selectedPo.invoice?.invoiceNumber)}
-                        className="bg-slate-900 text-white font-bold px-3 py-1 rounded-lg hover:bg-slate-800 transition-all flex items-center space-x-1.5 shadow-sm text-[11px]"
+                        className="bg-[#27272A] hover:bg-[#3F3F46] text-[#FAFAFA] border border-[#3F3F46] font-bold px-3 py-1 rounded-lg transition-all flex items-center space-x-1.5 shadow-sm text-[11px]"
                       >
-                        <Download className="w-3 h-3" />
+                        <Download className="w-3 h-3 text-purple-400" />
                         <span>Download PDF</span>
                       </button>
                     </div>
-                    <div className="grid grid-cols-4 gap-2 text-slate-700 font-mono text-xs">
+                    <div className="grid grid-cols-4 gap-2 font-mono text-xs text-[#A1A1AA]">
                       <div>
-                        <span className="text-[10px] text-slate-400 font-sans block">Invoice No.</span>
-                        <span className="font-bold text-slate-900">{selectedPo.invoice.invoiceNumber}</span>
+                        <span className="text-[10px] text-[#A1A1AA] font-sans block">Invoice No.</span>
+                        <span className="font-bold text-[#FAFAFA]">{selectedPo.invoice.invoiceNumber}</span>
                       </div>
                       <div>
-                        <span className="text-[10px] text-slate-400 font-sans block">Total Invoiced</span>
-                        <span className="font-bold text-slate-900">₹{Number(selectedPo.invoice.amountInvoiced).toLocaleString('en-IN')}</span>
+                        <span className="text-[10px] text-[#A1A1AA] font-sans block">Total Invoiced</span>
+                        <span className="font-bold text-[#FAFAFA]">₹{Number(selectedPo.invoice.amountInvoiced).toLocaleString('en-IN')}</span>
                       </div>
                       <div>
-                        <span className="text-[10px] text-emerald-600 font-sans block">Advance Paid</span>
-                        <span className="font-bold text-emerald-700">(-) ₹{Number(selectedPo.invoice.amountPaidAdvance).toLocaleString('en-IN')}</span>
+                        <span className="text-[10px] text-emerald-400 font-sans block">Advance Paid</span>
+                        <span className="font-bold text-emerald-400">(-) ₹{Number(selectedPo.invoice.amountPaidAdvance).toLocaleString('en-IN')}</span>
                       </div>
                       <div>
-                        <span className="text-[10px] text-amber-700 font-sans block">Balance Due</span>
-                        <span className="font-bold text-amber-800">₹{Number(selectedPo.invoice.balanceDue).toLocaleString('en-IN')}</span>
+                        <span className="text-[10px] text-amber-400 font-sans block">Balance Due</span>
+                        <span className="font-bold text-amber-400">₹{Number(selectedPo.invoice.balanceDue).toLocaleString('en-IN')}</span>
                       </div>
                     </div>
                   </div>
                 )}
 
                 {/* Line Items Table */}
-                <div className="border border-slate-200 rounded-xl overflow-hidden">
-                  <div className="bg-slate-50 p-3 font-bold text-slate-800 border-b border-slate-200">
+                <div className="border border-[#27272A] rounded-xl overflow-hidden bg-[#09090B]">
+                  <div className="bg-[#18181B] p-3 font-bold text-amber-400 border-b border-[#27272A]">
                     Line Items Snapshot ({selectedPo.items.length})
                   </div>
                   <table className="w-full text-left">
-                    <thead className="bg-slate-50 text-[10px] text-slate-500 uppercase border-b border-slate-200">
+                    <thead className="bg-[#18181B] text-[10px] text-[#A1A1AA] uppercase border-b border-[#27272A]">
                       <tr>
                         <th className="p-2.5">SL</th>
                         <th className="p-2.5">Description</th>
@@ -826,14 +841,14 @@ export function PurchaseOrdersPage() {
                         <th className="p-2.5 text-right">Total</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100">
+                    <tbody className="divide-y divide-[#27272A]">
                       {selectedPo.items.map((item) => (
-                        <tr key={item.id}>
-                          <td className="p-2.5 font-mono text-slate-500">{item.slNo}</td>
-                          <td className="p-2.5 font-bold text-slate-900">{item.productName}</td>
-                          <td className="p-2.5 text-center font-bold">{item.quantity} {item.unit}</td>
-                          <td className="p-2.5 text-right font-mono">₹{Number(item.rate).toLocaleString('en-IN')}</td>
-                          <td className="p-2.5 text-right font-mono font-bold text-slate-900">₹{Number(item.total || item.amount).toLocaleString('en-IN')}</td>
+                        <tr key={item.id} className="hover:bg-[#27272A]/40 transition-colors">
+                          <td className="p-2.5 font-mono text-[#A1A1AA]">{item.slNo}</td>
+                          <td className="p-2.5 font-bold text-[#FAFAFA]">{item.productName}</td>
+                          <td className="p-2.5 text-center font-bold text-[#FAFAFA]">{item.quantity} {item.unit}</td>
+                          <td className="p-2.5 text-right font-mono text-[#A1A1AA]">₹{Number(item.rate).toLocaleString('en-IN')}</td>
+                          <td className="p-2.5 text-right font-mono font-bold text-[#FAFAFA]">₹{Number(item.total || item.amount).toLocaleString('en-IN')}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -842,22 +857,22 @@ export function PurchaseOrdersPage() {
 
                 {/* Addresses */}
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
-                    <span className="font-bold text-slate-700 block mb-1">Billing Address</span>
-                    <p className="font-bold text-slate-900">{selectedPo.billingAddress?.attentionTo}</p>
-                    <p className="text-slate-500">{selectedPo.billingAddress?.companyName}</p>
-                    <p>{selectedPo.billingAddress?.addressLine1}</p>
-                    <p>{selectedPo.billingAddress?.city}, {selectedPo.billingAddress?.state} - {selectedPo.billingAddress?.postalCode}</p>
-                    <p className="text-slate-500">Phone: {selectedPo.billingAddress?.phone}</p>
+                  <div className="p-4 bg-[#09090B] rounded-xl border border-[#27272A] space-y-1">
+                    <span className="font-bold text-amber-400 block mb-1">Billing Address</span>
+                    <p className="font-bold text-[#FAFAFA]">{selectedPo.billingAddress?.attentionTo}</p>
+                    <p className="text-[#A1A1AA]">{selectedPo.billingAddress?.companyName}</p>
+                    <p className="text-[#FAFAFA]">{selectedPo.billingAddress?.addressLine1}</p>
+                    <p className="text-[#A1A1AA]">{selectedPo.billingAddress?.city}, {selectedPo.billingAddress?.state} - {selectedPo.billingAddress?.postalCode}</p>
+                    <p className="text-[#A1A1AA]">Phone: {selectedPo.billingAddress?.phone}</p>
                   </div>
-                  <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
-                    <span className="font-bold text-slate-700 block mb-1">Delivery Destination</span>
-                    <p className="font-bold text-slate-900">{selectedPo.deliveryAddress?.attentionTo}</p>
-                    <p className="text-slate-500">{selectedPo.deliveryAddress?.companyName}</p>
-                    <p>{selectedPo.deliveryAddress?.addressLine1}</p>
-                    <p>{selectedPo.deliveryAddress?.city}, {selectedPo.deliveryAddress?.state} - {selectedPo.deliveryAddress?.postalCode}</p>
+                  <div className="p-4 bg-[#09090B] rounded-xl border border-[#27272A] space-y-1">
+                    <span className="font-bold text-amber-400 block mb-1">Delivery Destination</span>
+                    <p className="font-bold text-[#FAFAFA]">{selectedPo.deliveryAddress?.attentionTo}</p>
+                    <p className="text-[#A1A1AA]">{selectedPo.deliveryAddress?.companyName}</p>
+                    <p className="text-[#FAFAFA]">{selectedPo.deliveryAddress?.addressLine1}</p>
+                    <p className="text-[#A1A1AA]">{selectedPo.deliveryAddress?.city}, {selectedPo.deliveryAddress?.state} - {selectedPo.deliveryAddress?.postalCode}</p>
                     {selectedPo.deliveryInstructions && (
-                      <p className="text-amber-800 bg-amber-50 p-1.5 rounded mt-1 font-medium">
+                      <p className="text-amber-300 bg-amber-950/50 border border-amber-800/60 p-2 rounded mt-1 font-medium">
                         <strong>Note:</strong> {selectedPo.deliveryInstructions}
                       </p>
                     )}
@@ -866,18 +881,23 @@ export function PurchaseOrdersPage() {
 
                 {/* Audit Logs */}
                 {selectedPo.auditLogs && selectedPo.auditLogs.length > 0 && (
-                  <div className="border border-slate-200 rounded-xl p-4 space-y-3">
-                    <h4 className="font-bold text-slate-800">Audit History & Event Trail</h4>
-                    <div className="divide-y divide-slate-100 space-y-2">
-                      {selectedPo.auditLogs.map((log) => (
-                        <div key={log.id} className="pt-2 flex justify-between items-start text-[11px]">
-                          <div>
-                            <span className="font-bold text-slate-900">{log.action.replace(/_/g, ' ')}</span>
-                            <span className="text-slate-500 ml-2">by {log.performedByName || log.performedBy}</span>
+                  <div className="border border-[#27272A] rounded-xl p-4 space-y-3 bg-[#09090B]">
+                    <h4 className="font-bold text-amber-400">Audit History & Event Trail</h4>
+                    <div className="divide-y divide-[#27272A] space-y-2">
+                      {selectedPo.auditLogs.map((log) => {
+                        const logDate = log.performedAt || log.createdAt || (log as any).timestamp;
+                        return (
+                          <div key={log.id} className="pt-2 flex justify-between items-start text-[11px]">
+                            <div>
+                              <span className="font-bold text-[#FAFAFA]">{log.action.replace(/_/g, ' ')}</span>
+                              <span className="text-[#A1A1AA] ml-2">by {log.performedByName || log.performedBy || 'System'}</span>
+                            </div>
+                            <span className="text-[#A1A1AA] font-mono">
+                              {logDate ? new Date(logDate).toLocaleString('en-IN') : 'N/A'}
+                            </span>
                           </div>
-                          <span className="text-slate-400 font-mono">{new Date(log.createdAt).toLocaleString('en-IN')}</span>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 )}
@@ -1349,7 +1369,7 @@ export function PurchaseOrdersPage() {
                 <h4 className="font-bold text-amber-400 uppercase text-[11px] tracking-wider">
                   Order & Commercial Terms
                 </h4>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                   <div>
                     <label className="block font-bold text-[#FAFAFA] mb-1">Customer PO Reference No.</label>
                     <input
@@ -1375,6 +1395,21 @@ export function PurchaseOrdersPage() {
                     </div>
                   </div>
                   <div>
+                    <label className="block font-bold text-[#FAFAFA] mb-1">Freight / Shipping Charge (₹)</label>
+                    <div className="relative flex items-center">
+                      <span className="absolute left-3 font-bold text-[#A1A1AA]">₹</span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        placeholder="0.00"
+                        value={editShippingCost}
+                        onChange={(e) => setEditShippingCost(Number(e.target.value))}
+                        className="w-full p-2.5 bg-[#18181B] border border-[#3F3F46] focus:border-amber-400 rounded-lg font-bold text-[#FAFAFA] outline-none pl-7"
+                      />
+                    </div>
+                  </div>
+                  <div>
                     <label className="block font-bold text-[#FAFAFA] mb-1">Requested Delivery Date</label>
                     <input
                       type="date"
@@ -1383,7 +1418,7 @@ export function PurchaseOrdersPage() {
                       className="w-full p-2.5 bg-[#18181B] border border-[#3F3F46] focus:border-amber-400 rounded-lg font-mono font-bold text-[#FAFAFA] outline-none"
                     />
                   </div>
-                  <div>
+                  <div className="sm:col-span-2">
                     <label className="block font-bold text-[#FAFAFA] mb-1">Delivery Instructions / Notes</label>
                     <input
                       type="text"
