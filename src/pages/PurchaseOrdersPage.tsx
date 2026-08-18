@@ -772,39 +772,44 @@ export function PurchaseOrdersPage() {
 
       {/* Acknowledge Payment Modal */}
       {ackModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-slate-200">
-            <h3 className="text-base font-bold text-slate-900">Acknowledge Advance Payment</h3>
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#18181B] text-[#FAFAFA] rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-[#27272A]">
+            <div className="flex items-center justify-between border-b border-[#27272A] pb-3">
+              <h3 className="text-base font-bold text-[#FAFAFA]">Acknowledge Advance Payment</h3>
+              <button onClick={() => setAckModalOpen(false)} className="text-[#A1A1AA] hover:text-[#FAFAFA]">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
             <form onSubmit={handleAcknowledgeSubmit} className="space-y-3 text-xs">
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Bank UTR / Transaction Reference *</label>
+                <label className="block font-bold text-[#FAFAFA] mb-1">Bank UTR / Transaction Reference *</label>
                 <input
                   type="text"
                   required
                   placeholder="e.g. UTR123456789012"
                   value={ackUtr}
                   onChange={(e) => setAckUtr(e.target.value)}
-                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg font-mono font-bold"
+                  className="w-full p-2.5 bg-[#09090B] border border-[#3F3F46] focus:border-blue-500 rounded-lg font-mono font-bold text-[#FAFAFA] outline-none"
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Amount Received (₹) *</label>
+                  <label className="block font-bold text-[#FAFAFA] mb-1">Amount Received (₹) *</label>
                   <input
                     type="number"
                     step="0.01"
                     required
                     value={ackAmount}
                     onChange={(e) => setAckAmount(Number(e.target.value))}
-                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg font-mono font-bold"
+                    className="w-full p-2.5 bg-[#09090B] border border-[#3F3F46] focus:border-blue-500 rounded-lg font-mono font-bold text-[#FAFAFA] outline-none"
                   />
                 </div>
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Payment Method</label>
+                  <label className="block font-bold text-[#FAFAFA] mb-1">Payment Method</label>
                   <select
                     value={ackMethod}
                     onChange={(e: any) => setAckMethod(e.target.value)}
-                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg font-bold"
+                    className="w-full p-2.5 bg-[#09090B] border border-[#3F3F46] focus:border-blue-500 rounded-lg font-bold text-[#FAFAFA] outline-none"
                   >
                     <option value="NEFT">NEFT</option>
                     <option value="RTGS">RTGS</option>
@@ -816,27 +821,27 @@ export function PurchaseOrdersPage() {
                 </div>
               </div>
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Remarks</label>
+                <label className="block font-bold text-[#FAFAFA] mb-1">Remarks</label>
                 <input
                   type="text"
                   placeholder="e.g. Received in HDFC current a/c"
                   value={ackRemarks}
                   onChange={(e) => setAckRemarks(e.target.value)}
-                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg"
+                  className="w-full p-2.5 bg-[#09090B] border border-[#3F3F46] focus:border-blue-500 rounded-lg text-[#FAFAFA] outline-none"
                 />
               </div>
-              <div className="pt-2 flex justify-end space-x-2">
+              <div className="pt-2 flex justify-end space-x-2 border-t border-[#27272A]">
                 <button
                   type="button"
                   onClick={() => setAckModalOpen(false)}
-                  className="px-4 py-2 bg-slate-100 font-bold rounded-lg"
+                  className="px-4 py-2 bg-[#27272A] hover:bg-[#3F3F46] text-[#FAFAFA] font-bold rounded-lg transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={ackSubmitting}
-                  className="px-4 py-2 bg-blue-600 text-white font-bold rounded-lg disabled:opacity-50"
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg disabled:opacity-50 transition-colors shadow-md"
                 >
                   {ackSubmitting ? 'Saving...' : 'Confirm Acknowledgment'}
                 </button>
@@ -848,52 +853,57 @@ export function PurchaseOrdersPage() {
 
       {/* Digital Verify Modal */}
       {verifyModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-slate-200">
-            <div className="flex items-center space-x-2 text-emerald-700">
-              <ShieldCheck className="w-6 h-6" />
-              <h3 className="text-base font-bold text-slate-900">Digitally Verify Advance & Trigger Packing List</h3>
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#18181B] text-[#FAFAFA] rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-[#27272A]">
+            <div className="flex items-center justify-between border-b border-[#27272A] pb-3">
+              <div className="flex items-center space-x-2 text-emerald-400">
+                <ShieldCheck className="w-6 h-6" />
+                <h3 className="text-base font-bold text-[#FAFAFA]">Verify Advance & Packing List</h3>
+              </div>
+              <button onClick={() => setVerifyModalOpen(false)} className="text-[#A1A1AA] hover:text-[#FAFAFA]">
+                <X className="w-5 h-5" />
+              </button>
             </div>
-            <p className="text-xs text-slate-500 leading-relaxed">
+            <p className="text-xs text-[#A1A1AA] leading-relaxed">
               This action formally certifies that advance funds have credited the PRC Hardware bank account. 
               The system will automatically generate a branded Commercial Packing List PDF embedding the Quotation Number and PO Number.
             </p>
             <form onSubmit={handleVerifySubmit} className="space-y-3 text-xs">
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Confirmed Amount (₹) *</label>
+                <label className="block font-bold text-[#FAFAFA] mb-1">Confirmed Amount (₹) *</label>
                 <input
                   type="number"
                   step="0.01"
                   required
                   value={verifyConfirmedAmount}
                   onChange={(e) => setVerifyConfirmedAmount(Number(e.target.value))}
-                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg font-mono font-bold"
+                  className="w-full p-2.5 bg-[#09090B] border border-[#3F3F46] focus:border-emerald-500 rounded-lg font-mono font-bold text-[#FAFAFA] outline-none"
                 />
               </div>
-              <div className="flex items-center space-x-2 bg-emerald-50 p-3 rounded-lg border border-emerald-200">
+              <div className="flex items-center space-x-2 bg-emerald-950/40 p-3 rounded-lg border border-emerald-500/30">
                 <input
                   type="checkbox"
                   id="confirmCredit"
                   checked={verifyBankCredit}
                   onChange={(e) => setVerifyBankCredit(e.target.checked)}
-                  className="rounded text-emerald-700"
+                  className="rounded text-emerald-500 bg-[#09090B] border-[#3F3F46]"
                 />
-                <label htmlFor="confirmCredit" className="font-bold text-emerald-900 cursor-pointer">
+                <label htmlFor="confirmCredit" className="font-bold text-emerald-300 cursor-pointer text-xs">
                   I confirm funds have credited our bank account statement.
                 </label>
               </div>
-              <div className="pt-2 flex justify-end space-x-2">
+              <div className="pt-2 flex justify-end space-x-2 border-t border-[#27272A]">
                 <button
                   type="button"
                   onClick={() => setVerifyModalOpen(false)}
-                  className="px-4 py-2 bg-slate-100 font-bold rounded-lg"
+                  className="px-4 py-2 bg-[#27272A] hover:bg-[#3F3F46] text-[#FAFAFA] font-bold rounded-lg transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={verifySubmitting || !verifyBankCredit}
-                  className="px-4 py-2 bg-emerald-700 text-white font-bold rounded-lg disabled:opacity-50"
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg disabled:opacity-50 transition-colors shadow-md"
                 >
                   {verifySubmitting ? 'Verifying & Generating PDF...' : 'Authorize & Generate Packing List'}
                 </button>
@@ -905,33 +915,38 @@ export function PurchaseOrdersPage() {
 
       {/* Reject Receipt Modal */}
       {rejectModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-slate-200">
-            <h3 className="text-base font-bold text-slate-900">Reject Payment Receipt</h3>
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#18181B] text-[#FAFAFA] rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-[#27272A]">
+            <div className="flex items-center justify-between border-b border-[#27272A] pb-3">
+              <h3 className="text-base font-bold text-rose-400">Reject Payment Receipt</h3>
+              <button onClick={() => setRejectModalOpen(false)} className="text-[#A1A1AA] hover:text-[#FAFAFA]">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
             <form onSubmit={handleRejectReceiptSubmit} className="space-y-3 text-xs">
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Reason for Rejection *</label>
+                <label className="block font-bold text-[#FAFAFA] mb-1">Reason for Rejection *</label>
                 <textarea
                   rows={3}
                   required
-                  placeholder="e.g. UTR number not legible / Amount does not match 30% advance"
+                  placeholder="e.g. UTR number not legible / Amount does not match required advance"
                   value={rejectReason}
                   onChange={(e) => setRejectReason(e.target.value)}
-                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg"
+                  className="w-full p-2.5 bg-[#09090B] border border-[#3F3F46] focus:border-rose-500 rounded-lg text-[#FAFAFA] outline-none"
                 />
               </div>
-              <div className="pt-2 flex justify-end space-x-2">
+              <div className="pt-2 flex justify-end space-x-2 border-t border-[#27272A]">
                 <button
                   type="button"
                   onClick={() => setRejectModalOpen(false)}
-                  className="px-4 py-2 bg-slate-100 font-bold rounded-lg"
+                  className="px-4 py-2 bg-[#27272A] hover:bg-[#3F3F46] text-[#FAFAFA] font-bold rounded-lg transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={rejectSubmitting}
-                  className="px-4 py-2 bg-red-600 text-white font-bold rounded-lg disabled:opacity-50"
+                  className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-lg disabled:opacity-50 transition-colors shadow-md"
                 >
                   {rejectSubmitting ? 'Rejecting...' : 'Reject Receipt'}
                 </button>
@@ -943,93 +958,134 @@ export function PurchaseOrdersPage() {
 
       {/* Settings Modal */}
       {settingsModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-xl w-full p-6 space-y-4 shadow-2xl border border-slate-200 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
-              <h3 className="text-base font-bold text-slate-900">PO & Bank Account Configuration</h3>
-              <button onClick={() => setSettingsModalOpen(false)}>
-                <X className="w-5 h-5 text-slate-400 hover:text-slate-600" />
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#18181B] text-[#FAFAFA] rounded-2xl max-w-xl w-full p-6 space-y-4 shadow-2xl border border-[#27272A] max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-[#27272A] pb-3">
+              <div className="flex items-center space-x-2">
+                <Sliders className="w-5 h-5 text-[#A855F7]" />
+                <h3 className="text-base font-bold text-[#FAFAFA]">PO & Bank Account Configuration</h3>
+              </div>
+              <button
+                onClick={() => setSettingsModalOpen(false)}
+                className="p-1 rounded-lg text-[#A1A1AA] hover:text-[#FAFAFA] hover:bg-[#27272A] transition-colors"
+              >
+                <X className="w-5 h-5" />
               </button>
             </div>
 
             {settingsLoading || !advanceSetting ? (
-              <div className="py-8 text-center">Loading settings...</div>
+              <div className="py-8 text-center text-[#A1A1AA] flex flex-col items-center justify-center space-y-2">
+                <div className="w-6 h-6 border-2 border-[#A855F7] border-t-transparent rounded-full animate-spin"></div>
+                <span className="font-bold">Loading configuration...</span>
+              </div>
             ) : (
               <form onSubmit={handleSaveSettings} className="space-y-4 text-xs">
-                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
-                  <h4 className="font-bold text-slate-800 uppercase text-[11px]">Advance Payment Rule</h4>
+                {/* Advance Payment Rule */}
+                <div className="bg-[#09090B] p-4 rounded-xl border border-[#27272A] space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-bold text-amber-400 uppercase text-[11px] tracking-wider">
+                      Advance Payment Terms Rule
+                    </h4>
+                    <span className="text-[10px] text-[#A1A1AA] bg-[#27272A] px-2 py-0.5 rounded font-mono">
+                      Commercial Default
+                    </span>
+                  </div>
                   <div>
-                    <label className="block font-bold text-slate-700 mb-1">Default Advance Percentage (%)</label>
-                    <input
-                      type="number"
-                      min="1"
-                      max="100"
-                      value={advanceSetting.defaultPercentage}
-                      onChange={(e) => setAdvanceSetting({ ...advanceSetting, defaultPercentage: Number(e.target.value) })}
-                      className="w-full p-2 bg-white border border-slate-200 rounded-lg font-bold"
-                    />
-                    <span className="text-[10px] text-slate-500">Default requirement is 30% across all commercial quotations.</span>
+                    <label className="block font-bold text-[#FAFAFA] mb-1.5">
+                      Default Advance Percentage (%)
+                    </label>
+                    <div className="relative flex items-center">
+                      <input
+                        type="number"
+                        min="1"
+                        max="100"
+                        value={advanceSetting.defaultPercentage}
+                        onChange={(e) =>
+                          setAdvanceSetting({
+                            ...advanceSetting,
+                            defaultPercentage: Number(e.target.value),
+                          })
+                        }
+                        className="w-full p-2.5 bg-[#18181B] border border-[#3F3F46] focus:border-[#A855F7] focus:ring-1 focus:ring-[#A855F7] rounded-lg font-bold text-[#FAFAFA] text-sm outline-none transition-all pr-8"
+                      />
+                      <span className="absolute right-3 font-bold text-[#A1A1AA]">%</span>
+                    </div>
+                    <span className="text-[11px] text-[#A1A1AA] mt-1.5 block">
+                      Default requirement is <strong className="text-[#FAFAFA]">30%</strong> across all commercial quotations.
+                    </span>
                   </div>
                 </div>
 
+                {/* Official Bank Transfer Details */}
                 {bankSettings.length > 0 && (
-                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
-                    <h4 className="font-bold text-slate-800 uppercase text-[11px]">Official Bank Transfer Details</h4>
+                  <div className="bg-[#09090B] p-4 rounded-xl border border-[#27272A] space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-bold text-amber-400 uppercase text-[11px] tracking-wider">
+                        Official Bank Transfer Details (NEFT / RTGS)
+                      </h4>
+                      <span className="text-[10px] text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-2 py-0.5 rounded font-bold">
+                        PRC Hardware Primary Account
+                      </span>
+                    </div>
                     <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block font-bold text-slate-700 mb-1">Account Holder</label>
+                      <div className="col-span-2 sm:col-span-1">
+                        <label className="block font-bold text-[#FAFAFA] mb-1">Account Holder Name *</label>
                         <input
                           type="text"
+                          required
                           value={bankSettings[0].accountHolderName}
                           onChange={(e) => {
                             const copy = [...bankSettings];
                             copy[0].accountHolderName = e.target.value;
                             setBankSettings(copy);
                           }}
-                          className="w-full p-2 bg-white border border-slate-200 rounded-lg"
+                          className="w-full p-2.5 bg-[#18181B] border border-[#3F3F46] focus:border-[#A855F7] rounded-lg text-[#FAFAFA] font-medium outline-none"
                         />
                       </div>
-                      <div>
-                        <label className="block font-bold text-slate-700 mb-1">Bank Name</label>
+                      <div className="col-span-2 sm:col-span-1">
+                        <label className="block font-bold text-[#FAFAFA] mb-1">Bank Name *</label>
                         <input
                           type="text"
+                          required
                           value={bankSettings[0].bankName}
                           onChange={(e) => {
                             const copy = [...bankSettings];
                             copy[0].bankName = e.target.value;
                             setBankSettings(copy);
                           }}
-                          className="w-full p-2 bg-white border border-slate-200 rounded-lg"
+                          className="w-full p-2.5 bg-[#18181B] border border-[#3F3F46] focus:border-[#A855F7] rounded-lg text-[#FAFAFA] font-medium outline-none"
                         />
                       </div>
-                      <div>
-                        <label className="block font-bold text-slate-700 mb-1">Account Number</label>
+                      <div className="col-span-2 sm:col-span-1">
+                        <label className="block font-bold text-[#FAFAFA] mb-1">Account Number *</label>
                         <input
                           type="text"
+                          required
                           value={bankSettings[0].accountNumber}
                           onChange={(e) => {
                             const copy = [...bankSettings];
                             copy[0].accountNumber = e.target.value;
                             setBankSettings(copy);
                           }}
-                          className="w-full p-2 bg-white border border-slate-200 rounded-lg font-mono font-bold"
+                          className="w-full p-2.5 bg-[#18181B] border border-[#3F3F46] focus:border-[#A855F7] rounded-lg font-mono font-bold text-[#FAFAFA] outline-none"
                         />
                       </div>
-                      <div>
-                        <label className="block font-bold text-slate-700 mb-1">IFSC Code</label>
+                      <div className="col-span-2 sm:col-span-1">
+                        <label className="block font-bold text-[#FAFAFA] mb-1">IFSC Code *</label>
                         <input
                           type="text"
+                          required
                           value={bankSettings[0].ifscOrRoutingNumber}
                           onChange={(e) => {
                             const copy = [...bankSettings];
                             copy[0].ifscOrRoutingNumber = e.target.value;
                             setBankSettings(copy);
                           }}
-                          className="w-full p-2 bg-white border border-slate-200 rounded-lg font-mono font-bold"
+                          className="w-full p-2.5 bg-[#18181B] border border-[#3F3F46] focus:border-[#A855F7] rounded-lg font-mono font-bold text-[#FAFAFA] outline-none"
                         />
                       </div>
                       <div className="col-span-2">
-                        <label className="block font-bold text-slate-700 mb-1">Branch Name</label>
+                        <label className="block font-bold text-[#FAFAFA] mb-1">Branch & Address</label>
                         <input
                           type="text"
                           value={bankSettings[0].branch || ''}
@@ -1038,27 +1094,27 @@ export function PurchaseOrdersPage() {
                             copy[0].branch = e.target.value;
                             setBankSettings(copy);
                           }}
-                          className="w-full p-2 bg-white border border-slate-200 rounded-lg"
+                          className="w-full p-2.5 bg-[#18181B] border border-[#3F3F46] focus:border-[#A855F7] rounded-lg text-[#FAFAFA] outline-none"
                         />
                       </div>
                     </div>
                   </div>
                 )}
 
-                <div className="pt-2 flex justify-end space-x-2">
+                <div className="pt-2 flex justify-end space-x-2 border-t border-[#27272A]">
                   <button
                     type="button"
                     onClick={() => setSettingsModalOpen(false)}
-                    className="px-4 py-2 bg-slate-100 font-bold rounded-lg"
+                    className="px-4 py-2 bg-[#27272A] hover:bg-[#3F3F46] text-[#FAFAFA] font-bold rounded-lg transition-colors"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={settingsSaving}
-                    className="px-4 py-2 bg-slate-900 text-white font-bold rounded-lg disabled:opacity-50"
+                    className="px-4 py-2 bg-[#8B5CF6] hover:bg-[#7C3AED] text-white font-bold rounded-lg disabled:opacity-50 transition-colors shadow-md flex items-center space-x-1.5"
                   >
-                    {settingsSaving ? 'Saving...' : 'Save Configuration'}
+                    <span>{settingsSaving ? 'Saving...' : 'Save Configuration'}</span>
                   </button>
                 </div>
               </form>
@@ -1069,73 +1125,78 @@ export function PurchaseOrdersPage() {
 
       {/* Dispatch Order Modal */}
       {dispatchModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-slate-200">
-            <div className="flex items-center space-x-2 text-blue-600">
-              <Truck className="w-6 h-6" />
-              <h3 className="text-base font-bold text-slate-900">Record Dispatch & Issue Invoice</h3>
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#18181B] text-[#FAFAFA] rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-[#27272A]">
+            <div className="flex items-center justify-between border-b border-[#27272A] pb-3">
+              <div className="flex items-center space-x-2 text-blue-400">
+                <Truck className="w-6 h-6" />
+                <h3 className="text-base font-bold text-[#FAFAFA]">Record Dispatch & Issue Invoice</h3>
+              </div>
+              <button onClick={() => setDispatchModalOpen(false)} className="text-[#A1A1AA] hover:text-[#FAFAFA]">
+                <X className="w-5 h-5" />
+              </button>
             </div>
-            <p className="text-xs text-slate-500 leading-relaxed">
-              Recording dispatch transitions the PO to <strong className="text-slate-900">DISPATCHED</strong> and automatically triggers background generation of the official <strong className="text-slate-900">Commercial Tax Invoice</strong> with GST calculation and advance credit deduction.
+            <p className="text-xs text-[#A1A1AA] leading-relaxed">
+              Recording dispatch transitions the PO to <strong className="text-[#FAFAFA]">DISPATCHED</strong> and automatically triggers background generation of the official <strong className="text-[#FAFAFA]">Commercial Tax Invoice</strong> with GST calculation and advance credit deduction.
             </p>
             <form onSubmit={handleDispatchSubmit} className="space-y-3 text-xs">
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Logistics / Freight Carrier *</label>
+                <label className="block font-bold text-[#FAFAFA] mb-1">Logistics / Freight Carrier *</label>
                 <input
                   type="text"
                   required
                   placeholder="e.g. BlueDart Express, DTDC, VRL, Self Fleet"
                   value={carrierName}
                   onChange={(e) => setCarrierName(e.target.value)}
-                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg font-bold"
+                  className="w-full p-2.5 bg-[#09090B] border border-[#3F3F46] focus:border-blue-500 rounded-lg font-bold text-[#FAFAFA] outline-none"
                 />
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Airway Bill / Tracking Number</label>
+                <label className="block font-bold text-[#FAFAFA] mb-1">Airway Bill / Tracking Number</label>
                 <input
                   type="text"
                   placeholder="e.g. BD987654321IN"
                   value={trackingNumber}
                   onChange={(e) => setTrackingNumber(e.target.value)}
-                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg font-mono font-bold"
+                  className="w-full p-2.5 bg-[#09090B] border border-[#3F3F46] focus:border-blue-500 rounded-lg font-mono font-bold text-[#FAFAFA] outline-none"
                 />
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Dispatched Date *</label>
+                <label className="block font-bold text-[#FAFAFA] mb-1">Dispatched Date *</label>
                 <input
                   type="date"
                   required
                   value={dispatchedAt}
                   onChange={(e) => setDispatchedAt(e.target.value)}
-                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg font-mono font-bold"
+                  className="w-full p-2.5 bg-[#09090B] border border-[#3F3F46] focus:border-blue-500 rounded-lg font-mono font-bold text-[#FAFAFA] outline-none"
                 />
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Dispatch & Packaging Notes</label>
+                <label className="block font-bold text-[#FAFAFA] mb-1">Dispatch & Packaging Notes</label>
                 <textarea
                   rows={2}
                   placeholder="e.g. Dispatched in 2 corrugated cartons with security seals"
                   value={dispatchNotes}
                   onChange={(e) => setDispatchNotes(e.target.value)}
-                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg"
+                  className="w-full p-2.5 bg-[#09090B] border border-[#3F3F46] focus:border-blue-500 rounded-lg text-[#FAFAFA] outline-none"
                 />
               </div>
 
-              <div className="pt-2 flex justify-end space-x-2">
+              <div className="pt-2 flex justify-end space-x-2 border-t border-[#27272A]">
                 <button
                   type="button"
                   onClick={() => setDispatchModalOpen(false)}
-                  className="px-4 py-2 bg-slate-100 font-bold rounded-lg"
+                  className="px-4 py-2 bg-[#27272A] hover:bg-[#3F3F46] text-[#FAFAFA] font-bold rounded-lg transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={dispatchSubmitting || !carrierName}
-                  className="px-4 py-2 bg-blue-700 text-white font-bold rounded-lg disabled:opacity-50 flex items-center space-x-1.5"
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg disabled:opacity-50 transition-colors flex items-center space-x-1.5 shadow-md"
                 >
                   <Truck className="w-3.5 h-3.5" />
                   <span>{dispatchSubmitting ? 'Dispatching & Invoicing...' : 'Confirm Dispatch & Generate Invoice'}</span>
