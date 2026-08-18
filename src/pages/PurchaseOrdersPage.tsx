@@ -17,6 +17,7 @@ import {
   adminDispatchPo,
   adminRegenerateInvoice,
   downloadAdminInvoicePdf,
+  adminDeletePurchaseOrder,
   AdminPurchaseOrder,
   AdvanceSetting,
   BankSetting,
@@ -40,6 +41,7 @@ import {
   Receipt,
   Pencil,
   ExternalLink,
+  Trash2,
 } from 'lucide-react';
 
 export function PurchaseOrdersPage() {
@@ -316,6 +318,27 @@ export function PurchaseOrdersPage() {
     }
   }
 
+  async function handleDeletePo(poId: string, poNumber: string) {
+    if (
+      !window.confirm(
+        `Are you sure you want to permanently delete Purchase Order "${poNumber}"? This will remove all associated line items, receipts, and invoices, and cannot be undone.`
+      )
+    ) {
+      return;
+    }
+    try {
+      await adminDeletePurchaseOrder(poId);
+      alert(`Purchase Order "${poNumber}" deleted successfully.`);
+      if (selectedPoId === poId) {
+        setSelectedPoId(null);
+        setSelectedPo(null);
+      }
+      await loadPos();
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete Purchase Order');
+    }
+  }
+
   async function openSettings() {
     setSettingsModalOpen(true);
     setSettingsLoading(true);
@@ -493,13 +516,23 @@ export function PurchaseOrdersPage() {
                       {new Date(po.submittedAt).toLocaleDateString('en-IN')}
                     </td>
                     <td className="py-3 px-4 text-center">
-                      <button
-                        onClick={() => openDetail(po.id)}
-                        className="inline-flex items-center space-x-1 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold px-3 py-1.5 rounded-lg transition-colors"
-                      >
-                        <Eye className="w-3.5 h-3.5" />
-                        <span>Inspect</span>
-                      </button>
+                      <div className="flex items-center justify-center space-x-1.5">
+                        <button
+                          onClick={() => openDetail(po.id)}
+                          className="inline-flex items-center space-x-1 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold px-2.5 py-1.5 rounded-lg transition-colors text-xs"
+                          title="Inspect Purchase Order"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>Inspect</span>
+                        </button>
+                        <button
+                          onClick={() => handleDeletePo(po.id, po.poNumber)}
+                          className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+                          title="Delete Purchase Order"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -582,6 +615,15 @@ export function PurchaseOrdersPage() {
                     >
                       <Download className="w-3.5 h-3.5 text-blue-400" />
                       <span>Download PO PDF</span>
+                    </button>
+
+                    <button
+                      onClick={() => handleDeletePo(selectedPo.id, selectedPo.poNumber)}
+                      className="bg-red-950/60 hover:bg-red-900/80 text-red-300 border border-red-800/80 font-bold px-3 py-2 rounded-xl transition-all flex items-center space-x-1.5 shadow-sm text-xs"
+                      title="Permanently Delete this Purchase Order"
+                    >
+                      <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                      <span>Delete PO</span>
                     </button>
 
                     {selectedPo.packingList && (

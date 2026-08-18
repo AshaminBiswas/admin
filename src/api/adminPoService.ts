@@ -264,6 +264,16 @@ export async function adminUpdatePurchaseOrder(
   return res.data;
 }
 
+export async function adminDeletePurchaseOrder(poId: string): Promise<any> {
+  const res = await fetchAdminApi(`/admin/purchase-orders/${poId}`, {
+    method: 'DELETE',
+  });
+  if (!res.success) {
+    throw new Error(res.error?.message || 'Failed to delete Purchase Order');
+  }
+  return res.data;
+}
+
 export async function downloadAdminPaymentReceipt(
   poId: string,
   poNumber: string,
