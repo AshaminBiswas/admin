@@ -30,6 +30,8 @@ import {
 import { usersApi, rolesApi } from "../api/adminApi";
 import { useAdminAuth } from "../context/AdminAuthContext";
 import { Role } from "../types/admin";
+import { useDebounce } from "../hooks/useDebounce";
+import { getCachedRoles } from "../utils/referenceDataCache";
 
 interface UsersPageProps {
   onNavigateB2BPricing?: (customerId?: string) => void;
@@ -103,18 +105,19 @@ export function UsersPage({ onNavigateB2BPricing }: UsersPageProps) {
     setPassword(pwd);
   };
 
+  const debouncedSearch = useDebounce(searchQuery, 300);
+
   const loadData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [uRes, rRes] = await Promise.all([
+      const [uRes, rList] = await Promise.all([
         usersApi.list({ limit: 100 }),
-        rolesApi.list(),
+        getCachedRoles(),
       ]);
 
-      if (rRes && rRes.success !== false) {
-        const rList = rRes.data ?? (Array.isArray(rRes) ? rRes : []);
+      if (rList && rList.length > 0) {
         setRoles(rList);
-        if (rList.length > 0 && !roleId) {
+        if (!roleId) {
           setRoleId(rList[0].id);
         }
       }
@@ -283,35 +286,38 @@ export function UsersPage({ onNavigateB2BPricing }: UsersPageProps) {
     }
   };
 
-  const filteredUsers = users.filter((u) => {
-    const name = `${u.firstName || ""} ${u.lastName || ""}`.toLowerCase();
-    const em = (u.email || "").toLowerCase();
-    const comp = (u.companyName || "").toLowerCase();
-    const gst = (u.gstin || "").toLowerCase();
-    const q = searchQuery.toLowerCase();
-    const matchesSearch =
-      name.includes(q) ||
-      em.includes(q) ||
-      comp.includes(q) ||
-      gst.includes(q) ||
-      (u.phone && u.phone.includes(q));
+  const filteredUsers = React.useMemo(() => {
+    return users.filter((u) => {
+      const name = `${u.firstName || ""} ${u.lastName || ""}`.toLowerCase();
+      const em = (u.email || "").toLowerCase();
+      const comp = (u.companyName || "").toLowerCase();
+      const gst = (u.gstin || "").toLowerCase();
+      const q = debouncedSearch.toLowerCase().trim();
+      const matchesSearch =
+        !q ||
+        name.includes(q) ||
+        em.includes(q) ||
+        comp.includes(q) ||
+        gst.includes(q) ||
+        (u.phone && u.phone.includes(q));
 
-    const matchesStatus = statusFilter === "ALL" || u.status === statusFilter;
+      const matchesStatus = statusFilter === "ALL" || u.status === statusFilter;
 
-    let matchesRole = true;
-    if (roleFilter === "B2B") {
-      matchesRole =
-        u.role?.slug === "b2b-customer" ||
-        u.role?.slug === "b2b_customer" ||
-        !!u.companyName ||
-        !!u.gstin;
-    } else if (roleFilter === "B2C") {
-      matchesRole =
-        u.role?.slug === "customer" && !u.companyName && !u.gstin;
-    }
+      let matchesRole = true;
+      if (roleFilter === "B2B") {
+        matchesRole =
+          u.role?.slug === "b2b-customer" ||
+          u.role?.slug === "b2b_customer" ||
+          !!u.companyName ||
+          !!u.gstin;
+      } else if (roleFilter === "B2C") {
+        matchesRole =
+          u.role?.slug === "customer" && !u.companyName && !u.gstin;
+      }
 
-    return matchesSearch && matchesStatus && matchesRole;
-  });
+      return matchesSearch && matchesStatus && matchesRole;
+    });
+  }, [users, debouncedSearch, statusFilter, roleFilter]);
 
   return (
     <div className="space-y-6 text-[#FAFAFA]">

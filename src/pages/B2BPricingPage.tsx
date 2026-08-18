@@ -20,9 +20,12 @@ import {
   ExternalLink,
   ChevronDown,
   Filter,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { b2bPricingApi, usersApi } from "../api/adminApi";
 import type { B2BCustomerPricingItem, B2BCustomerPricingMatrix } from "../types/admin";
+import { useDebounce } from "../hooks/useDebounce";
 
 interface B2BPricingPageProps {
   initialCustomerId?: string;
@@ -71,8 +74,18 @@ export const B2BPricingPage: React.FC<B2BPricingPageProps> = ({
 
   // Filtering & Search
   const [searchQuery, setSearchQuery] = useState("");
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
   const [filterType, setFilterType] = useState<"all" | "custom_only" | "retail_only">("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
+
+  // Table Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const PAGE_SIZE = 25;
+
+  // Reset page on filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearchQuery, filterType, categoryFilter, selectedCustomerId]);
 
   // Bulk Discount Modal
   const [showDiscountModal, setShowDiscountModal] = useState(false);
@@ -355,7 +368,7 @@ export const B2BPricingPage: React.FC<B2BPricingPageProps> = ({
       const vals = getProductValues(item);
 
       // Search match
-      const q = searchQuery.toLowerCase().trim();
+      const q = debouncedSearchQuery.toLowerCase().trim();
       const matchesSearch =
         !q ||
         item.name.toLowerCase().includes(q) ||
@@ -376,7 +389,13 @@ export const B2BPricingPage: React.FC<B2BPricingPageProps> = ({
 
       return matchesSearch && matchesCategory && matchesType;
     });
-  }, [pricingData, searchQuery, categoryFilter, filterType, draftChanges]);
+  }, [pricingData, debouncedSearchQuery, categoryFilter, filterType, draftChanges]);
+
+  // Paginated Items
+  const totalPages = Math.max(1, Math.ceil(filteredItems.length / PAGE_SIZE));
+  const paginatedItems = useMemo(() => {
+    return filteredItems.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  }, [filteredItems, currentPage]);
 
   // Dirty count
   const dirtyCount = Array.from(draftChanges.values()).filter((v) => v.dirty).length;
@@ -619,7 +638,7 @@ export const B2BPricingPage: React.FC<B2BPricingPageProps> = ({
                   </td>
                 </tr>
               ) : (
-                filteredItems.map((item) => {
+                paginatedItems.map((item) => {
                   const values = getProductValues(item);
                   const isDiscounted = values.discountPercent > 0;
 
@@ -738,15 +757,51 @@ export const B2BPricingPage: React.FC<B2BPricingPageProps> = ({
           </table>
         </div>
 
-        {/* Matrix Footer */}
-        <div className="p-4 border-t border-slate-100 dark:border-[#27272A] flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-50/50 dark:bg-[#18181B] text-xs text-slate-500 dark:text-[#71717A]">
+        {/* Matrix Footer with Pagination */}
+        <div className="p-4 border-t border-slate-100 dark:border-[#27272A] flex flex-col sm:flex-row items-center justify-between gap-4 bg-slate-50/50 dark:bg-[#18181B] text-xs text-slate-500 dark:text-[#71717A]">
           <div className="flex items-center gap-2">
-            <span>Showing <b>{filteredItems.length}</b> products</span>
+            <span>
+              Showing{" "}
+              <b>
+                {filteredItems.length === 0
+                  ? 0
+                  : `${(currentPage - 1) * PAGE_SIZE + 1}-${Math.min(
+                      currentPage * PAGE_SIZE,
+                      filteredItems.length
+                    )}`}
+              </b>{" "}
+              of <b>{filteredItems.length}</b> products
+            </span>
             <span>·</span>
             <span className="text-[#8B5CF6] font-bold">
               {pricingData?.customPricesCount || 0} customized
             </span>
           </div>
+
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage <= 1}
+                className="p-1.5 rounded-lg border border-slate-200 dark:border-[#3F3F46] disabled:opacity-40 hover:bg-slate-100 dark:hover:bg-[#27272A] transition-colors"
+              >
+                <ChevronLeft size={14} />
+              </button>
+              <span className="px-2 text-xs font-semibold">
+                Page {currentPage} of {totalPages}
+              </span>
+              <button
+                type="button"
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage >= totalPages}
+                className="p-1.5 rounded-lg border border-slate-200 dark:border-[#3F3F46] disabled:opacity-40 hover:bg-slate-100 dark:hover:bg-[#27272A] transition-colors"
+              >
+                <ChevronRight size={14} />
+              </button>
+            </div>
+          )}
 
           <div className="flex items-center gap-3">
             {dirtyCount > 0 && (

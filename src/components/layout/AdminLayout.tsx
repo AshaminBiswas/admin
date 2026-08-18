@@ -1,35 +1,50 @@
-import React, { useState } from "react";
+import React, { useState, Suspense, lazy } from "react";
 import { AdminSidebar } from "./AdminSidebar";
 import { AdminHeader } from "./AdminHeader";
 import { useAdminAuth } from "../../context/AdminAuthContext";
-import { DashboardPage } from "../../pages/DashboardPage";
-import { AnalyticsPage } from "../../pages/AnalyticsPage";
-import { ReportsPage } from "../../pages/ReportsPage";
-import { ProductsPage } from "../../pages/ProductsPage";
-import { CreateProductPage } from "../../pages/CreateProductPage";
-import { EditProductPage } from "../../pages/EditProductPage";
-import { OrdersPage } from "../../pages/OrdersPage";
-import { QuotesPage } from "../../pages/QuotesPage";
-import { AppointmentsPage } from "../../pages/AppointmentsPage";
-import { AuditPage } from "../../pages/AuditPage";
-import { AdminManagementPage } from "../../pages/AdminManagementPage";
-import { RolesPage } from "../../pages/RolesPage";
-import { AdminSecuritySettings } from "../settings/AdminSecuritySettings";
+import { RefreshCw } from "lucide-react";
 
-// New specialized pages
-import { CategoriesPage } from "../../pages/CategoriesPage";
-import { CreateCategoryPage } from "../../pages/CreateCategoryPage";
-import { EditCategoryPage } from "../../pages/EditCategoryPage";
-import { BannersPage } from "../../pages/BannersPage";
-import { CMSPage } from "../../pages/CMSPage";
-import { CouponsPage } from "../../pages/CouponsPage";
-import { MediaUploadManager } from "../../pages/MediaUploadManager";
-import { EnquiriesPage } from "../../pages/EnquiriesPage";
-import { ReviewsPage } from "../../pages/ReviewsPage";
-import { UsersPage } from "../../pages/UsersPage";
-import { ShippingsPage } from "../../pages/ShippingsPage";
-import { ModelManagementPage } from "../../pages/ModelManagementPage";
-import { B2BPricingPage } from "../../pages/B2BPricingPage";
+// ─── Code-Split Admin Views with Dynamic lazy() Imports ──────────────────────
+
+const DashboardPage = lazy(() => import("../../pages/DashboardPage").then((m) => ({ default: m.DashboardPage })));
+const AnalyticsPage = lazy(() => import("../../pages/AnalyticsPage").then((m) => ({ default: m.AnalyticsPage })));
+const ReportsPage = lazy(() => import("../../pages/ReportsPage").then((m) => ({ default: m.ReportsPage })));
+const ProductsPage = lazy(() => import("../../pages/ProductsPage").then((m) => ({ default: m.ProductsPage })));
+const CreateProductPage = lazy(() => import("../../pages/CreateProductPage").then((m) => ({ default: m.CreateProductPage })));
+const EditProductPage = lazy(() => import("../../pages/EditProductPage").then((m) => ({ default: m.EditProductPage })));
+const OrdersPage = lazy(() => import("../../pages/OrdersPage").then((m) => ({ default: m.OrdersPage })));
+const QuotesPage = lazy(() => import("../../pages/QuotesPage").then((m) => ({ default: m.QuotesPage })));
+const AppointmentsPage = lazy(() => import("../../pages/AppointmentsPage").then((m) => ({ default: m.AppointmentsPage })));
+const AuditPage = lazy(() => import("../../pages/AuditPage").then((m) => ({ default: m.AuditPage })));
+const AdminManagementPage = lazy(() => import("../../pages/AdminManagementPage").then((m) => ({ default: m.AdminManagementPage })));
+const RolesPage = lazy(() => import("../../pages/RolesPage").then((m) => ({ default: m.RolesPage })));
+const AdminSecuritySettings = lazy(() => import("../settings/AdminSecuritySettings").then((m) => ({ default: m.AdminSecuritySettings })));
+
+// Specialized pages
+const CategoriesPage = lazy(() => import("../../pages/CategoriesPage").then((m) => ({ default: m.CategoriesPage })));
+const CreateCategoryPage = lazy(() => import("../../pages/CreateCategoryPage").then((m) => ({ default: m.CreateCategoryPage })));
+const EditCategoryPage = lazy(() => import("../../pages/EditCategoryPage").then((m) => ({ default: m.EditCategoryPage })));
+const BannersPage = lazy(() => import("../../pages/BannersPage").then((m) => ({ default: m.BannersPage })));
+const CMSPage = lazy(() => import("../../pages/CMSPage").then((m) => ({ default: m.CMSPage })));
+const CouponsPage = lazy(() => import("../../pages/CouponsPage").then((m) => ({ default: m.CouponsPage })));
+const MediaUploadManager = lazy(() => import("../../pages/MediaUploadManager").then((m) => ({ default: m.MediaUploadManager })));
+const EnquiriesPage = lazy(() => import("../../pages/EnquiriesPage").then((m) => ({ default: m.EnquiriesPage })));
+const ReviewsPage = lazy(() => import("../../pages/ReviewsPage").then((m) => ({ default: m.ReviewsPage })));
+const UsersPage = lazy(() => import("../../pages/UsersPage").then((m) => ({ default: m.UsersPage })));
+const ShippingsPage = lazy(() => import("../../pages/ShippingsPage").then((m) => ({ default: m.ShippingsPage })));
+const ModelManagementPage = lazy(() => import("../../pages/ModelManagementPage").then((m) => ({ default: m.ModelManagementPage })));
+const B2BPricingPage = lazy(() => import("../../pages/B2BPricingPage").then((m) => ({ default: m.B2BPricingPage })));
+
+function ViewLoadingSkeleton() {
+  return (
+    <div className="flex flex-col items-center justify-center min-h-[400px] space-y-3">
+      <RefreshCw className="w-8 h-8 text-[#8B5CF6] animate-spin" />
+      <p className="text-xs font-semibold text-slate-500 dark:text-[#71717A]">
+        Loading view modules...
+      </p>
+    </div>
+  );
+}
 
 export function AdminLayout() {
   const { currentView, setCurrentView } = useAdminAuth();
@@ -249,7 +264,9 @@ export function AdminLayout() {
         />
         <main className="flex-1 p-3 sm:p-4 md:p-6 overflow-y-auto overflow-x-hidden min-h-0 w-full">
           <div className="max-w-7xl mx-auto space-y-6 w-full min-w-0">
-            {renderCurrentView()}
+            <Suspense fallback={<ViewLoadingSkeleton />}>
+              {renderCurrentView()}
+            </Suspense>
           </div>
         </main>
       </div>

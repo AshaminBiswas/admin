@@ -12,6 +12,7 @@ import {
   QuoteMetrics,
   SignatureVerificationResult
 } from "../api/quotesService";
+import { useDebounce } from "../hooks/useDebounce";
 
 export function QuotesPage() {
   const [quotes, setQuotes] = useState<AdminQuoteDetail[]>([]);
@@ -74,6 +75,8 @@ export function QuotesPage() {
   // PDF Download Tracking
   const [downloadingPdfId, setDownloadingPdfId] = useState<string | null>(null);
 
+  const debouncedSearch = useDebounce(searchQuery, 300);
+
   // Load Quotes
   const fetchQuotes = async () => {
     setLoading(true);
@@ -83,7 +86,7 @@ export function QuotesPage() {
         page: currentPage,
         limit: 20,
         status: selectedStatus,
-        search: searchQuery.trim(),
+        search: debouncedSearch.trim(),
         fromDate: fromDate || undefined,
         toDate: toDate || undefined,
       });
@@ -101,9 +104,9 @@ export function QuotesPage() {
 
   useEffect(() => {
     fetchQuotes();
-  }, [selectedStatus, currentPage, fromDate, toDate]);
+  }, [selectedStatus, currentPage, fromDate, toDate, debouncedSearch]);
 
-  // Handle Search Debounce
+  // Handle Search Debounce / Immediate Submit
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setCurrentPage(1);

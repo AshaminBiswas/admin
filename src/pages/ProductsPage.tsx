@@ -31,6 +31,8 @@ import { fetchAdminApi } from "../api/adminApi";
 import { useAdminAuth } from "../context/AdminAuthContext";
 import { ProductItem, Category } from "../types/admin";
 import { syncProductUpdate } from "../utils/productSync";
+import { useDebounce } from "../hooks/useDebounce";
+import { getCachedCategories } from "../utils/referenceDataCache";
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                             */
@@ -316,6 +318,7 @@ export function ProductsPage() {
 
   // Filters, Sort, Search
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounce(search, 300);
   const [statusFilter, setStatusFilter] = useState<"ALL" | "ACTIVE" | "INACTIVE" | "OUT_OF_STOCK">("ALL");
   const [categoryFilter, setCategoryFilter] = useState<string>("ALL");
   const [sortField, setSortField] = useState<"name" | "price" | "stock" | "id">("id");
@@ -324,6 +327,11 @@ export function ProductsPage() {
 
   // Pagination
   const [page, setPage] = useState(1);
+
+  // Reset page on filter changes
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, statusFilter, categoryFilter]);
 
   // Modals
   const [deleteModal, setDeleteModal] = useState<ProductItem | null>(null);
@@ -334,18 +342,14 @@ export function ProductsPage() {
     setIsSyncing(true);
     setError(null);
     try {
-      // Fetch Products
-      const res = await fetchAdminApi<any>(`/products`);
-      
-      // Fetch Categories if missing (for labels)
-      if (categories.length === 0) {
-        const catRes = await fetchAdminApi<any>(`/categories`);
-        if (catRes?.success !== false) {
-           const cList = Array.isArray(catRes?.data) ? catRes.data : Array.isArray(catRes?.categories) ? catRes.categories : Array.isArray(catRes) ? catRes : [];
-           setCategories(cList);
-           localStorage.setItem("prc_admin_categories_list", JSON.stringify(cList));
-        }
+      // 1. Fetch Categories from session cache
+      const cList = await getCachedCategories();
+      if (cList.length > 0) {
+        setCategories(cList);
       }
+
+      // 2. Fetch Products
+      const res = await fetchAdminApi<any>(`/products?limit=100`);
 
       if (res?.success !== false) {
         const raw = res?.data || res?.products || res;
@@ -364,27 +368,11 @@ export function ProductsPage() {
                   (p.id && (cachedItem as any).apiId && String(p.id) === String((cachedItem as any).apiId))
                 );
                 if (idx !== -1) {
-                  // Override raw API item with admin edited item
                   list[idx] = { ...list[idx], ...cachedItem };
                 } else {
                   list.unshift(cachedItem);
                 }
               }
-            }
-          }
-        } catch {}
-
-        // Overlay single most recently edited product from cache if available
-        try {
-          const recentlyEditedRaw = localStorage.getItem("prc_admin_edit_product");
-          if (recentlyEditedRaw) {
-            const editedItem = JSON.parse(recentlyEditedRaw);
-            if (editedItem && (editedItem.id || editedItem.sku)) {
-              const idx = list.findIndex((p) => 
-                String(p.id) === String(editedItem.id) ||
-                (p.sku && editedItem.sku && String(p.sku).toLowerCase() === String(editedItem.sku).toLowerCase())
-              );
-              if (idx !== -1) list[idx] = { ...list[idx], ...editedItem };
             }
           }
         } catch {}
@@ -405,37 +393,41 @@ export function ProductsPage() {
       setLoading(false);
       setIsSyncing(false);
     }
-  }, [products.length, categories.length]);
+  }, [products.length]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-  const filtered = products
-    .filter((p) => {
-      const q = search.toLowerCase();
-      const matchSearch =
-        !q ||
-        p.name?.toLowerCase().includes(q) ||
-        p.sku?.toLowerCase().includes(q) ||
-        String(p.id).toLowerCase().includes(q);
-      const matchStatus = statusFilter === "ALL" || normalizeStatus(p.status) === statusFilter;
-      const matchCategory = categoryFilter === "ALL" || String(p.categoryId) === categoryFilter;
-      return matchSearch && matchStatus && matchCategory;
-    })
-    .sort((a, b) => {
-      let av: any, bv: any;
-      if (sortField === "name") { av = a.name?.toLowerCase(); bv = b.name?.toLowerCase(); }
-      else if (sortField === "price") { av = a.price ?? 0; bv = b.price ?? 0; }
-      else if (sortField === "stock") { av = a.stock ?? 0; bv = b.stock ?? 0; }
-      else { av = String(a.id); bv = String(b.id); }
-      if (av < bv) return sortDir === "asc" ? -1 : 1;
-      if (av > bv) return sortDir === "asc" ? 1 : -1;
-      return 0;
-    });
+  const filtered = React.useMemo(() => {
+    return products
+      .filter((p) => {
+        const q = debouncedSearch.toLowerCase().trim();
+        const matchSearch =
+          !q ||
+          p.name?.toLowerCase().includes(q) ||
+          p.sku?.toLowerCase().includes(q) ||
+          String(p.id).toLowerCase().includes(q);
+        const matchStatus = statusFilter === "ALL" || normalizeStatus(p.status) === statusFilter;
+        const matchCategory = categoryFilter === "ALL" || String(p.categoryId) === categoryFilter;
+        return matchSearch && matchStatus && matchCategory;
+      })
+      .sort((a, b) => {
+        let av: any, bv: any;
+        if (sortField === "name") { av = a.name?.toLowerCase(); bv = b.name?.toLowerCase(); }
+        else if (sortField === "price") { av = a.price ?? 0; bv = b.price ?? 0; }
+        else if (sortField === "stock") { av = a.stock ?? 0; bv = b.stock ?? 0; }
+        else { av = String(a.id); bv = String(b.id); }
+        if (av < bv) return sortDir === "asc" ? -1 : 1;
+        if (av > bv) return sortDir === "asc" ? 1 : -1;
+        return 0;
+      });
+  }, [products, debouncedSearch, statusFilter, categoryFilter, sortField, sortDir]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const paginated = React.useMemo(() => {
+    return filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  }, [filtered, page]);
 
   const handleSort = (field: typeof sortField) => {
     if (sortField === field) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
