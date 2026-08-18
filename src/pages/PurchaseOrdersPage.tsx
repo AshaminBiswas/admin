@@ -8,6 +8,7 @@ import {
   adminRejectPurchaseOrder,
   adminUpdatePurchaseOrder,
   downloadAdminPaymentReceipt,
+  downloadAdminPoPdf,
   getAdvanceSetting,
   updateAdvanceSetting,
   getBankSettings,
@@ -570,6 +571,14 @@ export function PurchaseOrdersPage() {
                     >
                       <Pencil className="w-3.5 h-3.5 text-amber-700" />
                       <span>Edit PO Details</span>
+                    </button>
+
+                    <button
+                      onClick={() => downloadAdminPoPdf(selectedPo.id, selectedPo.poNumber)}
+                      className="bg-[#27272A] hover:bg-[#3F3F46] text-[#FAFAFA] border border-[#3F3F46] font-bold px-3 py-2 rounded-xl transition-all flex items-center space-x-1.5 shadow-sm text-xs"
+                    >
+                      <Download className="w-3.5 h-3.5 text-blue-400" />
+                      <span>Download PO PDF</span>
                     </button>
 
                     {selectedPo.packingList && (
