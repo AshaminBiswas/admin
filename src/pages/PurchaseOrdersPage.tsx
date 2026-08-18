@@ -6,6 +6,8 @@ import {
   adminVerifyPayment,
   adminRejectReceipt,
   adminRejectPurchaseOrder,
+  adminUpdatePurchaseOrder,
+  downloadAdminPaymentReceipt,
   getAdvanceSetting,
   updateAdvanceSetting,
   getBankSettings,
@@ -35,6 +37,8 @@ import {
   RefreshCw,
   FileCheck,
   Receipt,
+  Pencil,
+  ExternalLink,
 } from 'lucide-react';
 
 export function PurchaseOrdersPage() {
@@ -80,6 +84,21 @@ export function PurchaseOrdersPage() {
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
   const [rejectSubmitting, setRejectSubmitting] = useState(false);
+
+  // Edit PO Modal
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editPoRef, setEditPoRef] = useState('');
+  const [editAdvancePercentage, setEditAdvancePercentage] = useState<number>(30);
+  const [editDeliveryDate, setEditDeliveryDate] = useState('');
+  const [editDeliveryInstructions, setEditDeliveryInstructions] = useState('');
+  const [editAttentionTo, setEditAttentionTo] = useState('');
+  const [editCompanyName, setEditCompanyName] = useState('');
+  const [editAddress1, setEditAddress1] = useState('');
+  const [editCity, setEditCity] = useState('');
+  const [editState, setEditState] = useState('');
+  const [editPostalCode, setEditPostalCode] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [editSubmitting, setEditSubmitting] = useState(false);
 
   // Settings Modal
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
@@ -205,6 +224,69 @@ export function PurchaseOrdersPage() {
       alert(err.message || 'Failed to record dispatch');
     } finally {
       setDispatchSubmitting(false);
+    }
+  }
+
+  function openEditModal(po: AdminPurchaseOrder) {
+    setEditPoRef(po.customerPoReferenceNumber || '');
+    setEditAdvancePercentage(Number(po.advancePercentage) || 30);
+    setEditDeliveryDate(
+      po.requestedDeliveryDate ? new Date(po.requestedDeliveryDate).toISOString().slice(0, 10) : ''
+    );
+    setEditDeliveryInstructions(po.deliveryInstructions || '');
+    setEditAttentionTo(po.deliveryAddress?.attentionTo || '');
+    setEditCompanyName(po.deliveryAddress?.companyName || '');
+    setEditAddress1(po.deliveryAddress?.addressLine1 || '');
+    setEditCity(po.deliveryAddress?.city || '');
+    setEditState(po.deliveryAddress?.state || '');
+    setEditPostalCode(po.deliveryAddress?.postalCode || '');
+    setEditPhone(po.deliveryAddress?.phone || '');
+    setEditModalOpen(true);
+  }
+
+  async function handleEditSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!selectedPoId) return;
+    setEditSubmitting(true);
+    try {
+      await adminUpdatePurchaseOrder(selectedPoId, {
+        customerPoReferenceNumber: editPoRef.trim() || undefined,
+        advancePercentage: Number(editAdvancePercentage),
+        requestedDeliveryDate: editDeliveryDate || null,
+        deliveryInstructions: editDeliveryInstructions.trim() || null,
+        deliveryAddress: {
+          attentionTo: editAttentionTo.trim(),
+          companyName: editCompanyName.trim(),
+          addressLine1: editAddress1.trim(),
+          city: editCity.trim(),
+          state: editState.trim(),
+          postalCode: editPostalCode.trim(),
+          phone: editPhone.trim(),
+        },
+      });
+      setEditModalOpen(false);
+      await openDetail(selectedPoId);
+      await loadPos();
+    } catch (err: any) {
+      alert(err.message || 'Failed to update Purchase Order');
+    } finally {
+      setEditSubmitting(false);
+    }
+  }
+
+  async function handleViewReceipt(poId: string, poNumber: string) {
+    try {
+      await downloadAdminPaymentReceipt(poId, poNumber, true);
+    } catch (err: any) {
+      alert(err.message || 'Failed to view payment receipt');
+    }
+  }
+
+  async function handleDownloadReceipt(poId: string, poNumber: string) {
+    try {
+      await downloadAdminPaymentReceipt(poId, poNumber, false);
+    } catch (err: any) {
+      alert(err.message || 'Failed to download payment receipt');
     }
   }
 
@@ -482,10 +564,18 @@ export function PurchaseOrdersPage() {
                 {/* Action Bar */}
                 <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 flex flex-wrap items-center justify-between gap-3">
                   <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => openEditModal(selectedPo)}
+                      className="bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 font-bold px-3 py-2 rounded-xl transition-all flex items-center space-x-1.5 shadow-sm text-xs"
+                    >
+                      <Pencil className="w-3.5 h-3.5 text-amber-700" />
+                      <span>Edit PO Details</span>
+                    </button>
+
                     {selectedPo.packingList && (
                       <button
                         onClick={() => downloadAdminPackingListPdf(selectedPo.id, selectedPo.poNumber)}
-                        className="bg-emerald-700 text-white font-bold px-3 py-2 rounded-xl hover:bg-emerald-800 transition-all flex items-center space-x-1.5 shadow-sm"
+                        className="bg-emerald-700 text-white font-bold px-3 py-2 rounded-xl hover:bg-emerald-800 transition-all flex items-center space-x-1.5 shadow-sm text-xs"
                       >
                         <Download className="w-3.5 h-3.5" />
                         <span>Packing List PDF</span>
@@ -494,7 +584,7 @@ export function PurchaseOrdersPage() {
                     {selectedPo.invoice && (
                       <button
                         onClick={() => handleDownloadInvoice(selectedPo.id, selectedPo.invoice?.invoiceNumber)}
-                        className="bg-slate-900 text-white font-bold px-3 py-2 rounded-xl hover:bg-slate-800 transition-all flex items-center space-x-1.5 shadow-sm"
+                        className="bg-slate-900 text-white font-bold px-3 py-2 rounded-xl hover:bg-slate-800 transition-all flex items-center space-x-1.5 shadow-sm text-xs"
                       >
                         <Receipt className="w-3.5 h-3.5" />
                         <span>Download Tax Invoice</span>
@@ -507,13 +597,13 @@ export function PurchaseOrdersPage() {
                       <>
                         <button
                           onClick={() => setRejectModalOpen(true)}
-                          className="bg-red-50 text-red-700 border border-red-200 font-bold px-3 py-2 rounded-xl hover:bg-red-100"
+                          className="bg-red-50 text-red-700 border border-red-200 font-bold px-3 py-2 rounded-xl hover:bg-red-100 text-xs"
                         >
                           Reject Receipt
                         </button>
                         <button
                           onClick={() => setAckModalOpen(true)}
-                          className="bg-blue-600 text-white font-bold px-4 py-2 rounded-xl hover:bg-blue-700 shadow-sm"
+                          className="bg-blue-600 text-white font-bold px-4 py-2 rounded-xl hover:bg-blue-700 shadow-sm text-xs"
                         >
                           Acknowledge Payment
                         </button>
@@ -523,7 +613,7 @@ export function PurchaseOrdersPage() {
                     {(selectedPo.status === 'PAYMENT_ACKNOWLEDGED' || selectedPo.status === 'PAYMENT_RECEIPT_SUBMITTED') && (
                       <button
                         onClick={() => setVerifyModalOpen(true)}
-                        className="bg-emerald-700 text-white font-bold px-4 py-2 rounded-xl hover:bg-emerald-800 shadow-sm flex items-center space-x-1.5"
+                        className="bg-emerald-700 text-white font-bold px-4 py-2 rounded-xl hover:bg-emerald-800 shadow-sm flex items-center space-x-1.5 text-xs"
                       >
                         <ShieldCheck className="w-4 h-4" />
                         <span>Digitally Verify & Generate Packing List</span>
@@ -533,7 +623,7 @@ export function PurchaseOrdersPage() {
                     {['PACKING_LIST_GENERATED', 'PAYMENT_VERIFIED'].includes(selectedPo.status) && (
                       <button
                         onClick={() => setDispatchModalOpen(true)}
-                        className="bg-blue-700 text-white font-bold px-4 py-2 rounded-xl hover:bg-blue-800 shadow-sm flex items-center space-x-1.5"
+                        className="bg-blue-700 text-white font-bold px-4 py-2 rounded-xl hover:bg-blue-800 shadow-sm flex items-center space-x-1.5 text-xs"
                       >
                         <Truck className="w-4 h-4" />
                         <span>Record Dispatch & Generate Invoice</span>
@@ -544,7 +634,7 @@ export function PurchaseOrdersPage() {
                       <button
                         onClick={() => handleRegenerateInvoice(selectedPo.id)}
                         disabled={regeneratingInvoice}
-                        className="bg-orange-600 text-white font-bold px-4 py-2 rounded-xl hover:bg-orange-700 shadow-sm flex items-center space-x-1.5"
+                        className="bg-orange-600 text-white font-bold px-4 py-2 rounded-xl hover:bg-orange-700 shadow-sm flex items-center space-x-1.5 text-xs"
                       >
                         <RefreshCw className={`w-4 h-4 ${regeneratingInvoice ? 'animate-spin' : ''}`} />
                         <span>{regeneratingInvoice ? 'Regenerating...' : 'Retry Invoice Generation'}</span>
@@ -574,11 +664,11 @@ export function PurchaseOrdersPage() {
                 </div>
 
                 {/* Active Receipt Verification Panel */}
-                <div className="bg-slate-900 text-white p-5 rounded-2xl space-y-3">
+                <div className="bg-slate-900 text-white p-5 rounded-2xl space-y-4">
                   <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                     <div className="flex items-center space-x-2">
                       <ShieldCheck className="w-5 h-5 text-amber-400" />
-                      <h3 className="font-bold text-sm">Active Advance Payment Receipt</h3>
+                      <h3 className="font-bold text-sm">Customer Payment Receipt</h3>
                     </div>
                     {activeReceipt && (
                       <span className="text-[10px] font-extrabold px-2 py-0.5 rounded bg-slate-800 text-amber-300 font-mono">
@@ -588,7 +678,7 @@ export function PurchaseOrdersPage() {
                   </div>
 
                   {activeReceipt ? (
-                    <div className="space-y-2 text-xs">
+                    <div className="space-y-3 text-xs">
                       <div className="grid grid-cols-2 gap-2 text-slate-300">
                         <div>
                           <span className="text-[10px] text-slate-500 block">Uploaded File:</span>
@@ -614,6 +704,26 @@ export function PurchaseOrdersPage() {
                             <span className="font-mono font-bold text-emerald-400">₹{Number(activeReceipt.amountReceived).toLocaleString('en-IN')}</span>
                           </div>
                         )}
+                      </div>
+
+                      {/* Payment View / Download Actions */}
+                      <div className="flex items-center space-x-2 pt-2 border-t border-slate-800">
+                        <button
+                          type="button"
+                          onClick={() => handleViewReceipt(selectedPo.id, selectedPo.poNumber)}
+                          className="bg-blue-600 hover:bg-blue-500 text-white font-bold px-3 py-1.5 rounded-lg flex items-center space-x-1.5 text-xs transition-colors shadow-sm"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>View Payment Receipt</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDownloadReceipt(selectedPo.id, selectedPo.poNumber)}
+                          className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold px-3 py-1.5 rounded-lg flex items-center space-x-1.5 text-xs transition-colors"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          <span>Download File</span>
+                        </button>
                       </div>
                     </div>
                   ) : (
@@ -1200,6 +1310,170 @@ export function PurchaseOrdersPage() {
                 >
                   <Truck className="w-3.5 h-3.5" />
                   <span>{dispatchSubmitting ? 'Dispatching & Invoicing...' : 'Confirm Dispatch & Generate Invoice'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Purchase Order Details Modal */}
+      {editModalOpen && selectedPo && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#18181B] text-[#FAFAFA] rounded-2xl max-w-2xl w-full p-6 space-y-4 shadow-2xl border border-[#27272A] max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-[#27272A] pb-3">
+              <div className="flex items-center space-x-2">
+                <Pencil className="w-5 h-5 text-amber-400" />
+                <h3 className="text-base font-bold text-[#FAFAFA]">Edit Purchase Order ({selectedPo.poNumber})</h3>
+              </div>
+              <button
+                onClick={() => setEditModalOpen(false)}
+                className="p-1 rounded-lg text-[#A1A1AA] hover:text-[#FAFAFA] hover:bg-[#27272A] transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleEditSubmit} className="space-y-4 text-xs">
+              {/* Order Level Settings */}
+              <div className="bg-[#09090B] p-4 rounded-xl border border-[#27272A] space-y-3">
+                <h4 className="font-bold text-amber-400 uppercase text-[11px] tracking-wider">
+                  Order & Commercial Terms
+                </h4>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-[#FAFAFA] mb-1">Customer PO Reference No.</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. PO/2026/889"
+                      value={editPoRef}
+                      onChange={(e) => setEditPoRef(e.target.value)}
+                      className="w-full p-2.5 bg-[#18181B] border border-[#3F3F46] focus:border-amber-400 rounded-lg text-[#FAFAFA] font-medium outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-[#FAFAFA] mb-1">Advance Required (%)</label>
+                    <div className="relative flex items-center">
+                      <input
+                        type="number"
+                        min="1"
+                        max="100"
+                        value={editAdvancePercentage}
+                        onChange={(e) => setEditAdvancePercentage(Number(e.target.value))}
+                        className="w-full p-2.5 bg-[#18181B] border border-[#3F3F46] focus:border-amber-400 rounded-lg font-bold text-[#FAFAFA] outline-none pr-8"
+                      />
+                      <span className="absolute right-3 font-bold text-[#A1A1AA]">%</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block font-bold text-[#FAFAFA] mb-1">Requested Delivery Date</label>
+                    <input
+                      type="date"
+                      value={editDeliveryDate}
+                      onChange={(e) => setEditDeliveryDate(e.target.value)}
+                      className="w-full p-2.5 bg-[#18181B] border border-[#3F3F46] focus:border-amber-400 rounded-lg font-mono font-bold text-[#FAFAFA] outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-[#FAFAFA] mb-1">Delivery Instructions / Notes</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Gate 2 unloading only"
+                      value={editDeliveryInstructions}
+                      onChange={(e) => setEditDeliveryInstructions(e.target.value)}
+                      className="w-full p-2.5 bg-[#18181B] border border-[#3F3F46] focus:border-amber-400 rounded-lg text-[#FAFAFA] outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Delivery Destination Address */}
+              <div className="bg-[#09090B] p-4 rounded-xl border border-[#27272A] space-y-3">
+                <h4 className="font-bold text-amber-400 uppercase text-[11px] tracking-wider">
+                  Delivery Destination Address
+                </h4>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-[#FAFAFA] mb-1">Attention To / Contact Person</label>
+                    <input
+                      type="text"
+                      value={editAttentionTo}
+                      onChange={(e) => setEditAttentionTo(e.target.value)}
+                      className="w-full p-2.5 bg-[#18181B] border border-[#3F3F46] focus:border-amber-400 rounded-lg text-[#FAFAFA] outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-[#FAFAFA] mb-1">Company / Facility Name</label>
+                    <input
+                      type="text"
+                      value={editCompanyName}
+                      onChange={(e) => setEditCompanyName(e.target.value)}
+                      className="w-full p-2.5 bg-[#18181B] border border-[#3F3F46] focus:border-amber-400 rounded-lg text-[#FAFAFA] outline-none"
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="block font-bold text-[#FAFAFA] mb-1">Street Address / Landmark</label>
+                    <input
+                      type="text"
+                      value={editAddress1}
+                      onChange={(e) => setEditAddress1(e.target.value)}
+                      className="w-full p-2.5 bg-[#18181B] border border-[#3F3F46] focus:border-amber-400 rounded-lg text-[#FAFAFA] outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-[#FAFAFA] mb-1">City</label>
+                    <input
+                      type="text"
+                      value={editCity}
+                      onChange={(e) => setEditCity(e.target.value)}
+                      className="w-full p-2.5 bg-[#18181B] border border-[#3F3F46] focus:border-amber-400 rounded-lg text-[#FAFAFA] outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-[#FAFAFA] mb-1">State</label>
+                    <input
+                      type="text"
+                      value={editState}
+                      onChange={(e) => setEditState(e.target.value)}
+                      className="w-full p-2.5 bg-[#18181B] border border-[#3F3F46] focus:border-amber-400 rounded-lg text-[#FAFAFA] outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-[#FAFAFA] mb-1">Postal Code (PIN)</label>
+                    <input
+                      type="text"
+                      value={editPostalCode}
+                      onChange={(e) => setEditPostalCode(e.target.value)}
+                      className="w-full p-2.5 bg-[#18181B] border border-[#3F3F46] focus:border-amber-400 rounded-lg font-mono text-[#FAFAFA] outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-[#FAFAFA] mb-1">Contact Phone</label>
+                    <input
+                      type="text"
+                      value={editPhone}
+                      onChange={(e) => setEditPhone(e.target.value)}
+                      className="w-full p-2.5 bg-[#18181B] border border-[#3F3F46] focus:border-amber-400 rounded-lg text-[#FAFAFA] outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-2 flex justify-end space-x-2 border-t border-[#27272A]">
+                <button
+                  type="button"
+                  onClick={() => setEditModalOpen(false)}
+                  className="px-4 py-2 bg-[#27272A] hover:bg-[#3F3F46] text-[#FAFAFA] font-bold rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={editSubmitting}
+                  className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-lg disabled:opacity-50 transition-colors shadow-md flex items-center space-x-1.5"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  <span>{editSubmitting ? 'Saving Changes...' : 'Save Order Changes'}</span>
                 </button>
               </div>
             </form>

@@ -227,12 +227,77 @@ export async function adminVerifyPayment(
 ): Promise<any> {
   const res = await fetchAdminApi(`/admin/purchase-orders/${poId}/payment-receipt/verify`, {
     method: 'POST',
-    body: JSON.stringify(data),
+    body: JSON.stringify({
+      confirmedAmount: data.confirmedAmount,
+      verificationNotes: data.verificationNotes,
+      confirmBankCredit: true,
+      confirmVerifiedAgainstBank: true,
+    }),
   });
   if (!res.success) {
     throw new Error(res.error?.message || 'Failed to verify payment receipt');
   }
   return res.data;
+}
+
+export async function adminUpdatePurchaseOrder(
+  poId: string,
+  data: {
+    customerPoReferenceNumber?: string;
+    requestedDeliveryDate?: string | null;
+    deliveryInstructions?: string | null;
+    deliveryAddress?: any;
+    billingAddress?: any;
+    advancePercentage?: number;
+    adminNotes?: string;
+  }
+): Promise<any> {
+  const res = await fetchAdminApi(`/admin/purchase-orders/${poId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+  if (!res.success) {
+    throw new Error(res.error?.message || 'Failed to update Purchase Order');
+  }
+  return res.data;
+}
+
+export async function downloadAdminPaymentReceipt(
+  poId: string,
+  poNumber: string,
+  inline = false
+): Promise<void> {
+  const token = getAdminToken();
+  const endpoint = inline
+    ? `${API_BASE_URL}/admin/purchase-orders/${poId}/payment-receipt/view`
+    : `${API_BASE_URL}/admin/purchase-orders/${poId}/payment-receipt/download`;
+
+  const response = await fetch(endpoint, {
+    method: 'GET',
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+
+  if (!response.ok) {
+    const json = await response.json().catch(() => ({}));
+    throw new Error(json.error?.message || 'Payment receipt not available');
+  }
+
+  const blob = await response.blob();
+  const url = window.URL.createObjectURL(blob);
+
+  if (inline) {
+    window.open(url, '_blank');
+  } else {
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `PaymentReceipt_${poNumber.replace(/[^a-zA-Z0-9]/g, '_')}`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  }
 }
 
 export async function adminRejectReceipt(
