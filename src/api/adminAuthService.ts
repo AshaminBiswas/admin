@@ -456,6 +456,13 @@ export const adminAuthService = {
       body: JSON.stringify(bodyData),
     });
 
+    if (!res.success) {
+      return {
+        success: false,
+        message: res.error?.message || res.message || "Failed to create administrator account in database.",
+      } as any;
+    }
+
     const secret = generateBase32Secret(32);
     const appName = "PRC Hardware";
     const account = payload.email.trim();

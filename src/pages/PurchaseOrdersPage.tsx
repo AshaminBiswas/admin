@@ -1,11 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   getAdminPurchaseOrders,
   getAdminPurchaseOrderById,
   adminAcknowledgePayment,
   adminVerifyPayment,
   adminRejectReceipt,
-  adminRejectPurchaseOrder,
   adminUpdatePurchaseOrder,
   downloadAdminPaymentReceipt,
   downloadAdminPoPdf,
@@ -42,7 +41,197 @@ import {
   Pencil,
   ExternalLink,
   Trash2,
+  Package,
+  CreditCard,
 } from 'lucide-react';
+import { AsyncActionButton } from '../components/common/AsyncActionButton';
+
+/* ─── Skeleton Loading Body for Detail View ────────────────────────────────── */
+
+function PurchaseOrderDetailSkeleton() {
+  return (
+    <div className="p-6 space-y-6 flex-1 text-xs text-[#FAFAFA] animate-pulse">
+      {/* Top Banner Notice */}
+      <div className="flex items-center space-x-2 text-[#A1A1AA] pb-1">
+        <RefreshCw className="w-3.5 h-3.5 animate-spin text-amber-400" />
+        <span className="font-semibold text-[11px] text-[#A1A1AA]">Loading Purchase Order Details...</span>
+      </div>
+
+      {/* Action Bar Skeleton */}
+      <div className="bg-[#09090B] p-4 rounded-2xl border border-[#27272A] flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center space-x-2">
+          <div className="h-8 w-28 bg-[#27272A] rounded-xl"></div>
+          <div className="h-8 w-36 bg-[#27272A] rounded-xl"></div>
+          <div className="h-8 w-24 bg-[#27272A] rounded-xl"></div>
+        </div>
+        <div className="h-8 w-44 bg-[#27272A] rounded-xl"></div>
+      </div>
+
+      {/* Primary Reference Metrics Card Skeleton */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-[#09090B] p-4 rounded-xl border border-[#27272A]">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="space-y-2">
+            <div className="h-2.5 w-16 bg-[#27272A] rounded"></div>
+            <div className="h-5 w-28 bg-[#27272A] rounded"></div>
+          </div>
+        ))}
+      </div>
+
+      {/* Payment Receipt Verification Panel Skeleton */}
+      <div className="bg-[#09090B] p-5 rounded-2xl space-y-4 border border-[#27272A]">
+        <div className="flex items-center justify-between border-b border-[#27272A] pb-3">
+          <div className="flex items-center space-x-2">
+            <div className="w-5 h-5 bg-[#27272A] rounded-full"></div>
+            <div className="h-4 w-40 bg-[#27272A] rounded"></div>
+          </div>
+          <div className="h-4 w-20 bg-[#27272A] rounded"></div>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <div className="h-14 bg-[#18181B] rounded-xl border border-[#27272A] p-2 space-y-1.5">
+            <div className="h-2 w-12 bg-[#27272A] rounded"></div>
+            <div className="h-4 w-24 bg-[#27272A] rounded"></div>
+          </div>
+          <div className="h-14 bg-[#18181B] rounded-xl border border-[#27272A] p-2 space-y-1.5">
+            <div className="h-2 w-12 bg-[#27272A] rounded"></div>
+            <div className="h-4 w-20 bg-[#27272A] rounded"></div>
+          </div>
+          <div className="h-14 bg-[#18181B] rounded-xl border border-[#27272A] p-2 space-y-1.5 col-span-2 sm:col-span-1">
+            <div className="h-2 w-16 bg-[#27272A] rounded"></div>
+            <div className="h-4 w-28 bg-[#27272A] rounded"></div>
+          </div>
+        </div>
+      </div>
+
+      {/* Customer & Shipping Details Skeleton */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="bg-[#09090B] p-4 rounded-xl border border-[#27272A] space-y-3">
+          <div className="h-3 w-28 bg-[#27272A] rounded"></div>
+          <div className="space-y-2">
+            <div className="h-4 w-44 bg-[#27272A] rounded"></div>
+            <div className="h-3 w-56 bg-[#27272A] rounded"></div>
+            <div className="h-3 w-32 bg-[#27272A] rounded"></div>
+          </div>
+        </div>
+        <div className="bg-[#09090B] p-4 rounded-xl border border-[#27272A] space-y-3">
+          <div className="h-3 w-28 bg-[#27272A] rounded"></div>
+          <div className="space-y-2">
+            <div className="h-4 w-36 bg-[#27272A] rounded"></div>
+            <div className="h-3 w-48 bg-[#27272A] rounded"></div>
+            <div className="h-3 w-40 bg-[#27272A] rounded"></div>
+          </div>
+        </div>
+      </div>
+
+      {/* Line Items Table Skeleton */}
+      <div className="bg-[#09090B] rounded-xl border border-[#27272A] overflow-hidden p-4 space-y-3">
+        <div className="flex justify-between items-center pb-2 border-b border-[#27272A]">
+          <div className="h-3.5 w-28 bg-[#27272A] rounded"></div>
+          <div className="h-3.5 w-16 bg-[#27272A] rounded"></div>
+        </div>
+        <div className="space-y-2.5">
+          {Array.from({ length: 3 }).map((_, idx) => (
+            <div key={idx} className="flex items-center justify-between p-2.5 bg-[#18181B] rounded-lg border border-[#27272A]">
+              <div className="flex items-center space-x-3">
+                <div className="w-9 h-9 bg-[#27272A] rounded-md"></div>
+                <div className="space-y-1.5">
+                  <div className="h-3.5 w-36 bg-[#27272A] rounded"></div>
+                  <div className="h-2.5 w-20 bg-[#27272A] rounded"></div>
+                </div>
+              </div>
+              <div className="space-y-1.5 text-right">
+                <div className="h-3.5 w-16 bg-[#27272A] rounded ml-auto"></div>
+                <div className="h-2.5 w-12 bg-[#27272A] rounded ml-auto"></div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Skeleton Loading Body for Full Page View ────────────────────────────────── */
+
+export function PurchaseOrdersPageSkeleton() {
+  return (
+    <div className="space-y-6 max-w-[1600px] mx-auto animate-pulse">
+      {/* Top Header Skeleton */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#27272A] pb-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-tr-xl rounded-bl-xl bg-[#27272A]"></div>
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <div className="h-5 w-64 bg-[#27272A] rounded"></div>
+              <div className="h-4 w-24 bg-[#27272A] rounded-full"></div>
+            </div>
+            <div className="h-3 w-80 bg-[#27272A] rounded"></div>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="h-9 w-36 bg-[#27272A] rounded-tr-xl rounded-bl-xl"></div>
+          <div className="h-9 w-9 bg-[#27272A] rounded-tr-lg rounded-bl-lg"></div>
+        </div>
+      </div>
+
+      {/* 6 KPI Cards Skeleton */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="p-3.5 rounded-tr-xl rounded-bl-xl bg-[#18181B] border border-[#27272A] space-y-2">
+            <div className="w-8 h-8 rounded-lg bg-[#27272A]"></div>
+            <div className="h-5 w-12 bg-[#27272A] rounded"></div>
+            <div className="h-2.5 w-20 bg-[#27272A] rounded"></div>
+          </div>
+        ))}
+      </div>
+
+      {/* Filter Tabs & Search Skeleton */}
+      <div className="p-4 rounded-tr-2xl rounded-bl-2xl bg-[#18181B] border border-[#27272A] flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2 overflow-x-auto">
+          {Array.from({ length: 7 }).map((_, i) => (
+            <div key={i} className="h-7 w-28 bg-[#27272A] rounded-tr-lg rounded-bl-lg"></div>
+          ))}
+        </div>
+        <div className="h-8 w-64 bg-[#27272A] rounded-tr-lg rounded-bl-lg"></div>
+      </div>
+
+      {/* Main Table Skeleton */}
+      <div className="rounded-tr-2xl rounded-bl-2xl bg-[#18181B] border border-[#27272A] overflow-hidden shadow-lg">
+        <div className="p-3.5 bg-[#09090B] border-b border-[#27272A] flex justify-between">
+          <div className="h-3 w-40 bg-[#27272A] rounded"></div>
+          <div className="h-3 w-20 bg-[#27272A] rounded"></div>
+        </div>
+        <div className="divide-y divide-[#27272A]">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="p-4 flex items-center justify-between gap-4">
+              <div className="space-y-1.5 w-32">
+                <div className="h-4 w-28 bg-[#27272A] rounded"></div>
+                <div className="h-2.5 w-16 bg-[#27272A] rounded"></div>
+              </div>
+              <div className="h-4 w-24 bg-[#27272A] rounded"></div>
+              <div className="space-y-1.5 w-44">
+                <div className="h-4 w-36 bg-[#27272A] rounded"></div>
+                <div className="h-2.5 w-24 bg-[#27272A] rounded"></div>
+              </div>
+              <div className="h-4 w-24 bg-[#27272A] rounded"></div>
+              <div className="h-4 w-24 bg-[#27272A] rounded"></div>
+              <div className="h-5 w-24 bg-[#27272A] rounded-full"></div>
+              <div className="h-7 w-20 bg-[#27272A] rounded-lg"></div>
+            </div>
+          ))}
+        </div>
+        <div className="p-4 bg-[#09090B] border-t border-[#27272A] flex items-center justify-between">
+          <div className="h-3 w-36 bg-[#27272A] rounded"></div>
+          <div className="flex gap-2">
+            <div className="h-7 w-16 bg-[#27272A] rounded"></div>
+            <div className="h-7 w-16 bg-[#27272A] rounded"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Main Purchase Orders Component ───────────────────────────────────────── */
 
 export function PurchaseOrdersPage() {
   const [pos, setPos] = useState<AdminPurchaseOrder[]>([]);
@@ -102,6 +291,7 @@ export function PurchaseOrdersPage() {
   const [editState, setEditState] = useState('');
   const [editPostalCode, setEditPostalCode] = useState('');
   const [editPhone, setEditPhone] = useState('');
+  const [editEmail, setEditEmail] = useState('');
   const [editSubmitting, setEditSubmitting] = useState(false);
 
   // Settings Modal
@@ -111,11 +301,7 @@ export function PurchaseOrdersPage() {
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [settingsSaving, setSettingsSaving] = useState(false);
 
-  useEffect(() => {
-    loadPos();
-  }, [statusFilter, search, page]);
-
-  async function loadPos() {
+  const loadPos = useCallback(async () => {
     setLoading(true);
     try {
       const res = await getAdminPurchaseOrders({
@@ -132,11 +318,28 @@ export function PurchaseOrdersPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [statusFilter, search, page]);
+
+  useEffect(() => {
+    loadPos();
+  }, [loadPos]);
+
+  // Deep linking: Open PO detail if URL matches /purchase-orders/:id
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const path = window.location.pathname;
+    const match = path.match(/\/purchase-orders\/([a-zA-Z0-9_-]+)/);
+    if (match && match[1]) {
+      openDetail(match[1]);
+    }
+  }, []);
 
   async function openDetail(id: string) {
     setSelectedPoId(id);
     setDetailLoading(true);
+    if (typeof window !== 'undefined' && window.location.pathname !== `/purchase-orders/${id}`) {
+      window.history.pushState(null, '', `/purchase-orders/${id}`);
+    }
     try {
       const data = await getAdminPurchaseOrderById(id);
       setSelectedPo(data);
@@ -149,19 +352,29 @@ export function PurchaseOrdersPage() {
     }
   }
 
+  function closeDetail() {
+    setSelectedPoId(null);
+    setSelectedPo(null);
+    if (typeof window !== 'undefined' && window.location.pathname.startsWith('/purchase-orders/')) {
+      window.history.pushState(null, '', '/purchase-orders');
+    }
+  }
+
   async function handleAcknowledgeSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!selectedPoId || !ackUtr) return;
     setAckSubmitting(true);
     try {
       await adminAcknowledgePayment(selectedPoId, {
-        amountReceived: Number(ackAmount),
-        paymentReference: ackUtr.trim(),
-        paymentDate: ackDate,
+        amountReceived: ackAmount,
+        paymentReference: ackUtr,
         paymentMethod: ackMethod,
-        remarks: ackRemarks.trim() || undefined,
+        paymentDate: ackDate,
+        remarks: ackRemarks || undefined,
       });
       setAckModalOpen(false);
+      setAckUtr('');
+      setAckRemarks('');
       await openDetail(selectedPoId);
       await loadPos();
     } catch (err: any) {
@@ -177,15 +390,16 @@ export function PurchaseOrdersPage() {
     setVerifySubmitting(true);
     try {
       await adminVerifyPayment(selectedPoId, {
-        confirmedAmount: Number(verifyConfirmedAmount),
-        verificationNotes: verifyNotes.trim() || undefined,
+        confirmedAmount: verifyConfirmedAmount,
         confirmBankCredit: verifyBankCredit,
+        verificationNotes: verifyNotes || undefined,
       });
       setVerifyModalOpen(false);
+      setVerifyNotes('');
       await openDetail(selectedPoId);
       await loadPos();
     } catch (err: any) {
-      alert(err.message || 'Failed to verify payment and generate packing list');
+      alert(err.message || 'Failed to verify payment');
     } finally {
       setVerifySubmitting(false);
     }
@@ -196,11 +410,9 @@ export function PurchaseOrdersPage() {
     if (!selectedPoId || !rejectReason) return;
     setRejectSubmitting(true);
     try {
-      await adminRejectReceipt(selectedPoId, {
-        rejectionReason: rejectReason.trim(),
-        allowReupload: true,
-      });
+      await adminRejectReceipt(selectedPoId, { rejectionReason: rejectReason });
       setRejectModalOpen(false);
+      setRejectReason('');
       await openDetail(selectedPoId);
       await loadPos();
     } catch (err: any) {
@@ -212,20 +424,22 @@ export function PurchaseOrdersPage() {
 
   async function handleDispatchSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!selectedPoId || !carrierName) return;
+    if (!selectedPoId) return;
     setDispatchSubmitting(true);
     try {
       await adminDispatchPo(selectedPoId, {
-        carrierName: carrierName.trim(),
-        trackingNumber: trackingNumber.trim() || undefined,
-        dispatchedAt: dispatchedAt || undefined,
-        dispatchNotes: dispatchNotes.trim() || undefined,
+        carrierName,
+        trackingNumber: trackingNumber || undefined,
+        dispatchedAt: dispatchedAt ? new Date(dispatchedAt).toISOString() : new Date().toISOString(),
+        dispatchNotes: dispatchNotes || undefined,
       });
       setDispatchModalOpen(false);
+      setTrackingNumber('');
+      setDispatchNotes('');
       await openDetail(selectedPoId);
       await loadPos();
     } catch (err: any) {
-      alert(err.message || 'Failed to record dispatch');
+      alert(err.message || 'Failed to dispatch order');
     } finally {
       setDispatchSubmitting(false);
     }
@@ -233,45 +447,46 @@ export function PurchaseOrdersPage() {
 
   function openEditModal(po: AdminPurchaseOrder) {
     setEditPoRef(po.customerPoReferenceNumber || '');
-    setEditAdvancePercentage(Number(po.advancePercentage) || 30);
+    setEditAdvancePercentage(po.advancePercentage || 30);
     setEditShippingCost(Number(po.shippingCost) || 0);
-    setEditDeliveryDate(
-      po.requestedDeliveryDate ? new Date(po.requestedDeliveryDate).toISOString().slice(0, 10) : ''
-    );
+    setEditDeliveryDate(po.requestedDeliveryDate ? po.requestedDeliveryDate.slice(0, 10) : '');
     setEditDeliveryInstructions(po.deliveryInstructions || '');
-    setEditAttentionTo(po.deliveryAddress?.attentionTo || '');
-    setEditCompanyName(po.deliveryAddress?.companyName || '');
-    setEditAddress1(po.deliveryAddress?.addressLine1 || '');
-    setEditCity(po.deliveryAddress?.city || '');
-    setEditState(po.deliveryAddress?.state || '');
-    setEditPostalCode(po.deliveryAddress?.postalCode || '');
-    setEditPhone(po.deliveryAddress?.phone || '');
+    setEditAttentionTo(po.deliveryAddress?.attentionTo || po.billingAddress?.attentionTo || '');
+    setEditCompanyName(po.deliveryAddress?.companyName || po.billingAddress?.companyName || '');
+    setEditAddress1(po.deliveryAddress?.addressLine1 || po.billingAddress?.addressLine1 || '');
+    setEditCity(po.deliveryAddress?.city || po.billingAddress?.city || '');
+    setEditState(po.deliveryAddress?.state || po.billingAddress?.state || '');
+    setEditPostalCode(po.deliveryAddress?.postalCode || po.billingAddress?.postalCode || '');
+    setEditPhone(po.deliveryAddress?.phone || po.billingAddress?.phone || '');
+    setEditEmail(po.deliveryAddress?.email || po.billingAddress?.email || '');
     setEditModalOpen(true);
   }
 
   async function handleEditSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!selectedPoId) return;
+    if (!selectedPo) return;
     setEditSubmitting(true);
     try {
-      await adminUpdatePurchaseOrder(selectedPoId, {
-        customerPoReferenceNumber: editPoRef.trim() || undefined,
-        advancePercentage: Number(editAdvancePercentage),
-        shippingCost: Number(editShippingCost),
-        requestedDeliveryDate: editDeliveryDate || null,
-        deliveryInstructions: editDeliveryInstructions.trim() || null,
+      await adminUpdatePurchaseOrder(selectedPo.id, {
+        customerPoReferenceNumber: editPoRef || undefined,
+        advancePercentage: editAdvancePercentage,
+        shippingCost: editShippingCost,
+        requestedDeliveryDate: editDeliveryDate || undefined,
+        deliveryInstructions: editDeliveryInstructions || undefined,
         deliveryAddress: {
-          attentionTo: editAttentionTo.trim(),
-          companyName: editCompanyName.trim(),
-          addressLine1: editAddress1.trim(),
-          city: editCity.trim(),
-          state: editState.trim(),
-          postalCode: editPostalCode.trim(),
-          phone: editPhone.trim(),
+          attentionTo: editAttentionTo || 'Purchasing Contact',
+          companyName: editCompanyName || undefined,
+          addressLine1: editAddress1,
+          city: editCity,
+          state: editState,
+          postalCode: editPostalCode,
+          phone: editPhone,
+          email: editEmail || 'contact@client.com',
+          country: 'India',
         },
       });
       setEditModalOpen(false);
-      await openDetail(selectedPoId);
+      await openDetail(selectedPo.id);
       await loadPos();
     } catch (err: any) {
       alert(err.message || 'Failed to update Purchase Order');
@@ -330,8 +545,7 @@ export function PurchaseOrdersPage() {
       await adminDeletePurchaseOrder(poId);
       alert(`Purchase Order "${poNumber}" deleted successfully.`);
       if (selectedPoId === poId) {
-        setSelectedPoId(null);
-        setSelectedPo(null);
+        closeDetail();
       }
       await loadPos();
     } catch (err: any) {
@@ -373,92 +587,200 @@ export function PurchaseOrdersPage() {
 
   const activeReceipt = selectedPo?.receipts && selectedPo.receipts[0];
 
+  // Tab counters dynamically computed from current pos
+  const tabCounts = {
+    ALL: pos.length,
+    AWAITING_ADVANCE_PAYMENT: pos.filter((p) => p.status === 'AWAITING_ADVANCE_PAYMENT' || p.status === 'SUBMITTED' || p.status === 'DRAFT').length,
+    PAYMENT_RECEIPT_SUBMITTED: pos.filter((p) => p.status === 'PAYMENT_RECEIPT_SUBMITTED').length,
+    PAYMENT_ACKNOWLEDGED: pos.filter((p) => p.status === 'PAYMENT_ACKNOWLEDGED').length,
+    PACKING_LIST_GENERATED: pos.filter((p) => ['PACKING_LIST_GENERATED', 'PAYMENT_VERIFIED'].includes(p.status)).length,
+    DISPATCHED: pos.filter((p) => p.status === 'DISPATCHED').length,
+    INVOICED: pos.filter((p) => p.status === 'INVOICED').length,
+  };
+
+  // Derive displayed items according to the active status filter and search query
+  const displayedPos = pos.filter((po) => {
+    // Status filter matching
+    if (statusFilter === 'AWAITING_ADVANCE_PAYMENT') {
+      if (po.status !== 'AWAITING_ADVANCE_PAYMENT' && po.status !== 'SUBMITTED' && po.status !== 'DRAFT') {
+        return false;
+      }
+    } else if (statusFilter === 'PAYMENT_RECEIPT_SUBMITTED') {
+      if (po.status !== 'PAYMENT_RECEIPT_SUBMITTED') return false;
+    } else if (statusFilter === 'PAYMENT_ACKNOWLEDGED') {
+      if (po.status !== 'PAYMENT_ACKNOWLEDGED') return false;
+    } else if (statusFilter === 'PACKING_LIST_GENERATED') {
+      if (po.status !== 'PACKING_LIST_GENERATED' && po.status !== 'PAYMENT_VERIFIED') return false;
+    } else if (statusFilter === 'DISPATCHED') {
+      if (po.status !== 'DISPATCHED') return false;
+    } else if (statusFilter === 'INVOICED') {
+      if (po.status !== 'INVOICED') return false;
+    } else if (statusFilter !== 'ALL') {
+      if (po.status !== statusFilter) return false;
+    }
+
+    // Search query matching
+    if (search.trim()) {
+      const q = search.toLowerCase().trim();
+      const matchPo = po.poNumber?.toLowerCase().includes(q);
+      const matchQuote = po.quotationNumber?.toLowerCase().includes(q);
+      const matchCust = (po.billingAddress?.attentionTo || po.customer?.email || '').toLowerCase().includes(q);
+      const matchCompany = (po.billingAddress?.companyName || '').toLowerCase().includes(q);
+      const matchRef = (po.customerPoReferenceNumber || '').toLowerCase().includes(q);
+      if (!matchPo && !matchQuote && !matchCust && !matchCompany && !matchRef) {
+        return false;
+      }
+    }
+
+    return true;
+  });
+
+  if (loading && pos.length === 0) {
+    return <PurchaseOrdersPageSkeleton />;
+  }
+
   return (
-    <div className="p-6 space-y-6 max-w-[1600px] mx-auto">
-      
-      {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-black text-slate-900 tracking-tight">Purchase Orders (PO) Management</h1>
-          <p className="text-xs text-slate-500">
-            Audit B2B purchase orders, acknowledge advance bank transfers, digitally verify receipts, and generate packing lists.
-          </p>
+    <div className="space-y-6 max-w-[1600px] mx-auto">
+      {/* ─── Top Header ─── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#27272A] pb-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-tr-xl rounded-bl-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400">
+            <FileCheck size={20} />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg font-bold text-slate-900 dark:text-[#FAFAFA]">
+                Purchase Orders (PO) Console
+              </h1>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                B2B Fulfillment
+              </span>
+            </div>
+            <p className="text-xs text-[#A1A1AA]">
+              Audit commercial purchase orders, acknowledge advance bank transfers, digitally verify receipts, and generate packing lists.
+            </p>
+          </div>
         </div>
-        <div className="flex items-center space-x-3">
+
+        <div className="flex items-center gap-2">
           <button
             onClick={openSettings}
-            className="flex items-center space-x-2 bg-white border border-slate-200 text-slate-700 text-xs font-bold px-4 py-2.5 rounded-xl hover:bg-slate-50 shadow-sm transition-all"
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-tr-xl rounded-bl-xl bg-[#18181B] border border-[#27272A] text-[#A1A1AA] hover:text-[#FAFAFA] hover:border-[#8B5CF6]/40 text-xs font-semibold transition-colors shadow-sm"
           >
-            <Sliders className="w-4 h-4" />
+            <Sliders size={14} className="text-amber-400" />
             <span>PO & Bank Settings</span>
           </button>
           <button
             onClick={loadPos}
-            className="flex items-center space-x-2 bg-slate-900 text-white text-xs font-bold px-4 py-2.5 rounded-xl hover:bg-slate-800 shadow-sm transition-all"
+            className="p-2 rounded-tr-lg rounded-bl-lg border border-[#27272A] bg-[#18181B] text-[#A1A1AA] hover:text-amber-400 hover:border-amber-400/40 transition-colors"
+            title="Refresh Registry"
           >
-            <RefreshCw className="w-3.5 h-3.5" />
-            <span>Refresh</span>
+            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
           </button>
         </div>
       </div>
 
-      {/* Filter Tabs & Search */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+      {/* ─── Metric KPI Summary Cards (Interactive Filters) ─── */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        {[
+          { label: 'Total Orders', key: 'ALL', value: totalItems || pos.length, icon: <FileCheck size={16} />, color: 'text-amber-400', bg: 'bg-amber-500/10' },
+          { label: 'Awaiting Advance', key: 'AWAITING_ADVANCE_PAYMENT', value: tabCounts.AWAITING_ADVANCE_PAYMENT, icon: <Clock size={16} />, color: 'text-yellow-400', bg: 'bg-yellow-500/10' },
+          { label: 'Receipt Uploaded', key: 'PAYMENT_RECEIPT_SUBMITTED', value: tabCounts.PAYMENT_RECEIPT_SUBMITTED, icon: <CreditCard size={16} />, color: 'text-blue-400', bg: 'bg-blue-500/10' },
+          { label: 'Acknowledged', key: 'PAYMENT_ACKNOWLEDGED', value: tabCounts.PAYMENT_ACKNOWLEDGED, icon: <CheckCircle size={16} />, color: 'text-indigo-400', bg: 'bg-indigo-500/10' },
+          { label: 'Packing List Ready', key: 'PACKING_LIST_GENERATED', value: tabCounts.PACKING_LIST_GENERATED, icon: <Package size={16} />, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
+          { label: 'Dispatched / Invoiced', key: 'DISPATCHED', value: tabCounts.DISPATCHED + tabCounts.INVOICED, icon: <Truck size={16} />, color: 'text-purple-400', bg: 'bg-purple-500/10' },
+        ].map((card) => (
+          <button
+            key={card.label}
+            type="button"
+            onClick={() => {
+              setStatusFilter(card.key);
+              setPage(1);
+            }}
+            className={`text-left p-3.5 rounded-tr-xl rounded-bl-xl bg-[#18181B] border transition-all cursor-pointer ${
+              statusFilter === card.key
+                ? 'border-amber-400 shadow-md shadow-amber-500/10 bg-[#27272A]/40'
+                : 'border-[#27272A] hover:border-amber-400/40 hover:bg-[#27272A]/20'
+            }`}
+          >
+            <div className={`w-8 h-8 rounded-lg ${card.bg} flex items-center justify-center ${card.color} mb-2`}>
+              {card.icon}
+            </div>
+            <p className={`text-base font-bold ${card.color}`}>{card.value}</p>
+            <p className="text-[10px] text-[#71717A] mt-0.5 font-medium">{card.label}</p>
+          </button>
+        ))}
+      </div>
+
+      {/* ─── Filter Tabs & Search Bar ─── */}
+      <div className="p-4 rounded-tr-2xl rounded-bl-2xl bg-[#18181B] border border-[#27272A] space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center space-x-2 overflow-x-auto text-xs font-bold">
+          {/* Status Tabs */}
+          <div className="flex items-center gap-1.5 overflow-x-auto text-xs font-semibold pb-1 sm:pb-0">
             {[
-              { label: 'All Orders', key: 'ALL' },
-              { label: 'Awaiting Advance', key: 'AWAITING_ADVANCE_PAYMENT' },
-              { label: 'Receipt Uploaded', key: 'PAYMENT_RECEIPT_SUBMITTED' },
-              { label: 'Acknowledged', key: 'PAYMENT_ACKNOWLEDGED' },
-              { label: 'Verified & Packing List', key: 'PACKING_LIST_GENERATED' },
-              { label: 'Dispatched', key: 'DISPATCHED' },
-              { label: 'Invoiced', key: 'INVOICED' },
+              { label: 'All Orders', key: 'ALL', count: tabCounts.ALL },
+              { label: 'Awaiting Advance', key: 'AWAITING_ADVANCE_PAYMENT', count: tabCounts.AWAITING_ADVANCE_PAYMENT },
+              { label: 'Receipt Uploaded', key: 'PAYMENT_RECEIPT_SUBMITTED', count: tabCounts.PAYMENT_RECEIPT_SUBMITTED },
+              { label: 'Acknowledged', key: 'PAYMENT_ACKNOWLEDGED', count: tabCounts.PAYMENT_ACKNOWLEDGED },
+              { label: 'Verified & Packing List', key: 'PACKING_LIST_GENERATED', count: tabCounts.PACKING_LIST_GENERATED },
+              { label: 'Dispatched', key: 'DISPATCHED', count: tabCounts.DISPATCHED },
+              { label: 'Invoiced', key: 'INVOICED', count: tabCounts.INVOICED },
             ].map((tab) => (
               <button
                 key={tab.key}
-                onClick={() => { setStatusFilter(tab.key); setPage(1); }}
-                className={`px-3 py-1.5 rounded-lg transition-all ${
+                type="button"
+                onClick={() => {
+                  setStatusFilter(tab.key);
+                  setPage(1);
+                }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-tr-lg rounded-bl-lg transition-all cursor-pointer whitespace-nowrap ${
                   statusFilter === tab.key
-                    ? 'bg-slate-900 text-white'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    ? 'bg-amber-500 text-slate-950 font-bold shadow-md shadow-amber-500/20'
+                    : 'text-[#A1A1AA] hover:text-[#FAFAFA] hover:bg-[#27272A]'
                 }`}
               >
-                {tab.label}
+                <span>{tab.label}</span>
+                <span
+                  className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold font-mono ${
+                    statusFilter === tab.key
+                      ? 'bg-slate-950/30 text-slate-950'
+                      : 'bg-[#27272A] text-[#A1A1AA]'
+                  }`}
+                >
+                  {tab.count}
+                </span>
               </button>
             ))}
           </div>
 
-          <div className="relative w-full sm:w-64">
-            <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
+          {/* Search Input */}
+          <div className="relative w-full sm:w-72">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#71717A]" />
             <input
               type="text"
               placeholder="Search PO / Quote No / Customer..."
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-              className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-slate-900"
+              className="w-full pl-9 pr-3 py-2 bg-[#09090B] border border-[#27272A] rounded-tr-lg rounded-bl-lg text-xs text-[#FAFAFA] placeholder-[#71717A] focus:outline-none focus:border-amber-400"
             />
+            {search && (
+              <button
+                onClick={() => { setSearch(''); setPage(1); }}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#71717A] hover:text-white"
+              >
+                <X size={12} />
+              </button>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Main Table */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      {/* ─── Main Purchase Orders Table ─── */}
+      <div className="rounded-tr-2xl rounded-bl-2xl bg-[#18181B] border border-[#27272A] overflow-hidden shadow-lg">
         {loading ? (
-          <div className="p-12 text-center">
-            <div className="w-8 h-8 border-4 border-slate-900 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
-            <p className="text-xs text-slate-500 font-bold">Loading Purchase Orders...</p>
-          </div>
-        ) : pos.length === 0 ? (
-          <div className="p-12 text-center text-slate-500 space-y-2">
-            <FileText className="w-10 h-10 mx-auto text-slate-400" />
-            <p className="text-sm font-bold text-slate-800">No Purchase Orders Found</p>
-            <p className="text-xs">No orders match the current status and search filters.</p>
-          </div>
-        ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-xs text-left">
-              <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 uppercase font-black tracking-wider text-[10px]">
+              <thead className="bg-[#09090B] border-b border-[#27272A] text-[#71717A] uppercase font-bold tracking-wider text-[10px]">
                 <tr>
                   <th className="py-3 px-4">PO Number</th>
                   <th className="py-3 px-4">Quotation Ref</th>
@@ -466,68 +788,106 @@ export function PurchaseOrdersPage() {
                   <th className="py-3 px-4 text-right">Total Amount</th>
                   <th className="py-3 px-4 text-right">Advance Due</th>
                   <th className="py-3 px-4">Status</th>
-                  <th className="py-3 px-4">Date</th>
-                  <th className="py-3 px-4 text-center">Action</th>
+                  <th className="py-3 px-4 text-center">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 font-medium text-slate-800">
-                {pos.map((po) => (
-                  <tr key={po.id} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="py-3 px-4 font-mono font-bold text-slate-900">
+              <tbody className="divide-y divide-[#27272A] animate-pulse">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <tr key={i} className="hover:bg-[#27272A]/40">
+                    <td className="py-3.5 px-4"><div className="h-4 w-28 bg-[#27272A] rounded"></div></td>
+                    <td className="py-3.5 px-4"><div className="h-4 w-24 bg-[#27272A] rounded"></div></td>
+                    <td className="py-3.5 px-4"><div className="h-4 w-36 bg-[#27272A] rounded"></div></td>
+                    <td className="py-3.5 px-4 text-right"><div className="h-4 w-20 bg-[#27272A] rounded ml-auto"></div></td>
+                    <td className="py-3.5 px-4 text-right"><div className="h-4 w-20 bg-[#27272A] rounded ml-auto"></div></td>
+                    <td className="py-3.5 px-4"><div className="h-5 w-24 bg-[#27272A] rounded-full"></div></td>
+                    <td className="py-3.5 px-4 text-center"><div className="h-7 w-20 bg-[#27272A] rounded-lg mx-auto"></div></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : displayedPos.length === 0 ? (
+          <div className="p-12 text-center text-[#71717A] space-y-2">
+            <FileText className="w-10 h-10 mx-auto text-[#3F3F46]" />
+            <p className="text-sm font-bold text-[#FAFAFA]">No Purchase Orders Found</p>
+            <p className="text-xs">No orders match the selected "{statusFilter.replace(/_/g, ' ')}" status filter.</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs text-left">
+              <thead className="bg-[#09090B] border-b border-[#27272A] text-[#71717A] uppercase font-bold tracking-wider text-[10px]">
+                <tr>
+                  <th className="py-3.5 px-4">PO Number</th>
+                  <th className="py-3.5 px-4">Quotation Ref</th>
+                  <th className="py-3.5 px-4">Customer</th>
+                  <th className="py-3.5 px-4 text-right">Total Amount</th>
+                  <th className="py-3.5 px-4 text-right">Advance Due</th>
+                  <th className="py-3.5 px-4">Status</th>
+                  <th className="py-3.5 px-4">Submitted Date</th>
+                  <th className="py-3.5 px-4 text-center">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#27272A] text-[#FAFAFA]">
+                {displayedPos.map((po) => (
+                  <tr key={po.id} className="hover:bg-[#27272A]/40 transition-colors">
+                    <td className="py-3.5 px-4 font-mono font-bold text-amber-400">
                       {po.poNumber}
                     </td>
-                    <td className="py-3 px-4 font-mono text-slate-600">
+                    <td className="py-3.5 px-4 font-mono text-[#A855F7]">
                       {po.quotationNumber}
                     </td>
-                    <td className="py-3 px-4">
-                      <div className="font-bold text-slate-900">{po.billingAddress?.attentionTo || po.customer?.email}</div>
-                      <div className="text-[11px] text-slate-400">{po.billingAddress?.companyName || 'B2B Client'}</div>
+                    <td className="py-3.5 px-4">
+                      <div className="font-bold text-[#FAFAFA]">{po.billingAddress?.attentionTo || po.customer?.email}</div>
+                      <div className="text-[11px] text-[#A1A1AA]">{po.billingAddress?.companyName || 'B2B Client'}</div>
                     </td>
-                    <td className="py-3 px-4 text-right font-mono font-bold">
+                    <td className="py-3.5 px-4 text-right font-mono font-bold text-[#FAFAFA]">
                       ₹{Number(po.totalAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                     </td>
-                    <td className="py-3 px-4 text-right font-mono font-bold text-amber-800">
-                      ₹{Number(po.advanceAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })} ({po.advancePercentage}%)
+                    <td className="py-3.5 px-4 text-right font-mono font-bold text-amber-400">
+                      ₹{Number(po.advanceAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}{' '}
+                      <span className="text-[10px] text-[#71717A]">({po.advancePercentage}%)</span>
                     </td>
-                    <td className="py-3 px-4">
+                    <td className="py-3.5 px-4">
                       <span
                         className={`text-[9px] font-extrabold px-2.5 py-1 rounded-full uppercase tracking-wider ${
                           po.status === 'INVOICED'
-                            ? 'bg-purple-100 text-purple-800'
+                            ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
                             : po.status === 'DISPATCHED'
-                            ? 'bg-teal-100 text-teal-800'
+                            ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
                             : po.status === 'PACKING_LIST_GENERATED' || po.status === 'PAYMENT_VERIFIED'
-                            ? 'bg-emerald-100 text-emerald-800'
+                            ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
                             : po.status === 'PAYMENT_ACKNOWLEDGED'
-                            ? 'bg-blue-100 text-blue-800'
+                            ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
                             : po.status === 'PAYMENT_RECEIPT_SUBMITTED'
-                            ? 'bg-amber-100 text-amber-800'
+                            ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
                             : po.status === 'INVOICE_GENERATION_FAILED'
-                            ? 'bg-orange-100 text-orange-800'
+                            ? 'bg-orange-500/20 text-orange-300 border border-orange-500/30'
                             : po.status === 'REJECTED'
-                            ? 'bg-red-100 text-red-800'
-                            : 'bg-slate-100 text-slate-800'
+                            ? 'bg-red-500/20 text-red-300 border border-red-500/30'
+                            : 'bg-slate-500/20 text-slate-300 border border-slate-500/30'
                         }`}
                       >
                         {po.status.replace(/_/g, ' ')}
                       </span>
                     </td>
-                    <td className="py-3 px-4 text-slate-500 text-[11px]">
-                      {new Date(po.submittedAt).toLocaleDateString('en-IN')}
+                    <td className="py-3.5 px-4 text-[#A1A1AA] text-[11px] whitespace-nowrap">
+                      {new Date(po.submittedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
                     </td>
-                    <td className="py-3 px-4 text-center">
+                    <td className="py-3.5 px-4 text-center">
                       <div className="flex items-center justify-center space-x-1.5">
-                        <button
-                          onClick={() => openDetail(po.id)}
-                          className="inline-flex items-center space-x-1 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold px-2.5 py-1.5 rounded-lg transition-colors text-xs"
+                        <AsyncActionButton
+                          mode="view"
+                          onAction={() => openDetail(po.id)}
+                          idleIcon={<Eye className="w-3.5 h-3.5 text-amber-400" />}
+                          idleLabel="Inspect"
+                          loadingLabel="Opening…"
+                          className="bg-[#27272A] hover:bg-[#3F3F46] text-[#FAFAFA] font-semibold px-2.5 py-1.5 rounded-lg transition-colors text-xs"
+                          variant="custom"
                           title="Inspect Purchase Order"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                          <span>Inspect</span>
-                        </button>
+                        />
                         <button
                           onClick={() => handleDeletePo(po.id, po.poNumber)}
-                          className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+                          className="p-1.5 text-[#71717A] hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
                           title="Delete Purchase Order"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -541,22 +901,24 @@ export function PurchaseOrdersPage() {
           </div>
         )}
 
-        {/* Pagination footer */}
-        <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500">
-          <span>Showing {pos.length} of {totalItems} Purchase Orders</span>
+        {/* ─── Pagination Footer ─── */}
+        <div className="p-4 bg-[#09090B] border-t border-[#27272A] flex items-center justify-between text-xs text-[#71717A]">
+          <span>Showing {displayedPos.length} of {totalItems || pos.length} Purchase Orders</span>
           <div className="flex space-x-2">
             <button
               disabled={page <= 1}
               onClick={() => setPage(page - 1)}
-              className="px-3 py-1 bg-white border border-slate-200 rounded-lg disabled:opacity-40 font-bold"
+              className="px-3 py-1.5 bg-[#18181B] border border-[#27272A] text-[#A1A1AA] hover:text-white rounded-lg disabled:opacity-40 font-bold transition-colors"
             >
               Previous
             </button>
-            <span className="px-2 py-1 font-bold text-slate-700">Page {page} of {totalPages}</span>
+            <span className="px-3 py-1.5 font-bold text-amber-400">
+              Page {page} of {totalPages || 1}
+            </span>
             <button
               disabled={page >= totalPages}
               onClick={() => setPage(page + 1)}
-              className="px-3 py-1 bg-white border border-slate-200 rounded-lg disabled:opacity-40 font-bold"
+              className="px-3 py-1.5 bg-[#18181B] border border-[#27272A] text-[#A1A1AA] hover:text-white rounded-lg disabled:opacity-40 font-bold transition-colors"
             >
               Next
             </button>
@@ -564,9 +926,9 @@ export function PurchaseOrdersPage() {
         </div>
       </div>
 
-      {/* PO Detail Drawer / Modal */}
+      {/* ─── DETAIL & AUDIT DRAWER MODAL ─── */}
       {selectedPoId && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex justify-end">
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex justify-end">
           <div className="w-full max-w-3xl bg-[#18181B] text-[#FAFAFA] border-l border-[#27272A] h-full shadow-2xl overflow-y-auto flex flex-col">
             
             {/* Modal Header */}
@@ -575,15 +937,17 @@ export function PurchaseOrdersPage() {
                 <div className="flex items-center space-x-2">
                   <span className="text-xs text-amber-400 font-bold tracking-wider uppercase">Purchase Order Audit</span>
                   <span className="bg-[#27272A] text-amber-300 border border-[#3F3F46] text-[10px] px-2 py-0.5 rounded font-mono font-bold">
-                    {selectedPo?.status}
+                    {selectedPo?.status || 'LOADING'}
                   </span>
                 </div>
                 <h2 className="text-xl font-bold font-mono text-[#FAFAFA] mt-1">
-                  {selectedPo?.poNumber || 'Loading...'}
+                  {selectedPo?.poNumber || (
+                    <span className="inline-block h-6 w-48 bg-[#27272A] rounded animate-pulse align-middle"></span>
+                  )}
                 </h2>
               </div>
               <button
-                onClick={() => setSelectedPoId(null)}
+                onClick={closeDetail}
                 className="p-2 rounded-lg bg-[#27272A] text-[#A1A1AA] hover:text-[#FAFAFA] hover:bg-[#3F3F46] transition-colors"
               >
                 <X className="w-5 h-5" />
@@ -591,10 +955,7 @@ export function PurchaseOrdersPage() {
             </div>
 
             {detailLoading || !selectedPo ? (
-              <div className="p-12 text-center flex-1 flex flex-col items-center justify-center">
-                <div className="w-8 h-8 border-4 border-amber-400 border-t-transparent rounded-full animate-spin mb-2"></div>
-                <p className="text-xs text-[#A1A1AA] font-bold">Loading Order Information...</p>
-              </div>
+              <PurchaseOrderDetailSkeleton />
             ) : (
               <div className="p-6 space-y-6 flex-1 text-xs text-[#FAFAFA]">
                 
@@ -609,13 +970,16 @@ export function PurchaseOrdersPage() {
                       <span>Edit PO Details</span>
                     </button>
 
-                    <button
-                      onClick={() => downloadAdminPoPdf(selectedPo.id, selectedPo.poNumber)}
-                      className="bg-[#27272A] hover:bg-[#3F3F46] text-[#FAFAFA] border border-[#3F3F46] font-bold px-3 py-2 rounded-xl transition-all flex items-center space-x-1.5 shadow-sm text-xs"
-                    >
-                      <Download className="w-3.5 h-3.5 text-blue-400" />
-                      <span>Download PO PDF</span>
-                    </button>
+                    <AsyncActionButton
+                      mode="download"
+                      onAction={() => downloadAdminPoPdf(selectedPo.id, selectedPo.poNumber)}
+                      idleIcon={<Download className="w-3.5 h-3.5 text-blue-400" />}
+                      idleLabel="Download PO PDF"
+                      loadingLabel="Preparing PO…"
+                      successLabel="Downloaded!"
+                      className="bg-[#27272A] hover:bg-[#3F3F46] text-[#FAFAFA] border border-[#3F3F46] font-bold px-3 py-2 rounded-xl transition-all shadow-sm text-xs"
+                      variant="custom"
+                    />
 
                     <button
                       onClick={() => handleDeletePo(selectedPo.id, selectedPo.poNumber)}
@@ -627,22 +991,28 @@ export function PurchaseOrdersPage() {
                     </button>
 
                     {selectedPo.packingList && (
-                      <button
-                        onClick={() => downloadAdminPackingListPdf(selectedPo.id, selectedPo.poNumber)}
-                        className="bg-emerald-700 text-white font-bold px-3 py-2 rounded-xl hover:bg-emerald-600 transition-all flex items-center space-x-1.5 shadow-sm text-xs"
-                      >
-                        <Download className="w-3.5 h-3.5" />
-                        <span>Packing List PDF</span>
-                      </button>
+                      <AsyncActionButton
+                        mode="download"
+                        onAction={() => downloadAdminPackingListPdf(selectedPo.id, selectedPo.poNumber)}
+                        idleIcon={<Download className="w-3.5 h-3.5" />}
+                        idleLabel="Packing List PDF"
+                        loadingLabel="Preparing Packing List…"
+                        successLabel="Downloaded!"
+                        className="bg-emerald-700 text-white font-bold px-3 py-2 rounded-xl hover:bg-emerald-600 transition-all shadow-sm text-xs"
+                        variant="custom"
+                      />
                     )}
                     {selectedPo.invoice && (
-                      <button
-                        onClick={() => handleDownloadInvoice(selectedPo.id, selectedPo.invoice?.invoiceNumber)}
-                        className="bg-purple-700 text-white font-bold px-3 py-2 rounded-xl hover:bg-purple-600 transition-all flex items-center space-x-1.5 shadow-sm text-xs"
-                      >
-                        <Receipt className="w-3.5 h-3.5" />
-                        <span>Download Tax Invoice</span>
-                      </button>
+                      <AsyncActionButton
+                        mode="download"
+                        onAction={() => handleDownloadInvoice(selectedPo.id, selectedPo.invoice?.invoiceNumber)}
+                        idleIcon={<Receipt className="w-3.5 h-3.5" />}
+                        idleLabel="Download Tax Invoice"
+                        loadingLabel="Generating Invoice…"
+                        successLabel="Downloaded!"
+                        className="bg-purple-700 text-white font-bold px-3 py-2 rounded-xl hover:bg-purple-600 transition-all shadow-sm text-xs"
+                        variant="custom"
+                      />
                     )}
                   </div>
 
@@ -748,281 +1118,260 @@ export function PurchaseOrdersPage() {
                       <div className="grid grid-cols-2 gap-2 text-[#A1A1AA]">
                         <div>
                           <span className="text-[10px] text-[#A1A1AA] block">Uploaded File:</span>
-                          <span className="font-bold text-[#FAFAFA]">{activeReceipt.originalFileName}</span>
+                          <span className="font-mono text-[#FAFAFA] truncate block">{activeReceipt.originalFileName}</span>
                         </div>
                         <div>
-                          <span className="text-[10px] text-[#A1A1AA] block">File Size & MIME:</span>
-                          <span className="text-[#FAFAFA]">{(activeReceipt.fileSizeBytes / 1024).toFixed(1)} KB ({activeReceipt.mimeType})</span>
+                          <span className="text-[10px] text-[#A1A1AA] block">Reported Amount:</span>
+                          <span className="font-bold text-[#FAFAFA]">₹{Number(activeReceipt.amountReceived || 0).toLocaleString('en-IN')}</span>
                         </div>
-                        <div className="col-span-2">
-                          <span className="text-[10px] text-[#A1A1AA] block">Tamper-Proof SHA-256 Digest:</span>
-                          <span className="font-mono text-[10px] text-emerald-400 break-all">{activeReceipt.fileHash}</span>
+                        <div>
+                          <span className="text-[10px] text-[#A1A1AA] block">UTR / Ref:</span>
+                          <span className="font-mono text-[#FAFAFA]">{activeReceipt.paymentReference || 'N/A'}</span>
                         </div>
-                        {activeReceipt.paymentReference && (
-                          <div>
-                            <span className="text-[10px] text-[#A1A1AA] block">Bank UTR / Reference:</span>
-                            <span className="font-mono font-bold text-amber-400">{activeReceipt.paymentReference}</span>
-                          </div>
-                        )}
-                        {activeReceipt.amountReceived && (
-                          <div>
-                            <span className="text-[10px] text-[#A1A1AA] block">Amount Acknowledged:</span>
-                            <span className="font-mono font-bold text-emerald-400">₹{Number(activeReceipt.amountReceived).toLocaleString('en-IN')}</span>
-                          </div>
-                        )}
+                        <div>
+                          <span className="text-[10px] text-[#A1A1AA] block">Payment Date:</span>
+                          <span className="text-[#FAFAFA]">{activeReceipt.paymentDate ? new Date(activeReceipt.paymentDate).toLocaleDateString('en-IN') : 'N/A'}</span>
+                        </div>
                       </div>
 
-                      {/* Payment View / Download Actions */}
-                      <div className="flex items-center space-x-2 pt-2 border-t border-[#27272A]">
-                        <button
-                          type="button"
-                          onClick={() => handleViewReceipt(selectedPo.id, selectedPo.poNumber)}
-                          className="bg-blue-600 hover:bg-blue-500 text-white font-bold px-3 py-1.5 rounded-lg flex items-center space-x-1.5 text-xs transition-colors shadow-sm"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                          <span>View Payment Receipt</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDownloadReceipt(selectedPo.id, selectedPo.poNumber)}
-                          className="bg-[#27272A] hover:bg-[#3F3F46] text-[#FAFAFA] border border-[#3F3F46] font-bold px-3 py-1.5 rounded-lg flex items-center space-x-1.5 text-xs transition-colors"
-                        >
-                          <Download className="w-3.5 h-3.5" />
-                          <span>Download File</span>
-                        </button>
+                      {activeReceipt.rejectionReason && (
+                        <div className="bg-red-950/60 border border-red-800/80 p-3 rounded-lg text-red-300">
+                          <span className="font-bold block">Rejection Reason:</span>
+                          <p>{activeReceipt.rejectionReason}</p>
+                        </div>
+                      )}
+
+                      <div className="flex space-x-2 pt-2 border-t border-[#27272A]">
+                        <AsyncActionButton
+                          mode="view"
+                          onAction={() => handleViewReceipt(selectedPo.id, selectedPo.poNumber)}
+                          idleIcon={<ExternalLink className="w-3.5 h-3.5" />}
+                          idleLabel="View Receipt File"
+                          loadingLabel="Opening…"
+                          className="bg-[#27272A] hover:bg-[#3F3F46] text-[#FAFAFA] border border-[#3F3F46] font-bold px-3 py-1.5 rounded-lg text-xs"
+                          variant="custom"
+                        />
+                        <AsyncActionButton
+                          mode="download"
+                          onAction={() => handleDownloadReceipt(selectedPo.id, selectedPo.poNumber)}
+                          idleIcon={<Download className="w-3.5 h-3.5" />}
+                          idleLabel="Download Receipt"
+                          loadingLabel="Downloading…"
+                          successLabel="Downloaded!"
+                          className="bg-[#27272A] hover:bg-[#3F3F46] text-[#FAFAFA] border border-[#3F3F46] font-bold px-3 py-1.5 rounded-lg text-xs"
+                          variant="custom"
+                        />
                       </div>
                     </div>
                   ) : (
-                    <p className="text-[#A1A1AA] text-xs">No payment receipt submitted yet by the customer.</p>
+                    <p className="text-xs text-[#A1A1AA]">No payment receipts uploaded by the customer yet.</p>
                   )}
                 </div>
 
-                {/* Dispatch & Logistics Details Card */}
-                {selectedPo.dispatch && (
-                  <div className="bg-[#09090B] p-4 rounded-xl border border-[#27272A] space-y-3">
-                    <div className="flex items-center justify-between border-b border-[#27272A] pb-2">
-                      <div className="flex items-center space-x-2 text-[#FAFAFA] font-bold">
-                        <Truck className="w-4 h-4 text-blue-400" />
-                        <span>Shipment & Dispatch Details</span>
-                      </div>
-                      <span className="text-[10px] font-mono font-bold text-blue-400 bg-blue-950/60 border border-blue-800 px-2 py-0.5 rounded">
-                        DISPATCHED
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-3 gap-2 text-[#A1A1AA]">
-                      <div>
-                        <span className="text-[10px] text-[#A1A1AA] block">Logistics Carrier</span>
-                        <span className="font-bold text-[#FAFAFA]">{selectedPo.dispatch.carrierName}</span>
-                      </div>
-                      <div>
-                        <span className="text-[10px] text-[#A1A1AA] block">AWB / Tracking No</span>
-                        <span className="font-mono font-bold text-amber-400">{selectedPo.dispatch.trackingNumber || 'Pending'}</span>
-                      </div>
-                      <div>
-                        <span className="text-[10px] text-[#A1A1AA] block">Dispatched Date</span>
-                        <span className="font-bold text-[#FAFAFA]">{new Date(selectedPo.dispatch.dispatchedAt).toLocaleDateString('en-IN')}</span>
-                      </div>
-                      {selectedPo.dispatch.dispatchNotes && (
-                        <div className="col-span-3 text-[11px] text-[#A1A1AA] pt-1">
-                          <strong className="text-[#FAFAFA]">Notes:</strong> {selectedPo.dispatch.dispatchNotes}
-                        </div>
-                      )}
-                    </div>
+                {/* Customer & Shipping Addresses */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="bg-[#09090B] p-4 rounded-xl border border-[#27272A] space-y-1">
+                    <h4 className="font-bold text-xs uppercase text-[#A1A1AA] mb-2 flex items-center space-x-1">
+                      <Building className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Billing Details</span>
+                    </h4>
+                    <p className="font-bold text-[#FAFAFA]">{selectedPo.billingAddress?.attentionTo || selectedPo.customer?.email}</p>
+                    <p className="text-[#A1A1AA]">{selectedPo.billingAddress?.companyName}</p>
+                    <p className="text-[#A1A1AA]">{selectedPo.billingAddress?.addressLine1}</p>
+                    <p className="text-[#A1A1AA]">{selectedPo.billingAddress?.city}, {selectedPo.billingAddress?.state} {selectedPo.billingAddress?.postalCode}</p>
+                    <p className="text-[#A1A1AA]">{selectedPo.billingAddress?.phone || selectedPo.customer?.phone}</p>
+                  </div>
+
+                  <div className="bg-[#09090B] p-4 rounded-xl border border-[#27272A] space-y-1">
+                    <h4 className="font-bold text-xs uppercase text-[#A1A1AA] mb-2 flex items-center space-x-1">
+                      <Truck className="w-3.5 h-3.5 text-blue-400" />
+                      <span>Delivery / Shipping Address</span>
+                    </h4>
+                    <p className="font-bold text-[#FAFAFA]">{selectedPo.deliveryAddress?.attentionTo || selectedPo.customer?.email}</p>
+                    <p className="text-[#A1A1AA]">{selectedPo.deliveryAddress?.companyName}</p>
+                    <p className="text-[#A1A1AA]">{selectedPo.deliveryAddress?.addressLine1}</p>
+                    <p className="text-[#A1A1AA]">{selectedPo.deliveryAddress?.city}, {selectedPo.deliveryAddress?.state} {selectedPo.deliveryAddress?.postalCode}</p>
+                    <p className="text-[#A1A1AA]">{selectedPo.deliveryAddress?.phone}</p>
+                  </div>
+                </div>
+
+                {/* Delivery Notes */}
+                {selectedPo.deliveryInstructions && (
+                  <div className="bg-[#09090B] p-4 rounded-xl border border-[#27272A] space-y-1">
+                    <h4 className="font-bold text-xs uppercase text-amber-400">Special Delivery Instructions</h4>
+                    <p className="text-xs text-[#FAFAFA]">{selectedPo.deliveryInstructions}</p>
                   </div>
                 )}
 
-                {/* Commercial Tax Invoice Card */}
-                {selectedPo.invoice && (
-                  <div className="bg-[#09090B] p-4 rounded-xl border border-[#27272A] space-y-3">
-                    <div className="flex items-center justify-between border-b border-[#27272A] pb-2">
-                      <div className="flex items-center space-x-2 text-[#FAFAFA] font-bold">
-                        <Receipt className="w-4 h-4 text-purple-400" />
-                        <span>Commercial Tax Invoice</span>
-                      </div>
-                      <button
-                        onClick={() => handleDownloadInvoice(selectedPo.id, selectedPo.invoice?.invoiceNumber)}
-                        className="bg-[#27272A] hover:bg-[#3F3F46] text-[#FAFAFA] border border-[#3F3F46] font-bold px-3 py-1 rounded-lg transition-all flex items-center space-x-1.5 shadow-sm text-[11px]"
-                      >
-                        <Download className="w-3 h-3 text-purple-400" />
-                        <span>Download PDF</span>
-                      </button>
+                {/* Dispatch Information */}
+                {selectedPo.dispatch && (
+                  <div className="bg-[#09090B] p-4 rounded-xl border border-[#27272A] space-y-2">
+                    <div className="flex items-center space-x-2">
+                      <Truck className="w-4 h-4 text-blue-400" />
+                      <h4 className="font-bold text-xs uppercase text-[#FAFAFA]">Logistics & Dispatch Information</h4>
                     </div>
-                    <div className="grid grid-cols-4 gap-2 font-mono text-xs text-[#A1A1AA]">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
                       <div>
-                        <span className="text-[10px] text-[#A1A1AA] font-sans block">Invoice No.</span>
-                        <span className="font-bold text-[#FAFAFA]">{selectedPo.invoice.invoiceNumber}</span>
+                        <span className="text-[#A1A1AA] block text-[10px]">Carrier Name</span>
+                        <span className="font-bold text-[#FAFAFA]">{selectedPo.dispatch.carrierName || 'N/A'}</span>
                       </div>
                       <div>
-                        <span className="text-[10px] text-[#A1A1AA] font-sans block">Total Invoiced</span>
-                        <span className="font-bold text-[#FAFAFA]">₹{Number(selectedPo.invoice.amountInvoiced).toLocaleString('en-IN')}</span>
+                        <span className="text-[#A1A1AA] block text-[10px]">Tracking Number</span>
+                        <span className="font-mono font-bold text-blue-400">{selectedPo.dispatch.trackingNumber || 'N/A'}</span>
                       </div>
                       <div>
-                        <span className="text-[10px] text-emerald-400 font-sans block">Advance Paid</span>
-                        <span className="font-bold text-emerald-400">(-) ₹{Number(selectedPo.invoice.amountPaidAdvance).toLocaleString('en-IN')}</span>
-                      </div>
-                      <div>
-                        <span className="text-[10px] text-amber-400 font-sans block">Balance Due</span>
-                        <span className="font-bold text-amber-400">₹{Number(selectedPo.invoice.balanceDue).toLocaleString('en-IN')}</span>
+                        <span className="text-[#A1A1AA] block text-[10px]">Dispatched On</span>
+                        <span className="text-[#FAFAFA]">{new Date(selectedPo.dispatch.dispatchedAt).toLocaleDateString('en-IN')}</span>
                       </div>
                     </div>
+                    {selectedPo.dispatch.dispatchNotes && (
+                      <div className="pt-2 border-t border-[#27272A]">
+                        <span className="text-[#A1A1AA] block text-[10px]">Dispatch Notes:</span>
+                        <p className="text-xs text-[#FAFAFA]">{selectedPo.dispatch.dispatchNotes}</p>
+                      </div>
+                    )}
                   </div>
                 )}
 
                 {/* Line Items Table */}
-                <div className="border border-[#27272A] rounded-xl overflow-hidden bg-[#09090B]">
-                  <div className="bg-[#18181B] p-3 font-bold text-amber-400 border-b border-[#27272A]">
-                    Line Items Snapshot ({selectedPo.items.length})
+                <div className="bg-[#09090B] rounded-xl border border-[#27272A] overflow-hidden">
+                  <div className="p-3 bg-[#18181B] font-bold text-xs uppercase text-[#FAFAFA] border-b border-[#27272A] flex justify-between">
+                    <span>Ordered Products / Line Items ({selectedPo.items?.length || 0})</span>
+                    <span className="font-mono text-amber-400">Total: ₹{Number(selectedPo.totalAmount).toLocaleString('en-IN')}</span>
                   </div>
-                  <table className="w-full text-left">
-                    <thead className="bg-[#18181B] text-[10px] text-[#A1A1AA] uppercase border-b border-[#27272A]">
+                  <table className="w-full text-xs">
+                    <thead className="bg-[#09090B] text-[#A1A1AA] border-b border-[#27272A] text-[10px] uppercase">
                       <tr>
-                        <th className="p-2.5">SL</th>
-                        <th className="p-2.5">Description</th>
-                        <th className="p-2.5 text-center">Qty</th>
-                        <th className="p-2.5 text-right">Unit Rate</th>
-                        <th className="p-2.5 text-right">Total</th>
+                        <th className="py-2.5 px-3">Item Description</th>
+                        <th className="py-2.5 px-2 text-center">Qty</th>
+                        <th className="py-2.5 px-3 text-right">Unit Rate</th>
+                        <th className="py-2.5 px-3 text-right">Total</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[#27272A]">
-                      {selectedPo.items.map((item) => (
-                        <tr key={item.id} className="hover:bg-[#27272A]/40 transition-colors">
-                          <td className="p-2.5 font-mono text-[#A1A1AA]">{item.slNo}</td>
-                          <td className="p-2.5 font-bold text-[#FAFAFA]">{item.productName}</td>
-                          <td className="p-2.5 text-center font-bold text-[#FAFAFA]">{item.quantity} {item.unit}</td>
-                          <td className="p-2.5 text-right font-mono text-[#A1A1AA]">₹{Number(item.rate).toLocaleString('en-IN')}</td>
-                          <td className="p-2.5 text-right font-mono font-bold text-[#FAFAFA]">₹{Number(item.total || item.amount).toLocaleString('en-IN')}</td>
+                      {selectedPo.items?.map((item) => (
+                        <tr key={item.id} className="hover:bg-[#18181B]">
+                          <td className="py-3 px-3">
+                            <div className="font-bold text-[#FAFAFA]">{item.productName}</div>
+                            {item.sku && <div className="text-[10px] text-[#A1A1AA]">SKU: {item.sku}</div>}
+                          </td>
+                          <td className="py-3 px-2 text-center font-mono font-bold text-[#FAFAFA]">{item.quantity}</td>
+                          <td className="py-3 px-3 text-right font-mono text-[#A1A1AA]">₹{Number(item.rate).toLocaleString('en-IN')}</td>
+                          <td className="py-3 px-3 text-right font-mono font-bold text-[#FAFAFA]">₹{Number(item.total).toLocaleString('en-IN')}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
 
-                {/* Addresses */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="p-4 bg-[#09090B] rounded-xl border border-[#27272A] space-y-1">
-                    <span className="font-bold text-amber-400 block mb-1">Billing Address</span>
-                    <p className="font-bold text-[#FAFAFA]">{selectedPo.billingAddress?.attentionTo}</p>
-                    <p className="text-[#A1A1AA]">{selectedPo.billingAddress?.companyName}</p>
-                    <p className="text-[#FAFAFA]">{selectedPo.billingAddress?.addressLine1}</p>
-                    <p className="text-[#A1A1AA]">{selectedPo.billingAddress?.city}, {selectedPo.billingAddress?.state} - {selectedPo.billingAddress?.postalCode}</p>
-                    <p className="text-[#A1A1AA]">Phone: {selectedPo.billingAddress?.phone}</p>
-                  </div>
-                  <div className="p-4 bg-[#09090B] rounded-xl border border-[#27272A] space-y-1">
-                    <span className="font-bold text-amber-400 block mb-1">Delivery Destination</span>
-                    <p className="font-bold text-[#FAFAFA]">{selectedPo.deliveryAddress?.attentionTo}</p>
-                    <p className="text-[#A1A1AA]">{selectedPo.deliveryAddress?.companyName}</p>
-                    <p className="text-[#FAFAFA]">{selectedPo.deliveryAddress?.addressLine1}</p>
-                    <p className="text-[#A1A1AA]">{selectedPo.deliveryAddress?.city}, {selectedPo.deliveryAddress?.state} - {selectedPo.deliveryAddress?.postalCode}</p>
-                    {selectedPo.deliveryInstructions && (
-                      <p className="text-amber-300 bg-amber-950/50 border border-amber-800/60 p-2 rounded mt-1 font-medium">
-                        <strong>Note:</strong> {selectedPo.deliveryInstructions}
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                {/* Audit Logs */}
+                {/* Audit Trail History */}
                 {selectedPo.auditLogs && selectedPo.auditLogs.length > 0 && (
-                  <div className="border border-[#27272A] rounded-xl p-4 space-y-3 bg-[#09090B]">
-                    <h4 className="font-bold text-amber-400">Audit History & Event Trail</h4>
-                    <div className="divide-y divide-[#27272A] space-y-2">
-                      {selectedPo.auditLogs.map((log) => {
-                        const logDate = log.performedAt || log.createdAt || (log as any).timestamp;
-                        return (
-                          <div key={log.id} className="pt-2 flex justify-between items-start text-[11px]">
-                            <div>
-                              <span className="font-bold text-[#FAFAFA]">{log.action.replace(/_/g, ' ')}</span>
-                              <span className="text-[#A1A1AA] ml-2">by {log.performedByName || log.performedBy || 'System'}</span>
+                  <div className="bg-[#09090B] p-4 rounded-xl border border-[#27272A] space-y-3">
+                    <h4 className="font-bold text-xs uppercase text-[#A1A1AA] flex items-center space-x-1.5">
+                      <Clock className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Purchase Order Lifecycle & Audit History</span>
+                    </h4>
+                    <div className="space-y-2">
+                      {selectedPo.auditLogs.map((h) => (
+                        <div key={h.id} className="flex items-start space-x-2 text-[11px] pb-2 border-b border-[#27272A] last:border-0">
+                          <div className="w-2 h-2 rounded-full bg-amber-400 mt-1.5 flex-shrink-0"></div>
+                          <div className="flex-1">
+                            <div className="flex justify-between">
+                              <span className="font-bold text-[#FAFAFA]">{h.action.replace(/_/g, ' ')}</span>
+                              <span className="text-[#A1A1AA] text-[10px]">
+                                {h.createdAt ? new Date(h.createdAt).toLocaleString('en-IN') : ''}
+                              </span>
                             </div>
-                            <span className="text-[#A1A1AA] font-mono">
-                              {logDate ? new Date(logDate).toLocaleString('en-IN') : 'N/A'}
-                            </span>
+                            {h.performedByName && <p className="text-[#71717A] text-[10px]">By: {h.performedByName}</p>}
                           </div>
-                        );
-                      })}
+                        </div>
+                      ))}
                     </div>
                   </div>
                 )}
 
               </div>
             )}
-
           </div>
         </div>
       )}
 
-      {/* Acknowledge Payment Modal */}
+      {/* ─── MODALS ─── */}
+
+      {/* 1. Acknowledge Payment Modal */}
       {ackModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#18181B] text-[#FAFAFA] rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-[#27272A]">
-            <div className="flex items-center justify-between border-b border-[#27272A] pb-3">
-              <h3 className="text-base font-bold text-[#FAFAFA]">Acknowledge Advance Payment</h3>
-              <button onClick={() => setAckModalOpen(false)} className="text-[#A1A1AA] hover:text-[#FAFAFA]">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-[#18181B] text-[#FAFAFA] border border-[#27272A] rounded-tr-2xl rounded-bl-2xl p-6 space-y-4 shadow-2xl">
+            <h3 className="font-bold text-sm text-[#FAFAFA]">Acknowledge Advance Payment</h3>
             <form onSubmit={handleAcknowledgeSubmit} className="space-y-3 text-xs">
               <div>
-                <label className="block font-bold text-[#FAFAFA] mb-1">Bank UTR / Transaction Reference *</label>
+                <label className="block text-[#A1A1AA] mb-1">Amount (₹)</label>
+                <input
+                  type="number"
+                  required
+                  value={ackAmount}
+                  onChange={(e) => setAckAmount(Number(e.target.value))}
+                  className="w-full p-2.5 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] focus:border-amber-400 outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-[#A1A1AA] mb-1">UTR / Transaction Ref *</label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. UTR123456789012"
+                  placeholder="Enter Bank UTR"
                   value={ackUtr}
                   onChange={(e) => setAckUtr(e.target.value)}
-                  className="w-full p-2.5 bg-[#09090B] border border-[#3F3F46] focus:border-blue-500 rounded-lg font-mono font-bold text-[#FAFAFA] outline-none"
+                  className="w-full p-2.5 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] focus:border-amber-400 outline-none font-mono"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block font-bold text-[#FAFAFA] mb-1">Amount Received (₹) *</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    required
-                    value={ackAmount}
-                    onChange={(e) => setAckAmount(Number(e.target.value))}
-                    className="w-full p-2.5 bg-[#09090B] border border-[#3F3F46] focus:border-blue-500 rounded-lg font-mono font-bold text-[#FAFAFA] outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block font-bold text-[#FAFAFA] mb-1">Payment Method</label>
+                  <label className="block text-[#A1A1AA] mb-1">Method</label>
                   <select
                     value={ackMethod}
-                    onChange={(e: any) => setAckMethod(e.target.value)}
-                    className="w-full p-2.5 bg-[#09090B] border border-[#3F3F46] focus:border-blue-500 rounded-lg font-bold text-[#FAFAFA] outline-none"
+                    onChange={(e) => setAckMethod(e.target.value as any)}
+                    className="w-full p-2.5 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] focus:border-amber-400 outline-none"
                   >
                     <option value="NEFT">NEFT</option>
                     <option value="RTGS">RTGS</option>
                     <option value="IMPS">IMPS</option>
                     <option value="UPI">UPI</option>
-                    <option value="CHEQUE">Cheque</option>
-                    <option value="OTHER">Other</option>
+                    <option value="CHEQUE">CHEQUE</option>
+                    <option value="OTHER">OTHER</option>
                   </select>
+                </div>
+                <div>
+                  <label className="block text-[#A1A1AA] mb-1">Payment Date</label>
+                  <input
+                    type="date"
+                    value={ackDate}
+                    onChange={(e) => setAckDate(e.target.value)}
+                    className="w-full p-2.5 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] focus:border-amber-400 outline-none"
+                  />
                 </div>
               </div>
               <div>
-                <label className="block font-bold text-[#FAFAFA] mb-1">Remarks</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Received in HDFC current a/c"
+                <label className="block text-[#A1A1AA] mb-1">Remarks</label>
+                <textarea
                   value={ackRemarks}
                   onChange={(e) => setAckRemarks(e.target.value)}
-                  className="w-full p-2.5 bg-[#09090B] border border-[#3F3F46] focus:border-blue-500 rounded-lg text-[#FAFAFA] outline-none"
+                  rows={2}
+                  className="w-full p-2.5 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] focus:border-amber-400 outline-none resize-none"
                 />
               </div>
-              <div className="pt-2 flex justify-end space-x-2 border-t border-[#27272A]">
+              <div className="flex justify-end space-x-2 pt-2 border-t border-[#27272A]">
                 <button
                   type="button"
                   onClick={() => setAckModalOpen(false)}
-                  className="px-4 py-2 bg-[#27272A] hover:bg-[#3F3F46] text-[#FAFAFA] font-bold rounded-lg transition-colors"
+                  className="px-4 py-2 bg-[#27272A] hover:bg-[#3F3F46] rounded-lg font-bold text-[#A1A1AA]"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={ackSubmitting}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg disabled:opacity-50 transition-colors shadow-md"
+                  className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-lg font-bold disabled:opacity-50"
                 >
                   {ackSubmitting ? 'Saving...' : 'Confirm Acknowledgment'}
                 </button>
@@ -1032,61 +1381,57 @@ export function PurchaseOrdersPage() {
         </div>
       )}
 
-      {/* Digital Verify Modal */}
+      {/* 2. Verify Payment Modal */}
       {verifyModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#18181B] text-[#FAFAFA] rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-[#27272A]">
-            <div className="flex items-center justify-between border-b border-[#27272A] pb-3">
-              <div className="flex items-center space-x-2 text-emerald-400">
-                <ShieldCheck className="w-6 h-6" />
-                <h3 className="text-base font-bold text-[#FAFAFA]">Verify Advance & Packing List</h3>
-              </div>
-              <button onClick={() => setVerifyModalOpen(false)} className="text-[#A1A1AA] hover:text-[#FAFAFA]">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <p className="text-xs text-[#A1A1AA] leading-relaxed">
-              This action formally certifies that advance funds have credited the PRC Hardware bank account. 
-              The system will automatically generate a branded Commercial Packing List PDF embedding the Quotation Number and PO Number.
-            </p>
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-[#18181B] text-[#FAFAFA] border border-[#27272A] rounded-tr-2xl rounded-bl-2xl p-6 space-y-4 shadow-2xl">
+            <h3 className="font-bold text-sm text-[#FAFAFA]">Verify Payment & Generate Packing List</h3>
             <form onSubmit={handleVerifySubmit} className="space-y-3 text-xs">
               <div>
-                <label className="block font-bold text-[#FAFAFA] mb-1">Confirmed Amount (₹) *</label>
+                <label className="block text-[#A1A1AA] mb-1">Confirmed Amount (₹)</label>
                 <input
                   type="number"
-                  step="0.01"
                   required
                   value={verifyConfirmedAmount}
                   onChange={(e) => setVerifyConfirmedAmount(Number(e.target.value))}
-                  className="w-full p-2.5 bg-[#09090B] border border-[#3F3F46] focus:border-emerald-500 rounded-lg font-mono font-bold text-[#FAFAFA] outline-none"
+                  className="w-full p-2.5 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] focus:border-amber-400 outline-none"
                 />
               </div>
-              <div className="flex items-center space-x-2 bg-emerald-950/40 p-3 rounded-lg border border-emerald-500/30">
+              <div className="flex items-center space-x-2 pt-1">
                 <input
                   type="checkbox"
-                  id="confirmCredit"
+                  id="creditCheck"
                   checked={verifyBankCredit}
                   onChange={(e) => setVerifyBankCredit(e.target.checked)}
-                  className="rounded text-emerald-500 bg-[#09090B] border-[#3F3F46]"
+                  className="accent-amber-500 rounded"
                 />
-                <label htmlFor="confirmCredit" className="font-bold text-emerald-300 cursor-pointer text-xs">
-                  I confirm funds have credited our bank account statement.
+                <label htmlFor="creditCheck" className="text-[#A1A1AA]">
+                  I confirm funds have credited in company account
                 </label>
               </div>
-              <div className="pt-2 flex justify-end space-x-2 border-t border-[#27272A]">
+              <div>
+                <label className="block text-[#A1A1AA] mb-1">Verification Notes</label>
+                <textarea
+                  value={verifyNotes}
+                  onChange={(e) => setVerifyNotes(e.target.value)}
+                  rows={2}
+                  className="w-full p-2.5 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] focus:border-amber-400 outline-none resize-none"
+                />
+              </div>
+              <div className="flex justify-end space-x-2 pt-2 border-t border-[#27272A]">
                 <button
                   type="button"
                   onClick={() => setVerifyModalOpen(false)}
-                  className="px-4 py-2 bg-[#27272A] hover:bg-[#3F3F46] text-[#FAFAFA] font-bold rounded-lg transition-colors"
+                  className="px-4 py-2 bg-[#27272A] hover:bg-[#3F3F46] rounded-lg font-bold text-[#A1A1AA]"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={verifySubmitting || !verifyBankCredit}
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg disabled:opacity-50 transition-colors shadow-md"
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold disabled:opacity-50"
                 >
-                  {verifySubmitting ? 'Verifying & Generating PDF...' : 'Authorize & Generate Packing List'}
+                  {verifySubmitting ? 'Verifying...' : 'Verify & Generate Packing List'}
                 </button>
               </div>
             </form>
@@ -1094,42 +1439,37 @@ export function PurchaseOrdersPage() {
         </div>
       )}
 
-      {/* Reject Receipt Modal */}
+      {/* 3. Reject Receipt Modal */}
       {rejectModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#18181B] text-[#FAFAFA] rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-[#27272A]">
-            <div className="flex items-center justify-between border-b border-[#27272A] pb-3">
-              <h3 className="text-base font-bold text-rose-400">Reject Payment Receipt</h3>
-              <button onClick={() => setRejectModalOpen(false)} className="text-[#A1A1AA] hover:text-[#FAFAFA]">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-[#18181B] text-[#FAFAFA] border border-[#27272A] rounded-tr-2xl rounded-bl-2xl p-6 space-y-4 shadow-2xl">
+            <h3 className="font-bold text-sm text-red-400">Reject Payment Receipt</h3>
             <form onSubmit={handleRejectReceiptSubmit} className="space-y-3 text-xs">
               <div>
-                <label className="block font-bold text-[#FAFAFA] mb-1">Reason for Rejection *</label>
+                <label className="block text-[#A1A1AA] mb-1">Reason for Rejection *</label>
                 <textarea
-                  rows={3}
                   required
-                  placeholder="e.g. UTR number not legible / Amount does not match required advance"
+                  placeholder="e.g. UTR mismatch, invalid screenshot, partial amount..."
                   value={rejectReason}
                   onChange={(e) => setRejectReason(e.target.value)}
-                  className="w-full p-2.5 bg-[#09090B] border border-[#3F3F46] focus:border-rose-500 rounded-lg text-[#FAFAFA] outline-none"
+                  rows={3}
+                  className="w-full p-2.5 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] focus:border-red-400 outline-none resize-none"
                 />
               </div>
-              <div className="pt-2 flex justify-end space-x-2 border-t border-[#27272A]">
+              <div className="flex justify-end space-x-2 pt-2 border-t border-[#27272A]">
                 <button
                   type="button"
                   onClick={() => setRejectModalOpen(false)}
-                  className="px-4 py-2 bg-[#27272A] hover:bg-[#3F3F46] text-[#FAFAFA] font-bold rounded-lg transition-colors"
+                  className="px-4 py-2 bg-[#27272A] hover:bg-[#3F3F46] rounded-lg font-bold text-[#A1A1AA]"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={rejectSubmitting}
-                  className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-lg disabled:opacity-50 transition-colors shadow-md"
+                  className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg font-bold disabled:opacity-50"
                 >
-                  {rejectSubmitting ? 'Rejecting...' : 'Reject Receipt'}
+                  {rejectSubmitting ? 'Rejecting...' : 'Confirm Rejection'}
                 </button>
               </div>
             </form>
@@ -1137,250 +1477,63 @@ export function PurchaseOrdersPage() {
         </div>
       )}
 
-      {/* Settings Modal */}
-      {settingsModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#18181B] text-[#FAFAFA] rounded-2xl max-w-xl w-full p-6 space-y-4 shadow-2xl border border-[#27272A] max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-[#27272A] pb-3">
-              <div className="flex items-center space-x-2">
-                <Sliders className="w-5 h-5 text-[#A855F7]" />
-                <h3 className="text-base font-bold text-[#FAFAFA]">PO & Bank Account Configuration</h3>
-              </div>
-              <button
-                onClick={() => setSettingsModalOpen(false)}
-                className="p-1 rounded-lg text-[#A1A1AA] hover:text-[#FAFAFA] hover:bg-[#27272A] transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {settingsLoading || !advanceSetting ? (
-              <div className="py-8 text-center text-[#A1A1AA] flex flex-col items-center justify-center space-y-2">
-                <div className="w-6 h-6 border-2 border-[#A855F7] border-t-transparent rounded-full animate-spin"></div>
-                <span className="font-bold">Loading configuration...</span>
-              </div>
-            ) : (
-              <form onSubmit={handleSaveSettings} className="space-y-4 text-xs">
-                {/* Advance Payment Rule */}
-                <div className="bg-[#09090B] p-4 rounded-xl border border-[#27272A] space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h4 className="font-bold text-amber-400 uppercase text-[11px] tracking-wider">
-                      Advance Payment Terms Rule
-                    </h4>
-                    <span className="text-[10px] text-[#A1A1AA] bg-[#27272A] px-2 py-0.5 rounded font-mono">
-                      Commercial Default
-                    </span>
-                  </div>
-                  <div>
-                    <label className="block font-bold text-[#FAFAFA] mb-1.5">
-                      Default Advance Percentage (%)
-                    </label>
-                    <div className="relative flex items-center">
-                      <input
-                        type="number"
-                        min="1"
-                        max="100"
-                        value={advanceSetting.defaultPercentage}
-                        onChange={(e) =>
-                          setAdvanceSetting({
-                            ...advanceSetting,
-                            defaultPercentage: Number(e.target.value),
-                          })
-                        }
-                        className="w-full p-2.5 bg-[#18181B] border border-[#3F3F46] focus:border-[#A855F7] focus:ring-1 focus:ring-[#A855F7] rounded-lg font-bold text-[#FAFAFA] text-sm outline-none transition-all pr-8"
-                      />
-                      <span className="absolute right-3 font-bold text-[#A1A1AA]">%</span>
-                    </div>
-                    <span className="text-[11px] text-[#A1A1AA] mt-1.5 block">
-                      Default requirement is <strong className="text-[#FAFAFA]">30%</strong> across all commercial quotations.
-                    </span>
-                  </div>
-                </div>
-
-                {/* Official Bank Transfer Details */}
-                {bankSettings.length > 0 && (
-                  <div className="bg-[#09090B] p-4 rounded-xl border border-[#27272A] space-y-3">
-                    <div className="flex items-center justify-between">
-                      <h4 className="font-bold text-amber-400 uppercase text-[11px] tracking-wider">
-                        Official Bank Transfer Details (NEFT / RTGS)
-                      </h4>
-                      <span className="text-[10px] text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-2 py-0.5 rounded font-bold">
-                        PRC Hardware Primary Account
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="col-span-2 sm:col-span-1">
-                        <label className="block font-bold text-[#FAFAFA] mb-1">Account Holder Name *</label>
-                        <input
-                          type="text"
-                          required
-                          value={bankSettings[0].accountHolderName}
-                          onChange={(e) => {
-                            const copy = [...bankSettings];
-                            copy[0].accountHolderName = e.target.value;
-                            setBankSettings(copy);
-                          }}
-                          className="w-full p-2.5 bg-[#18181B] border border-[#3F3F46] focus:border-[#A855F7] rounded-lg text-[#FAFAFA] font-medium outline-none"
-                        />
-                      </div>
-                      <div className="col-span-2 sm:col-span-1">
-                        <label className="block font-bold text-[#FAFAFA] mb-1">Bank Name *</label>
-                        <input
-                          type="text"
-                          required
-                          value={bankSettings[0].bankName}
-                          onChange={(e) => {
-                            const copy = [...bankSettings];
-                            copy[0].bankName = e.target.value;
-                            setBankSettings(copy);
-                          }}
-                          className="w-full p-2.5 bg-[#18181B] border border-[#3F3F46] focus:border-[#A855F7] rounded-lg text-[#FAFAFA] font-medium outline-none"
-                        />
-                      </div>
-                      <div className="col-span-2 sm:col-span-1">
-                        <label className="block font-bold text-[#FAFAFA] mb-1">Account Number *</label>
-                        <input
-                          type="text"
-                          required
-                          value={bankSettings[0].accountNumber}
-                          onChange={(e) => {
-                            const copy = [...bankSettings];
-                            copy[0].accountNumber = e.target.value;
-                            setBankSettings(copy);
-                          }}
-                          className="w-full p-2.5 bg-[#18181B] border border-[#3F3F46] focus:border-[#A855F7] rounded-lg font-mono font-bold text-[#FAFAFA] outline-none"
-                        />
-                      </div>
-                      <div className="col-span-2 sm:col-span-1">
-                        <label className="block font-bold text-[#FAFAFA] mb-1">IFSC Code *</label>
-                        <input
-                          type="text"
-                          required
-                          value={bankSettings[0].ifscOrRoutingNumber}
-                          onChange={(e) => {
-                            const copy = [...bankSettings];
-                            copy[0].ifscOrRoutingNumber = e.target.value;
-                            setBankSettings(copy);
-                          }}
-                          className="w-full p-2.5 bg-[#18181B] border border-[#3F3F46] focus:border-[#A855F7] rounded-lg font-mono font-bold text-[#FAFAFA] outline-none"
-                        />
-                      </div>
-                      <div className="col-span-2">
-                        <label className="block font-bold text-[#FAFAFA] mb-1">Branch & Address</label>
-                        <input
-                          type="text"
-                          value={bankSettings[0].branch || ''}
-                          onChange={(e) => {
-                            const copy = [...bankSettings];
-                            copy[0].branch = e.target.value;
-                            setBankSettings(copy);
-                          }}
-                          className="w-full p-2.5 bg-[#18181B] border border-[#3F3F46] focus:border-[#A855F7] rounded-lg text-[#FAFAFA] outline-none"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                <div className="pt-2 flex justify-end space-x-2 border-t border-[#27272A]">
-                  <button
-                    type="button"
-                    onClick={() => setSettingsModalOpen(false)}
-                    className="px-4 py-2 bg-[#27272A] hover:bg-[#3F3F46] text-[#FAFAFA] font-bold rounded-lg transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={settingsSaving}
-                    className="px-4 py-2 bg-[#8B5CF6] hover:bg-[#7C3AED] text-white font-bold rounded-lg disabled:opacity-50 transition-colors shadow-md flex items-center space-x-1.5"
-                  >
-                    <span>{settingsSaving ? 'Saving...' : 'Save Configuration'}</span>
-                  </button>
-                </div>
-              </form>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Dispatch Order Modal */}
+      {/* 4. Dispatch Modal */}
       {dispatchModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#18181B] text-[#FAFAFA] rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-[#27272A]">
-            <div className="flex items-center justify-between border-b border-[#27272A] pb-3">
-              <div className="flex items-center space-x-2 text-blue-400">
-                <Truck className="w-6 h-6" />
-                <h3 className="text-base font-bold text-[#FAFAFA]">Record Dispatch & Issue Invoice</h3>
-              </div>
-              <button onClick={() => setDispatchModalOpen(false)} className="text-[#A1A1AA] hover:text-[#FAFAFA]">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <p className="text-xs text-[#A1A1AA] leading-relaxed">
-              Recording dispatch transitions the PO to <strong className="text-[#FAFAFA]">DISPATCHED</strong> and automatically triggers background generation of the official <strong className="text-[#FAFAFA]">Commercial Tax Invoice</strong> with GST calculation and advance credit deduction.
-            </p>
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-[#18181B] text-[#FAFAFA] border border-[#27272A] rounded-tr-2xl rounded-bl-2xl p-6 space-y-4 shadow-2xl">
+            <h3 className="font-bold text-sm text-[#FAFAFA]">Record Dispatch & Issue Invoice</h3>
             <form onSubmit={handleDispatchSubmit} className="space-y-3 text-xs">
               <div>
-                <label className="block font-bold text-[#FAFAFA] mb-1">Logistics / Freight Carrier *</label>
+                <label className="block text-[#A1A1AA] mb-1">Carrier Name *</label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. BlueDart Express, DTDC, VRL, Self Fleet"
                   value={carrierName}
                   onChange={(e) => setCarrierName(e.target.value)}
-                  className="w-full p-2.5 bg-[#09090B] border border-[#3F3F46] focus:border-blue-500 rounded-lg font-bold text-[#FAFAFA] outline-none"
+                  className="w-full p-2.5 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] focus:border-amber-400 outline-none"
                 />
               </div>
-
               <div>
-                <label className="block font-bold text-[#FAFAFA] mb-1">Airway Bill / Tracking Number</label>
+                <label className="block text-[#A1A1AA] mb-1">Tracking / Waybill Number</label>
                 <input
                   type="text"
-                  placeholder="e.g. BD987654321IN"
                   value={trackingNumber}
                   onChange={(e) => setTrackingNumber(e.target.value)}
-                  className="w-full p-2.5 bg-[#09090B] border border-[#3F3F46] focus:border-blue-500 rounded-lg font-mono font-bold text-[#FAFAFA] outline-none"
+                  className="w-full p-2.5 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] focus:border-amber-400 outline-none font-mono"
                 />
               </div>
-
               <div>
-                <label className="block font-bold text-[#FAFAFA] mb-1">Dispatched Date *</label>
+                <label className="block text-[#A1A1AA] mb-1">Dispatch Date</label>
                 <input
                   type="date"
-                  required
                   value={dispatchedAt}
                   onChange={(e) => setDispatchedAt(e.target.value)}
-                  className="w-full p-2.5 bg-[#09090B] border border-[#3F3F46] focus:border-blue-500 rounded-lg font-mono font-bold text-[#FAFAFA] outline-none"
+                  className="w-full p-2.5 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] focus:border-amber-400 outline-none"
                 />
               </div>
-
               <div>
-                <label className="block font-bold text-[#FAFAFA] mb-1">Dispatch & Packaging Notes</label>
+                <label className="block text-[#A1A1AA] mb-1">Dispatch Notes</label>
                 <textarea
-                  rows={2}
-                  placeholder="e.g. Dispatched in 2 corrugated cartons with security seals"
                   value={dispatchNotes}
                   onChange={(e) => setDispatchNotes(e.target.value)}
-                  className="w-full p-2.5 bg-[#09090B] border border-[#3F3F46] focus:border-blue-500 rounded-lg text-[#FAFAFA] outline-none"
+                  rows={2}
+                  className="w-full p-2.5 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] focus:border-amber-400 outline-none resize-none"
                 />
               </div>
-
-              <div className="pt-2 flex justify-end space-x-2 border-t border-[#27272A]">
+              <div className="flex justify-end space-x-2 pt-2 border-t border-[#27272A]">
                 <button
                   type="button"
                   onClick={() => setDispatchModalOpen(false)}
-                  className="px-4 py-2 bg-[#27272A] hover:bg-[#3F3F46] text-[#FAFAFA] font-bold rounded-lg transition-colors"
+                  className="px-4 py-2 bg-[#27272A] hover:bg-[#3F3F46] rounded-lg font-bold text-[#A1A1AA]"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={dispatchSubmitting || !carrierName}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg disabled:opacity-50 transition-colors flex items-center space-x-1.5 shadow-md"
+                  disabled={dispatchSubmitting}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold disabled:opacity-50"
                 >
-                  <Truck className="w-3.5 h-3.5" />
-                  <span>{dispatchSubmitting ? 'Dispatching & Invoicing...' : 'Confirm Dispatch & Generate Invoice'}</span>
+                  {dispatchSubmitting ? 'Dispatching...' : 'Record Dispatch & Generate Invoice'}
                 </button>
               </div>
             </form>
@@ -1388,181 +1541,277 @@ export function PurchaseOrdersPage() {
         </div>
       )}
 
-      {/* Edit Purchase Order Details Modal */}
-      {editModalOpen && selectedPo && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#18181B] text-[#FAFAFA] rounded-2xl max-w-2xl w-full p-6 space-y-4 shadow-2xl border border-[#27272A] max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-[#27272A] pb-3">
-              <div className="flex items-center space-x-2">
-                <Pencil className="w-5 h-5 text-amber-400" />
-                <h3 className="text-base font-bold text-[#FAFAFA]">Edit Purchase Order ({selectedPo.poNumber})</h3>
-              </div>
-              <button
-                onClick={() => setEditModalOpen(false)}
-                className="p-1 rounded-lg text-[#A1A1AA] hover:text-[#FAFAFA] hover:bg-[#27272A] transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleEditSubmit} className="space-y-4 text-xs">
-              {/* Order Level Settings */}
-              <div className="bg-[#09090B] p-4 rounded-xl border border-[#27272A] space-y-3">
-                <h4 className="font-bold text-amber-400 uppercase text-[11px] tracking-wider">
-                  Order & Commercial Terms
-                </h4>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  <div>
-                    <label className="block font-bold text-[#FAFAFA] mb-1">Customer PO Reference No.</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. PO/2026/889"
-                      value={editPoRef}
-                      onChange={(e) => setEditPoRef(e.target.value)}
-                      className="w-full p-2.5 bg-[#18181B] border border-[#3F3F46] focus:border-amber-400 rounded-lg text-[#FAFAFA] font-medium outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="block font-bold text-[#FAFAFA] mb-1">Advance Required (%)</label>
-                    <div className="relative flex items-center">
-                      <input
-                        type="number"
-                        min="1"
-                        max="100"
-                        value={editAdvancePercentage}
-                        onChange={(e) => setEditAdvancePercentage(Number(e.target.value))}
-                        className="w-full p-2.5 bg-[#18181B] border border-[#3F3F46] focus:border-amber-400 rounded-lg font-bold text-[#FAFAFA] outline-none pr-8"
-                      />
-                      <span className="absolute right-3 font-bold text-[#A1A1AA]">%</span>
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block font-bold text-[#FAFAFA] mb-1">Freight / Shipping Charge (₹)</label>
-                    <div className="relative flex items-center">
-                      <span className="absolute left-3 font-bold text-[#A1A1AA]">₹</span>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        placeholder="0.00"
-                        value={editShippingCost}
-                        onChange={(e) => setEditShippingCost(Number(e.target.value))}
-                        className="w-full p-2.5 bg-[#18181B] border border-[#3F3F46] focus:border-amber-400 rounded-lg font-bold text-[#FAFAFA] outline-none pl-7"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block font-bold text-[#FAFAFA] mb-1">Requested Delivery Date</label>
-                    <input
-                      type="date"
-                      value={editDeliveryDate}
-                      onChange={(e) => setEditDeliveryDate(e.target.value)}
-                      className="w-full p-2.5 bg-[#18181B] border border-[#3F3F46] focus:border-amber-400 rounded-lg font-mono font-bold text-[#FAFAFA] outline-none"
-                    />
-                  </div>
-                  <div className="sm:col-span-2">
-                    <label className="block font-bold text-[#FAFAFA] mb-1">Delivery Instructions / Notes</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. Gate 2 unloading only"
-                      value={editDeliveryInstructions}
-                      onChange={(e) => setEditDeliveryInstructions(e.target.value)}
-                      className="w-full p-2.5 bg-[#18181B] border border-[#3F3F46] focus:border-amber-400 rounded-lg text-[#FAFAFA] outline-none"
-                    />
-                  </div>
+      {/* 5. Edit PO Modal */}
+      {editModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-lg bg-[#18181B] text-[#FAFAFA] border border-[#27272A] rounded-tr-2xl rounded-bl-2xl p-6 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <h3 className="font-bold text-sm text-[#FAFAFA]">Edit Purchase Order Information</h3>
+            <form onSubmit={handleEditSubmit} className="space-y-3 text-xs">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[#A1A1AA] mb-1">Customer PO Ref</label>
+                  <input
+                    type="text"
+                    value={editPoRef}
+                    onChange={(e) => setEditPoRef(e.target.value)}
+                    className="w-full p-2.5 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] focus:border-amber-400 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[#A1A1AA] mb-1">Advance Required (%)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={editAdvancePercentage}
+                    onChange={(e) => setEditAdvancePercentage(Number(e.target.value))}
+                    className="w-full p-2.5 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] focus:border-amber-400 outline-none"
+                  />
                 </div>
               </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[#A1A1AA] mb-1">Shipping / Freight (₹)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={editShippingCost}
+                    onChange={(e) => setEditShippingCost(Number(e.target.value))}
+                    className="w-full p-2.5 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] focus:border-amber-400 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[#A1A1AA] mb-1">Requested Delivery Date</label>
+                  <input
+                    type="date"
+                    value={editDeliveryDate}
+                    onChange={(e) => setEditDeliveryDate(e.target.value)}
+                    className="w-full p-2.5 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] focus:border-amber-400 outline-none"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-[#A1A1AA] mb-1">Delivery Instructions</label>
+                <textarea
+                  value={editDeliveryInstructions}
+                  onChange={(e) => setEditDeliveryInstructions(e.target.value)}
+                  rows={2}
+                  className="w-full p-2.5 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] focus:border-amber-400 outline-none resize-none"
+                />
+              </div>
 
-              {/* Delivery Destination Address */}
-              <div className="bg-[#09090B] p-4 rounded-xl border border-[#27272A] space-y-3">
-                <h4 className="font-bold text-amber-400 uppercase text-[11px] tracking-wider">
-                  Delivery Destination Address
-                </h4>
-                <div className="grid grid-cols-2 gap-3">
+              <div className="border-t border-[#27272A] pt-3 space-y-2">
+                <h4 className="font-bold text-xs uppercase text-amber-400">Delivery Address Details</h4>
+                <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="block font-bold text-[#FAFAFA] mb-1">Attention To / Contact Person</label>
+                    <label className="block text-[#71717A] mb-0.5">Attention To</label>
                     <input
                       type="text"
                       value={editAttentionTo}
                       onChange={(e) => setEditAttentionTo(e.target.value)}
-                      className="w-full p-2.5 bg-[#18181B] border border-[#3F3F46] focus:border-amber-400 rounded-lg text-[#FAFAFA] outline-none"
+                      className="w-full p-2 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] outline-none"
                     />
                   </div>
                   <div>
-                    <label className="block font-bold text-[#FAFAFA] mb-1">Company / Facility Name</label>
+                    <label className="block text-[#71717A] mb-0.5">Company Name</label>
                     <input
                       type="text"
                       value={editCompanyName}
                       onChange={(e) => setEditCompanyName(e.target.value)}
-                      className="w-full p-2.5 bg-[#18181B] border border-[#3F3F46] focus:border-amber-400 rounded-lg text-[#FAFAFA] outline-none"
+                      className="w-full p-2 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] outline-none"
                     />
                   </div>
-                  <div className="col-span-2">
-                    <label className="block font-bold text-[#FAFAFA] mb-1">Street Address / Landmark</label>
-                    <input
-                      type="text"
-                      value={editAddress1}
-                      onChange={(e) => setEditAddress1(e.target.value)}
-                      className="w-full p-2.5 bg-[#18181B] border border-[#3F3F46] focus:border-amber-400 rounded-lg text-[#FAFAFA] outline-none"
-                    />
-                  </div>
+                </div>
+                <div>
+                  <label className="block text-[#71717A] mb-0.5">Address Line 1</label>
+                  <input
+                    type="text"
+                    value={editAddress1}
+                    onChange={(e) => setEditAddress1(e.target.value)}
+                    className="w-full p-2 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] outline-none"
+                  />
+                </div>
+                <div className="grid grid-cols-3 gap-2">
                   <div>
-                    <label className="block font-bold text-[#FAFAFA] mb-1">City</label>
+                    <label className="block text-[#71717A] mb-0.5">City</label>
                     <input
                       type="text"
                       value={editCity}
                       onChange={(e) => setEditCity(e.target.value)}
-                      className="w-full p-2.5 bg-[#18181B] border border-[#3F3F46] focus:border-amber-400 rounded-lg text-[#FAFAFA] outline-none"
+                      className="w-full p-2 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] outline-none"
                     />
                   </div>
                   <div>
-                    <label className="block font-bold text-[#FAFAFA] mb-1">State</label>
+                    <label className="block text-[#71717A] mb-0.5">State</label>
                     <input
                       type="text"
                       value={editState}
                       onChange={(e) => setEditState(e.target.value)}
-                      className="w-full p-2.5 bg-[#18181B] border border-[#3F3F46] focus:border-amber-400 rounded-lg text-[#FAFAFA] outline-none"
+                      className="w-full p-2 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] outline-none"
                     />
                   </div>
                   <div>
-                    <label className="block font-bold text-[#FAFAFA] mb-1">Postal Code (PIN)</label>
+                    <label className="block text-[#71717A] mb-0.5">Postal Code</label>
                     <input
                       type="text"
                       value={editPostalCode}
                       onChange={(e) => setEditPostalCode(e.target.value)}
-                      className="w-full p-2.5 bg-[#18181B] border border-[#3F3F46] focus:border-amber-400 rounded-lg font-mono text-[#FAFAFA] outline-none"
+                      className="w-full p-2 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] outline-none"
                     />
                   </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="block font-bold text-[#FAFAFA] mb-1">Contact Phone</label>
+                    <label className="block text-[#71717A] mb-0.5">Contact Phone</label>
                     <input
                       type="text"
                       value={editPhone}
                       onChange={(e) => setEditPhone(e.target.value)}
-                      className="w-full p-2.5 bg-[#18181B] border border-[#3F3F46] focus:border-amber-400 rounded-lg text-[#FAFAFA] outline-none"
+                      className="w-full p-2 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[#71717A] mb-0.5">Contact Email</label>
+                    <input
+                      type="email"
+                      value={editEmail}
+                      onChange={(e) => setEditEmail(e.target.value)}
+                      className="w-full p-2 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] outline-none"
                     />
                   </div>
                 </div>
               </div>
 
-              <div className="pt-2 flex justify-end space-x-2 border-t border-[#27272A]">
+              <div className="flex justify-end space-x-2 pt-3 border-t border-[#27272A]">
                 <button
                   type="button"
                   onClick={() => setEditModalOpen(false)}
-                  className="px-4 py-2 bg-[#27272A] hover:bg-[#3F3F46] text-[#FAFAFA] font-bold rounded-lg transition-colors"
+                  className="px-4 py-2 bg-[#27272A] hover:bg-[#3F3F46] rounded-lg font-bold text-[#A1A1AA]"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={editSubmitting}
-                  className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-lg disabled:opacity-50 transition-colors shadow-md flex items-center space-x-1.5"
+                  className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-lg font-bold disabled:opacity-50"
                 >
-                  <Check className="w-3.5 h-3.5" />
-                  <span>{editSubmitting ? 'Saving Changes...' : 'Save Order Changes'}</span>
+                  {editSubmitting ? 'Saving...' : 'Save Order Changes'}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* 6. Settings Modal */}
+      {settingsModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-lg bg-[#18181B] text-[#FAFAFA] border border-[#27272A] rounded-tr-2xl rounded-bl-2xl p-6 space-y-4 shadow-2xl">
+            <h3 className="font-bold text-sm text-[#FAFAFA] flex items-center space-x-2">
+              <Sliders size={16} className="text-amber-400" />
+              <span>Purchase Order & Bank Configuration</span>
+            </h3>
+
+            {settingsLoading || !advanceSetting ? (
+              <div className="p-8 text-center text-xs text-[#A1A1AA] flex items-center justify-center space-x-2">
+                <RefreshCw size={16} className="animate-spin text-amber-400" />
+                <span>Loading configuration...</span>
+              </div>
+            ) : (
+              <form onSubmit={handleSaveSettings} className="space-y-4 text-xs">
+                <div>
+                  <label className="block text-[#A1A1AA] mb-1 font-bold">Default Advance Percentage (%)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={advanceSetting.defaultPercentage}
+                    onChange={(e) => setAdvanceSetting({ ...advanceSetting, defaultPercentage: Number(e.target.value) })}
+                    className="w-full p-2.5 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] focus:border-amber-400 outline-none"
+                  />
+                  <span className="text-[10px] text-[#71717A] mt-1 block">
+                    Applied as default deposit required when B2B customers generate Purchase Orders.
+                  </span>
+                </div>
+
+                {bankSettings.length > 0 && (
+                  <div className="border-t border-[#27272A] pt-3 space-y-2">
+                    <h4 className="font-bold text-xs uppercase text-amber-400">Primary Bank Account for Wire Transfers</h4>
+                    <div>
+                      <label className="block text-[#71717A] mb-0.5">Bank Name</label>
+                      <input
+                        type="text"
+                        value={bankSettings[0].bankName}
+                        onChange={(e) => {
+                          const updated = [...bankSettings];
+                          updated[0].bankName = e.target.value;
+                          setBankSettings(updated);
+                        }}
+                        className="w-full p-2 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[#71717A] mb-0.5">Account Number</label>
+                      <input
+                        type="text"
+                        value={bankSettings[0].accountNumber}
+                        onChange={(e) => {
+                          const updated = [...bankSettings];
+                          updated[0].accountNumber = e.target.value;
+                          setBankSettings(updated);
+                        }}
+                        className="w-full p-2 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] font-mono outline-none"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-[#71717A] mb-0.5">IFSC / Routing Code</label>
+                        <input
+                          type="text"
+                          value={bankSettings[0].ifscOrRoutingNumber}
+                          onChange={(e) => {
+                            const updated = [...bankSettings];
+                            updated[0].ifscOrRoutingNumber = e.target.value;
+                            setBankSettings(updated);
+                          }}
+                          className="w-full p-2 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] font-mono outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[#71717A] mb-0.5">Branch Location</label>
+                        <input
+                          type="text"
+                          value={bankSettings[0].branch || 'Main Branch'}
+                          onChange={(e) => {
+                            const updated = [...bankSettings];
+                            updated[0].branch = e.target.value;
+                            setBankSettings(updated);
+                          }}
+                          className="w-full p-2 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] outline-none"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex justify-end space-x-2 pt-3 border-t border-[#27272A]">
+                  <button
+                    type="button"
+                    onClick={() => setSettingsModalOpen(false)}
+                    className="px-4 py-2 bg-[#27272A] hover:bg-[#3F3F46] rounded-lg font-bold text-[#A1A1AA]"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={settingsSaving}
+                    className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-lg font-bold disabled:opacity-50"
+                  >
+                    {settingsSaving ? 'Saving...' : 'Save Configuration'}
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}

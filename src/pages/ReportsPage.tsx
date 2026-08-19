@@ -14,6 +14,7 @@ import {
   Package,
   ShieldCheck,
 } from "lucide-react";
+import { AsyncActionButton } from "../components/common/AsyncActionButton";
 
 type ReportType = "sales" | "quotes" | "inventory" | "tax";
 
@@ -392,23 +393,26 @@ export function ReportsPage() {
 
         {/* Global Export Action Buttons */}
         <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={exportToExcel}
+          <AsyncActionButton
+            mode="download"
+            onAction={exportToExcel}
+            idleIcon={<FileSpreadsheet size={16} />}
+            idleLabel="Download Excel (.xlsx)"
+            loadingLabel="Generating XLSX…"
+            successLabel="Downloaded!"
             className="flex items-center gap-2 bg-[#10B981] hover:bg-[#059669] text-[#FAFAFA] font-bold text-xs px-4 py-2.5 rounded-tr-xl rounded-bl-xl shadow-lg shadow-[#10B981]/20 transition-all"
-          >
-            <FileSpreadsheet size={16} />
-            <span>Download Excel (.xlsx)</span>
-          </button>
+            variant="custom"
+          />
 
-          <button
-            type="button"
-            onClick={exportToPDF}
+          <AsyncActionButton
+            mode="view"
+            onAction={exportToPDF}
+            idleIcon={<Printer size={16} />}
+            idleLabel="Download PDF (.pdf)"
+            loadingLabel="Generating PDF…"
             className="flex items-center gap-2 bg-[#8B5CF6] hover:bg-[#7C3AED] text-[#FAFAFA] font-bold text-xs px-4 py-2.5 rounded-tr-xl rounded-bl-xl shadow-lg shadow-[#8B5CF6]/20 transition-all"
-          >
-            <Printer size={16} />
-            <span>Download PDF (.pdf)</span>
-          </button>
+            variant="custom"
+          />
         </div>
       </div>
 

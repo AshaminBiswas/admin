@@ -72,7 +72,10 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
     return null;
   });
 
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState<boolean>(() => {
+    // Instant optimistic hydration: 0ms initial load
+    return false;
+  });
   const [pending2FA, setPending2FA] = useState(false);
   const [mfaToken, setMfaToken] = useState<string | null>(null);
   const [sessionNotice, setSessionNoticeState] = useState<string | null>(() => {
@@ -80,7 +83,18 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
   });
 
   const [currentView, setCurrentViewState] = useState<AdminView>(() => {
+    if (typeof window !== "undefined") {
+      const path = window.location.pathname.replace(/^\/+/, "");
+      const rootSegment = path.split("/")[0];
+      if (rootSegment) {
+        if (rootSegment === "varients") return "variants";
+        if (rootSegment === "notifications") return "notification";
+        return rootSegment as AdminView;
+      }
+    }
     const saved = localStorage.getItem(VIEW_STORAGE_KEY);
+    if (saved === "varients") return "variants";
+    if (saved === "notifications") return "notification";
     return (saved as AdminView) || "dashboard";
   });
 
@@ -90,9 +104,27 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
   const maxSessionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const setCurrentView = (view: AdminView) => {
-    setCurrentViewState(view);
-    localStorage.setItem(VIEW_STORAGE_KEY, view);
+    let normalized = view === "varients" ? "variants" : view;
+    if (normalized === "notifications") normalized = "notification";
+    setCurrentViewState(normalized);
+    localStorage.setItem(VIEW_STORAGE_KEY, normalized);
+    if (typeof window !== "undefined" && !window.location.pathname.startsWith(`/${normalized}`)) {
+      window.history.pushState(null, "", `/${normalized}`);
+    }
   };
+
+  useEffect(() => {
+    const handlePopState = () => {
+      const path = window.location.pathname.replace(/^\/+/, "");
+      const rootSegment = path.split("/")[0];
+      if (rootSegment) {
+        if (rootSegment === "varients") setCurrentViewState("variants");
+        else setCurrentViewState(rootSegment as AdminView);
+      }
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
 
   const clearSessionNotice = () => {
     setSessionNoticeState(null);

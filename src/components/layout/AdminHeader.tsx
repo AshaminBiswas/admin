@@ -27,6 +27,7 @@ import {
 import { useAdminAuth } from "../../context/AdminAuthContext";
 import { useTheme } from "../../context/ThemeContext";
 import { usersApi } from "../../api/adminApi";
+import { AdminNotificationDropdown } from "../notifications/AdminNotificationDropdown";
 
 interface AdminHeaderProps {
   isCollapsed?: boolean;
@@ -39,6 +40,11 @@ export function AdminHeader({ isCollapsed, onToggleCollapse, onToggleMobile }: A
   const { theme, toggleTheme } = useTheme();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Real-Time Notification Dropdown States
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [unreadNotifCount, setUnreadNotifCount] = useState(0);
+  const notifRef = useRef<HTMLDivElement>(null);
 
   // Edit Profile Modal States
   const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
@@ -57,11 +63,14 @@ export function AdminHeader({ isCollapsed, onToggleCollapse, onToggleMobile }: A
     }
   }, [adminUser, isEditProfileOpen]);
 
-  // Close dropdown when clicking outside
+  // Close dropdowns when clicking outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setIsProfileOpen(false);
+      }
+      if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
+        setIsNotificationsOpen(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
@@ -187,15 +196,33 @@ export function AdminHeader({ isCollapsed, onToggleCollapse, onToggleMobile }: A
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8B5CF6]" />
           </div>
 
-          {/* Notifications Bell */}
-          <button
-            type="button"
-            className="relative text-slate-500 dark:text-[#A1A1AA] hover:text-[#8B5CF6] p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-[#27272A] transition-colors"
-            aria-label="Notifications"
-          >
-            <Bell size={18} />
-            <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[#8B5CF6]" />
-          </button>
+          {/* Notifications Bell Dropdown */}
+          <div className="relative" ref={notifRef}>
+            <button
+              type="button"
+              onClick={() => {
+                setIsNotificationsOpen((prev) => !prev);
+                setIsProfileOpen(false);
+              }}
+              className="relative text-slate-500 dark:text-[#A1A1AA] hover:text-[#8B5CF6] p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-[#27272A] transition-colors"
+              aria-label="Notifications"
+              title="Real-Time Operations Alerts"
+            >
+              <Bell size={18} />
+              {unreadNotifCount > 0 && (
+                <span className="absolute top-1 right-1 min-w-[16px] h-4 px-1 rounded-full bg-[#8B5CF6] text-white text-[9px] font-black flex items-center justify-center shadow-sm shadow-[#8B5CF6]/50 animate-pulse">
+                  {unreadNotifCount > 99 ? "99+" : unreadNotifCount}
+                </span>
+              )}
+            </button>
+
+            <AdminNotificationDropdown
+              isOpen={isNotificationsOpen}
+              onClose={() => setIsNotificationsOpen(false)}
+              onUnreadCountChange={setUnreadNotifCount}
+              onNavigateToView={(view) => setCurrentView(view)}
+            />
+          </div>
 
           {/* Storefront Link */}
           <a

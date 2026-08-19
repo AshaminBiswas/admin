@@ -90,6 +90,27 @@ export const adminAppointmentService = {
     });
   },
 
+  // Get Appointment Details (Admin)
+  async getAppointmentById(id: string) {
+    return await fetchAdminApi<AdminAppointmentItem>(`/appointments/${id}`);
+  },
+
+  // Create Appointment (Admin)
+  async createAppointment(payload: Partial<AdminAppointmentItem>) {
+    return await fetchAdminApi<AdminAppointmentItem>("/appointments", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  // Update Appointment Details (Admin)
+  async updateAppointment(id: string, payload: Partial<AdminAppointmentItem>) {
+    return await fetchAdminApi<AdminAppointmentItem>(`/appointments/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+  },
+
   // Update Appointment Status (Admin)
   async updateAppointmentStatus(id: string, payload: { status: string; comment?: string }) {
     return await fetchAdminApi<AdminAppointmentItem>(`/appointments/${id}/status`, {
@@ -103,6 +124,20 @@ export const adminAppointmentService = {
     return await fetchAdminApi<AdminAppointmentItem>(`/appointments/${id}/cancel`, {
       method: "POST",
       body: JSON.stringify(payload),
+    });
+  },
+
+  // Delete Appointment (Admin)
+  async deleteAppointment(id: string) {
+    return await fetchAdminApi<{ success: boolean }>(`/appointments/${id}`, {
+      method: "DELETE",
+    });
+  },
+
+  // Delete Service (Admin)
+  async deleteService(id: string) {
+    return await fetchAdminApi<{ success: boolean }>(`/appointments/services/${id}`, {
+      method: "DELETE",
     });
   },
 };

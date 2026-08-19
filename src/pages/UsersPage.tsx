@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Users,
   Search,
@@ -12,26 +12,103 @@ import {
   RefreshCw,
   X,
   Save,
-  Loader2,
   UserPlus,
   CheckCircle2,
   AlertCircle,
-  Building,
-  Coins,
   Building2,
   Receipt,
   Sparkles,
+  Coins,
   ArrowUpRight,
   Copy,
   Check,
   KeyRound,
-  Send,
+  Download,
+  Calendar,
+  Layers,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { usersApi, rolesApi } from "../api/adminApi";
 import { useAdminAuth } from "../context/AdminAuthContext";
 import { Role } from "../types/admin";
 import { useDebounce } from "../hooks/useDebounce";
 import { getCachedRoles } from "../utils/referenceDataCache";
+import { AsyncActionButton } from "../components/common/AsyncActionButton";
+
+/* ─── Skeleton Loading Body for Users Page ───────────────────────────────────── */
+
+export function UsersPageSkeleton() {
+  return (
+    <div className="space-y-6 max-w-[1600px] mx-auto animate-pulse">
+      {/* Header Skeleton */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#27272A] pb-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-tr-xl rounded-bl-xl bg-[#27272A]"></div>
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <div className="h-5 w-60 bg-[#27272A] rounded"></div>
+              <div className="h-4 w-28 bg-[#27272A] rounded-full"></div>
+            </div>
+            <div className="h-3 w-80 bg-[#27272A] rounded"></div>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="h-9 w-36 bg-[#27272A] rounded-tr-xl rounded-bl-xl"></div>
+          <div className="h-9 w-9 bg-[#27272A] rounded-tr-lg rounded-bl-lg"></div>
+        </div>
+      </div>
+
+      {/* 4 KPI Cards Skeleton */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="p-3.5 rounded-tr-xl rounded-bl-xl bg-[#18181B] border border-[#27272A] space-y-2">
+            <div className="w-7 h-7 rounded-lg bg-[#27272A]"></div>
+            <div className="h-5 w-12 bg-[#27272A] rounded"></div>
+            <div className="h-2.5 w-20 bg-[#27272A] rounded"></div>
+          </div>
+        ))}
+      </div>
+
+      {/* Filter Tabs & Search Skeleton */}
+      <div className="p-4 rounded-tr-2xl rounded-bl-2xl bg-[#18181B] border border-[#27272A] flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2 overflow-x-auto">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="h-7 w-24 bg-[#27272A] rounded-tr-lg rounded-bl-lg"></div>
+          ))}
+        </div>
+        <div className="h-8 w-64 bg-[#27272A] rounded-tr-lg rounded-bl-lg"></div>
+      </div>
+
+      {/* Table Skeleton */}
+      <div className="rounded-tr-2xl rounded-bl-2xl bg-[#18181B] border border-[#27272A] overflow-hidden shadow-lg">
+        <div className="p-3.5 bg-[#09090B] border-b border-[#27272A] flex justify-between">
+          <div className="h-3 w-40 bg-[#27272A] rounded"></div>
+          <div className="h-3 w-20 bg-[#27272A] rounded"></div>
+        </div>
+        <div className="divide-y divide-[#27272A]">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="p-4 flex items-center justify-between gap-4">
+              <div className="space-y-1.5 w-48">
+                <div className="h-4 w-36 bg-[#27272A] rounded"></div>
+                <div className="h-2.5 w-28 bg-[#27272A] rounded"></div>
+              </div>
+              <div className="space-y-1.5 w-40">
+                <div className="h-4 w-32 bg-[#27272A] rounded"></div>
+                <div className="h-2.5 w-20 bg-[#27272A] rounded"></div>
+              </div>
+              <div className="h-5 w-24 bg-[#27272A] rounded-full"></div>
+              <div className="h-5 w-16 bg-[#27272A] rounded-full"></div>
+              <div className="h-7 w-32 bg-[#27272A] rounded-lg"></div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Main Users Page Component ──────────────────────────────────────────────── */
 
 interface UsersPageProps {
   onNavigateB2BPricing?: (customerId?: string) => void;
@@ -40,10 +117,9 @@ interface UsersPageProps {
 export function UsersPage({ onNavigateB2BPricing }: UsersPageProps) {
   const { adminUser } = useAdminAuth();
   const rawRole = adminUser?.role as any;
-  const roleSlug =
-    typeof rawRole === "object" && rawRole !== null
-      ? rawRole.slug ?? rawRole.name ?? "super_admin"
-      : rawRole ?? "super_admin";
+  const roleSlug = typeof rawRole === "object" && rawRole !== null
+    ? (rawRole.slug ?? rawRole.name ?? "super_admin")
+    : (rawRole ?? "super_admin");
   const isSuperAdmin = roleSlug === "super_admin";
 
   const [users, setUsers] = useState<any[]>([]);
@@ -51,22 +127,19 @@ export function UsersPage({ onNavigateB2BPricing }: UsersPageProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
-  const [roleFilter, setRoleFilter] = useState("ALL");
+  const [accountFilter, setAccountFilter] = useState("ALL");
+
+  // Pagination
+  const [page, setPage] = useState(1);
+  const [limit] = useState(25);
+  const [totalCount, setTotalCount] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
 
   // Modals
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingUser, setEditingUser] = useState<any | null>(null);
   const [deletingUser, setDeletingUser] = useState<any | null>(null);
   const [viewingUser, setViewingUser] = useState<any | null>(null);
-  const [createdB2BResult, setCreatedB2BResult] = useState<{
-    id: string;
-    email: string;
-    firstName: string;
-    lastName?: string;
-    companyName?: string;
-    temporaryPassword?: string;
-  } | null>(null);
-  const [copiedCredentials, setCopiedCredentials] = useState(false);
 
   // Create Form State
   const [accountType, setAccountType] = useState<"B2C" | "B2B">("B2C");
@@ -79,8 +152,6 @@ export function UsersPage({ onNavigateB2BPricing }: UsersPageProps) {
   const [gstin, setGstin] = useState("");
   const [roleId, setRoleId] = useState("");
   const [status, setStatus] = useState<"ACTIVE" | "INACTIVE">("ACTIVE");
-  const [mustChangePassword, setMustChangePassword] = useState(true);
-  const [sendWelcomeEmail, setSendWelcomeEmail] = useState(true);
 
   // Edit Form State
   const [editFirstName, setEditFirstName] = useState("");
@@ -92,18 +163,7 @@ export function UsersPage({ onNavigateB2BPricing }: UsersPageProps) {
   const [editStatus, setEditStatus] = useState<"ACTIVE" | "INACTIVE" | "SUSPENDED">("ACTIVE");
 
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(
-    null
-  );
-
-  const generateTempPassword = () => {
-    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%";
-    let pwd = "Prc@";
-    for (let i = 0; i < 8; i++) {
-      pwd += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    setPassword(pwd);
-  };
+  const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   const debouncedSearch = useDebounce(searchQuery, 300);
 
@@ -111,50 +171,108 @@ export function UsersPage({ onNavigateB2BPricing }: UsersPageProps) {
     setIsLoading(true);
     try {
       const [uRes, rList] = await Promise.all([
-        usersApi.list({ limit: 100 }),
+        usersApi.list({
+          page,
+          limit,
+          search: debouncedSearch.trim() || undefined,
+          status: statusFilter !== "ALL" ? statusFilter : undefined,
+        }),
         getCachedRoles(),
       ]);
 
       if (rList && rList.length > 0) {
         setRoles(rList);
-        if (!roleId) {
-          setRoleId(rList[0].id);
-        }
+        setRoleId((prev) => {
+          if (prev) return prev;
+          const custRole = rList.find((r: Role) => r.slug === "customer") || rList[0];
+          return custRole ? custRole.id : rList[0].id;
+        });
       }
 
       if (uRes && uRes.success !== false) {
-        const uList = uRes.data ?? (Array.isArray(uRes) ? uRes : []);
-        setUsers(uList);
+        const uData = uRes.data ?? (Array.isArray(uRes) ? uRes : []);
+        const items = Array.isArray(uData) ? uData : uData.items || uData.users || [];
+        const meta = uData.meta || uRes.meta || {};
+        setUsers(items);
+        setTotalCount(meta.total || items.length || 0);
+        setTotalPages(meta.totalPages || Math.ceil((meta.total || items.length || 1) / limit) || 1);
       }
     } catch (err: any) {
-      setFeedback({ type: "error", text: err.message || "Failed to load customers." });
+      console.error("[Users Fetch Error]:", err);
+      setFeedback({ type: "error", text: "Failed to load registered accounts." });
     } finally {
       setIsLoading(false);
     }
-  }, [roleId]);
+  }, [page, limit, debouncedSearch, statusFilter]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
 
-  // Adjust role when accountType toggles
-  useEffect(() => {
-    if (roles.length === 0) return;
-    if (accountType === "B2B") {
-      const b2bRole = roles.find(
-        (r) => r.slug === "b2b-customer" || r.slug === "b2b_customer"
-      );
-      if (b2bRole) setRoleId(b2bRole.id);
-      generateTempPassword();
-      setMustChangePassword(true);
-    } else {
-      const customerRole = roles.find((r) => r.slug === "customer");
-      if (customerRole) setRoleId(customerRole.id);
-      setPassword("Password@123");
-      setMustChangePassword(false);
-    }
-  }, [accountType, roles]);
+  // Compute Metrics
+  const metrics = useMemo(() => {
+    const total = totalCount || users.length;
+    const b2b = users.filter((u) => u.companyName || u.gstin || u.role?.slug === "b2b_buyer").length;
+    const b2c = users.filter((u) => !u.companyName && !u.gstin).length;
+    const inactive = users.filter((u) => u.status === "INACTIVE" || u.status === "SUSPENDED").length;
+    return { total, b2b, b2c, inactive };
+  }, [users, totalCount]);
 
+  // Filtered Users
+  const filteredUsers = useMemo(() => {
+    return users.filter((user) => {
+      const isB2B = Boolean(user.companyName || user.gstin || user.role?.slug === "b2b_buyer");
+      if (accountFilter === "B2B" && !isB2B) return false;
+      if (accountFilter === "B2C" && isB2B) return false;
+      return true;
+    });
+  }, [users, accountFilter]);
+
+  // Create User
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!firstName || !lastName || !email || !roleId) {
+      setFeedback({ type: "error", text: "Please fill in all mandatory fields." });
+      return;
+    }
+
+    setIsSubmitting(true);
+    setFeedback(null);
+    try {
+      const res = await usersApi.create({
+        firstName,
+        lastName,
+        email,
+        password,
+        phone,
+        companyName: accountType === "B2B" ? companyName : undefined,
+        gstin: accountType === "B2B" ? gstin : undefined,
+        roleId,
+        status,
+      });
+
+      if (res && res.success !== false) {
+        setFeedback({ type: "success", text: `Account for ${firstName} ${lastName} created successfully.` });
+        setShowCreateModal(false);
+        setFirstName("");
+        setLastName("");
+        setEmail("");
+        setCompanyName("");
+        setGstin("");
+        setPhone("+91 ");
+        setPassword("Password@123");
+        await loadData();
+      } else {
+        setFeedback({ type: "error", text: res.message || res.error?.message || "Failed to create user account." });
+      }
+    } catch (err: any) {
+      setFeedback({ type: "error", text: err.message || "Failed to create user account." });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Open Edit User
   const handleOpenEdit = (user: any) => {
     setEditingUser(user);
     setEditFirstName(user.firstName || "");
@@ -163,102 +281,32 @@ export function UsersPage({ onNavigateB2BPricing }: UsersPageProps) {
     setEditCompanyName(user.companyName || "");
     setEditGstin(user.gstin || "");
     setEditStatus(user.status || "ACTIVE");
-    setEditRoleId(user.role?.id || user.roleId || (roles[0]?.id ?? ""));
-    setFeedback(null);
+    const rId = user.role?.id || user.roleId || (roles[0]?.id ?? "");
+    setEditRoleId(rId);
   };
 
-  const handleCreateSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setFeedback(null);
-
-    if (!roleId) {
-      setFeedback({ type: "error", text: "Please select a valid role." });
-      return;
-    }
-
-    if (accountType === "B2B" && !companyName.trim()) {
-      setFeedback({ type: "error", text: "Company name is required for B2B accounts." });
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      const res = await usersApi.create({
-        email: email.trim(),
-        password,
-        firstName: firstName.trim(),
-        lastName: lastName.trim(),
-        phone: phone.trim() || undefined,
-        companyName: accountType === "B2B" ? companyName.trim() : undefined,
-        gstin: accountType === "B2B" ? gstin.trim().toUpperCase() : undefined,
-        roleId,
-        status,
-        mustChangePassword: accountType === "B2B" ? mustChangePassword : false,
-        sendWelcomeEmail,
-      });
-
-      if (res && res.success !== false) {
-        const createdUser = res.data || res;
-        setShowCreateModal(false);
-        if (accountType === "B2B") {
-          setCreatedB2BResult({
-            id: createdUser.id,
-            email: email.trim(),
-            firstName: firstName.trim(),
-            lastName: lastName.trim(),
-            companyName: companyName.trim(),
-            temporaryPassword: password,
-          });
-        } else {
-          setFeedback({
-            type: "success",
-            text: `Customer '${email.trim()}' created successfully!`,
-          });
-        }
-        setFirstName("");
-        setLastName("");
-        setEmail("");
-        setPassword("Password@123");
-        setPhone("+91 ");
-        setCompanyName("");
-        setGstin("");
-        await loadData();
-      } else {
-        setFeedback({ type: "error", text: res?.message || "Failed to create user." });
-      }
-    } catch (err: any) {
-      setFeedback({ type: "error", text: err.message || "Failed to create user." });
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleEditSubmit = async (e: React.FormEvent) => {
+  // Save Edit User
+  const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingUser) return;
-    setFeedback(null);
-
     setIsSubmitting(true);
     try {
       const res = await usersApi.update(editingUser.id, {
-        firstName: editFirstName.trim(),
-        lastName: editLastName.trim(),
-        phone: editPhone.trim() || undefined,
-        companyName: editCompanyName.trim() || undefined,
-        gstin: editGstin.trim().toUpperCase() || undefined,
+        firstName: editFirstName,
+        lastName: editLastName,
+        phone: editPhone,
+        companyName: editCompanyName || undefined,
+        gstin: editGstin || undefined,
         status: editStatus,
-        roleId: editRoleId || undefined,
+        roleId: editRoleId,
       });
 
       if (res && res.success !== false) {
-        setFeedback({
-          type: "success",
-          text: `User '${editingUser.email}' updated successfully!`,
-        });
+        setFeedback({ type: "success", text: "User profile updated successfully." });
         setEditingUser(null);
         await loadData();
       } else {
-        setFeedback({ type: "error", text: res?.message || "Failed to update user." });
+        setFeedback({ type: "error", text: res.message || res.error?.message || "Failed to update user." });
       }
     } catch (err: any) {
       setFeedback({ type: "error", text: err.message || "Failed to update user." });
@@ -267,17 +315,18 @@ export function UsersPage({ onNavigateB2BPricing }: UsersPageProps) {
     }
   };
 
-  const handleDeleteSubmit = async () => {
+  // Permanent Delete User
+  const handleConfirmDelete = async () => {
     if (!deletingUser) return;
     setIsSubmitting(true);
     try {
       const res = await usersApi.delete(deletingUser.id);
       if (res && res.success !== false) {
-        setFeedback({ type: "success", text: `User '${deletingUser.email}' deleted.` });
+        setFeedback({ type: "success", text: `Account ${deletingUser.email} deleted permanently from database.` });
         setDeletingUser(null);
-        await loadData();
+        setUsers((prev) => prev.filter((u) => u.id !== deletingUser.id));
       } else {
-        setFeedback({ type: "error", text: res?.message || "Failed to delete user." });
+        setFeedback({ type: "error", text: res.message || res.error?.message || "Failed to delete user." });
       }
     } catch (err: any) {
       setFeedback({ type: "error", text: err.message || "Failed to delete user." });
@@ -286,293 +335,358 @@ export function UsersPage({ onNavigateB2BPricing }: UsersPageProps) {
     }
   };
 
-  const filteredUsers = React.useMemo(() => {
-    return users.filter((u) => {
-      const name = `${u.firstName || ""} ${u.lastName || ""}`.toLowerCase();
-      const em = (u.email || "").toLowerCase();
-      const comp = (u.companyName || "").toLowerCase();
-      const gst = (u.gstin || "").toLowerCase();
-      const q = debouncedSearch.toLowerCase().trim();
-      const matchesSearch =
-        !q ||
-        name.includes(q) ||
-        em.includes(q) ||
-        comp.includes(q) ||
-        gst.includes(q) ||
-        (u.phone && u.phone.includes(q));
+  // Export CSV
+  const handleExportCSV = async () => {
+    if (users.length === 0) return;
+    const headers = ["ID", "Name", "Email", "Phone", "Company", "GSTIN", "Role", "Status", "Created At"];
+    const rows = users.map((u) => [
+      `"${u.id}"`,
+      `"${u.firstName || ""} ${u.lastName || ""}"`,
+      `"${u.email || ""}"`,
+      `"${u.phone || ""}"`,
+      `"${u.companyName || ""}"`,
+      `"${u.gstin || ""}"`,
+      `"${u.role?.name || u.role?.slug || u.role || ""}"`,
+      `"${u.status || ""}"`,
+      `"${u.createdAt ? new Date(u.createdAt).toISOString() : ""}"`,
+    ]);
 
-      const matchesStatus = statusFilter === "ALL" || u.status === statusFilter;
+    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `PRC_Accounts_Export_${new Date().toISOString().split("T")[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
-      let matchesRole = true;
-      if (roleFilter === "B2B") {
-        matchesRole =
-          u.role?.slug === "b2b-customer" ||
-          u.role?.slug === "b2b_customer" ||
-          !!u.companyName ||
-          !!u.gstin;
-      } else if (roleFilter === "B2C") {
-        matchesRole =
-          u.role?.slug === "customer" && !u.companyName && !u.gstin;
-      }
-
-      return matchesSearch && matchesStatus && matchesRole;
-    });
-  }, [users, debouncedSearch, statusFilter, roleFilter]);
+  if (isLoading && users.length === 0) {
+    return <UsersPageSkeleton />;
+  }
 
   return (
-    <div className="space-y-6 text-[#FAFAFA]">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 rounded-tr-3xl rounded-bl-3xl bg-[#18181B] border border-[#27272A] shadow-xl">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-tr-2xl rounded-bl-2xl bg-[#8B5CF6] text-white flex items-center justify-center font-bold shadow-lg shadow-[#8B5CF6]/20">
-            <Users size={26} />
+    <div className="space-y-6 text-[#FAFAFA] max-w-[1600px] mx-auto" style={{ fontFamily: "Inter, sans-serif" }}>
+
+      {/* ─── Top Header ─── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#27272A] pb-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-tr-xl rounded-bl-xl bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-[#A855F7]">
+            <Users size={20} />
           </div>
           <div>
-            <h1 className="text-xl font-serif font-bold text-[#FAFAFA]">
-              Customers & B2B Client Management
-            </h1>
-            <p className="text-xs text-[#A1A1AA] mt-0.5">
-              Manage retail buyers, wholesale distributors, enterprise B2B accounts, and custom contracts.
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-bold text-[#FAFAFA]">
+                Customer & B2B Buyer Accounts Hub
+              </h1>
+              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-purple-500/20 text-[#A855F7] border border-purple-500/30">
+                CENTRAL DIRECTORY
+              </span>
+            </div>
+            <p className="text-xs text-[#A1A1AA]">
+              Manage retail buyers, wholesale contractors, architectural firms, GSTIN registrations, and custom B2B rate cards.
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowCreateModal(true)}
+            className="bg-[#8B5CF6] hover:bg-[#7C3AED] text-white font-bold text-xs px-4 py-2 rounded-tr-xl rounded-bl-xl transition-all shadow-sm flex items-center gap-2"
+          >
+            <UserPlus size={15} />
+            <span>Create New Account</span>
+          </button>
+
+          <AsyncActionButton
+            mode="download"
+            onAction={handleExportCSV}
+            idleIcon={<Download size={14} />}
+            idleLabel="Export CSV"
+            loadingLabel="Exporting…"
+            successLabel="Exported!"
+            className="bg-[#27272A] hover:bg-[#3F3F46] text-[#FAFAFA] font-bold text-xs px-3.5 py-2 rounded-tr-xl rounded-bl-xl transition-all border border-[#3F3F46] flex items-center gap-1.5 shadow-sm"
+            variant="custom"
+          />
+
           <button
             type="button"
             onClick={loadData}
-            title="Refresh List"
-            className="p-2.5 rounded-tr-xl rounded-bl-xl bg-[#27272A] hover:bg-[#3F3F46] text-[#FAFAFA] transition-colors"
+            className="p-2 bg-[#27272A] hover:bg-[#3F3F46] rounded-tr-lg rounded-bl-lg text-[#A1A1AA] hover:text-[#FAFAFA] border border-[#3F3F46] transition-colors"
+            title="Refresh Directory"
           >
-            <RefreshCw size={14} className={isLoading ? "animate-spin" : ""} />
-          </button>
-
-          {onNavigateB2BPricing && (
-            <button
-              type="button"
-              onClick={() => onNavigateB2BPricing()}
-              className="flex items-center gap-1.5 bg-[#27272A] hover:bg-[#3F3F46] text-[#FAFAFA] text-xs font-bold px-3.5 py-2.5 rounded-tr-xl rounded-bl-xl transition-colors border border-[#3F3F46]"
-            >
-              <Coins size={14} className="text-[#8B5CF6]" />
-              <span>B2B Pricing Matrix</span>
-            </button>
-          )}
-
-          <button
-            type="button"
-            onClick={() => {
-              setShowCreateModal(true);
-              setFeedback(null);
-            }}
-            className="flex items-center gap-2 bg-[#8B5CF6] hover:bg-[#7C3AED] text-white text-xs font-bold px-4 py-2.5 rounded-tr-xl rounded-bl-xl shadow-lg shadow-[#8B5CF6]/25 transition-colors"
-          >
-            <UserPlus size={15} />
-            <span>+ Create Customer</span>
+            <RefreshCw size={16} className={isLoading ? "animate-spin text-[#A855F7]" : ""} />
           </button>
         </div>
       </div>
 
-      {feedback && (
-        <div
-          className={`p-4 rounded-tr-2xl rounded-bl-2xl border text-xs flex items-center gap-3 ${
-            feedback.type === "success"
-              ? "bg-emerald-950/60 border-emerald-500/40 text-emerald-300"
-              : "bg-rose-950/60 border-rose-500/40 text-rose-300"
+      {/* ─── 4 Interactive KPI Cards ─── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <button
+          type="button"
+          onClick={() => { setAccountFilter("ALL"); setStatusFilter("ALL"); }}
+          className={`p-3.5 rounded-tr-xl rounded-bl-xl bg-[#18181B] border transition-all text-left space-y-1 group ${
+            accountFilter === "ALL" && statusFilter === "ALL"
+              ? "border-[#8B5CF6] shadow-lg shadow-[#8B5CF6]/10 ring-1 ring-[#8B5CF6]"
+              : "border-[#27272A] hover:border-[#3F3F46]"
           }`}
         >
-          {feedback.type === "success" ? (
-            <CheckCircle2 size={18} className="text-emerald-400 flex-shrink-0" />
-          ) : (
-            <AlertCircle size={18} className="text-rose-400 flex-shrink-0" />
-          )}
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] uppercase font-bold text-[#A1A1AA] tracking-wider">Total Accounts</span>
+            <Users size={14} className="text-[#A1A1AA] group-hover:text-[#FAFAFA]" />
+          </div>
+          <p className="text-xl font-black font-mono text-[#FAFAFA]">{metrics.total}</p>
+          <span className="text-[10px] text-[#71717A] block">All customer profiles</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => { setAccountFilter("B2B"); setStatusFilter("ALL"); }}
+          className={`p-3.5 rounded-tr-xl rounded-bl-xl bg-[#18181B] border transition-all text-left space-y-1 group ${
+            accountFilter === "B2B"
+              ? "border-purple-500 shadow-lg shadow-purple-500/10 ring-1 ring-purple-500"
+              : "border-[#27272A] hover:border-purple-500/40"
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] uppercase font-bold text-[#A855F7] tracking-wider">B2B Enterprises</span>
+            <Building2 size={14} className="text-[#A855F7]" />
+          </div>
+          <p className="text-xl font-black font-mono text-[#A855F7]">{metrics.b2b}</p>
+          <span className="text-[10px] text-[#71717A] block">Corporate & GSTIN accounts</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => { setAccountFilter("B2C"); setStatusFilter("ALL"); }}
+          className={`p-3.5 rounded-tr-xl rounded-bl-xl bg-[#18181B] border transition-all text-left space-y-1 group ${
+            accountFilter === "B2C"
+              ? "border-emerald-500 shadow-lg shadow-emerald-500/10 ring-1 ring-emerald-500"
+              : "border-[#27272A] hover:border-emerald-500/40"
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] uppercase font-bold text-emerald-400 tracking-wider">Retail Consumers</span>
+            <CheckCircle2 size={14} className="text-emerald-400" />
+          </div>
+          <p className="text-xl font-black font-mono text-emerald-400">{metrics.b2c}</p>
+          <span className="text-[10px] text-[#71717A] block">Direct individual buyers</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => { setAccountFilter("ALL"); setStatusFilter("INACTIVE"); }}
+          className={`p-3.5 rounded-tr-xl rounded-bl-xl bg-[#18181B] border transition-all text-left space-y-1 group ${
+            statusFilter === "INACTIVE"
+              ? "border-rose-500 shadow-lg shadow-rose-500/10 ring-1 ring-rose-500"
+              : "border-[#27272A] hover:border-rose-500/40"
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] uppercase font-bold text-rose-400 tracking-wider">Suspended / Inactive</span>
+            <AlertCircle size={14} className="text-rose-400" />
+          </div>
+          <p className="text-xl font-black font-mono text-rose-400">{metrics.inactive}</p>
+          <span className="text-[10px] text-[#71717A] block">Restricted logins</span>
+        </button>
+      </div>
+
+      {/* Notifications */}
+      {feedback && (
+        <div
+          className={`p-4 rounded-xl text-xs flex items-center gap-2 border ${
+            feedback.type === "success"
+              ? "bg-emerald-950/80 border-emerald-500/40 text-emerald-300"
+              : "bg-rose-950/80 border-rose-500/40 text-rose-300"
+          }`}
+        >
+          {feedback.type === "success" ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
           <span>{feedback.text}</span>
         </div>
       )}
 
-      {/* Filter / Search Bar */}
-      <div className="p-6 bg-[#18181B] border border-[#27272A] rounded-tr-3xl rounded-bl-3xl shadow-xl space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="relative flex-1 max-w-md">
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by customer name, company, GSTIN, email, phone..."
-              className="w-full bg-[#09090B] text-[#FAFAFA] placeholder-[#A1A1AA]/50 pl-9 pr-4 py-2 rounded-tr-xl rounded-bl-xl text-xs border border-[#27272A] focus:outline-none focus:border-[#8B5CF6]"
-            />
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8B5CF6]" />
+      {/* ─── Search & Filter Toolbar ─── */}
+      <div className="p-4 rounded-tr-2xl rounded-bl-2xl bg-[#18181B] border border-[#27272A] space-y-3 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap gap-1 bg-[#09090B] p-1 rounded-xl border border-[#27272A]">
+            {[
+              { id: "ALL", label: "All Accounts" },
+              { id: "B2B", label: "B2B Enterprises" },
+              { id: "B2C", label: "Retail Consumers" },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setAccountFilter(tab.id)}
+                className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-all ${
+                  accountFilter === tab.id
+                    ? "bg-[#8B5CF6] text-white shadow"
+                    : "text-[#A1A1AA] hover:text-[#FAFAFA]"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
 
           <div className="flex items-center gap-2">
-            <select
-              value={roleFilter}
-              onChange={(e) => setRoleFilter(e.target.value)}
-              className="bg-[#09090B] text-[#FAFAFA] text-xs px-3 py-2 rounded-tr-xl rounded-bl-xl border border-[#27272A] focus:outline-none focus:border-[#8B5CF6]"
-            >
-              <option value="ALL">All Account Types</option>
-              <option value="B2B">🏢 B2B & Wholesale Clients</option>
-              <option value="B2C">🛍️ Retail Customers (B2C)</option>
-            </select>
-
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="bg-[#09090B] text-[#FAFAFA] text-xs px-3 py-2 rounded-tr-xl rounded-bl-xl border border-[#27272A] focus:outline-none focus:border-[#8B5CF6]"
-            >
-              <option value="ALL">All Statuses</option>
-              <option value="ACTIVE">ACTIVE</option>
-              <option value="INACTIVE">INACTIVE</option>
-            </select>
+            {["ALL", "ACTIVE", "INACTIVE"].map((st) => (
+              <button
+                key={st}
+                type="button"
+                onClick={() => setStatusFilter(st)}
+                className={`text-xs font-bold px-3 py-1.5 rounded-lg border transition-all ${
+                  statusFilter === st
+                    ? "border-[#8B5CF6] text-purple-300 bg-purple-950/40"
+                    : "border-[#27272A] text-[#71717A] hover:text-[#FAFAFA]"
+                }`}
+              >
+                {st}
+              </button>
+            ))}
           </div>
         </div>
 
-        {/* Users Table */}
-        <div className="overflow-x-auto border border-[#27272A] rounded-tr-2xl rounded-bl-2xl">
-          <table className="w-full text-left text-xs text-[#A1A1AA]">
-            <thead className="bg-[#09090B] text-[#A855F7] border-b border-[#27272A] font-bold uppercase tracking-wider text-[10px]">
+        {/* Search Input */}
+        <div className="relative">
+          <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#71717A]" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search by Customer Name, Email, Phone, Company Name, or GSTIN..."
+            className="w-full pl-10 pr-9 py-2.5 bg-[#09090B] border border-[#27272A] rounded-xl text-xs text-[#FAFAFA] placeholder-[#71717A] focus:outline-none focus:border-[#8B5CF6]"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-[#71717A] hover:text-[#FAFAFA]"
+            >
+              <X size={14} />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* ─── Main Users Table ─── */}
+      <div className="rounded-2xl bg-[#18181B] border border-[#27272A] shadow-lg overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead className="bg-[#09090B] text-[#A1A1AA] border-b border-[#27272A] font-bold uppercase tracking-wider text-[10px]">
               <tr>
-                <th className="py-3.5 px-4">Customer & Business Details</th>
-                <th className="py-3.5 px-4">Contact</th>
-                <th className="py-3.5 px-4">Account Type</th>
+                <th className="py-3.5 px-4">Customer Name & Contact</th>
+                <th className="py-3.5 px-4">Organization & GSTIN</th>
+                <th className="py-3.5 px-4">Role Tier</th>
                 <th className="py-3.5 px-4 text-center">Status</th>
                 <th className="py-3.5 px-4 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#27272A] text-[#FAFAFA]">
-              {isLoading ? (
+            <tbody className="divide-y divide-[#27272A]">
+              {filteredUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="py-12 text-center text-[#A1A1AA]">
-                    <Loader2 size={24} className="animate-spin mx-auto text-[#8B5CF6] mb-2" />
-                    <span>Loading customer accounts...</span>
-                  </td>
-                </tr>
-              ) : filteredUsers.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="py-12 text-center text-[#A1A1AA]">
-                    <Users size={32} className="mx-auto text-slate-500 mb-2 opacity-60" />
-                    <p className="font-semibold text-sm">No customers found</p>
+                  <td colSpan={5} className="py-12 text-center text-xs text-[#71717A]">
+                    <Users size={32} className="mx-auto mb-2 text-[#3F3F46]" />
+                    No customer accounts found matching criteria.
                   </td>
                 </tr>
               ) : (
-                filteredUsers.map((u) => {
-                  const roleName =
-                    typeof u.role === "object" ? u.role?.name : u.role || "Customer";
-                  const isB2B =
-                    u.role?.slug === "b2b-customer" ||
-                    u.role?.slug === "b2b_customer" ||
-                    !!u.companyName ||
-                    !!u.gstin;
+                filteredUsers.map((user) => {
+                  const isB2B = Boolean(user.companyName || user.gstin || user.role?.slug === "b2b_buyer");
 
                   return (
-                    <tr key={u.id} className="hover:bg-[#27272A]/50 transition-colors">
-                      {/* Customer Details */}
+                    <tr key={user.id} className="hover:bg-[#27272A]/40 transition-colors">
                       <td className="py-3.5 px-4">
-                        <div className="flex items-center gap-3">
-                          <div
-                            className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs flex-shrink-0 ${
-                              isB2B
-                                ? "bg-[#8B5CF6]/20 text-[#A855F7] border border-[#8B5CF6]/40"
-                                : "bg-[#27272A] text-[#FAFAFA]"
-                            }`}
-                          >
-                            {isB2B ? <Building2 size={16} /> : (u.firstName ? u.firstName[0].toUpperCase() : "U")}
-                          </div>
-                          <div>
-                            <div className="font-bold text-[#FAFAFA] flex items-center gap-2">
-                              <span>
-                                {u.firstName || "Customer"} {u.lastName || ""}
-                              </span>
-                              {isB2B && (
-                                <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded bg-[#8B5CF6]/20 text-[#A855F7] uppercase tracking-wide">
-                                  B2B
-                                </span>
-                              )}
-                            </div>
-                            <div className="text-[10px] text-[#A1A1AA] font-mono">{u.email}</div>
-                            {u.companyName && (
-                              <div className="text-[11px] font-semibold text-slate-300 flex items-center gap-1 mt-0.5">
-                                🏢 {u.companyName}
-                              </div>
-                            )}
-                            {u.gstin && (
-                              <div className="text-[10px] font-mono text-slate-400">
-                                GST: {u.gstin}
-                              </div>
-                            )}
-                          </div>
+                        <p className="font-bold text-[#FAFAFA]">
+                          {user.firstName} {user.lastName}
+                        </p>
+                        <div className="flex flex-col text-[11px] text-[#A1A1AA] space-y-0.5 mt-0.5">
+                          <span className="flex items-center gap-1">
+                            <Mail size={11} className="text-[#71717A]" />
+                            {user.email}
+                          </span>
+                          {user.phone && (
+                            <span className="flex items-center gap-1 font-mono">
+                              <Phone size={11} className="text-[#71717A]" />
+                              {user.phone}
+                            </span>
+                          )}
                         </div>
                       </td>
-
-                      {/* Contact */}
                       <td className="py-3.5 px-4">
-                        <p className="text-[#FAFAFA] font-medium">{u.phone || "—"}</p>
+                        {isB2B ? (
+                          <div className="space-y-0.5">
+                            <p className="font-bold text-[#A855F7] flex items-center gap-1">
+                              <Building2 size={12} />
+                              {user.companyName || "B2B Enterprise"}
+                            </p>
+                            {user.gstin && (
+                              <span className="text-[10px] font-mono text-[#A1A1AA] bg-[#09090B] px-1.5 py-0.5 rounded border border-[#27272A]">
+                                GST: {user.gstin}
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-[#71717A] text-[11px]">Retail Consumer</span>
+                        )}
                       </td>
-
-                      {/* Role & B2B Badge */}
-                      <td className="py-3.5 px-4 font-semibold text-[#8B5CF6]">
+                      <td className="py-3.5 px-4">
                         <span
-                          className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                          className={`text-[10px] font-bold px-2.5 py-1 rounded-full uppercase ${
                             isB2B
-                              ? "bg-[#8B5CF6]/20 text-[#A855F7] border border-[#8B5CF6]/30"
-                              : "bg-[#27272A] text-[#A1A1AA]"
+                              ? "bg-purple-950/80 text-[#A855F7] border border-purple-500/40"
+                              : "bg-emerald-950/80 text-emerald-400 border border-emerald-500/40"
                           }`}
                         >
-                          {roleName}
+                          {user.role?.name || (isB2B ? "B2B Buyer" : "Customer")}
                         </span>
                       </td>
-
-                      {/* Status */}
                       <td className="py-3.5 px-4 text-center">
                         <span
-                          className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                            u.status === "ACTIVE"
-                              ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-                              : "bg-rose-500/10 text-rose-400 border border-rose-500/20"
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${
+                            user.status === "ACTIVE"
+                              ? "bg-emerald-950/80 text-emerald-400 border border-emerald-500/40"
+                              : "bg-zinc-800 text-zinc-400 border border-zinc-700"
                           }`}
                         >
-                          {u.status || "ACTIVE"}
+                          {user.status || "ACTIVE"}
                         </span>
                       </td>
-
-                      {/* Actions */}
                       <td className="py-3.5 px-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
-                          {/* Direct B2B Pricing Setup shortcut */}
-                          {onNavigateB2BPricing && (
+                          {isB2B && onNavigateB2BPricing && (
                             <button
                               type="button"
-                              onClick={() => onNavigateB2BPricing(u.id)}
-                              title="Set Custom Product Pricing (B2B Rates)"
-                              className="p-1.5 rounded-lg bg-[#8B5CF6]/15 text-[#8B5CF6] hover:bg-[#8B5CF6] hover:text-white transition-colors flex items-center gap-1 text-[11px] font-bold px-2.5"
+                              onClick={() => onNavigateB2BPricing(user.id)}
+                              className="px-2.5 py-1.5 bg-[#8B5CF6]/20 hover:bg-[#8B5CF6]/30 text-purple-300 border border-purple-500/40 rounded-lg font-bold flex items-center gap-1 transition-colors text-xs"
+                              title="Configure B2B Custom Matrix Rates"
                             >
                               <Coins size={12} />
-                              <span>Pricing</span>
+                              <span>B2B Rates</span>
                             </button>
                           )}
-
                           <button
                             type="button"
-                            onClick={() => setViewingUser(u)}
-                            title="View Details"
-                            className="p-1.5 rounded-lg bg-[#27272A] hover:bg-[#8B5CF6] hover:text-white text-[#A1A1AA] transition-colors"
+                            onClick={() => setViewingUser(user)}
+                            className="p-1.5 bg-[#27272A] hover:bg-[#3F3F46] text-[#FAFAFA] rounded-lg transition-colors"
+                            title="Inspect Profile"
                           >
                             <Eye size={13} />
                           </button>
-
                           <button
                             type="button"
-                            onClick={() => handleOpenEdit(u)}
-                            title="Edit User"
-                            className="p-1.5 rounded-lg bg-[#27272A] hover:bg-[#8B5CF6] hover:text-white text-[#A1A1AA] transition-colors"
+                            onClick={() => handleOpenEdit(user)}
+                            className="p-1.5 bg-[#27272A] hover:bg-[#3F3F46] text-amber-400 rounded-lg transition-colors"
+                            title="Edit Account"
                           >
                             <Edit2 size={13} />
                           </button>
-
                           <button
                             type="button"
-                            onClick={() => setDeletingUser(u)}
-                            title="Delete User"
-                            className="p-1.5 rounded-lg bg-[#27272A] hover:bg-rose-600 hover:text-white text-[#A1A1AA] transition-colors"
+                            onClick={() => setDeletingUser(user)}
+                            className="p-1.5 bg-rose-950/40 hover:bg-rose-900/60 text-rose-400 border border-rose-500/30 rounded-lg transition-colors"
+                            title="Permanently Delete Account"
                           >
                             <Trash2 size={13} />
                           </button>
@@ -585,235 +699,174 @@ export function UsersPage({ onNavigateB2BPricing }: UsersPageProps) {
             </tbody>
           </table>
         </div>
+
+        {/* Pagination Footer */}
+        <div className="p-4 bg-[#09090B] border-t border-[#27272A] flex flex-wrap items-center justify-between gap-3 text-xs">
+          <span className="text-[#A1A1AA]">
+            Showing page <strong className="text-[#FAFAFA]">{page}</strong> of <strong className="text-[#FAFAFA]">{totalPages}</strong> ({totalCount} total accounts)
+          </span>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              disabled={page <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              className="px-3 py-1.5 bg-[#18181B] hover:bg-[#27272A] disabled:opacity-40 disabled:cursor-not-allowed border border-[#27272A] rounded-lg text-[#FAFAFA] font-bold"
+            >
+              Previous
+            </button>
+            <button
+              type="button"
+              disabled={page >= totalPages}
+              onClick={() => setPage((p) => p + 1)}
+              className="px-3 py-1.5 bg-[#18181B] hover:bg-[#27272A] disabled:opacity-40 disabled:cursor-not-allowed border border-[#27272A] rounded-lg text-[#FAFAFA] font-bold"
+            >
+              Next
+            </button>
+          </div>
+        </div>
       </div>
 
-      {/* ══ CREATE USER MODAL ══════════════════════════════════════════════════ */}
+      {/* ─── MODAL 1: CREATE USER MODAL ─── */}
       {showCreateModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 overflow-y-auto backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-[#18181B] border border-[#27272A] rounded-tr-3xl rounded-bl-3xl p-6 max-w-lg w-full space-y-4 shadow-2xl">
-            <div className="flex items-start justify-between border-b border-[#27272A] pb-3">
-              <div>
-                <h3 className="text-sm font-extrabold text-[#FAFAFA]">
-                  Create Customer Account
-                </h3>
-                <p className="text-[10px] text-[#A1A1AA]">
-                  Add a new retail buyer or corporate wholesale B2B client
-                </p>
-              </div>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="bg-[#18181B] border border-[#27272A] rounded-2xl w-full max-w-lg shadow-2xl p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-[#27272A] pb-3">
+              <h3 className="font-bold text-sm text-[#FAFAFA] flex items-center gap-2">
+                <UserPlus size={16} className="text-[#8B5CF6]" />
+                <span>Provision Customer / B2B Account</span>
+              </h3>
               <button
                 type="button"
                 onClick={() => setShowCreateModal(false)}
-                className="p-1 text-slate-400 hover:text-white"
+                className="text-[#71717A] hover:text-[#FAFAFA]"
               >
                 <X size={16} />
               </button>
             </div>
 
-            <form onSubmit={handleCreateSubmit} className="space-y-3.5">
+            <form onSubmit={handleCreateUser} className="space-y-3.5 text-xs">
               {/* Account Type Toggle */}
-              <div>
-                <label className="block text-xs font-bold text-[#A1A1AA] mb-1.5">
-                  Account Type
-                </label>
-                <div className="grid grid-cols-2 gap-2 p-1 bg-[#09090B] border border-[#27272A] rounded-xl">
-                  <button
-                    type="button"
-                    onClick={() => setAccountType("B2C")}
-                    className={`py-2 px-3 rounded-lg text-xs font-bold transition-colors ${
-                      accountType === "B2C"
-                        ? "bg-[#27272A] text-white shadow-xs"
-                        : "text-[#A1A1AA] hover:text-white"
-                    }`}
-                  >
-                    🛍️ Retail Customer (B2C)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setAccountType("B2B")}
-                    className={`py-2 px-3 rounded-lg text-xs font-bold transition-colors ${
-                      accountType === "B2B"
-                        ? "bg-[#8B5CF6] text-white shadow-xs"
-                        : "text-[#A1A1AA] hover:text-[#8B5CF6]"
-                    }`}
-                  >
-                    🏢 B2B / Wholesale Client
-                  </button>
+              <div className="flex gap-2 p-1 bg-[#09090B] rounded-xl border border-[#27272A]">
+                <button
+                  type="button"
+                  onClick={() => setAccountType("B2C")}
+                  className={`flex-1 py-1.5 rounded-lg font-bold transition-all ${
+                    accountType === "B2C" ? "bg-[#8B5CF6] text-white" : "text-[#A1A1AA]"
+                  }`}
+                >
+                  Retail Consumer (B2C)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAccountType("B2B")}
+                  className={`flex-1 py-1.5 rounded-lg font-bold transition-all ${
+                    accountType === "B2B" ? "bg-[#8B5CF6] text-white" : "text-[#A1A1AA]"
+                  }`}
+                >
+                  B2B Corporate Enterprise
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[11px] text-[#A1A1AA] font-semibold">First Name *</label>
+                  <input
+                    type="text"
+                    required
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    placeholder="e.g. Anand"
+                    className="w-full bg-[#09090B] border border-[#27272A] rounded-xl px-3 py-2 text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[11px] text-[#A1A1AA] font-semibold">Last Name *</label>
+                  <input
+                    type="text"
+                    required
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    placeholder="e.g. Singhania"
+                    className="w-full bg-[#09090B] border border-[#27272A] rounded-xl px-3 py-2 text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
+                  />
                 </div>
               </div>
 
-              {/* B2B Company Details */}
+              <div className="space-y-1">
+                <label className="text-[11px] text-[#A1A1AA] font-semibold">Email Address *</label>
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="anand@singhaniaprojects.in"
+                  className="w-full bg-[#09090B] border border-[#27272A] rounded-xl px-3 py-2 text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
+                />
+              </div>
+
               {accountType === "B2B" && (
-                <div className="p-3 bg-[#8B5CF6]/8 border border-[#8B5CF6]/25 rounded-xl space-y-2.5">
-                  <div>
-                    <label className="block text-[11px] font-bold text-[#A855F7] mb-1">
-                      Company / Firm Name *
-                    </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[11px] text-[#A1A1AA] font-semibold">Company Name</label>
                     <input
                       type="text"
                       value={companyName}
                       onChange={(e) => setCompanyName(e.target.value)}
-                      required={accountType === "B2B"}
-                      placeholder="e.g. Apex Hardware & Contracting Ltd"
-                      className="w-full bg-[#09090B] border border-[#8B5CF6]/40 rounded-lg px-3 py-2 text-xs text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
+                      placeholder="Singhania Infrastructure Pvt Ltd"
+                      className="w-full bg-[#09090B] border border-[#27272A] rounded-xl px-3 py-2 text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
                     />
                   </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-[#A855F7] mb-1">
-                      GSTIN (15-character GST Number)
-                    </label>
+                  <div className="space-y-1">
+                    <label className="text-[11px] text-[#A1A1AA] font-semibold">GSTIN (15 Digits)</label>
                     <input
                       type="text"
+                      maxLength={15}
                       value={gstin}
                       onChange={(e) => setGstin(e.target.value.toUpperCase())}
-                      maxLength={15}
-                      placeholder="e.g. 29ABCDE1234F1Z5"
-                      className="w-full bg-[#09090B] border border-[#8B5CF6]/40 rounded-lg px-3 py-2 text-xs font-mono uppercase text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
+                      placeholder="27AABCU9603R1ZM"
+                      className="w-full bg-[#09090B] border border-[#27272A] rounded-xl px-3 py-2 font-mono text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
                     />
                   </div>
                 </div>
               )}
 
-              {/* Personal Details */}
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-[#A1A1AA] mb-1">
-                    First Name *
-                  </label>
-                  <input
-                    type="text"
-                    value={firstName}
-                    onChange={(e) => setFirstName(e.target.value)}
-                    required
-                    className="w-full bg-[#09090B] border border-[#27272A] rounded-lg px-3 py-2 text-xs text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-[#A1A1AA] mb-1">
-                    Last Name *
-                  </label>
-                  <input
-                    type="text"
-                    value={lastName}
-                    onChange={(e) => setLastName(e.target.value)}
-                    required
-                    className="w-full bg-[#09090B] border border-[#27272A] rounded-lg px-3 py-2 text-xs text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-[#A1A1AA] mb-1">
-                  Email Address *
-                </label>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  className="w-full bg-[#09090B] border border-[#27272A] rounded-lg px-3 py-2 text-xs text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="block text-xs font-bold text-[#A1A1AA]">
-                    {accountType === "B2B" ? "Temporary Login Password *" : "Password *"}
-                  </label>
-                  {accountType === "B2B" && (
-                    <button
-                      type="button"
-                      onClick={generateTempPassword}
-                      className="text-[11px] text-[#A855F7] hover:text-[#C084FC] font-semibold flex items-center gap-1"
-                    >
-                      <Sparkles size={11} />
-                      <span>Generate Temporary</span>
-                    </button>
-                  )}
-                </div>
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    className="w-full bg-[#09090B] border border-[#27272A] rounded-lg px-3 py-2 text-xs font-mono text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
-                  />
-                </div>
-              </div>
-
-              {/* B2B Onboarding Preferences */}
-              {accountType === "B2B" && (
-                <div className="p-2.5 bg-[#18181B] border border-[#27272A] rounded-xl space-y-2 text-xs">
-                  <label className="flex items-center gap-2 text-[#FAFAFA] cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={mustChangePassword}
-                      onChange={(e) => setMustChangePassword(e.target.checked)}
-                      className="rounded accent-[#8B5CF6]"
-                    />
-                    <span>Force customer to change password on first login</span>
-                  </label>
-                  <label className="flex items-center gap-2 text-[#FAFAFA] cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={sendWelcomeEmail}
-                      onChange={(e) => setSendWelcomeEmail(e.target.checked)}
-                      className="rounded accent-[#8B5CF6]"
-                    />
-                    <span>Email temporary login credentials to customer</span>
-                  </label>
-                </div>
-              )}
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-[#A1A1AA] mb-1">
-                    Phone Number
-                  </label>
+                <div className="space-y-1">
+                  <label className="text-[11px] text-[#A1A1AA] font-semibold">Phone Number</label>
                   <input
                     type="text"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
-                    className="w-full bg-[#09090B] border border-[#27272A] rounded-lg px-3 py-2 text-xs text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
+                    placeholder="+91 9876543210"
+                    className="w-full bg-[#09090B] border border-[#27272A] rounded-xl px-3 py-2 text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
                   />
                 </div>
-                <div>
-                  <label className="block text-xs font-bold text-[#A1A1AA] mb-1">
-                    Role Assignment
-                  </label>
-                  <select
-                    value={roleId}
-                    onChange={(e) => setRoleId(e.target.value)}
-                    className="w-full bg-[#09090B] border border-[#27272A] rounded-lg px-3 py-2 text-xs text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
-                  >
-                    {roles.map((r) => (
-                      <option key={r.id} value={r.id}>
-                        {r.name}
-                      </option>
-                    ))}
-                  </select>
+                <div className="space-y-1">
+                  <label className="text-[11px] text-[#A1A1AA] font-semibold">Initial Password</label>
+                  <input
+                    type="text"
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full bg-[#09090B] border border-[#27272A] rounded-xl px-3 py-2 font-mono text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
+                  />
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 pt-3 border-t border-[#27272A]">
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="flex-1 bg-[#8B5CF6] hover:bg-[#7C3AED] text-white font-bold py-2.5 rounded-tr-xl rounded-bl-xl text-xs flex items-center justify-center gap-1.5 shadow-md shadow-[#8B5CF6]/20"
-                >
-                  {isSubmitting ? (
-                    <Loader2 size={13} className="animate-spin" />
-                  ) : (
-                    <UserPlus size={13} />
-                  )}
-                  <span>Create {accountType === "B2B" ? "B2B Customer" : "Account"}</span>
-                </button>
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-[#27272A]">
                 <button
                   type="button"
                   onClick={() => setShowCreateModal(false)}
-                  className="px-4 py-2.5 text-xs text-[#A1A1AA] hover:bg-[#27272A] rounded-xl"
+                  className="px-4 py-2 bg-[#27272A] hover:bg-[#3F3F46] rounded-xl text-[#FAFAFA] font-bold"
                 >
                   Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="px-5 py-2 bg-[#8B5CF6] hover:bg-[#7C3AED] disabled:opacity-50 text-white rounded-xl font-bold shadow"
+                >
+                  {isSubmitting ? "Provisioning..." : "Create Account"}
                 </button>
               </div>
             </form>
@@ -821,183 +874,84 @@ export function UsersPage({ onNavigateB2BPricing }: UsersPageProps) {
         </div>
       )}
 
-      {/* ══ B2B CUSTOMER CREATED SUCCESS MODAL ═══════════════════════════════ */}
-      {createdB2BResult && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs">
-          <div className="bg-[#18181B] border border-[#8B5CF6]/40 rounded-3xl p-6 w-full max-w-md shadow-2xl space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-[#8B5CF6]/20 text-[#A855F7] flex items-center justify-center">
-                <CheckCircle2 size={24} />
-              </div>
-              <div>
-                <h3 className="text-base font-bold text-white">B2B Customer Account Created</h3>
-                <p className="text-xs text-[#A1A1AA]">
-                  {createdB2BResult.companyName || `${createdB2BResult.firstName} ${createdB2BResult.lastName || ""}`}
-                </p>
-              </div>
-            </div>
-
-            <div className="bg-[#09090B] border border-[#27272A] rounded-2xl p-4 space-y-3">
-              <div>
-                <span className="text-[11px] text-[#A1A1AA] block">Login Email</span>
-                <span className="text-xs font-semibold text-white">{createdB2BResult.email}</span>
-              </div>
-              <div>
-                <span className="text-[11px] text-[#A1A1AA] block">Temporary Login Password</span>
-                <span className="text-xs font-mono font-bold text-[#38BDF8] bg-[#18181B] px-2 py-1 rounded border border-[#27272A] inline-block mt-0.5">
-                  {createdB2BResult.temporaryPassword}
-                </span>
-              </div>
-              <div className="p-2.5 bg-[#8B5CF6]/10 border border-[#8B5CF6]/25 rounded-xl text-[11px] text-[#C084FC]">
-                ℹ️ The customer will be prompted to set their permanent password upon logging in.
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <button
-                type="button"
-                onClick={() => {
-                  const creds = `Pacific Hardware Wholesale Portal Credentials:\nCompany: ${createdB2BResult.companyName || ""}\nLogin Email: ${createdB2BResult.email}\nTemporary Password: ${createdB2BResult.temporaryPassword}\nNote: Please set your permanent password upon your first login.`;
-                  navigator.clipboard.writeText(creds);
-                  setCopiedCredentials(true);
-                  setTimeout(() => setCopiedCredentials(false), 2000);
-                }}
-                className="w-full bg-[#27272A] hover:bg-[#3F3F46] text-white py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
-              >
-                {copiedCredentials ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
-                <span>{copiedCredentials ? "Credentials Copied to Clipboard!" : "Copy Login Credentials"}</span>
-              </button>
-
-              {onNavigateB2BPricing && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    const custId = createdB2BResult.id;
-                    setCreatedB2BResult(null);
-                    onNavigateB2BPricing(custId);
-                  }}
-                  className="w-full bg-[#8B5CF6] hover:bg-[#7C3AED] text-white py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-md shadow-[#8B5CF6]/20 transition-colors"
-                >
-                  <Coins size={14} />
-                  <span>Configure Custom Pricing Matrix Now</span>
-                </button>
-              )}
-
-              <button
-                type="button"
-                onClick={() => setCreatedB2BResult(null)}
-                className="w-full text-xs text-[#A1A1AA] hover:text-white py-2 text-center"
-              >
-                Done
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ══ EDIT USER MODAL ════════════════════════════════════════════════════ */}
+      {/* ─── MODAL 2: EDIT USER MODAL ─── */}
       {editingUser && (
-        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 overflow-y-auto backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-[#18181B] border border-[#27272A] rounded-tr-3xl rounded-bl-3xl p-6 max-w-md w-full space-y-4 shadow-2xl">
-            <div className="flex items-start justify-between border-b border-[#27272A] pb-3">
-              <div>
-                <h3 className="text-sm font-extrabold text-[#FAFAFA]">Edit User Details</h3>
-                <p className="text-[10px] text-[#A1A1AA] font-mono">{editingUser.email}</p>
-              </div>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="bg-[#18181B] border border-[#27272A] rounded-2xl w-full max-w-lg shadow-2xl p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-[#27272A] pb-3">
+              <h3 className="font-bold text-sm text-[#FAFAFA] flex items-center gap-2">
+                <Edit2 size={16} className="text-amber-400" />
+                <span>Edit Customer Details</span>
+              </h3>
               <button
                 type="button"
                 onClick={() => setEditingUser(null)}
-                className="p-1 text-slate-400 hover:text-white"
+                className="text-[#71717A] hover:text-[#FAFAFA]"
               >
                 <X size={16} />
               </button>
             </div>
 
-            <form onSubmit={handleEditSubmit} className="space-y-3">
+            <form onSubmit={handleSaveEdit} className="space-y-3.5 text-xs">
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-[#A1A1AA] mb-1">
-                    First Name *
-                  </label>
+                <div className="space-y-1">
+                  <label className="text-[11px] text-[#A1A1AA] font-semibold">First Name</label>
                   <input
                     type="text"
                     value={editFirstName}
                     onChange={(e) => setEditFirstName(e.target.value)}
-                    required
-                    className="w-full bg-[#09090B] border border-[#27272A] rounded-lg px-3 py-2 text-xs text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
+                    className="w-full bg-[#09090B] border border-[#27272A] rounded-xl px-3 py-2 text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
                   />
                 </div>
-                <div>
-                  <label className="block text-xs font-bold text-[#A1A1AA] mb-1">
-                    Last Name *
-                  </label>
+                <div className="space-y-1">
+                  <label className="text-[11px] text-[#A1A1AA] font-semibold">Last Name</label>
                   <input
                     type="text"
                     value={editLastName}
                     onChange={(e) => setEditLastName(e.target.value)}
-                    required
-                    className="w-full bg-[#09090B] border border-[#27272A] rounded-lg px-3 py-2 text-xs text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
+                    className="w-full bg-[#09090B] border border-[#27272A] rounded-xl px-3 py-2 text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
                   />
                 </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-[#A1A1AA] mb-1">
-                  Company / Firm Name
-                </label>
-                <input
-                  type="text"
-                  value={editCompanyName}
-                  onChange={(e) => setEditCompanyName(e.target.value)}
-                  placeholder="Leave empty if regular customer"
-                  className="w-full bg-[#09090B] border border-[#27272A] rounded-lg px-3 py-2 text-xs text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
-                />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-[#A1A1AA] mb-1">GSTIN</label>
+                <div className="space-y-1">
+                  <label className="text-[11px] text-[#A1A1AA] font-semibold">Company Name</label>
                   <input
                     type="text"
-                    value={editGstin}
-                    onChange={(e) => setEditGstin(e.target.value.toUpperCase())}
-                    maxLength={15}
-                    placeholder="GSTIN"
-                    className="w-full bg-[#09090B] border border-[#27272A] rounded-lg px-3 py-2 text-xs font-mono uppercase text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
+                    value={editCompanyName}
+                    onChange={(e) => setEditCompanyName(e.target.value)}
+                    className="w-full bg-[#09090B] border border-[#27272A] rounded-xl px-3 py-2 text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
                   />
                 </div>
-                <div>
-                  <label className="block text-xs font-bold text-[#A1A1AA] mb-1">Phone</label>
+                <div className="space-y-1">
+                  <label className="text-[11px] text-[#A1A1AA] font-semibold">GSTIN</label>
+                  <input
+                    type="text"
+                    maxLength={15}
+                    value={editGstin}
+                    onChange={(e) => setEditGstin(e.target.value.toUpperCase())}
+                    className="w-full bg-[#09090B] border border-[#27272A] rounded-xl px-3 py-2 font-mono text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[11px] text-[#A1A1AA] font-semibold">Phone</label>
                   <input
                     type="text"
                     value={editPhone}
                     onChange={(e) => setEditPhone(e.target.value)}
-                    className="w-full bg-[#09090B] border border-[#27272A] rounded-lg px-3 py-2 text-xs text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
+                    className="w-full bg-[#09090B] border border-[#27272A] rounded-xl px-3 py-2 text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
                   />
                 </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-[#A1A1AA] mb-1">Role</label>
-                  <select
-                    value={editRoleId}
-                    onChange={(e) => setEditRoleId(e.target.value)}
-                    className="w-full bg-[#09090B] border border-[#27272A] rounded-lg px-3 py-2 text-xs text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
-                  >
-                    {roles.map((r) => (
-                      <option key={r.id} value={r.id}>
-                        {r.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-[#A1A1AA] mb-1">Status</label>
+                <div className="space-y-1">
+                  <label className="text-[11px] text-[#A1A1AA] font-semibold">Status</label>
                   <select
                     value={editStatus}
                     onChange={(e) => setEditStatus(e.target.value as any)}
-                    className="w-full bg-[#09090B] border border-[#27272A] rounded-lg px-3 py-2 text-xs text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
+                    className="w-full bg-[#09090B] border border-[#27272A] rounded-xl px-3 py-2 text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
                   >
                     <option value="ACTIVE">ACTIVE</option>
                     <option value="INACTIVE">INACTIVE</option>
@@ -1006,182 +960,124 @@ export function UsersPage({ onNavigateB2BPricing }: UsersPageProps) {
                 </div>
               </div>
 
-              <div className="flex items-center justify-between gap-2 pt-3 border-t border-[#27272A]">
-                {editingUser.email !== adminUser?.email ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const toDel = editingUser;
-                      setEditingUser(null);
-                      setDeletingUser(toDel);
-                    }}
-                    className="p-2 text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-950/30 rounded-xl transition-colors flex items-center gap-1 font-bold"
-                  >
-                    <Trash2 size={13} />
-                    <span>Delete User</span>
-                  </button>
-                ) : (
-                  <div />
-                )}
-
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setEditingUser(null)}
-                    className="px-4 py-2.5 text-xs text-[#A1A1AA] hover:bg-[#27272A] rounded-xl"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isSubmitting}
-                    className="bg-[#8B5CF6] hover:bg-[#7C3AED] text-white font-bold px-5 py-2.5 rounded-tr-xl rounded-bl-xl text-xs flex items-center justify-center gap-1.5"
-                  >
-                    {isSubmitting ? (
-                      <Loader2 size={13} className="animate-spin" />
-                    ) : (
-                      <Save size={13} />
-                    )}
-                    <span>Save Changes</span>
-                  </button>
-                </div>
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-[#27272A]">
+                <button
+                  type="button"
+                  onClick={() => setEditingUser(null)}
+                  className="px-4 py-2 bg-[#27272A] hover:bg-[#3F3F46] rounded-xl text-[#FAFAFA] font-bold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="px-5 py-2 bg-[#8B5CF6] hover:bg-[#7C3AED] disabled:opacity-50 text-white rounded-xl font-bold shadow"
+                >
+                  {isSubmitting ? "Saving..." : "Save Changes"}
+                </button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* ══ DELETE USER MODAL ══════════════════════════════════════════════════ */}
+      {/* ─── MODAL 3: DELETE USER MODAL ─── */}
       {deletingUser && (
-        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-[#18181B] border border-[#27272A] rounded-tr-3xl rounded-bl-3xl p-6 max-w-sm w-full space-y-4 shadow-2xl text-center">
-            <div className="w-12 h-12 rounded-full bg-rose-950/40 border border-rose-500/40 text-rose-400 flex items-center justify-center mx-auto">
-              <Trash2 size={22} />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="bg-[#18181B] border border-rose-500/40 rounded-2xl w-full max-w-sm shadow-2xl p-6 space-y-4 text-center">
+            <div className="w-12 h-12 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center mx-auto border border-rose-500/40">
+              <Trash2 size={24} />
             </div>
-            <div>
-              <h3 className="text-base font-bold text-[#FAFAFA]">Delete User Account?</h3>
-              <p className="text-xs text-[#A1A1AA] mt-1 leading-relaxed">
-                Are you sure you want to remove{" "}
-                <span className="text-[#FAFAFA] font-bold">{deletingUser.email}</span>?
-              </p>
-            </div>
-            <div className="flex items-center gap-2 pt-2">
-              <button
-                type="button"
-                disabled={isSubmitting}
-                onClick={handleDeleteSubmit}
-                className="flex-1 bg-rose-600 hover:bg-rose-700 text-white font-bold py-2 rounded-tr-xl rounded-bl-xl text-xs"
-              >
-                {isSubmitting ? "Deleting..." : "Yes, Delete"}
-              </button>
+            <h3 className="font-bold text-sm text-[#FAFAFA]">Delete Account Permanently?</h3>
+            <p className="text-xs text-[#A1A1AA]">
+              Are you sure you want to permanently delete account <strong>{deletingUser.firstName} {deletingUser.lastName}</strong> ({deletingUser.email}) from the database? This action cannot be undone.
+            </p>
+            <div className="flex items-center justify-center gap-2 pt-2">
               <button
                 type="button"
                 onClick={() => setDeletingUser(null)}
-                className="flex-1 bg-[#27272A] hover:bg-[#3F3F46] text-[#A1A1AA] font-semibold py-2 rounded-xl text-xs"
+                className="px-4 py-2 bg-[#27272A] hover:bg-[#3F3F46] rounded-xl text-xs text-[#FAFAFA] font-bold"
               >
                 Cancel
               </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                disabled={isSubmitting}
+                className="px-5 py-2 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold shadow"
+              >
+                {isSubmitting ? "Deleting..." : "Yes, Delete Permanently"}
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ══ VIEW USER DETAILS MODAL ════════════════════════════════════════════ */}
+      {/* ─── DRAWER: INSPECT USER ─── */}
       {viewingUser && (
-        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-[#18181B] border border-[#27272A] rounded-tr-3xl rounded-bl-3xl p-6 max-w-md w-full space-y-5 shadow-2xl">
-            <div className="flex items-start justify-between border-b border-[#27272A] pb-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-[#8B5CF6] text-white flex items-center justify-center font-black">
-                  {viewingUser.firstName ? viewingUser.firstName[0].toUpperCase() : "U"}
-                </div>
+        <div className="fixed inset-0 z-50 flex justify-end bg-black/70 backdrop-blur-sm">
+          <div className="bg-[#18181B] border-l border-[#27272A] w-full max-w-md h-full flex flex-col justify-between shadow-2xl p-6 overflow-y-auto">
+            <div className="space-y-6">
+              <div className="flex items-center justify-between border-b border-[#27272A] pb-4">
                 <div>
-                  <h3 className="text-sm font-bold text-[#FAFAFA]">
+                  <span className="text-[10px] uppercase font-bold text-[#A855F7] tracking-wider">
+                    Profile Directory
+                  </span>
+                  <h2 className="text-lg font-bold text-[#FAFAFA]">
                     {viewingUser.firstName} {viewingUser.lastName}
-                  </h3>
-                  <p className="text-[10px] text-[#A1A1AA] font-mono">{viewingUser.email}</p>
+                  </h2>
                 </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setViewingUser(null)}
-                className="p-1 text-slate-400 hover:text-white"
-              >
-                <X size={16} />
-              </button>
-            </div>
-
-            <div className="space-y-3 text-xs">
-              {viewingUser.companyName && (
-                <div className="flex items-center justify-between p-2.5 bg-[#09090B] rounded-xl border border-[#27272A]">
-                  <span className="text-[#A1A1AA]">Company Name:</span>
-                  <span className="font-bold text-[#FAFAFA]">{viewingUser.companyName}</span>
-                </div>
-              )}
-              {viewingUser.gstin && (
-                <div className="flex items-center justify-between p-2.5 bg-[#09090B] rounded-xl border border-[#27272A]">
-                  <span className="text-[#A1A1AA]">GSTIN:</span>
-                  <span className="font-mono font-bold text-[#8B5CF6]">{viewingUser.gstin}</span>
-                </div>
-              )}
-              <div className="flex items-center justify-between p-2.5 bg-[#09090B] rounded-xl border border-[#27272A]">
-                <span className="text-[#A1A1AA]">Phone Number:</span>
-                <span className="text-[#FAFAFA] font-medium">{viewingUser.phone || "—"}</span>
-              </div>
-              <div className="flex items-center justify-between p-2.5 bg-[#09090B] rounded-xl border border-[#27272A]">
-                <span className="text-[#A1A1AA]">Role:</span>
-                <span className="text-[#8B5CF6] font-bold uppercase">
-                  {typeof viewingUser.role === "object"
-                    ? viewingUser.role?.name
-                    : viewingUser.role}
-                </span>
-              </div>
-              <div className="flex items-center justify-between p-2.5 bg-[#09090B] rounded-xl border border-[#27272A]">
-                <span className="text-[#A1A1AA]">Status:</span>
-                <span className="text-emerald-400 font-bold">
-                  {viewingUser.status || "ACTIVE"}
-                </span>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 pt-2 border-t border-[#27272A]">
-              {onNavigateB2BPricing && (
                 <button
                   type="button"
-                  onClick={() => {
-                    const id = viewingUser.id;
-                    setViewingUser(null);
-                    onNavigateB2BPricing(id);
-                  }}
-                  className="flex-1 bg-[#8B5CF6]/15 hover:bg-[#8B5CF6] text-[#8B5CF6] hover:text-white py-2.5 rounded-tr-xl rounded-bl-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-colors"
+                  onClick={() => setViewingUser(null)}
+                  className="p-1.5 rounded-lg bg-[#27272A] text-[#A1A1AA] hover:text-[#FAFAFA]"
                 >
-                  <Coins size={13} />
-                  <span>Configure B2B Pricing</span>
+                  <X size={16} />
                 </button>
-              )}
-              <button
-                type="button"
-                onClick={() => {
-                  const toEdit = viewingUser;
-                  setViewingUser(null);
-                  handleOpenEdit(toEdit);
-                }}
-                className="px-4 py-2.5 bg-[#27272A] hover:bg-[#3F3F46] text-white py-2.5 rounded-tr-xl rounded-bl-xl font-bold text-xs flex items-center justify-center gap-1.5"
-              >
-                <Edit2 size={13} />
-                <span>Edit</span>
-              </button>
+              </div>
+
+              <div className="space-y-3 text-xs">
+                <div className="p-3 bg-[#09090B] rounded-xl border border-[#27272A] space-y-1">
+                  <span className="text-[10px] text-[#71717A] uppercase font-bold">Email Address</span>
+                  <p className="font-bold text-[#FAFAFA] break-all">{viewingUser.email}</p>
+                </div>
+
+                {viewingUser.companyName && (
+                  <div className="p-3 bg-[#09090B] rounded-xl border border-[#27272A] space-y-1">
+                    <span className="text-[10px] text-[#71717A] uppercase font-bold">Enterprise Organization</span>
+                    <p className="font-bold text-purple-400">{viewingUser.companyName}</p>
+                  </div>
+                )}
+
+                {viewingUser.gstin && (
+                  <div className="p-3 bg-[#09090B] rounded-xl border border-[#27272A] space-y-1">
+                    <span className="text-[10px] text-[#71717A] uppercase font-bold">GSTIN Registration</span>
+                    <p className="font-mono font-bold text-[#FAFAFA]">{viewingUser.gstin}</p>
+                  </div>
+                )}
+
+                <div className="p-3 bg-[#09090B] rounded-xl border border-[#27272A] space-y-1">
+                  <span className="text-[10px] text-[#71717A] uppercase font-bold">Account Tier</span>
+                  <p className="font-bold text-[#FAFAFA]">
+                    {viewingUser.role?.name || "Standard Customer"}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="border-t border-[#27272A] pt-4 mt-6">
               <button
                 type="button"
                 onClick={() => setViewingUser(null)}
-                className="px-4 py-2.5 bg-[#27272A] hover:bg-[#3F3F46] text-[#FAFAFA] rounded-xl font-semibold text-xs"
+                className="w-full py-2.5 bg-[#27272A] hover:bg-[#3F3F46] rounded-xl text-xs text-[#FAFAFA] font-bold"
               >
-                Close
+                Close Inspector
               </button>
             </div>
           </div>
         </div>
       )}
+
     </div>
   );
 }

@@ -13,6 +13,163 @@ import {
   SignatureVerificationResult
 } from "../api/quotesService";
 import { useDebounce } from "../hooks/useDebounce";
+import { AsyncActionButton } from "../components/common/AsyncActionButton";
+
+function QuoteDetailSkeleton() {
+  return (
+    <div className="space-y-6 text-xs animate-pulse">
+      {/* Top Banner Notice */}
+      <div className="flex items-center space-x-2 text-[#A1A1AA] pb-1">
+        <RefreshCw className="w-3.5 h-3.5 animate-spin text-[#8B5CF6]" />
+        <span className="font-semibold text-[11px] text-[#A1A1AA]">Loading Quotation Breakdown & Line Items...</span>
+      </div>
+
+      {/* Client Info Cards Skeleton */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="p-4 rounded-xl bg-[#09090B] border border-[#27272A] space-y-2">
+          <div className="h-2.5 w-20 bg-[#27272A] rounded"></div>
+          <div className="h-4 w-40 bg-[#27272A] rounded"></div>
+          <div className="h-3 w-32 bg-[#27272A] rounded"></div>
+          <div className="h-3 w-28 bg-[#27272A] rounded"></div>
+          <div className="h-3 w-48 bg-[#27272A] rounded"></div>
+        </div>
+
+        <div className="p-4 rounded-xl bg-[#09090B] border border-[#27272A] space-y-2">
+          <div className="h-2.5 w-24 bg-[#27272A] rounded"></div>
+          <div className="flex items-center gap-2 pt-1">
+            <div className="h-5 w-24 bg-[#27272A] rounded-full"></div>
+            <div className="h-5 w-28 bg-[#27272A] rounded"></div>
+          </div>
+          <div className="h-3 w-56 bg-[#27272A] rounded pt-2"></div>
+        </div>
+      </div>
+
+      {/* Status Transitions Bar Skeleton */}
+      <div className="p-4 rounded-xl bg-[#09090B] border border-[#27272A] space-y-2">
+        <div className="h-2.5 w-24 bg-[#27272A] rounded"></div>
+        <div className="flex flex-wrap gap-2">
+          <div className="h-8 w-28 bg-[#27272A] rounded-lg"></div>
+          <div className="h-8 w-28 bg-[#27272A] rounded-lg"></div>
+          <div className="h-8 w-28 bg-[#27272A] rounded-lg"></div>
+          <div className="h-8 w-36 bg-[#27272A] rounded-lg"></div>
+        </div>
+      </div>
+
+      {/* Financial Summary Grid Skeleton */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-[#09090B] p-4 rounded-xl border border-[#27272A]">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="space-y-1.5">
+            <div className="h-2.5 w-16 bg-[#27272A] rounded"></div>
+            <div className="h-4 w-24 bg-[#27272A] rounded"></div>
+          </div>
+        ))}
+      </div>
+
+      {/* Line Items Table Skeleton */}
+      <div className="p-4 rounded-xl bg-[#09090B] border border-[#27272A] space-y-3">
+        <div className="flex justify-between items-center pb-2 border-b border-[#27272A]">
+          <div className="h-3.5 w-32 bg-[#27272A] rounded"></div>
+          <div className="h-7 w-28 bg-[#27272A] rounded-lg"></div>
+        </div>
+        <div className="space-y-2">
+          {Array.from({ length: 3 }).map((_, idx) => (
+            <div key={idx} className="flex items-center justify-between p-3 bg-[#18181B] rounded-lg border border-[#27272A]">
+              <div className="space-y-1.5">
+                <div className="h-3.5 w-48 bg-[#27272A] rounded"></div>
+                <div className="h-2.5 w-24 bg-[#27272A] rounded"></div>
+              </div>
+              <div className="space-y-1.5 text-right">
+                <div className="h-3.5 w-20 bg-[#27272A] rounded ml-auto"></div>
+                <div className="h-2.5 w-14 bg-[#27272A] rounded ml-auto"></div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Skeleton Loading Body for Full Page View ────────────────────────────────── */
+
+export function QuotesPageSkeleton() {
+  return (
+    <div className="space-y-6 max-w-[1600px] mx-auto animate-pulse">
+      {/* Top Header Skeleton */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#27272A] pb-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-tr-xl rounded-bl-xl bg-[#27272A]"></div>
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <div className="h-5 w-64 bg-[#27272A] rounded"></div>
+              <div className="h-4 w-24 bg-[#27272A] rounded-full"></div>
+            </div>
+            <div className="h-3 w-80 bg-[#27272A] rounded"></div>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="h-9 w-40 bg-[#27272A] rounded-tr-xl rounded-bl-xl"></div>
+          <div className="h-9 w-9 bg-[#27272A] rounded-tr-lg rounded-bl-lg"></div>
+        </div>
+      </div>
+
+      {/* 6 KPI Cards Skeleton */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="p-3.5 rounded-tr-xl rounded-bl-xl bg-[#18181B] border border-[#27272A] space-y-2">
+            <div className="w-8 h-8 rounded-lg bg-[#27272A]"></div>
+            <div className="h-5 w-12 bg-[#27272A] rounded"></div>
+            <div className="h-2.5 w-20 bg-[#27272A] rounded"></div>
+          </div>
+        ))}
+      </div>
+
+      {/* Filter Tabs & Search Skeleton */}
+      <div className="p-4 rounded-tr-2xl rounded-bl-2xl bg-[#18181B] border border-[#27272A] flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2 overflow-x-auto">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="h-7 w-28 bg-[#27272A] rounded-tr-lg rounded-bl-lg"></div>
+          ))}
+        </div>
+        <div className="h-8 w-64 bg-[#27272A] rounded-tr-lg rounded-bl-lg"></div>
+      </div>
+
+      {/* Main Table Skeleton */}
+      <div className="rounded-tr-2xl rounded-bl-2xl bg-[#18181B] border border-[#27272A] overflow-hidden shadow-lg">
+        <div className="p-3.5 bg-[#09090B] border-b border-[#27272A] flex justify-between">
+          <div className="h-3 w-40 bg-[#27272A] rounded"></div>
+          <div className="h-3 w-20 bg-[#27272A] rounded"></div>
+        </div>
+        <div className="divide-y divide-[#27272A]">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="p-4 flex items-center justify-between gap-4">
+              <div className="space-y-1.5 w-36">
+                <div className="h-4 w-32 bg-[#27272A] rounded"></div>
+                <div className="h-2.5 w-20 bg-[#27272A] rounded"></div>
+              </div>
+              <div className="space-y-1.5 w-44">
+                <div className="h-4 w-36 bg-[#27272A] rounded"></div>
+                <div className="h-2.5 w-24 bg-[#27272A] rounded"></div>
+              </div>
+              <div className="h-4 w-24 bg-[#27272A] rounded"></div>
+              <div className="h-4 w-24 bg-[#27272A] rounded"></div>
+              <div className="h-4 w-24 bg-[#27272A] rounded"></div>
+              <div className="h-5 w-24 bg-[#27272A] rounded-full"></div>
+              <div className="h-7 w-20 bg-[#27272A] rounded-lg"></div>
+            </div>
+          ))}
+        </div>
+        <div className="p-4 bg-[#09090B] border-t border-[#27272A] flex items-center justify-between">
+          <div className="h-3 w-36 bg-[#27272A] rounded"></div>
+          <div className="flex gap-2">
+            <div className="h-7 w-16 bg-[#27272A] rounded"></div>
+            <div className="h-7 w-16 bg-[#27272A] rounded"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function QuotesPage() {
   const [quotes, setQuotes] = useState<AdminQuoteDetail[]>([]);
@@ -324,23 +481,34 @@ export function QuotesPage() {
   const editShipping = parseFloat(editShippingCost) || 0;
   const editGrandTotal = Math.round((editBasicPrice + editGst + editShipping) * 100) / 100;
 
+  if (loading && quotes.length === 0) {
+    return <QuotesPageSkeleton />;
+  }
+
   return (
-    <div className="space-y-6 text-[#FAFAFA]" style={{ fontFamily: "Inter, sans-serif" }}>
-      {/* Header & Metrics */}
-      <div className="flex flex-wrap items-center justify-between gap-4 p-5 rounded-2xl bg-[#18181B] border border-[#27272A] shadow-md">
-        <div>
-          <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#A855F7] bg-[#A855F7]/10 px-2.5 py-0.5 rounded border border-[#A855F7]/20">
-            PRC Commercial Operations
-          </span>
-          <h2 className="text-xl font-bold font-serif text-[#FAFAFA] mt-1">
-            B2B Bulk Quotation (RFQ) Console
-          </h2>
-          <p className="text-xs text-[#A1A1AA]">
-            Review incoming project RFQs, customize contractor volume discounts, digitally sign, and issue QR-verified bids.
-          </p>
+    <div className="space-y-6 text-[#FAFAFA] max-w-[1600px] mx-auto" style={{ fontFamily: "Inter, sans-serif" }}>
+      {/* ─── Top Header ─── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#27272A] pb-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-tr-xl rounded-bl-xl bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-[#A855F7]">
+            <FileText size={20} />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-bold text-[#FAFAFA]">
+                B2B Bulk Quotation (RFQ) Console
+              </h1>
+              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-purple-500/20 text-[#A855F7] border border-purple-500/30">
+                PRC COMMERCIAL
+              </span>
+            </div>
+            <p className="text-xs text-[#A1A1AA]">
+              Review project RFQs, customize contractor volume discounts, digitally sign, and issue QR-verified estimates.
+            </p>
+          </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={() => {
@@ -349,15 +517,15 @@ export function QuotesPage() {
               setVerifyError("");
               setIsVerifyModalOpen(true);
             }}
-            className="bg-[#27272A] hover:bg-[#3F3F46] text-[#FAFAFA] font-bold text-xs px-4 py-2 rounded-xl transition-all border border-[#3F3F46] flex items-center gap-2"
+            className="bg-[#27272A] hover:bg-[#3F3F46] text-[#FAFAFA] font-bold text-xs px-3.5 py-2 rounded-tr-xl rounded-bl-xl transition-all border border-[#3F3F46] flex items-center gap-2 shadow-sm"
           >
             <ShieldCheck size={15} className="text-emerald-400" />
-            <span>Verify Signature Tool</span>
+            <span>Verify Signature</span>
           </button>
           <button
             type="button"
             onClick={fetchQuotes}
-            className="p-2 bg-[#27272A] hover:bg-[#3F3F46] rounded-xl text-[#A1A1AA] hover:text-[#FAFAFA] transition-colors"
+            className="p-2 bg-[#27272A] hover:bg-[#3F3F46] rounded-tr-lg rounded-bl-lg text-[#A1A1AA] hover:text-[#FAFAFA] border border-[#3F3F46] transition-colors"
             title="Refresh Quotes"
           >
             <RefreshCw size={16} className={loading ? "animate-spin text-[#A855F7]" : ""} />
@@ -365,31 +533,100 @@ export function QuotesPage() {
         </div>
       </div>
 
-      {/* Metrics Row */}
+      {/* ─── 6 KPI Metrics Summary Cards (Interactive Filters) ─── */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        <div className="p-4 rounded-xl bg-[#18181B] border border-[#27272A] space-y-1">
-          <span className="text-[10px] uppercase font-bold text-[#A1A1AA]">Total RFQs</span>
-          <p className="text-xl font-black text-[#FAFAFA]">{metrics.total}</p>
-        </div>
-        <div className="p-4 rounded-xl bg-[#18181B] border border-[#27272A] space-y-1">
-          <span className="text-[10px] uppercase font-bold text-amber-400">Pending Review</span>
-          <p className="text-xl font-black text-amber-400">{metrics.pending}</p>
-        </div>
-        <div className="p-4 rounded-xl bg-[#18181B] border border-[#27272A] space-y-1">
-          <span className="text-[10px] uppercase font-bold text-blue-400">Under Review</span>
-          <p className="text-xl font-black text-blue-400">{metrics.underReview}</p>
-        </div>
-        <div className="p-4 rounded-xl bg-[#18181B] border border-[#27272A] space-y-1">
-          <span className="text-[10px] uppercase font-bold text-emerald-400">Approved</span>
-          <p className="text-xl font-black text-emerald-400">{metrics.approved}</p>
-        </div>
-        <div className="p-4 rounded-xl bg-[#18181B] border border-[#27272A] space-y-1">
-          <span className="text-[10px] uppercase font-bold text-rose-400">Rejected</span>
-          <p className="text-xl font-black text-rose-400">{metrics.rejected}</p>
-        </div>
-        <div className="p-4 rounded-xl bg-[#18181B] border border-[#27272A] space-y-1">
-          <span className="text-[10px] uppercase font-bold text-[#A855F7]">Digitally Signed</span>
-          <p className="text-xl font-black text-[#A855F7]">{metrics.digitallySigned}</p>
+        <button
+          type="button"
+          onClick={() => setSelectedStatus("ALL")}
+          className={`p-3.5 rounded-tr-xl rounded-bl-xl bg-[#18181B] border transition-all text-left space-y-1 group ${
+            selectedStatus === "ALL"
+              ? "border-[#8B5CF6] shadow-lg shadow-[#8B5CF6]/10 ring-1 ring-[#8B5CF6]"
+              : "border-[#27272A] hover:border-[#3F3F46]"
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] uppercase font-bold text-[#A1A1AA] tracking-wider">Total RFQs</span>
+            <FileText size={14} className="text-[#A1A1AA] group-hover:text-[#FAFAFA]" />
+          </div>
+          <p className="text-xl font-black font-mono text-[#FAFAFA]">{metrics.total}</p>
+          <span className="text-[10px] text-[#71717A] block">All submitted quotes</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setSelectedStatus("PENDING")}
+          className={`p-3.5 rounded-tr-xl rounded-bl-xl bg-[#18181B] border transition-all text-left space-y-1 group ${
+            selectedStatus === "PENDING"
+              ? "border-amber-500 shadow-lg shadow-amber-500/10 ring-1 ring-amber-500"
+              : "border-[#27272A] hover:border-amber-500/40"
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] uppercase font-bold text-amber-400 tracking-wider">Pending</span>
+            <Clock size={14} className="text-amber-400" />
+          </div>
+          <p className="text-xl font-black font-mono text-amber-400">{metrics.pending}</p>
+          <span className="text-[10px] text-[#71717A] block">Awaiting estimator</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setSelectedStatus("UNDER_REVIEW")}
+          className={`p-3.5 rounded-tr-xl rounded-bl-xl bg-[#18181B] border transition-all text-left space-y-1 group ${
+            selectedStatus === "UNDER_REVIEW"
+              ? "border-blue-500 shadow-lg shadow-blue-500/10 ring-1 ring-blue-500"
+              : "border-[#27272A] hover:border-blue-500/40"
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] uppercase font-bold text-blue-400 tracking-wider">Under Review</span>
+            <Eye size={14} className="text-blue-400" />
+          </div>
+          <p className="text-xl font-black font-mono text-blue-400">{metrics.underReview}</p>
+          <span className="text-[10px] text-[#71717A] block">Custom pricing review</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setSelectedStatus("APPROVED")}
+          className={`p-3.5 rounded-tr-xl rounded-bl-xl bg-[#18181B] border transition-all text-left space-y-1 group ${
+            selectedStatus === "APPROVED"
+              ? "border-emerald-500 shadow-lg shadow-emerald-500/10 ring-1 ring-emerald-500"
+              : "border-[#27272A] hover:border-emerald-500/40"
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] uppercase font-bold text-emerald-400 tracking-wider">Approved</span>
+            <CheckCircle2 size={14} className="text-emerald-400" />
+          </div>
+          <p className="text-xl font-black font-mono text-emerald-400">{metrics.approved}</p>
+          <span className="text-[10px] text-[#71717A] block">Approved & sent</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setSelectedStatus("REJECTED")}
+          className={`p-3.5 rounded-tr-xl rounded-bl-xl bg-[#18181B] border transition-all text-left space-y-1 group ${
+            selectedStatus === "REJECTED"
+              ? "border-rose-500 shadow-lg shadow-rose-500/10 ring-1 ring-rose-500"
+              : "border-[#27272A] hover:border-rose-500/40"
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] uppercase font-bold text-rose-400 tracking-wider">Rejected</span>
+            <XCircle size={14} className="text-rose-400" />
+          </div>
+          <p className="text-xl font-black font-mono text-rose-400">{metrics.rejected}</p>
+          <span className="text-[10px] text-[#71717A] block">Declined quotes</span>
+        </button>
+
+        <div className="p-3.5 rounded-tr-xl rounded-bl-xl bg-[#18181B] border border-[#27272A] space-y-1">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] uppercase font-bold text-[#A855F7] tracking-wider">Signed Seals</span>
+            <ShieldCheck size={14} className="text-[#A855F7]" />
+          </div>
+          <p className="text-xl font-black font-mono text-[#A855F7]">{metrics.digitallySigned}</p>
+          <span className="text-[10px] text-[#71717A] block">HMAC-SHA256 locked</span>
         </div>
       </div>
 
@@ -407,26 +644,32 @@ export function QuotesPage() {
         </div>
       )}
 
-      {/* Search & Filter Controls */}
-      <div className="p-4 rounded-2xl bg-[#18181B] border border-[#27272A] space-y-4">
+      {/* ─── Search & Filter Controls ─── */}
+      <div className="p-4 rounded-tr-2xl rounded-bl-2xl bg-[#18181B] border border-[#27272A] space-y-4 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3">
           {/* Status Tabs */}
-          <div className="flex flex-wrap gap-1.5 bg-[#09090B] p-1 rounded-xl border border-[#27272A]">
-            {["ALL", "PENDING", "UNDER_REVIEW", "APPROVED", "REJECTED"].map((status) => (
+          <div className="flex flex-wrap gap-1 bg-[#09090B] p-1 rounded-xl border border-[#27272A]">
+            {[
+              { id: "ALL", label: "All Quotes" },
+              { id: "PENDING", label: "Pending" },
+              { id: "UNDER_REVIEW", label: "Under Review" },
+              { id: "APPROVED", label: "Approved" },
+              { id: "REJECTED", label: "Rejected" },
+            ].map((tab) => (
               <button
-                key={status}
+                key={tab.id}
                 type="button"
                 onClick={() => {
-                  setSelectedStatus(status);
+                  setSelectedStatus(tab.id);
                   setCurrentPage(1);
                 }}
                 className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-all ${
-                  selectedStatus === status
+                  selectedStatus === tab.id
                     ? "bg-[#8B5CF6] text-white shadow"
                     : "text-[#A1A1AA] hover:text-[#FAFAFA]"
                 }`}
               >
-                {status === "ALL" ? "All Statuses" : status.replace("_", " ")}
+                {tab.label}
               </button>
             ))}
           </div>
@@ -440,14 +683,14 @@ export function QuotesPage() {
               type="date"
               value={fromDate}
               onChange={(e) => setFromDate(e.target.value)}
-              className="bg-[#09090B] border border-[#27272A] rounded-lg px-2 py-1 text-xs text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
+              className="bg-[#09090B] border border-[#27272A] rounded-lg px-2.5 py-1 text-xs text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
             />
             <span className="text-[#A1A1AA]">To:</span>
             <input
               type="date"
               value={toDate}
               onChange={(e) => setToDate(e.target.value)}
-              className="bg-[#09090B] border border-[#27272A] rounded-lg px-2 py-1 text-xs text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
+              className="bg-[#09090B] border border-[#27272A] rounded-lg px-2.5 py-1 text-xs text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
             />
             {(fromDate || toDate) && (
               <button
@@ -456,9 +699,9 @@ export function QuotesPage() {
                   setFromDate("");
                   setToDate("");
                 }}
-                className="text-[11px] text-rose-400 hover:text-rose-300 font-bold"
+                className="text-[11px] text-rose-400 hover:text-rose-300 font-bold ml-1"
               >
-                Clear
+                Clear Dates
               </button>
             )}
           </div>
@@ -473,8 +716,17 @@ export function QuotesPage() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search by Quotation Ref No, Company Name, Client Name, Email, GSTIN, or Phone..."
-              className="w-full pl-10 pr-4 py-2.5 bg-[#09090B] border border-[#27272A] rounded-xl text-xs text-[#FAFAFA] placeholder-[#71717A] focus:outline-none focus:border-[#8B5CF6]"
+              className="w-full pl-10 pr-9 py-2.5 bg-[#09090B] border border-[#27272A] rounded-xl text-xs text-[#FAFAFA] placeholder-[#71717A] focus:outline-none focus:border-[#8B5CF6]"
             />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-[#71717A] hover:text-[#FAFAFA]"
+              >
+                <X size={14} />
+              </button>
+            )}
           </div>
           <button
             type="submit"
@@ -502,14 +754,21 @@ export function QuotesPage() {
                 <th className="py-3.5 px-4 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#27272A]">
+            <tbody className={`divide-y divide-[#27272A] ${loading ? "animate-pulse" : ""}`}>
               {loading ? (
-                <tr>
-                  <td colSpan={9} className="py-12 text-center text-xs text-[#71717A]">
-                    <RefreshCw size={20} className="animate-spin text-[#8B5CF6] mx-auto mb-2" />
-                    Loading quotations registry...
-                  </td>
-                </tr>
+                Array.from({ length: 5 }).map((_, i) => (
+                  <tr key={i} className="hover:bg-[#27272A]/40">
+                    <td className="py-3.5 px-4"><div className="h-4 w-28 bg-[#27272A] rounded"></div></td>
+                    <td className="py-3.5 px-4"><div className="h-4 w-36 bg-[#27272A] rounded"></div></td>
+                    <td className="py-3.5 px-4"><div className="h-4 w-28 bg-[#27272A] rounded"></div></td>
+                    <td className="py-3.5 px-3 text-center"><div className="h-5 w-8 bg-[#27272A] rounded mx-auto"></div></td>
+                    <td className="py-3.5 px-4 text-right"><div className="h-4 w-20 bg-[#27272A] rounded ml-auto"></div></td>
+                    <td className="py-3.5 px-3 text-center"><div className="h-5 w-20 bg-[#27272A] rounded-full mx-auto"></div></td>
+                    <td className="py-3.5 px-3 text-center"><div className="h-5 w-16 bg-[#27272A] rounded mx-auto"></div></td>
+                    <td className="py-3.5 px-3 text-center"><div className="h-5 w-16 bg-[#27272A] rounded mx-auto"></div></td>
+                    <td className="py-3.5 px-4 text-right"><div className="h-7 w-20 bg-[#27272A] rounded-lg ml-auto"></div></td>
+                  </tr>
+                ))
               ) : quotes.length === 0 ? (
                 <tr>
                   <td colSpan={9} className="py-12 text-center text-xs text-[#71717A]">
@@ -577,28 +836,26 @@ export function QuotesPage() {
                     </td>
                     <td className="py-3.5 px-4 text-right">
                       <div className="flex items-center justify-end gap-1.5">
-                        <button
-                          type="button"
-                          onClick={(e) => handleDownloadPdf(q, e)}
-                          disabled={downloadingPdfId === q.id}
-                          className="bg-[#27272A] hover:bg-emerald-600 text-[#FAFAFA] hover:text-white font-bold text-xs px-2.5 py-1.5 rounded-lg transition-all flex items-center gap-1 disabled:opacity-50"
+                        <AsyncActionButton
+                          mode="download"
+                          onAction={() => quotesService.downloadQuotePdf(q.id, q.referenceNo || q.quoteNumber)}
+                          idleIcon={<Download size={13} />}
+                          idleLabel={<span className="hidden sm:inline">PDF</span>}
+                          loadingLabel="PDF…"
+                          successLabel="Done!"
+                          className="bg-[#27272A] hover:bg-emerald-600 text-[#FAFAFA] hover:text-white font-bold text-xs px-2.5 py-1.5 rounded-lg transition-all"
                           title="Download Official Quotation PDF"
-                        >
-                          {downloadingPdfId === q.id ? (
-                            <RefreshCw size={13} className="animate-spin text-emerald-400" />
-                          ) : (
-                            <Download size={13} />
-                          )}
-                          <span className="hidden sm:inline">PDF</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleOpenDetail(q.id)}
-                          className="bg-[#27272A] hover:bg-[#8B5CF6] hover:text-white text-[#FAFAFA] font-bold text-xs px-3 py-1.5 rounded-lg transition-all flex items-center gap-1"
-                        >
-                          <Eye size={13} />
-                          <span>Review</span>
-                        </button>
+                          variant="custom"
+                        />
+                        <AsyncActionButton
+                          mode="view"
+                          onAction={() => handleOpenDetail(q.id)}
+                          idleIcon={<Eye size={13} />}
+                          idleLabel="Review"
+                          loadingLabel="Opening…"
+                          className="bg-[#27272A] hover:bg-[#8B5CF6] hover:text-white text-[#FAFAFA] font-bold text-xs px-3 py-1.5 rounded-lg transition-all"
+                          variant="custom"
+                        />
                         <button
                           type="button"
                           onClick={() => setQuoteToDelete(q)}
@@ -657,20 +914,17 @@ export function QuotesPage() {
                 </h3>
               </div>
               <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => handleDownloadPdf(selectedQuote)}
-                  disabled={downloadingPdfId === selectedQuote.id}
-                  className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 shadow disabled:opacity-50"
+                <AsyncActionButton
+                  mode="download"
+                  onAction={() => quotesService.downloadQuotePdf(selectedQuote.id, selectedQuote.referenceNo || selectedQuote.quoteNumber)}
+                  idleIcon={<Download size={13} />}
+                  idleLabel="Download PDF"
+                  loadingLabel="Preparing PDF…"
+                  successLabel="Downloaded!"
+                  variant="emerald"
+                  size="sm"
                   title="Download Official PDF"
-                >
-                  {downloadingPdfId === selectedQuote.id ? (
-                    <RefreshCw size={13} className="animate-spin" />
-                  ) : (
-                    <Download size={13} />
-                  )}
-                  <span>Download PDF</span>
-                </button>
+                />
                 <button
                   type="button"
                   onClick={() => setIsDetailOpen(false)}
@@ -682,10 +936,7 @@ export function QuotesPage() {
             </div>
 
             {detailLoading ? (
-              <div className="py-16 text-center text-xs text-[#A1A1AA]">
-                <RefreshCw size={24} className="animate-spin text-[#8B5CF6] mx-auto mb-2" />
-                Loading detailed quote breakdown...
-              </div>
+              <QuoteDetailSkeleton />
             ) : (
               <div className="space-y-6 text-xs">
                 {/* Client Info Cards */}
@@ -1029,19 +1280,17 @@ export function QuotesPage() {
                           </p>
                         </div>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => handleDownloadPdf(selectedQuote)}
-                        disabled={downloadingPdfId === selectedQuote.id}
-                        className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-3.5 py-2 rounded-xl transition-all shadow flex items-center gap-1.5 ml-auto disabled:opacity-50"
-                      >
-                        {downloadingPdfId === selectedQuote.id ? (
-                          <RefreshCw size={14} className="animate-spin" />
-                        ) : (
-                          <Download size={14} />
-                        )}
-                        <span>Download Official PDF</span>
-                      </button>
+                      <AsyncActionButton
+                        mode="download"
+                        onAction={() => quotesService.downloadQuotePdf(selectedQuote.id, selectedQuote.referenceNo || selectedQuote.quoteNumber)}
+                        idleIcon={<Download size={14} />}
+                        idleLabel="Download Official PDF"
+                        loadingLabel="Generating PDF…"
+                        successLabel="Downloaded!"
+                        variant="emerald"
+                        size="md"
+                        className="ml-auto"
+                      />
                     </div>
                   ) : (
                     <p className="text-xs text-indigo-200">

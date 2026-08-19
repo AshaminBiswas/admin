@@ -431,3 +431,166 @@ export const b2bPricingApi = {
     }),
 };
 
+/* ─── Product Variants API ─────────────────────────────────────────────────── */
+export interface ProductVariantItem {
+  id: string;
+  productId: string;
+  sku: string;
+  name: string | null;
+  price: number;
+  salePrice: number | null;
+  offerPrice: number | null;
+  stock: number;
+  attributes: Record<string, any>;
+  image: string | null;
+  isAvailable: boolean;
+  inStock?: boolean;
+  createdAt: string;
+  updatedAt: string;
+  product?: {
+    id: string;
+    name: string;
+    sku: string;
+    thumbnail?: string | null;
+    category?: {
+      id: string;
+      name: string;
+    };
+  };
+}
+
+export interface ListVariantsParams {
+  page?: number;
+  limit?: number;
+  search?: string;
+  productId?: string;
+  inStock?: string;
+  isAvailable?: string;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
+}
+
+export const variantsApi = {
+  /** GET /variants — list variants catalog-wide or by product */
+  list: (params?: ListVariantsParams) => {
+    const query = new URLSearchParams();
+    if (params?.page) query.append('page', String(params.page));
+    if (params?.limit) query.append('limit', String(params.limit));
+    if (params?.search) query.append('search', params.search);
+    if (params?.productId) query.append('productId', params.productId);
+    if (params?.inStock) query.append('inStock', params.inStock);
+    if (params?.isAvailable) query.append('isAvailable', params.isAvailable);
+    if (params?.sortBy) query.append('sortBy', params.sortBy);
+    if (params?.sortOrder) query.append('sortOrder', params.sortOrder);
+    const qs = query.toString();
+    return fetchAdminApi<any>(`/variants${qs ? `?${qs}` : ''}`);
+  },
+
+  /** GET /variants/:id — get variant detail */
+  getById: (id: string) => fetchAdminApi<any>(`/variants/${id}`),
+
+  /** POST /variants — create new variant */
+  create: (payload: {
+    productId: string;
+    sku: string;
+    name?: string | null;
+    price: number;
+    salePrice?: number | null;
+    offerPrice?: number | null;
+    stock?: number;
+    attributes?: Record<string, any>;
+    image?: string | null;
+    isAvailable?: boolean;
+  }) =>
+    fetchAdminApi<any>('/variants', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  /** PATCH /variants/:id — update variant */
+  update: (
+    id: string,
+    payload: {
+      productId?: string;
+      sku?: string;
+      name?: string | null;
+      price?: number;
+      salePrice?: number | null;
+      offerPrice?: number | null;
+      stock?: number;
+      attributes?: Record<string, any>;
+      image?: string | null;
+      isAvailable?: boolean;
+    }
+  ) =>
+    fetchAdminApi<any>(`/variants/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+
+  /** DELETE /variants/:id — delete variant permanently */
+  delete: (id: string) =>
+    fetchAdminApi<any>(`/variants/${id}`, {
+      method: 'DELETE',
+    }),
+};
+
+/* ─── Notifications API ─────────────────────────────────────────────────────── */
+export interface AdminNotificationItem {
+  id: string;
+  userId?: string;
+  type: string;
+  title: string;
+  message: string;
+  data?: any;
+  isRead: boolean;
+  readAt?: string | null;
+  createdAt: string;
+}
+
+export const notificationsApi = {
+  /** GET /notifications — get paginated notifications for current user */
+  list: (params?: { page?: number; limit?: number; isRead?: boolean }) => {
+    const query = new URLSearchParams();
+    if (params?.page) query.append('page', String(params.page));
+    if (params?.limit) query.append('limit', String(params.limit));
+    if (params?.isRead !== undefined) query.append('isRead', String(params.isRead));
+    const qs = query.toString();
+    return fetchAdminApi<any>(`/notifications${qs ? `?${qs}` : ''}`);
+  },
+
+  /** PATCH /notifications/:id/read — mark single notification as read */
+  markAsRead: (id: string) =>
+    fetchAdminApi<any>(`/notifications/${id}/read`, {
+      method: 'PATCH',
+    }),
+
+  /** PATCH /notifications/read-all — mark all notifications as read */
+  markAllAsRead: () =>
+    fetchAdminApi<any>('/notifications/read-all', {
+      method: 'PATCH',
+    }),
+
+  /** POST /notifications — broadcast or send targeted notification */
+  create: (payload: {
+    userId?: string;
+    broadcast?: boolean;
+    type: string;
+    title: string;
+    message: string;
+    data?: any;
+  }) =>
+    fetchAdminApi<any>('/notifications', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  /** DELETE /notifications/:id — delete notification */
+  delete: (id: string) =>
+    fetchAdminApi<any>(`/notifications/${id}`, {
+      method: 'DELETE',
+    }),
+};
+
+
+

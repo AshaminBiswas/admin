@@ -73,7 +73,7 @@ export function AdminSidebar({
     // Catalog & Stock
     { id: "products", label: "Products Catalog", category: "Catalog & Stock", icon: <Package size={18} />, badge: "5" },
     { id: "categories", label: "Categories", category: "Catalog & Stock", icon: <FolderTree size={18} /> },
-    { id: "varients", label: "Variants & SKUs", category: "Catalog & Stock", icon: <Sliders size={18} /> },
+    { id: "variants", label: "Variants & SKUs", category: "Catalog & Stock", icon: <Sliders size={18} /> },
     { id: "inventory", label: "Inventory Stock", category: "Catalog & Stock", icon: <Boxes size={18} />, badge: "Alert" },
     { id: "allocation", label: "Stock Allocation", category: "Catalog & Stock", icon: <Layers size={18} /> },
     { id: "upload", label: "Media Uploads", category: "Catalog & Stock", icon: <Upload size={18} /> },
@@ -86,7 +86,7 @@ export function AdminSidebar({
     { id: "purchase-orders", label: "Purchase Orders (PO)", category: "Sales & Fulfillment", icon: <FileCheck size={18} />, badge: "PO" },
     { id: "appointments", label: "Appointments", category: "Sales & Fulfillment", icon: <Calendar size={18} /> },
     { id: "enquiries", label: "Enquiries", category: "Sales & Fulfillment", icon: <HelpCircle size={18} /> },
-    { id: "invoice", label: "Invoices & GST", category: "Sales & Fulfillment", icon: <Receipt size={18} /> },
+    { id: "invoice", label: "Invoices & GST", category: "Sales & Fulfillment", icon: <Receipt size={18} />, badge: "GST" },
 
     // Customers & Access
     { id: "admins", label: "Admin Users & Staff", category: "Customers & Access", icon: <KeyRound size={18} />, badge: "Admin" },
@@ -201,7 +201,10 @@ export function AdminSidebar({
                 </p>
               )}
               {itemsInCat.map((item) => {
-                const isActive = currentView === item.id;
+                const isActive =
+                  currentView === item.id ||
+                  (item.id === "variants" && currentView === "varients") ||
+                  (item.id === "varients" && currentView === "variants");
                 return (
                   <button
                     key={item.id}

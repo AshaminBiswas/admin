@@ -35,14 +35,42 @@ const UsersPage = lazy(() => import("../../pages/UsersPage").then((m) => ({ defa
 const ShippingsPage = lazy(() => import("../../pages/ShippingsPage").then((m) => ({ default: m.ShippingsPage })));
 const ModelManagementPage = lazy(() => import("../../pages/ModelManagementPage").then((m) => ({ default: m.ModelManagementPage })));
 const B2BPricingPage = lazy(() => import("../../pages/B2BPricingPage").then((m) => ({ default: m.B2BPricingPage })));
+const VariantsPage = lazy(() => import("../../pages/VariantsPage").then((m) => ({ default: m.VariantsPage })));
+const NotificationsPage = lazy(() => import("../../pages/NotificationsPage").then((m) => ({ default: m.NotificationsPage })));
+const GSTInvoiceHub = lazy(() => import("../../pages/GSTInvoiceHub"));
 
 function ViewLoadingSkeleton() {
   return (
-    <div className="flex flex-col items-center justify-center min-h-[400px] space-y-3">
-      <RefreshCw className="w-8 h-8 text-[#8B5CF6] animate-spin" />
-      <p className="text-xs font-semibold text-slate-500 dark:text-[#71717A]">
-        Loading view modules...
-      </p>
+    <div className="space-y-6 animate-pulse max-w-[1600px] mx-auto">
+      {/* Header bar skeleton */}
+      <div className="flex items-center justify-between pb-4 border-b border-[#27272A]">
+        <div className="space-y-2">
+          <div className="h-6 w-48 bg-[#27272A] rounded" />
+          <div className="h-3 w-72 bg-[#27272A] rounded" />
+        </div>
+        <div className="h-9 w-28 bg-[#27272A] rounded-xl" />
+      </div>
+
+      {/* 4 KPI cards skeleton */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="p-4 rounded-xl bg-[#18181B] border border-[#27272A] space-y-2">
+            <div className="w-7 h-7 rounded-lg bg-[#27272A]" />
+            <div className="h-5 w-14 bg-[#27272A] rounded" />
+            <div className="h-2.5 w-20 bg-[#27272A] rounded" />
+          </div>
+        ))}
+      </div>
+
+      {/* Body panel skeleton */}
+      <div className="p-6 rounded-2xl bg-[#18181B] border border-[#27272A] space-y-4">
+        <div className="h-4 w-36 bg-[#27272A] rounded" />
+        <div className="space-y-3">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="h-12 bg-[#27272A] rounded-xl" />
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
@@ -75,14 +103,8 @@ export function AdminLayout() {
           />
         );
       case "notification":
-        return (
-          <ModelManagementPage
-            modelKey="notification"
-            title="System Notifications & Alerts"
-            subtitle="Alert Center"
-            description="Manage automated SMS, Email, Push notifications, inventory stock alerts, and webhook triggers."
-          />
-        );
+      case "notifications":
+        return <NotificationsPage />;
 
       // 2. Catalog & Stock
       case "products":
@@ -99,15 +121,9 @@ export function AdminLayout() {
         return <EditCategoryPage />;
       case "banner":
         return <BannersPage />;
+      case "variants":
       case "varients":
-        return (
-          <ModelManagementPage
-            modelKey="varients"
-            title="Product Variants & Options"
-            subtitle="SKU Matrix"
-            description="Manage product color variations, material finishes, size configurations, and individual SKU pricing."
-          />
-        );
+        return <VariantsPage />;
       case "inventory":
         return (
           <ModelManagementPage
@@ -157,14 +173,9 @@ export function AdminLayout() {
       case "enquiries":
         return <EnquiriesPage />;
       case "invoice":
-        return (
-          <ModelManagementPage
-            modelKey="invoice"
-            title="Invoices & GST Tax Billing"
-            subtitle="Financial Invoicing"
-            description="Generate B2B GST tax invoices, manage automated billing PDFs, and track payment dues."
-          />
-        );
+      case "invoice-create":
+      case "invoice-detail":
+        return <GSTInvoiceHub />;
 
       // 4. Customers & Access
       case "users":

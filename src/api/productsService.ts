@@ -1,4 +1,5 @@
-import { fetchAdminApi } from "./adminApi";
+import { fetchAdminApi, ProductVariantItem } from "./adminApi";
+export type { ProductVariantItem };
 
 export interface ProductManufacturerInfo {
   "Generic Name"?: string;
@@ -41,18 +42,8 @@ export interface ProductItem {
   seo?: { metaTitle?: string; metaDescription?: string };
   manufacturerInfo?: ProductManufacturerInfo;
   productSpecification?: ProductSpecification;
-}
-
-export interface ProductVariantItem {
-  id: string;
-  productId: string;
-  sku: string;
-  name: string;
-  price: number;
-  salePrice?: number;
-  stock: number;
-  attributes?: Record<string, any>;
-  isAvailable?: boolean;
+  hsn_sac?: string;
+  gst_rate?: number;
 }
 
 export const productsService = {

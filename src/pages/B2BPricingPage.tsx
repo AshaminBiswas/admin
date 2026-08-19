@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import {
   Coins,
   Search,
@@ -10,22 +10,101 @@ import {
   AlertTriangle,
   RotateCcw,
   Sparkles,
-  TrendingDown,
   Layers,
   ArrowRight,
   Plus,
   Trash2,
   CheckCircle2,
+  AlertCircle,
   HelpCircle,
   ExternalLink,
   ChevronDown,
   Filter,
   ChevronLeft,
   ChevronRight,
+  X,
+  Download,
+  Building,
 } from "lucide-react";
 import { b2bPricingApi, usersApi } from "../api/adminApi";
 import type { B2BCustomerPricingItem, B2BCustomerPricingMatrix } from "../types/admin";
 import { useDebounce } from "../hooks/useDebounce";
+
+/* ─── Skeleton Loading Body for B2B Pricing ─────────────────────────────────── */
+
+export function B2BPricingPageSkeleton() {
+  return (
+    <div className="space-y-6 max-w-[1600px] mx-auto animate-pulse">
+      {/* Header Skeleton */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#27272A] pb-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-tr-xl rounded-bl-xl bg-[#27272A]"></div>
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <div className="h-5 w-64 bg-[#27272A] rounded"></div>
+              <div className="h-4 w-28 bg-[#27272A] rounded-full"></div>
+            </div>
+            <div className="h-3 w-80 bg-[#27272A] rounded"></div>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="h-9 w-44 bg-[#27272A] rounded-tr-xl rounded-bl-xl"></div>
+          <div className="h-9 w-9 bg-[#27272A] rounded-tr-lg rounded-bl-lg"></div>
+        </div>
+      </div>
+
+      {/* Customer Picker Skeleton */}
+      <div className="p-4 rounded-tr-2xl rounded-bl-2xl bg-[#18181B] border border-[#27272A] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="space-y-1.5 flex-1 max-w-md">
+          <div className="h-3 w-32 bg-[#27272A] rounded"></div>
+          <div className="h-9 w-full bg-[#27272A] rounded-xl"></div>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="h-9 w-36 bg-[#27272A] rounded-xl"></div>
+          <div className="h-9 w-32 bg-[#27272A] rounded-xl"></div>
+        </div>
+      </div>
+
+      {/* 4 KPI Cards Skeleton */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="p-3.5 rounded-tr-xl rounded-bl-xl bg-[#18181B] border border-[#27272A] space-y-2">
+            <div className="w-7 h-7 rounded-lg bg-[#27272A]"></div>
+            <div className="h-5 w-16 bg-[#27272A] rounded"></div>
+            <div className="h-2.5 w-24 bg-[#27272A] rounded"></div>
+          </div>
+        ))}
+      </div>
+
+      {/* Table Skeleton */}
+      <div className="rounded-tr-2xl rounded-bl-2xl bg-[#18181B] border border-[#27272A] overflow-hidden shadow-lg">
+        <div className="p-3.5 bg-[#09090B] border-b border-[#27272A] flex justify-between">
+          <div className="h-3 w-40 bg-[#27272A] rounded"></div>
+          <div className="h-3 w-20 bg-[#27272A] rounded"></div>
+        </div>
+        <div className="divide-y divide-[#27272A]">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="p-4 flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3 w-56">
+                <div className="w-10 h-10 rounded-lg bg-[#27272A]"></div>
+                <div className="space-y-1.5 flex-1">
+                  <div className="h-4 w-32 bg-[#27272A] rounded"></div>
+                  <div className="h-2.5 w-20 bg-[#27272A] rounded"></div>
+                </div>
+              </div>
+              <div className="h-4 w-20 bg-[#27272A] rounded"></div>
+              <div className="h-7 w-28 bg-[#27272A] rounded-lg"></div>
+              <div className="h-7 w-20 bg-[#27272A] rounded-lg"></div>
+              <div className="h-7 w-20 bg-[#27272A] rounded-lg"></div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Main B2B Pricing Component ─────────────────────────────────────────────── */
 
 interface B2BPricingPageProps {
   initialCustomerId?: string;
@@ -57,43 +136,36 @@ export const B2BPricingPage: React.FC<B2BPricingPageProps> = ({
   initialCustomerId,
   onNavigateUsers,
 }) => {
-  // State
   const [customers, setCustomers] = useState<CustomerOption[]>([]);
   const [loadingCustomers, setLoadingCustomers] = useState(true);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>(initialCustomerId || "");
-  const [customerSearch, setCustomerSearch] = useState("");
 
-  const [pricingData, setPricingData] = useState<B2BCustomerPricingMatrix | null>(null);
+  const [productsList, setProductsList] = useState<B2BCustomerPricingItem[]>([]);
   const [loadingPricing, setLoadingPricing] = useState(false);
   const [savingBulk, setSavingBulk] = useState(false);
 
-  // Local draft changes: Map<productId, { price: number; minQuantity: number; notes: string }>
+  // Local draft edits: Map<productId, { price: number; minQuantity: number; notes: string; dirty: boolean }>
   const [draftChanges, setDraftChanges] = useState<
     Map<string, { price: number; minQuantity: number; notes: string; dirty: boolean }>
   >(new Map());
 
-  // Filtering & Search
+  // Search & Filters
   const [searchQuery, setSearchQuery] = useState("");
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
   const [filterType, setFilterType] = useState<"all" | "custom_only" | "retail_only">("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
 
-  // Table Pagination
+  // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const PAGE_SIZE = 25;
 
-  // Reset page on filter changes
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [debouncedSearchQuery, filterType, categoryFilter, selectedCustomerId]);
-
-  // Bulk Discount Modal
+  // Bulk Category Discount Modal
   const [showDiscountModal, setShowDiscountModal] = useState(false);
   const [discountPercent, setDiscountPercent] = useState<number>(15);
   const [discountCategory, setDiscountCategory] = useState<string>("all");
   const [applyingDiscount, setApplyingDiscount] = useState(false);
 
-  // Notifications / Toast
+  // Feedback notifications
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
 
   const showToast = (msg: string, type: "success" | "error" = "success") => {
@@ -101,17 +173,13 @@ export const B2BPricingPage: React.FC<B2BPricingPageProps> = ({
     setTimeout(() => setToast(null), 3500);
   };
 
-  // Load B2B and all customers
-  useEffect(() => {
-    loadCustomers();
-  }, []);
-
-  const loadCustomers = async () => {
+  // Load Customers
+  const loadCustomers = useCallback(async () => {
     setLoadingCustomers(true);
     try {
       const res = await usersApi.list({ limit: 100 });
-      if (res.success && res.data) {
-        const userList = Array.isArray(res.data) ? res.data : res.data.data || [];
+      if (res && res.success !== false) {
+        const userList = Array.isArray(res.data) ? res.data : res.data?.items || res.data?.users || [];
         const opts: CustomerOption[] = userList.map((u: any) => ({
           id: u.id,
           name: `${u.firstName || ""} ${u.lastName || ""}`.trim() || u.email,
@@ -121,633 +189,617 @@ export const B2BPricingPage: React.FC<B2BPricingPageProps> = ({
           role: u.role,
         }));
         setCustomers(opts);
-
-        // Pre-select first B2B or first customer if not set
-        if (!selectedCustomerId && opts.length > 0) {
-          const firstB2B = opts.find(
-            (c) =>
-              c.role?.slug === "b2b-customer" ||
-              c.role?.slug === "b2b_customer" ||
-              c.companyName ||
-              c.gstin
-          );
-          setSelectedCustomerId(firstB2B ? firstB2B.id : opts[0].id);
+        if (opts.length > 0) {
+          setSelectedCustomerId((prev) => {
+            if (prev) return prev;
+            const firstB2B = opts.find((c) => Boolean(c.companyName || c.gstin)) || opts[0];
+            return firstB2B ? firstB2B.id : "";
+          });
         }
       }
     } catch (err: any) {
-      showToast(err.message || "Failed to load customers", "error");
+      console.error("[B2B Customers Load Error]:", err);
     } finally {
       setLoadingCustomers(false);
     }
-  };
+  }, []);
 
-  // Load pricing matrix when selected customer changes
   useEffect(() => {
-    if (selectedCustomerId) {
-      loadCustomerPricing(selectedCustomerId);
-    }
-  }, [selectedCustomerId]);
+    loadCustomers();
+  }, [loadCustomers]);
 
-  const loadCustomerPricing = async (userId: string) => {
+  // Load Pricing Matrix for Selected Customer
+  const loadPricingMatrix = useCallback(async (customerId: string) => {
+    if (!customerId) return;
     setLoadingPricing(true);
-    setDraftChanges(new Map());
     try {
-      const res = await b2bPricingApi.getCustomerPricing(userId);
-
-      // Normalise response shape — data may live at res.data or at top-level
-      const pricingPayload =
-        res.data && typeof res.data === "object" && "items" in res.data
+      const res = await b2bPricingApi.getCustomerPricing(customerId);
+      if (res && res.success !== false) {
+        const items: B2BCustomerPricingItem[] = Array.isArray(res.data)
           ? res.data
-          : (res as any).items !== undefined
-          ? res
-          : null;
-
-      if (pricingPayload) {
-        setPricingData(pricingPayload);
-      } else if (res.success === false || res.error) {
-        showToast(res.message || "Failed to load customer pricing", "error");
+          : res.data?.items || res.data?.products || [];
+        setProductsList(items);
+        setDraftChanges(new Map());
       } else {
-        // Unknown shape — store whatever came back and let the UI handle it
-        setPricingData(res.data || res);
+        showToast(res.message || "Failed to load pricing matrix for customer", "error");
       }
     } catch (err: any) {
       showToast(err.message || "Failed to load pricing matrix", "error");
     } finally {
       setLoadingPricing(false);
     }
-  };
+  }, []);
 
-  // Get current active price & MOQ for a product (draft takes precedence)
-  const getProductValues = (item: B2BCustomerPricingItem) => {
-    const draft = draftChanges.get(item.productId);
-    if (draft) {
-      const currentPrice = draft.price;
-      const discount =
-        item.standardPrice > 0
-          ? Number((((item.standardPrice - currentPrice) / item.standardPrice) * 100).toFixed(2))
-          : 0;
-      return {
-        price: draft.price,
-        minQuantity: draft.minQuantity,
-        notes: draft.notes,
-        isCustom: true,
-        discountPercent: discount,
-        isDirty: draft.dirty,
-      };
+  useEffect(() => {
+    if (selectedCustomerId) {
+      loadPricingMatrix(selectedCustomerId);
     }
+  }, [selectedCustomerId, loadPricingMatrix]);
+
+  // Filtered categories
+  const categoriesList = useMemo(() => {
+    const set = new Set<string>();
+    productsList.forEach((p) => {
+      if (p.categoryName) set.add(p.categoryName);
+    });
+    return Array.from(set).sort();
+  }, [productsList]);
+
+  // Filtered products
+  const filteredProducts = useMemo(() => {
+    return productsList.filter((item) => {
+      const draft = draftChanges.get(item.productId);
+      const isCustom = draft ? draft.price !== item.standardPrice : item.hasCustomPrice;
+
+      if (filterType === "custom_only" && !isCustom) return false;
+      if (filterType === "retail_only" && isCustom) return false;
+
+      if (categoryFilter !== "all" && item.categoryName !== categoryFilter) return false;
+
+      if (debouncedSearchQuery) {
+        const query = debouncedSearchQuery.toLowerCase();
+        const matchName = item.name?.toLowerCase().includes(query);
+        const matchSku = item.sku?.toLowerCase().includes(query);
+        if (!matchName && !matchSku) return false;
+      }
+
+      return true;
+    });
+  }, [productsList, draftChanges, filterType, categoryFilter, debouncedSearchQuery]);
+
+  // Pagination slice
+  const paginatedProducts = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE;
+    return filteredProducts.slice(start, start + PAGE_SIZE);
+  }, [filteredProducts, currentPage]);
+
+  const totalPages = Math.ceil(filteredProducts.length / PAGE_SIZE) || 1;
+
+  // Stats calculation
+  const stats = useMemo(() => {
+    let customCount = 0;
+    let totalDiscount = 0;
+
+    productsList.forEach((p) => {
+      const draft = draftChanges.get(p.productId);
+      const effectivePrice = draft ? draft.price : (p.customPrice ?? p.standardPrice);
+      const isCustom = draft ? draft.price !== p.standardPrice : p.hasCustomPrice;
+
+      if (isCustom) {
+        customCount++;
+        const disc = Math.max(0, ((p.standardPrice - effectivePrice) / (p.standardPrice || 1)) * 100);
+        totalDiscount += disc;
+      }
+    });
+
+    const unsavedCount = Array.from(draftChanges.values()).filter((d) => d.dirty).length;
+    const avgDiscount = customCount > 0 ? Math.round(totalDiscount / customCount) : 0;
 
     return {
-      price: item.hasCustomPrice ? item.customPrice! : item.standardPrice,
-      minQuantity: item.minQuantity || 1,
-      notes: item.notes || "",
-      isCustom: item.hasCustomPrice,
-      discountPercent: item.discountPercent,
-      isDirty: false,
+      totalProducts: productsList.length,
+      customCount,
+      unsavedCount,
+      avgDiscount,
     };
+  }, [productsList, draftChanges]);
+
+  // Price change handler
+  const handlePriceChange = (productId: string, price: number, defaultMoq: number) => {
+    const existing = draftChanges.get(productId) || {
+      price,
+      minQuantity: defaultMoq || 1,
+      notes: "",
+      dirty: false,
+    };
+    const product = productsList.find((p) => p.productId === productId);
+    const isDirty = product ? price !== (product.customPrice ?? product.standardPrice) : true;
+
+    setDraftChanges(
+      new Map(
+        draftChanges.set(productId, {
+          ...existing,
+          price: Math.max(0, price),
+          dirty: isDirty,
+        })
+      )
+    );
   };
 
-  // Update draft price
-  const handlePriceChange = (item: B2BCustomerPricingItem, newPriceVal: number) => {
-    const safePrice = isNaN(newPriceVal) || newPriceVal < 0 ? 0 : newPriceVal;
-    const current = getProductValues(item);
+  // MOQ change handler
+  const handleMoqChange = (productId: string, minQuantity: number, defaultPrice: number) => {
+    const existing = draftChanges.get(productId) || {
+      price: defaultPrice,
+      minQuantity,
+      notes: "",
+      dirty: false,
+    };
+    const product = productsList.find((p) => p.productId === productId);
+    const isDirty = product ? minQuantity !== (product.minQuantity || 1) : true;
 
-    setDraftChanges((prev) => {
-      const next = new Map(prev);
-      next.set(item.productId, {
-        price: safePrice,
-        minQuantity: current.minQuantity,
-        notes: current.notes,
-        dirty: true,
-      });
-      return next;
-    });
+    setDraftChanges(
+      new Map(
+        draftChanges.set(productId, {
+          ...existing,
+          minQuantity: Math.max(1, minQuantity),
+          dirty: isDirty,
+        })
+      )
+    );
   };
 
-  // Update MOQ
-  const handleMoqChange = (item: B2BCustomerPricingItem, newMoq: number) => {
-    const safeMoq = isNaN(newMoq) || newMoq < 1 ? 1 : Math.floor(newMoq);
-    const current = getProductValues(item);
-
-    setDraftChanges((prev) => {
-      const next = new Map(prev);
-      next.set(item.productId, {
-        price: current.price,
-        minQuantity: safeMoq,
-        notes: current.notes,
-        dirty: true,
-      });
-      return next;
-    });
+  // Reset row to retail
+  const handleResetRow = (productId: string) => {
+    const product = productsList.find((p) => p.productId === productId);
+    if (!product) return;
+    setDraftChanges(
+      new Map(
+        draftChanges.set(productId, {
+          price: product.standardPrice,
+          minQuantity: 1,
+          notes: "",
+          dirty: true,
+        })
+      )
+    );
   };
 
-  // Revert / Delete single custom price
-  const handleRevertToRetail = async (item: B2BCustomerPricingItem) => {
+  // Save single product price
+  const handleSaveSingle = async (productId: string) => {
     if (!selectedCustomerId) return;
+    const draft = draftChanges.get(productId);
+    const product = productsList.find((p) => p.productId === productId);
+    if (!product) return;
 
-    if (item.hasCustomPrice) {
-      try {
-        const res = await b2bPricingApi.deleteProductPrice(selectedCustomerId, item.productId);
-        if (res.success) {
-          showToast(`Reverted "${item.name}" to standard retail price`);
-          setDraftChanges((prev) => {
-            const next = new Map(prev);
-            next.delete(item.productId);
-            return next;
-          });
-          broadcastB2BPriceUpdate(selectedCustomerId);
-          loadCustomerPricing(selectedCustomerId);
-        }
-      } catch (err: any) {
-        showToast(err.message || "Failed to remove custom price", "error");
-      }
-    } else {
-      // Just clear local draft
-      setDraftChanges((prev) => {
-        const next = new Map(prev);
-        next.delete(item.productId);
-        return next;
+    const priceToSet = draft ? draft.price : (product.customPrice ?? product.standardPrice);
+    const moqToSet = draft ? draft.minQuantity : product.minQuantity || 1;
+
+    try {
+      const res = await b2bPricingApi.setProductPrice(selectedCustomerId, {
+        productId,
+        price: priceToSet,
+        minQuantity: moqToSet,
+        notes: draft?.notes || undefined,
       });
+
+      if (res && res.success !== false) {
+        showToast(`Saved rate for "${product.name}"`);
+        broadcastB2BPriceUpdate(selectedCustomerId);
+        await loadPricingMatrix(selectedCustomerId);
+      } else {
+        showToast(res.message || "Failed to save rate", "error");
+      }
+    } catch (err: any) {
+      showToast(err.message || "Save error", "error");
     }
   };
 
-  // Save all modified draft changes
-  const handleSaveAll = async () => {
-    if (!selectedCustomerId || draftChanges.size === 0) return;
-
+  // Save all bulk changes
+  const handleSaveBulk = async () => {
+    if (!selectedCustomerId || stats.unsavedCount === 0) return;
     setSavingBulk(true);
+
+    const itemsToSave: { productId: string; price: number; minQuantity?: number; notes?: string }[] = [];
+    draftChanges.forEach((val, key) => {
+      if (val.dirty) {
+        itemsToSave.push({
+          productId: key,
+          price: val.price,
+          minQuantity: val.minQuantity,
+          notes: val.notes || undefined,
+        });
+      }
+    });
+
     try {
-      const payload = Array.from(draftChanges.entries()).map(([productId, val]) => ({
-        productId,
-        price: val.price,
-        minQuantity: val.minQuantity,
-        notes: val.notes || undefined,
-      }));
-
-      const res = await b2bPricingApi.bulkSetPrices(selectedCustomerId, payload);
-
-      // Treat any non-error response as success (backend may omit `success` field)
-      const isSuccess =
-        res.success === true ||
-        res.success === undefined ||
-        res.status === "success" ||
-        res.message?.toLowerCase().includes("success");
-
-      if (isSuccess && !res.error) {
-        showToast(`Successfully saved ${payload.length} custom product prices!`);
-        setDraftChanges(new Map());
+      const res = await b2bPricingApi.bulkSetPrices(selectedCustomerId, itemsToSave);
+      if (res && res.success !== false) {
+        showToast(`Successfully updated ${itemsToSave.length} B2B custom rates!`);
         broadcastB2BPriceUpdate(selectedCustomerId);
-        await loadCustomerPricing(selectedCustomerId);
+        await loadPricingMatrix(selectedCustomerId);
       } else {
-        showToast(res.message || "Failed to save prices", "error");
-        // Still reload to show current server state
-        broadcastB2BPriceUpdate(selectedCustomerId);
-        await loadCustomerPricing(selectedCustomerId);
+        showToast(res.message || "Bulk save failed", "error");
       }
     } catch (err: any) {
-      showToast(err.message || "Failed to save custom prices", "error");
+      showToast(err.message || "Bulk save error", "error");
     } finally {
       setSavingBulk(false);
     }
   };
 
-  // Apply flat discount tool
-  const handleApplyDiscount = async () => {
-    if (!selectedCustomerId) return;
+  // Apply Category Discount
+  const handleApplyCategoryDiscount = () => {
     setApplyingDiscount(true);
-    try {
-      const res = await b2bPricingApi.applyFlatDiscount(selectedCustomerId, {
-        discountPercent,
-        categoryId: discountCategory === "all" ? undefined : discountCategory,
-      });
+    const factor = (100 - discountPercent) / 100;
+    const newDrafts = new Map(draftChanges);
 
-      // Treat any non-error response as success (backend may omit `success` field)
-      const isSuccess =
-        res.success === true ||
-        res.success === undefined ||
-        res.status === "success" ||
-        res.message?.toLowerCase().includes("success");
-
-      if (isSuccess && !res.error) {
-        const appliedCount = res.data?.appliedCount ?? res.appliedCount ?? "all";
-        showToast(
-          `Applied flat ${discountPercent}% discount to ${appliedCount} products!`
-        );
-        setShowDiscountModal(false);
-        setDraftChanges(new Map());
-        broadcastB2BPriceUpdate(selectedCustomerId);
-        await loadCustomerPricing(selectedCustomerId);
-      } else {
-        showToast(res.message || "Failed to apply discount", "error");
-        // Still reload to reflect any partial server changes
-        broadcastB2BPriceUpdate(selectedCustomerId);
-        await loadCustomerPricing(selectedCustomerId);
+    productsList.forEach((p) => {
+      if (discountCategory === "all" || p.categoryName === discountCategory) {
+        const discountedPrice = Math.round(p.standardPrice * factor * 100) / 100;
+        newDrafts.set(p.productId, {
+          price: discountedPrice,
+          minQuantity: p.minQuantity || 1,
+          notes: `${discountPercent}% wholesale discount applied`,
+          dirty: true,
+        });
       }
-    } catch (err: any) {
-      showToast(err.message || "Failed to apply discount", "error");
-    } finally {
-      setApplyingDiscount(false);
-    }
+    });
+
+    setDraftChanges(newDrafts);
+    setApplyingDiscount(false);
+    setShowDiscountModal(false);
+    showToast(`Calculated ${discountPercent}% discount across catalog. Review and click "Save Matrix".`);
   };
 
-  // Extract unique categories for filter
-  const categories = useMemo(() => {
-    if (!pricingData?.items) return [];
-    const catMap = new Map<string, string>();
-    pricingData.items.forEach((it) => {
-      if (it.categoryId && it.categoryName) {
-        catMap.set(it.categoryId, it.categoryName);
-      }
-    });
-    return Array.from(catMap.entries()).map(([id, name]) => ({ id, name }));
-  }, [pricingData]);
-
-  // Filtered items
-  const filteredItems = useMemo(() => {
-    if (!pricingData?.items) return [];
-    return pricingData.items.filter((item) => {
-      const vals = getProductValues(item);
-
-      // Search match
-      const q = debouncedSearchQuery.toLowerCase().trim();
-      const matchesSearch =
-        !q ||
-        item.name.toLowerCase().includes(q) ||
-        item.sku.toLowerCase().includes(q) ||
-        item.categoryName.toLowerCase().includes(q);
-
-      // Category match
-      const matchesCategory =
-        categoryFilter === "all" || item.categoryId === categoryFilter;
-
-      // Type match
-      let matchesType = true;
-      if (filterType === "custom_only") {
-        matchesType = vals.isCustom || vals.isDirty;
-      } else if (filterType === "retail_only") {
-        matchesType = !vals.isCustom && !vals.isDirty;
-      }
-
-      return matchesSearch && matchesCategory && matchesType;
-    });
-  }, [pricingData, debouncedSearchQuery, categoryFilter, filterType, draftChanges]);
-
-  // Paginated Items
-  const totalPages = Math.max(1, Math.ceil(filteredItems.length / PAGE_SIZE));
-  const paginatedItems = useMemo(() => {
-    return filteredItems.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
-  }, [filteredItems, currentPage]);
-
-  // Dirty count
-  const dirtyCount = Array.from(draftChanges.values()).filter((v) => v.dirty).length;
-
-  const currentCustomer = customers.find((c) => c.id === selectedCustomerId);
+  if (loadingCustomers && customers.length === 0) {
+    return <B2BPricingPageSkeleton />;
+  }
 
   return (
-    <div className="space-y-5 pb-12">
-      {/* Toast */}
-      {toast && (
-        <div className="fixed top-4 right-4 z-[100] flex items-center gap-2 px-4 py-3 rounded-xl shadow-xl text-sm font-semibold border bg-white dark:bg-[#18181B] text-slate-800 dark:text-[#FAFAFA] border-slate-200 dark:border-[#27272A] animate-in fade-in slide-in-from-top-2">
-          {toast.type === "success" ? (
-            <CheckCircle2 size={16} className="text-emerald-500 flex-shrink-0" />
-          ) : (
-            <AlertTriangle size={16} className="text-rose-500 flex-shrink-0" />
-          )}
-          <span>{toast.msg}</span>
-        </div>
-      )}
+    <div className="space-y-6 text-[#FAFAFA] max-w-[1600px] mx-auto" style={{ fontFamily: "Inter, sans-serif" }}>
 
-      {/* Page Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      {/* ─── Top Header ─── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#27272A] pb-4">
         <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-tr-2xl rounded-bl-2xl bg-[#8B5CF6]/10 flex items-center justify-center text-[#8B5CF6] flex-shrink-0">
-            <Coins size={22} />
+          <div className="w-10 h-10 rounded-tr-xl rounded-bl-xl bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-[#A855F7]">
+            <Coins size={20} />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-xl font-extrabold text-slate-900 dark:text-[#FAFAFA] tracking-tight">
-                B2B Custom Pricing Matrix
+              <h1 className="text-xl font-bold text-[#FAFAFA]">
+                B2B Custom Pricing & Wholesale Matrix
               </h1>
-              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-[#8B5CF6]/15 text-[#8B5CF6] uppercase tracking-wider">
-                Per-Client Rates
+              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-purple-500/20 text-[#A855F7] border border-purple-500/30">
+                PRICE GOVERNANCE
               </span>
             </div>
-            <p className="text-xs text-slate-500 dark:text-[#71717A] mt-0.5">
-              Set and manage customer-specific contract prices, minimum order quantities (MOQ), and volume discounts
+            <p className="text-xs text-[#A1A1AA]">
+              Override retail list prices, configure client tier discounts, set Minimum Order Quantities (MOQ), and synchronize live buyer catalogs.
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5 flex-wrap">
-          <button
-            onClick={() => selectedCustomerId && loadCustomerPricing(selectedCustomerId)}
-            disabled={loadingPricing || !selectedCustomerId}
-            title="Refresh pricing"
-            className="p-2.5 rounded-xl border border-slate-200 dark:border-[#27272A] bg-white dark:bg-[#18181B] text-slate-600 dark:text-[#A1A1AA] hover:text-slate-900 dark:hover:text-white transition-colors"
-          >
-            <RefreshCw size={15} className={loadingPricing ? "animate-spin" : ""} />
-          </button>
+        <div className="flex items-center gap-2">
+          {onNavigateUsers && (
+            <button
+              type="button"
+              onClick={onNavigateUsers}
+              className="bg-[#27272A] hover:bg-[#3F3F46] text-[#FAFAFA] font-bold text-xs px-3.5 py-2 rounded-tr-xl rounded-bl-xl transition-all border border-[#3F3F46] flex items-center gap-1.5 shadow-sm"
+            >
+              <Building2 size={14} />
+              <span>Back to Directory</span>
+            </button>
+          )}
 
           <button
-            onClick={() => setShowDiscountModal(true)}
-            disabled={!selectedCustomerId || loadingPricing}
-            className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-tr-xl rounded-bl-xl bg-slate-100 dark:bg-[#27272A] hover:bg-slate-200 dark:hover:bg-[#3F3F46] text-xs font-bold text-slate-800 dark:text-[#FAFAFA] transition-colors"
+            type="button"
+            onClick={() => loadPricingMatrix(selectedCustomerId)}
+            className="p-2 bg-[#27272A] hover:bg-[#3F3F46] rounded-tr-lg rounded-bl-lg text-[#A1A1AA] hover:text-[#FAFAFA] border border-[#3F3F46] transition-colors"
+            title="Refresh Matrix"
           >
-            <Percent size={14} className="text-[#8B5CF6]" />
-            Bulk Discount Tool
-          </button>
-
-          <button
-            onClick={handleSaveAll}
-            disabled={dirtyCount === 0 || savingBulk}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-tr-xl rounded-bl-xl bg-[#8B5CF6] hover:bg-[#7C3AED] disabled:opacity-50 text-white text-xs font-extrabold shadow-md shadow-[#8B5CF6]/25 transition-all"
-          >
-            {savingBulk ? (
-              <RefreshCw size={14} className="animate-spin" />
-            ) : (
-              <Save size={14} />
-            )}
-            Save Changes {dirtyCount > 0 && `(${dirtyCount})`}
+            <RefreshCw size={16} className={loadingPricing ? "animate-spin text-[#A855F7]" : ""} />
           </button>
         </div>
       </div>
 
-      {/* Customer Selection Banner */}
-      <div className="bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] rounded-tr-2xl rounded-bl-2xl p-4 sm:p-5 shadow-sm">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          {/* Customer Dropdown / Selector */}
-          <div className="flex-1 min-w-[280px]">
-            <label className="block text-[11px] font-bold text-slate-500 dark:text-[#71717A] uppercase tracking-wider mb-1.5">
-              Select B2B / Business Customer
-            </label>
-            <div className="relative">
-              <select
-                value={selectedCustomerId}
-                onChange={(e) => setSelectedCustomerId(e.target.value)}
-                disabled={loadingCustomers}
-                className="w-full appearance-none bg-slate-50 dark:bg-[#27272A] border border-slate-200 dark:border-[#3F3F46] rounded-xl px-4 py-2.5 pr-10 text-sm font-semibold text-slate-900 dark:text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6] transition-colors"
+      {/* ─── Customer Selection Bar ─── */}
+      <div className="p-4 rounded-tr-2xl rounded-bl-2xl bg-[#18181B] border border-[#27272A] flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
+        <div className="space-y-1 flex-1 max-w-lg">
+          <label className="text-[11px] uppercase font-bold text-[#A855F7] tracking-wider flex items-center gap-1.5">
+            <Building2 size={13} />
+            <span>Select Target B2B Enterprise / Buyer</span>
+          </label>
+          <select
+            value={selectedCustomerId}
+            onChange={(e) => setSelectedCustomerId(e.target.value)}
+            className="w-full bg-[#09090B] border border-[#27272A] rounded-xl px-3.5 py-2.5 text-xs text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6] font-semibold"
+          >
+            {customers.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.companyName ? `${c.companyName} — ${c.name}` : `${c.name} (${c.email})`}
+                {c.gstin ? ` [GST: ${c.gstin}]` : ""}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowDiscountModal(true)}
+            className="bg-[#27272A] hover:bg-[#3F3F46] text-[#FAFAFA] font-bold text-xs px-4 py-2.5 rounded-tr-xl rounded-bl-xl transition-all border border-[#3F3F46] flex items-center gap-1.5 shadow-sm"
+          >
+            <Percent size={14} className="text-[#A855F7]" />
+            <span>Batch Category Discount</span>
+          </button>
+
+          <button
+            type="button"
+            disabled={stats.unsavedCount === 0 || savingBulk}
+            onClick={handleSaveBulk}
+            className="bg-[#8B5CF6] hover:bg-[#7C3AED] disabled:opacity-50 text-white font-bold text-xs px-4 py-2.5 rounded-tr-xl rounded-bl-xl transition-all shadow-sm flex items-center gap-1.5"
+          >
+            <Save size={14} />
+            <span>{savingBulk ? "Saving Matrix…" : `Save Matrix (${stats.unsavedCount} Edits)`}</span>
+          </button>
+        </div>
+      </div>
+
+      {/* ─── 4 Interactive KPI Cards ─── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="p-3.5 rounded-tr-xl rounded-bl-xl bg-[#18181B] border border-[#27272A] space-y-1">
+          <span className="text-[10px] uppercase font-bold text-[#A1A1AA] tracking-wider">Catalog Products</span>
+          <p className="text-xl font-black font-mono text-[#FAFAFA]">{stats.totalProducts}</p>
+          <span className="text-[10px] text-[#71717A] block">Available for customization</span>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setFilterType(filterType === "custom_only" ? "all" : "custom_only")}
+          className={`p-3.5 rounded-tr-xl rounded-bl-xl bg-[#18181B] border transition-all text-left space-y-1 group ${
+            filterType === "custom_only"
+              ? "border-[#8B5CF6] shadow-lg shadow-[#8B5CF6]/10 ring-1 ring-[#8B5CF6]"
+              : "border-[#27272A] hover:border-[#3F3F46]"
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] uppercase font-bold text-[#A855F7] tracking-wider">Custom Rates</span>
+            <Coins size={14} className="text-[#A855F7]" />
+          </div>
+          <p className="text-xl font-black font-mono text-[#A855F7]">{stats.customCount}</p>
+          <span className="text-[10px] text-[#71717A] block">Active client overrides</span>
+        </button>
+
+        <div className="p-3.5 rounded-tr-xl rounded-bl-xl bg-[#18181B] border border-[#27272A] space-y-1">
+          <span className="text-[10px] uppercase font-bold text-emerald-400 tracking-wider">Avg Discount</span>
+          <p className="text-xl font-black font-mono text-emerald-400">{stats.avgDiscount}%</p>
+          <span className="text-[10px] text-[#71717A] block">Across custom priced items</span>
+        </div>
+
+        <div className="p-3.5 rounded-tr-xl rounded-bl-xl bg-[#18181B] border border-[#27272A] space-y-1">
+          <span className="text-[10px] uppercase font-bold text-amber-400 tracking-wider">Pending Saves</span>
+          <p className="text-xl font-black font-mono text-amber-400">{stats.unsavedCount}</p>
+          <span className="text-[10px] text-[#71717A] block">Unsaved local modifications</span>
+        </div>
+      </div>
+
+      {/* Notifications */}
+      {toast && (
+        <div
+          className={`p-4 rounded-xl text-xs flex items-center gap-2 border ${
+            toast.type === "success"
+              ? "bg-emerald-950/80 border-emerald-500/40 text-emerald-300"
+              : "bg-rose-950/80 border-rose-500/40 text-rose-300"
+          }`}
+        >
+          {toast.type === "success" ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
+          <span>{toast.msg}</span>
+        </div>
+      )}
+
+      {/* ─── Search & Filter Toolbar ─── */}
+      <div className="p-4 rounded-tr-2xl rounded-bl-2xl bg-[#18181B] border border-[#27272A] space-y-3 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap gap-1 bg-[#09090B] p-1 rounded-xl border border-[#27272A]">
+            {[
+              { id: "all", label: "All Items" },
+              { id: "custom_only", label: "Custom Overrides Only" },
+              { id: "retail_only", label: "Standard Retail Only" },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => { setFilterType(tab.id as any); setCurrentPage(1); }}
+                className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-all ${
+                  filterType === tab.id
+                    ? "bg-[#8B5CF6] text-white shadow"
+                    : "text-[#A1A1AA] hover:text-[#FAFAFA]"
+                }`}
               >
-                {customers.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.companyName ? `🏢 ${c.companyName} — ` : ""}
-                    {c.name} ({c.email})
-                  </option>
-                ))}
-              </select>
-              <ChevronDown
-                size={16}
-                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
-              />
-            </div>
+                {tab.label}
+              </button>
+            ))}
           </div>
 
-          {/* Active Customer Profile Badge */}
-          {pricingData?.customer && (
-            <div className="flex flex-wrap items-center gap-4 bg-slate-50 dark:bg-[#27272A]/50 border border-slate-100 dark:border-[#27272A] rounded-xl p-3 px-4">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-lg bg-[#8B5CF6]/15 text-[#8B5CF6] flex items-center justify-center font-bold text-sm">
-                  <Building2 size={18} />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-extrabold text-slate-900 dark:text-[#FAFAFA]">
-                      {pricingData.customer.companyName || pricingData.customer.name}
-                    </span>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300">
-                      {pricingData.customer.role}
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-slate-500 dark:text-[#71717A]">
-                    {pricingData.customer.email} {pricingData.customer.phone ? `· ${pricingData.customer.phone}` : ""}
-                  </p>
-                </div>
-              </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-[#A1A1AA]">Category:</span>
+            <select
+              value={categoryFilter}
+              onChange={(e) => { setCategoryFilter(e.target.value); setCurrentPage(1); }}
+              className="bg-[#09090B] border border-[#27272A] rounded-lg px-2.5 py-1.5 text-xs text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
+            >
+              <option value="all">All Categories</option>
+              {categoriesList.map((cat) => (
+                <option key={cat} value={cat}>
+                  {cat}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
 
-              {pricingData.customer.gstin && (
-                <div className="border-l border-slate-200 dark:border-[#3F3F46] pl-4">
-                  <span className="text-[9px] uppercase font-bold text-slate-400 dark:text-[#71717A] block">
-                    GSTIN
-                  </span>
-                  <span className="text-xs font-mono font-bold text-slate-800 dark:text-[#E4E4E7]">
-                    {pricingData.customer.gstin}
-                  </span>
-                </div>
-              )}
-
-              <div className="border-l border-slate-200 dark:border-[#3F3F46] pl-4">
-                <span className="text-[9px] uppercase font-bold text-slate-400 dark:text-[#71717A] block">
-                  Custom Prices
-                </span>
-                <span className="text-xs font-extrabold text-[#8B5CF6]">
-                  {pricingData.customPricesCount} / {pricingData.totalProducts} products
-                </span>
-              </div>
-            </div>
+        {/* Search Input */}
+        <div className="relative">
+          <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#71717A]" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search products by Name or SKU..."
+            className="w-full pl-10 pr-9 py-2.5 bg-[#09090B] border border-[#27272A] rounded-xl text-xs text-[#FAFAFA] placeholder-[#71717A] focus:outline-none focus:border-[#8B5CF6]"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-[#71717A] hover:text-[#FAFAFA]"
+            >
+              <X size={14} />
+            </button>
           )}
         </div>
       </div>
 
-      {/* Pricing Matrix Table Container */}
-      <div className="bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] rounded-tr-2xl rounded-bl-2xl shadow-sm overflow-hidden flex flex-col">
-        {/* Table Filters Header */}
-        <div className="p-4 border-b border-slate-100 dark:border-[#27272A] flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-50/50 dark:bg-[#18181B]">
-          {/* Search Box */}
-          <div className="relative w-full sm:w-72">
-            <Search
-              size={15}
-              className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
-            />
-            <input
-              type="text"
-              placeholder="Search product, SKU..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-white dark:bg-[#27272A] border border-slate-200 dark:border-[#3F3F46] rounded-xl pl-9 pr-3 py-2 text-xs text-slate-900 dark:text-[#FAFAFA] placeholder-slate-400 focus:outline-none focus:border-[#8B5CF6] transition-colors"
-            />
-          </div>
-
-          {/* Filter Buttons & Category Dropdown */}
-          <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap justify-end">
-            <div className="flex items-center bg-slate-200/70 dark:bg-[#27272A] p-0.5 rounded-xl text-xs font-bold">
-              <button
-                onClick={() => setFilterType("all")}
-                className={`px-3 py-1.5 rounded-lg transition-colors ${
-                  filterType === "all"
-                    ? "bg-white dark:bg-[#18181B] text-slate-900 dark:text-white shadow-xs"
-                    : "text-slate-600 dark:text-[#A1A1AA] hover:text-slate-900"
-                }`}
-              >
-                All ({pricingData?.totalProducts || 0})
-              </button>
-              <button
-                onClick={() => setFilterType("custom_only")}
-                className={`px-3 py-1.5 rounded-lg transition-colors ${
-                  filterType === "custom_only"
-                    ? "bg-white dark:bg-[#18181B] text-[#8B5CF6] shadow-xs"
-                    : "text-slate-600 dark:text-[#A1A1AA] hover:text-[#8B5CF6]"
-                }`}
-              >
-                Custom Priced ({pricingData?.customPricesCount || 0})
-              </button>
-            </div>
-
-            {categories.length > 0 && (
-              <select
-                value={categoryFilter}
-                onChange={(e) => setCategoryFilter(e.target.value)}
-                className="bg-white dark:bg-[#27272A] border border-slate-200 dark:border-[#3F3F46] rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 dark:text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
-              >
-                <option value="all">All Categories</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            )}
-          </div>
-        </div>
-
-        {/* Matrix Table */}
+      {/* ─── Pricing Matrix Table ─── */}
+      <div className="rounded-2xl bg-[#18181B] border border-[#27272A] shadow-lg overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
-            <thead className="bg-slate-50 dark:bg-[#27272A]/50 border-b border-slate-100 dark:border-[#27272A] text-[10px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-[#71717A]">
+            <thead className="bg-[#09090B] text-[#A1A1AA] border-b border-[#27272A] font-bold uppercase tracking-wider text-[10px]">
               <tr>
-                <th className="py-3 px-4">Product</th>
-                <th className="py-3 px-4">Category</th>
-                <th className="py-3 px-4 text-right">Retail Price</th>
-                <th className="py-3 px-4 text-center">B2B Contract Price (₹)</th>
-                <th className="py-3 px-4 text-center">Discount</th>
-                <th className="py-3 px-4 text-center">MOQ</th>
-                <th className="py-3 px-4 text-right">Actions</th>
+                <th className="py-3.5 px-4">Hardware Item & SKU</th>
+                <th className="py-3.5 px-4">Standard Retail</th>
+                <th className="py-3.5 px-4">B2B Custom Rate (₹)</th>
+                <th className="py-3.5 px-4 text-center">Min Order Qty (MOQ)</th>
+                <th className="py-3.5 px-4 text-center">Discount / Margin</th>
+                <th className="py-3.5 px-4 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-[#27272A]/60">
-              {loadingPricing ? (
+            <tbody className="divide-y divide-[#27272A]">
+              {paginatedProducts.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-16 text-center text-slate-400 dark:text-[#71717A]">
-                    <RefreshCw size={24} className="animate-spin mx-auto mb-2 text-[#8B5CF6]" />
-                    <p className="text-xs font-semibold">Loading product catalog & custom rates...</p>
-                  </td>
-                </tr>
-              ) : filteredItems.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="py-16 text-center text-slate-400 dark:text-[#52525B]">
-                    <Coins size={32} strokeWidth={1.5} className="mx-auto mb-2 opacity-50" />
-                    <p className="text-sm font-semibold">No products match your filter</p>
-                    <p className="text-xs mt-1 text-slate-400">Try changing search keywords or category</p>
+                  <td colSpan={6} className="py-12 text-center text-xs text-[#71717A]">
+                    <Coins size={32} className="mx-auto mb-2 text-[#3F3F46]" />
+                    No products matching search criteria.
                   </td>
                 </tr>
               ) : (
-                paginatedItems.map((item) => {
-                  const values = getProductValues(item);
-                  const isDiscounted = values.discountPercent > 0;
+                paginatedProducts.map((prod) => {
+                  const draft = draftChanges.get(prod.productId);
+                  const effectivePrice = draft ? draft.price : (prod.customPrice ?? prod.standardPrice);
+                  const effectiveMoq = draft ? draft.minQuantity : prod.minQuantity || 1;
+                  const isDirty = draft?.dirty;
+                  const isCustom = draft ? draft.price !== prod.standardPrice : prod.hasCustomPrice;
+
+                  const discountPct =
+                    prod.standardPrice > 0
+                      ? Math.round(((prod.standardPrice - effectivePrice) / prod.standardPrice) * 100)
+                      : 0;
 
                   return (
                     <tr
-                      key={item.productId}
-                      className={`hover:bg-slate-50/80 dark:hover:bg-[#27272A]/30 transition-colors ${
-                        values.isDirty ? "bg-[#8B5CF6]/5" : ""
+                      key={prod.productId}
+                      className={`hover:bg-[#27272A]/40 transition-colors ${
+                        isDirty ? "bg-amber-950/20" : ""
                       }`}
                     >
-                      {/* Product Name & Thumbnail */}
                       <td className="py-3.5 px-4">
                         <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-lg bg-slate-100 dark:bg-[#27272A] border border-slate-200 dark:border-[#3F3F46] flex items-center justify-center overflow-hidden flex-shrink-0">
-                            {item.thumbnail ? (
-                              <img
-                                src={item.thumbnail}
-                                alt={item.name}
-                                className="w-full h-full object-cover"
-                              />
-                            ) : (
-                              <Coins size={16} className="text-slate-400" />
-                            )}
-                          </div>
-                          <div className="min-w-0 max-w-xs">
-                            <p className="font-bold text-slate-900 dark:text-[#FAFAFA] truncate">
-                              {item.name}
-                            </p>
-                            <span className="font-mono text-[10px] text-slate-400 dark:text-[#71717A]">
-                              SKU: {item.sku}
-                            </span>
+                          {prod.thumbnail ? (
+                            <img
+                              src={prod.thumbnail}
+                              alt={prod.name}
+                              className="w-10 h-10 object-cover rounded-lg border border-[#27272A] bg-[#09090B]"
+                            />
+                          ) : (
+                            <div className="w-10 h-10 rounded-lg bg-[#27272A] flex items-center justify-center text-[#71717A]">
+                              <Layers size={16} />
+                            </div>
+                          )}
+                          <div>
+                            <p className="font-bold text-[#FAFAFA]">{prod.name}</p>
+                            <span className="text-[11px] font-mono text-[#A1A1AA]">{prod.sku}</span>
                           </div>
                         </div>
                       </td>
 
-                      {/* Category */}
-                      <td className="py-3.5 px-4 text-slate-600 dark:text-[#A1A1AA] whitespace-nowrap">
-                        {item.categoryName}
+                      <td className="py-3.5 px-4">
+                        <span className="font-mono text-[#A1A1AA] line-through font-semibold">
+                          ₹{prod.standardPrice.toLocaleString("en-IN")}
+                        </span>
                       </td>
 
-                      {/* Standard Retail Price */}
-                      <td className="py-3.5 px-4 text-right font-mono font-semibold text-slate-500 dark:text-[#71717A] whitespace-nowrap">
-                        ₹{item.standardPrice.toLocaleString("en-IN")}
-                      </td>
-
-                      {/* B2B Custom Price Input */}
-                      <td className="py-3.5 px-4 text-center">
-                        <div className="inline-flex items-center relative max-w-[140px]">
-                          <span className="absolute left-3 text-xs font-bold text-slate-400 pointer-events-none">
+                      <td className="py-3.5 px-4">
+                        <div className="relative max-w-[130px]">
+                          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-mono text-[#71717A]">
                             ₹
                           </span>
                           <input
                             type="number"
-                            min="1"
-                            step="1"
-                            value={values.price}
+                            min="0"
+                            step="0.01"
+                            value={effectivePrice}
                             onChange={(e) =>
-                              handlePriceChange(item, parseFloat(e.target.value))
+                              handlePriceChange(
+                                prod.productId,
+                                parseFloat(e.target.value) || 0,
+                                prod.minQuantity || 1
+                              )
                             }
-                            className={`w-full bg-slate-50 dark:bg-[#27272A] border rounded-lg pl-7 pr-2.5 py-1.5 text-xs font-mono font-bold text-slate-900 dark:text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6] transition-colors ${
-                              values.isCustom || values.isDirty
-                                ? "border-[#8B5CF6] bg-[#8B5CF6]/5"
-                                : "border-slate-200 dark:border-[#3F3F46]"
+                            className={`w-full pl-6 pr-2 py-1.5 bg-[#09090B] border rounded-lg text-xs font-mono font-bold focus:outline-none ${
+                              isCustom
+                                ? "border-purple-500/60 text-purple-300 ring-1 ring-purple-500/30"
+                                : "border-[#27272A] text-[#FAFAFA]"
                             }`}
                           />
                         </div>
                       </td>
 
-                      {/* Discount % Badge */}
-                      <td className="py-3.5 px-4 text-center whitespace-nowrap">
-                        {isDiscounted ? (
-                          <span className="inline-flex items-center gap-1 font-bold text-[11px] px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300">
-                            <TrendingDown size={11} />
-                            -{values.discountPercent}%
-                          </span>
-                        ) : values.price > item.standardPrice ? (
-                          <span className="inline-flex items-center gap-1 font-bold text-[10px] px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300">
-                            +{Math.abs(values.discountPercent)}%
-                          </span>
-                        ) : (
-                          <span className="text-[11px] text-slate-400 font-mono">Retail</span>
-                        )}
-                      </td>
-
-                      {/* MOQ (Min Quantity) */}
                       <td className="py-3.5 px-4 text-center">
                         <input
                           type="number"
                           min="1"
-                          value={values.minQuantity}
+                          value={effectiveMoq}
                           onChange={(e) =>
-                            handleMoqChange(item, parseInt(e.target.value, 10))
+                            handleMoqChange(
+                              prod.productId,
+                              parseInt(e.target.value, 10) || 1,
+                              effectivePrice
+                            )
                           }
-                          className="w-16 text-center bg-slate-50 dark:bg-[#27272A] border border-slate-200 dark:border-[#3F3F46] rounded-lg py-1.5 text-xs font-mono font-semibold text-slate-800 dark:text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
+                          className="w-16 px-2 py-1.5 bg-[#09090B] border border-[#27272A] rounded-lg text-xs font-mono font-bold text-center text-[#FAFAFA] focus:outline-none"
                         />
                       </td>
 
-                      {/* Actions */}
-                      <td className="py-3.5 px-4 text-right whitespace-nowrap">
-                        {(values.isCustom || values.isDirty) && (
+                      <td className="py-3.5 px-4 text-center">
+                        {discountPct > 0 ? (
+                          <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-500/30 font-mono">
+                            -{discountPct}%
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-[#71717A]">Standard</span>
+                        )}
+                      </td>
+
+                      <td className="py-3.5 px-4 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          {isCustom && (
+                            <button
+                              type="button"
+                              onClick={() => handleResetRow(prod.productId)}
+                              className="p-1.5 bg-[#27272A] hover:bg-[#3F3F46] text-[#A1A1AA] hover:text-[#FAFAFA] rounded-lg transition-colors"
+                              title="Reset to Standard Retail"
+                            >
+                              <RotateCcw size={13} />
+                            </button>
+                          )}
                           <button
                             type="button"
-                            onClick={() => handleRevertToRetail(item)}
-                            title="Revert to standard retail price"
-                            className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 px-2.5 py-1.5 rounded-lg transition-colors"
+                            onClick={() => handleSaveSingle(prod.productId)}
+                            className="px-2.5 py-1.5 bg-[#8B5CF6] hover:bg-[#7C3AED] text-white rounded-lg font-bold text-xs transition-all shadow"
+                            title="Save Row"
                           >
-                            <RotateCcw size={12} /> Revert
+                            Save
                           </button>
-                        )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -757,181 +809,110 @@ export const B2BPricingPage: React.FC<B2BPricingPageProps> = ({
           </table>
         </div>
 
-        {/* Matrix Footer with Pagination */}
-        <div className="p-4 border-t border-slate-100 dark:border-[#27272A] flex flex-col sm:flex-row items-center justify-between gap-4 bg-slate-50/50 dark:bg-[#18181B] text-xs text-slate-500 dark:text-[#71717A]">
-          <div className="flex items-center gap-2">
-            <span>
-              Showing{" "}
-              <b>
-                {filteredItems.length === 0
-                  ? 0
-                  : `${(currentPage - 1) * PAGE_SIZE + 1}-${Math.min(
-                      currentPage * PAGE_SIZE,
-                      filteredItems.length
-                    )}`}
-              </b>{" "}
-              of <b>{filteredItems.length}</b> products
-            </span>
-            <span>·</span>
-            <span className="text-[#8B5CF6] font-bold">
-              {pricingData?.customPricesCount || 0} customized
-            </span>
-          </div>
-
-          {/* Pagination Controls */}
-          {totalPages > 1 && (
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                disabled={currentPage <= 1}
-                className="p-1.5 rounded-lg border border-slate-200 dark:border-[#3F3F46] disabled:opacity-40 hover:bg-slate-100 dark:hover:bg-[#27272A] transition-colors"
-              >
-                <ChevronLeft size={14} />
-              </button>
-              <span className="px-2 text-xs font-semibold">
-                Page {currentPage} of {totalPages}
-              </span>
-              <button
-                type="button"
-                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                disabled={currentPage >= totalPages}
-                className="p-1.5 rounded-lg border border-slate-200 dark:border-[#3F3F46] disabled:opacity-40 hover:bg-slate-100 dark:hover:bg-[#27272A] transition-colors"
-              >
-                <ChevronRight size={14} />
-              </button>
-            </div>
-          )}
-
-          <div className="flex items-center gap-3">
-            {dirtyCount > 0 && (
-              <span className="text-amber-600 dark:text-amber-400 font-bold flex items-center gap-1">
-                <AlertTriangle size={13} /> {dirtyCount} unsaved changes
-              </span>
-            )}
+        {/* Pagination Footer */}
+        <div className="p-4 bg-[#09090B] border-t border-[#27272A] flex flex-wrap items-center justify-between gap-3 text-xs">
+          <span className="text-[#A1A1AA]">
+            Showing page <strong className="text-[#FAFAFA]">{currentPage}</strong> of <strong className="text-[#FAFAFA]">{totalPages}</strong> ({filteredProducts.length} filtered items)
+          </span>
+          <div className="flex items-center gap-1.5">
             <button
-              onClick={handleSaveAll}
-              disabled={dirtyCount === 0 || savingBulk}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-tr-xl rounded-bl-xl bg-[#8B5CF6] hover:bg-[#7C3AED] disabled:opacity-50 text-white font-bold transition-all shadow-sm"
+              type="button"
+              disabled={currentPage <= 1}
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              className="px-3 py-1.5 bg-[#18181B] hover:bg-[#27272A] disabled:opacity-40 disabled:cursor-not-allowed border border-[#27272A] rounded-lg text-[#FAFAFA] font-bold"
             >
-              <Save size={13} /> Save All
+              Previous
+            </button>
+            <button
+              type="button"
+              disabled={currentPage >= totalPages}
+              onClick={() => setCurrentPage((p) => p + 1)}
+              className="px-3 py-1.5 bg-[#18181B] hover:bg-[#27272A] disabled:opacity-40 disabled:cursor-not-allowed border border-[#27272A] rounded-lg text-[#FAFAFA] font-bold"
+            >
+              Next
             </button>
           </div>
         </div>
       </div>
 
-      {/* ══ BULK DISCOUNT MODAL ═══════════════════════════════════════════════ */}
+      {/* ─── MODAL: BATCH CATEGORY DISCOUNT ─── */}
       {showDiscountModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white dark:bg-[#18181B] w-full max-w-md rounded-tr-2xl rounded-bl-2xl shadow-2xl border border-slate-200 dark:border-[#27272A] overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-[#27272A]">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-[#8B5CF6]/10 flex items-center justify-center text-[#8B5CF6]">
-                  <Percent size={16} />
-                </div>
-                <div>
-                  <h3 className="text-sm font-extrabold text-slate-900 dark:text-[#FAFAFA]">
-                    Apply Bulk Flat Discount
-                  </h3>
-                  <p className="text-[10px] text-slate-500 dark:text-[#71717A]">
-                    Instantly set percentage off catalog retail for this customer
-                  </p>
-                </div>
-              </div>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="bg-[#18181B] border border-[#27272A] rounded-2xl w-full max-w-md shadow-2xl p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-[#27272A] pb-3">
+              <h3 className="font-bold text-sm text-[#FAFAFA] flex items-center gap-2">
+                <Percent size={16} className="text-[#8B5CF6]" />
+                <span>Batch Category Discount Rule</span>
+              </h3>
               <button
+                type="button"
                 onClick={() => setShowDiscountModal(false)}
-                className="text-slate-400 hover:text-slate-700 dark:hover:text-white"
+                className="text-[#71717A] hover:text-[#FAFAFA]"
               >
-                ✕
+                <X size={16} />
               </button>
             </div>
 
-            <div className="p-5 space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-[#A1A1AA] mb-1.5">
-                  Discount Percentage (% off retail)
-                </label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    min="1"
-                    max="99"
-                    step="0.5"
-                    value={discountPercent}
-                    onChange={(e) => setDiscountPercent(parseFloat(e.target.value) || 0)}
-                    className="w-full bg-slate-50 dark:bg-[#27272A] border border-slate-200 dark:border-[#3F3F46] rounded-xl px-3.5 py-2.5 text-sm font-bold text-slate-900 dark:text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
-                  />
-                  <span className="absolute right-3.5 top-1/2 -translate-y-1/2 font-bold text-slate-400">
-                    %
-                  </span>
-                </div>
-                <div className="flex gap-2 mt-2">
-                  {[5, 10, 15, 20, 25, 30].map((pct) => (
-                    <button
-                      key={pct}
-                      type="button"
-                      onClick={() => setDiscountPercent(pct)}
-                      className={`text-[10px] font-bold px-2 py-1 rounded-md border transition-colors ${
-                        discountPercent === pct
-                          ? "bg-[#8B5CF6] border-[#8B5CF6] text-white"
-                          : "border-slate-200 dark:border-[#3F3F46] text-slate-600 dark:text-[#A1A1AA]"
-                      }`}
-                    >
-                      {pct}%
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-[#A1A1AA] mb-1.5">
-                  Apply To
-                </label>
+            <div className="space-y-3.5 text-xs">
+              <div className="space-y-1">
+                <label className="text-[11px] text-[#A1A1AA] font-semibold">Select Target Category</label>
                 <select
                   value={discountCategory}
                   onChange={(e) => setDiscountCategory(e.target.value)}
-                  className="w-full bg-slate-50 dark:bg-[#27272A] border border-slate-200 dark:border-[#3F3F46] rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 dark:text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
+                  className="w-full bg-[#09090B] border border-[#27272A] rounded-xl px-3 py-2 text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
                 >
-                  <option value="all">All Catalog Products</option>
-                  {categories.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      Category: {c.name}
+                  <option value="all">Entire Product Catalog (All Categories)</option>
+                  {categoriesList.map((cat) => (
+                    <option key={cat} value={cat}>
+                      {cat}
                     </option>
                   ))}
                 </select>
               </div>
 
-              <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 rounded-xl p-3 text-[11px] text-amber-800 dark:text-amber-200">
-                ⚠️ This will calculate and overwrite custom prices for this customer at{" "}
-                <b>{discountPercent}% off</b> retail catalog price.
+              <div className="space-y-1">
+                <label className="text-[11px] text-[#A1A1AA] font-semibold">Wholesale Discount Percentage (%)</label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    min="1"
+                    max="90"
+                    value={discountPercent}
+                    onChange={(e) => setDiscountPercent(Math.min(90, Math.max(1, parseInt(e.target.value) || 0)))}
+                    className="w-full bg-[#09090B] border border-[#27272A] rounded-xl px-3 py-2 text-[#FAFAFA] font-mono focus:outline-none focus:border-[#8B5CF6]"
+                  />
+                  <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs text-[#71717A] font-bold">
+                    %
+                  </span>
+                </div>
               </div>
 
-              <div className="flex items-center gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={handleApplyDiscount}
-                  disabled={applyingDiscount || discountPercent <= 0}
-                  className="flex-1 flex items-center justify-center gap-1.5 bg-[#8B5CF6] hover:bg-[#7C3AED] disabled:opacity-60 text-white text-xs font-bold py-2.5 rounded-tr-xl rounded-bl-xl shadow-md shadow-[#8B5CF6]/25 transition-colors"
-                >
-                  {applyingDiscount ? (
-                    <RefreshCw size={14} className="animate-spin" />
-                  ) : (
-                    <Sparkles size={14} />
-                  )}
-                  Apply {discountPercent}% Discount
-                </button>
+              <p className="text-[11px] text-[#71717A] leading-relaxed">
+                This rule will automatically recalculate custom B2B rates for all products in the selected category by deducting <strong>{discountPercent}%</strong> from each product's base retail price.
+              </p>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-[#27272A]">
                 <button
                   type="button"
                   onClick={() => setShowDiscountModal(false)}
-                  className="px-4 py-2.5 text-xs font-semibold text-slate-600 dark:text-[#A1A1AA] hover:bg-slate-100 dark:hover:bg-[#27272A] rounded-xl transition-colors"
+                  className="px-4 py-2 bg-[#27272A] hover:bg-[#3F3F46] rounded-xl text-[#FAFAFA] font-bold"
                 >
                   Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleApplyCategoryDiscount}
+                  disabled={applyingDiscount}
+                  className="px-5 py-2 bg-[#8B5CF6] hover:bg-[#7C3AED] disabled:opacity-50 text-white rounded-xl font-bold shadow"
+                >
+                  Apply Discount
                 </button>
               </div>
             </div>
           </div>
         </div>
       )}
+
     </div>
   );
 };

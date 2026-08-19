@@ -239,6 +239,7 @@ export type AdminView =
   | 'invoice'
   | 'logistics'
   | 'notification'
+  | 'notifications'
   | 'orders'
   | 'payment'
   | 'products'
@@ -254,12 +255,15 @@ export type AdminView =
   | 'shippings'
   | 'upload'
   | 'users'
+  | 'variants'
   | 'varients'
   | 'wishlist'
   | 'analytics'
   | 'audit'
   | 'admins'
-  | 'b2b-pricing';
+  | 'b2b-pricing'
+  | 'invoice-create'
+  | 'invoice-detail';
 
 /* ─── B2B Customer Custom Pricing ─────────────────────────────────────────── */
 
@@ -295,3 +299,227 @@ export interface B2BCustomerPricingMatrix {
   customPricesCount: number;
   items: B2BCustomerPricingItem[];
 }
+
+/* ─── GST Tax Invoice & E-Invoice / IRN ─────────────────────────────────── */
+
+export type GSTInvoiceStatus =
+  | 'DRAFT'
+  | 'VALIDATED'
+  | 'IRN_PENDING'
+  | 'IRN_GENERATED'
+  | 'ISSUED'
+  | 'CANCELLED';
+
+export type GSTTransactionType = 'INTRASTATE' | 'INTERSTATE';
+export type GSTSupplyType = 'B2B' | 'B2C';
+
+export interface GSTAddress {
+  addr1: string;
+  addr2?: string;
+  city: string;
+  state: string;
+  state_code: string;
+  pincode: string;
+}
+
+export interface CompanySettings {
+  id: number;
+  legal_name: string;
+  trade_name?: string;
+  gstin: string;
+  pan: string;
+  address: string;
+  city: string;
+  state: string;
+  state_code: string;
+  pincode: string;
+  phone?: string;
+  email?: string;
+  logo_url?: string;
+  irn_cancellation_window_hours: number;
+  irp_configured: boolean;
+  updated_at: string;
+}
+
+export interface GSTCustomer {
+  id: string;
+  legal_name: string;
+  trade_name?: string;
+  gstin?: string;
+  pan?: string;
+  email?: string;
+  phone?: string;
+  billing_address: GSTAddress;
+  shipping_address?: GSTAddress;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GSTInvoiceItem {
+  id?: string;
+  sl_no: number;
+  product_id?: string;
+  description: string;
+  hsn_sac: string;
+  is_service: boolean;
+  quantity: number;
+  unit: string;
+  unit_price: number;
+  total_amount: number;
+  discount: number;
+  taxable_value: number;
+  gst_rate: number;
+  cgst_amount: number;
+  sgst_amount: number;
+  igst_amount: number;
+  cess_rate: number;
+  cess_amount: number;
+  total_item_value: number;
+}
+
+export interface EInvoiceRecord {
+  id: string;
+  invoice_id: string;
+  irn?: string;
+  ack_number?: string;
+  ack_date?: string;
+  signed_invoice?: string;
+  signed_qr_code?: string;
+  irp_status?: string;
+  generated_at?: string;
+  cancelled_at?: string;
+  cancellation_reason?: string;
+  cancellation_reason_code?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GSTInvoice {
+  id: string;
+  invoice_number: string;
+  invoice_date: string;
+  financial_year: string;
+  sequence_no: number;
+  customer_id: string;
+  customer_legal_name: string;
+  customer_gstin?: string;
+  customer_pan?: string;
+  billing_address: GSTAddress;
+  shipping_address?: GSTAddress;
+  place_of_supply: string;
+  place_of_supply_state_code: string;
+  supply_type: GSTSupplyType;
+  transaction_type: GSTTransactionType;
+  taxable_amount: number;
+  cgst_amount: number;
+  sgst_amount: number;
+  igst_amount: number;
+  cess_amount: number;
+  discount_amount: number;
+  round_off: number;
+  grand_total: number;
+  status: GSTInvoiceStatus;
+  notes?: string;
+  created_by?: string;
+  created_at: string;
+  updated_at: string;
+  items?: GSTInvoiceItem[];
+  einvoice?: EInvoiceRecord;
+}
+
+export interface GSTValidationResult {
+  field: string;
+  label: string;
+  passed: boolean;
+  message?: string;
+}
+
+export interface GSTReportFilter {
+  date_from?: string;
+  date_to?: string;
+  customer_id?: string;
+  status?: string;
+  gstin?: string;
+  page?: number;
+  limit?: number;
+}
+
+export interface GSTAuditLog {
+  id: string;
+  user_id?: string;
+  user_email?: string;
+  action: string;
+  entity_type: string;
+  entity_id?: string;
+  old_data?: Record<string, any>;
+  new_data?: Record<string, any>;
+  ip_address?: string;
+  error_detail?: string;
+  created_at: string;
+}
+
+export interface GSTDashboardStats {
+  total_invoices: number;
+  this_month_invoices: number;
+  irn_generated: number;
+  irn_pending: number;
+  irn_cancelled: number;
+  total_taxable_sales: number;
+  total_gst_collected: number;
+}
+
+export const INDIA_STATE_CODES: { code: string; name: string }[] = [
+  { code: '01', name: 'Jammu & Kashmir' },
+  { code: '02', name: 'Himachal Pradesh' },
+  { code: '03', name: 'Punjab' },
+  { code: '04', name: 'Chandigarh' },
+  { code: '05', name: 'Uttarakhand' },
+  { code: '06', name: 'Haryana' },
+  { code: '07', name: 'Delhi' },
+  { code: '08', name: 'Rajasthan' },
+  { code: '09', name: 'Uttar Pradesh' },
+  { code: '10', name: 'Bihar' },
+  { code: '11', name: 'Sikkim' },
+  { code: '12', name: 'Arunachal Pradesh' },
+  { code: '13', name: 'Nagaland' },
+  { code: '14', name: 'Manipur' },
+  { code: '15', name: 'Mizoram' },
+  { code: '16', name: 'Tripura' },
+  { code: '17', name: 'Meghalaya' },
+  { code: '18', name: 'Assam' },
+  { code: '19', name: 'West Bengal' },
+  { code: '20', name: 'Jharkhand' },
+  { code: '21', name: 'Odisha' },
+  { code: '22', name: 'Chhattisgarh' },
+  { code: '23', name: 'Madhya Pradesh' },
+  { code: '24', name: 'Gujarat' },
+  { code: '26', name: 'Dadra & Nagar Haveli and Daman & Diu' },
+  { code: '27', name: 'Maharashtra' },
+  { code: '29', name: 'Karnataka' },
+  { code: '30', name: 'Goa' },
+  { code: '31', name: 'Lakshadweep' },
+  { code: '32', name: 'Kerala' },
+  { code: '33', name: 'Tamil Nadu' },
+  { code: '34', name: 'Puducherry' },
+  { code: '35', name: 'Andaman & Nicobar Islands' },
+  { code: '36', name: 'Telangana' },
+  { code: '37', name: 'Andhra Pradesh' },
+  { code: '38', name: 'Ladakh' },
+  { code: '97', name: 'Other Territory' },
+];
+
+export const GST_RATES = [0, 0.1, 0.25, 1, 1.5, 3, 5, 6, 7.5, 12, 18, 28];
+
+export const UNIT_OPTIONS = [
+  'NOS', 'BOX', 'KGS', 'MTR', 'LTR', 'SQF', 'SQM', 'CMS',
+  'SET', 'PCS', 'PAC', 'BAG', 'BTL', 'CAN', 'CTN', 'DOZ',
+  'GMS', 'GRS', 'MLT', 'OTH',
+];
+
+export const CANCEL_REASON_CODES: { code: string; label: string }[] = [
+  { code: '1', label: 'Duplicate' },
+  { code: '2', label: 'Data Entry Mistake' },
+  { code: '3', label: 'Order Cancelled' },
+  { code: '4', label: 'Others' },
+];

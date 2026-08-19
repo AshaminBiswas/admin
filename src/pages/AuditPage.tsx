@@ -23,6 +23,7 @@ import {
   X,
   Plus,
 } from "lucide-react";
+import { AsyncActionButton } from "../components/common/AsyncActionButton";
 import { useAdminAuth } from "../context/AdminAuthContext";
 import { AuditLogItem } from "../types/admin";
 import { getAuditLogs, logAdminActivity, clearAuditLogs } from "../api/auditService";
@@ -219,14 +220,16 @@ export function AuditPage() {
             <span>Simulate Log Event</span>
           </button>
 
-          <button
-            type="button"
-            onClick={handleExportJSON}
-            className="px-3 py-2 rounded-xl bg-slate-100 dark:bg-[#09090B] text-slate-700 dark:text-[#FAFAFA] border border-slate-200 dark:border-[#27272A] hover:border-[#8B5CF6] text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm active:scale-95"
-          >
-            <Download size={14} />
-            <span>Export JSON</span>
-          </button>
+          <AsyncActionButton
+            mode="download"
+            onAction={handleExportJSON}
+            idleIcon={<Download size={14} />}
+            idleLabel="Export JSON"
+            loadingLabel="Exporting…"
+            successLabel="Exported!"
+            className="px-3 py-2 rounded-xl bg-slate-100 dark:bg-[#09090B] text-slate-700 dark:text-[#FAFAFA] border border-slate-200 dark:border-[#27272A] hover:border-[#8B5CF6] text-xs font-bold transition-all shadow-sm"
+            variant="custom"
+          />
         </div>
       </div>
 
@@ -452,14 +455,16 @@ export function AuditPage() {
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] font-bold text-[#8B5CF6] uppercase tracking-wider">Cryptographic Event Payload</span>
-                  <button
-                    type="button"
-                    onClick={() => handleCopyPayload(selectedLog.payload || {})}
-                    className="text-[11px] text-[#8B5CF6] hover:underline flex items-center gap-1 font-bold"
-                  >
-                    {copiedPayload ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} />}
-                    <span>{copiedPayload ? "Copied JSON!" : "Copy Payload"}</span>
-                  </button>
+                  <AsyncActionButton
+                    mode="copy"
+                    onAction={() => navigator.clipboard.writeText(JSON.stringify(selectedLog.payload || {}, null, 2))}
+                    idleIcon={<Copy size={13} />}
+                    idleLabel="Copy Payload"
+                    loadingLabel="Copying…"
+                    successLabel="Copied JSON!"
+                    className="text-[11px] text-[#8B5CF6] hover:underline font-bold"
+                    variant="custom"
+                  />
                 </div>
 
                 <pre className="p-4 bg-[#09090B] text-emerald-400 font-mono text-[11px] rounded-xl border border-[#27272A] overflow-x-auto max-h-48 leading-relaxed">
