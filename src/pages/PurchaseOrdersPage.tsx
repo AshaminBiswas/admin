@@ -58,6 +58,7 @@ import {
   Send,
 } from 'lucide-react';
 import { AsyncActionButton } from '../components/common/AsyncActionButton';
+import { useDebounce } from '../hooks/useDebounce';
 
 /* ─── Skeleton Loading Body for Detail View ────────────────────────────────── */
 
@@ -210,12 +211,14 @@ export function PurchaseOrdersPage() {
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [settingsSaving, setSettingsSaving] = useState(false);
 
+  const debouncedSearch = useDebounce(search, 300);
+
   const loadPos = useCallback(async () => {
     setLoading(true);
     try {
       const res = await getAdminPurchaseOrders({
         status: statusFilter,
-        search: search.trim() || undefined,
+        search: debouncedSearch.trim() || undefined,
         page,
         limit: 15,
       });
@@ -227,7 +230,7 @@ export function PurchaseOrdersPage() {
     } finally {
       setLoading(false);
     }
-  }, [statusFilter, search, page]);
+  }, [statusFilter, debouncedSearch, page]);
 
   useEffect(() => {
     loadPos();
@@ -649,13 +652,28 @@ export function PurchaseOrdersPage() {
       if (po.status !== statusFilter) return false;
     }
 
-    if (search.trim()) {
-      const q = search.toLowerCase().trim();
-      const matchPo = po.poNumber?.toLowerCase().includes(q);
-      const matchQuote = po.quotationNumber?.toLowerCase().includes(q);
-      const matchCust = (po.billingAddress?.attentionTo || po.customer?.email || '').toLowerCase().includes(q);
-      const matchCompany = (po.billingAddress?.companyName || '').toLowerCase().includes(q);
+    if (debouncedSearch.trim()) {
+      const q = debouncedSearch.toLowerCase().trim();
+      const matchPo = (po.poNumber || '').toLowerCase().includes(q);
+      const matchQuote = (po.quotationNumber || '').toLowerCase().includes(q);
       const matchRef = (po.customerPoReferenceNumber || '').toLowerCase().includes(q);
+      const matchCompany = (
+        (po.billingAddress?.companyName || '') + ' ' +
+        (po.deliveryAddress?.companyName || '') + ' ' +
+        (po.customer?.companyName || '')
+      ).toLowerCase().includes(q);
+      const matchCust = (
+        (po.billingAddress?.attentionTo || '') + ' ' +
+        (po.deliveryAddress?.attentionTo || '') + ' ' +
+        (po.customer?.firstName || '') + ' ' +
+        (po.customer?.lastName || '') + ' ' +
+        (po.customer?.email || '') + ' ' +
+        (po.customer?.phone || '') + ' ' +
+        (po.billingAddress?.email || '') + ' ' +
+        (po.billingAddress?.phone || '') + ' ' +
+        (po.deliveryAddress?.phone || '')
+      ).toLowerCase().includes(q);
+
       if (!matchPo && !matchQuote && !matchCust && !matchCompany && !matchRef) {
         return false;
       }
@@ -784,18 +802,30 @@ export function PurchaseOrdersPage() {
           </div>
 
           {/* Search Box */}
-          <div className="relative min-w-[240px] flex-1 sm:flex-initial">
+          <div className="relative min-w-[280px] sm:min-w-[340px] flex-1 sm:flex-initial">
             <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[#71717A]" />
             <input
               type="text"
-              placeholder="Search PO #, Client, Quotation..."
+              placeholder="Search Quotation #, PO #, Phone, Email, Client..."
               value={search}
               onChange={(e) => {
                 setSearch(e.target.value);
                 setPage(1);
               }}
-              className="w-full pl-8 pr-4 py-1.5 bg-[#09090B] border border-[#27272A] rounded-tr-lg rounded-bl-lg text-xs text-[#FAFAFA] placeholder-[#71717A] focus:border-amber-400 outline-none transition-colors"
+              className="w-full pl-8 pr-8 py-1.5 bg-[#09090B] border border-[#27272A] rounded-tr-lg rounded-bl-lg text-xs text-[#FAFAFA] placeholder-[#71717A] focus:border-amber-400 outline-none transition-colors"
             />
+            {search && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearch('');
+                  setPage(1);
+                }}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#71717A] hover:text-[#FAFAFA] cursor-pointer"
+              >
+                <X size={13} />
+              </button>
+            )}
           </div>
         </div>
 

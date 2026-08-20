@@ -261,6 +261,10 @@ export function QuotesPage() {
   };
 
   useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearch, selectedStatus, fromDate, toDate]);
+
+  useEffect(() => {
     fetchQuotes();
   }, [selectedStatus, currentPage, fromDate, toDate, debouncedSearch]);
 
