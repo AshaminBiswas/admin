@@ -90,7 +90,11 @@ export interface AdminPurchaseOrder {
     | 'PAYMENT_ACKNOWLEDGED'
     | 'PAYMENT_VERIFIED'
     | 'PACKING_LIST_GENERATED'
+    | 'PI_GENERATED'
+    | 'TAX_INVOICE_GENERATED'
+    | 'EWAY_BILL_GENERATED'
     | 'DISPATCHED'
+    | 'ISSUE_LIST_GENERATED'
     | 'INVOICE_GENERATION_FAILED'
     | 'INVOICED'
     | 'REJECTED'
@@ -120,6 +124,41 @@ export interface AdminPurchaseOrder {
     generatedAt: string;
     totalPackages: number;
     totalQuantity: number;
+  } | null;
+  proformaInvoice?: {
+    id: string;
+    piNumber: string;
+    pdfStorageKeyOrUrl: string;
+    grandTotal: number;
+    advanceAmountRequired: number;
+    balanceDue: number;
+    generatedAt: string;
+  } | null;
+  ewayBill?: {
+    id: string;
+    ewayBillNumber: string;
+    ewayBillDate: string;
+    validFrom: string;
+    validUntil?: string | null;
+    vehicleNumber?: string | null;
+    transporterName?: string | null;
+    transporterDocNo?: string | null;
+    approxDistanceKm?: number | null;
+    pdfStorageKeyOrUrl?: string | null;
+    status: string;
+  } | null;
+  issueList?: {
+    id: string;
+    issueNumber: string;
+    issuedAt: string;
+    issuedByName?: string | null;
+    receivedByName?: string | null;
+    carrierName?: string | null;
+    vehicleNumber?: string | null;
+    totalQuantity: number;
+    totalValue: number;
+    pdfStorageKeyOrUrl: string;
+    notes?: string | null;
   } | null;
   dispatch?: {
     id: string;
@@ -498,5 +537,164 @@ export async function getAdminInvoices(params?: {
       totalPages: (res as any).pagination?.totalPages || 1,
     },
   };
+}
+
+// ─── Proforma Invoice (PI) API Functions ───
+
+export async function adminGenerateProformaInvoice(poId: string): Promise<any> {
+  const res = await fetchAdminApi(`/admin/purchase-orders/${poId}/generate-pi`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  });
+  if (!res.success) {
+    throw new Error(res.error?.message || 'Failed to generate Proforma Invoice');
+  }
+  return res.data;
+}
+
+export async function downloadAdminProformaInvoicePdf(poId: string, piNumber: string): Promise<void> {
+  const token = getAdminToken();
+  const response = await fetch(`${API_BASE_URL}/admin/purchase-orders/${poId}/proforma-invoice/download`, {
+    method: 'GET',
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+
+  if (!response.ok) {
+    const json = await response.json().catch(() => ({}));
+    throw new Error(json.error?.message || 'Proforma Invoice PDF not available for download');
+  }
+
+  const blob = await response.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `ProformaInvoice_${piNumber.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  window.URL.revokeObjectURL(url);
+  document.body.removeChild(a);
+}
+
+// ─── IRIS GST Tax Invoice API Functions ───
+
+export async function adminGenerateTaxInvoiceIris(poId: string): Promise<any> {
+  const res = await fetchAdminApi(`/admin/purchase-orders/${poId}/generate-tax-invoice-iris`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  });
+  if (!res.success) {
+    throw new Error(res.error?.message || 'Failed to generate GST Tax Invoice via IRIS API');
+  }
+  return res.data;
+}
+
+// ─── IRIS E-Way Bill API Functions ───
+
+export async function adminGenerateEwayBillIris(
+  poId: string,
+  data?: {
+    carrierName?: string;
+    vehicleNumber?: string;
+    transporterDocNo?: string;
+    approxDistanceKm?: number;
+  }
+): Promise<any> {
+  const res = await fetchAdminApi(`/admin/purchase-orders/${poId}/generate-eway-bill-iris`, {
+    method: 'POST',
+    body: JSON.stringify(data || {}),
+  });
+  if (!res.success) {
+    throw new Error(res.error?.message || 'Failed to generate E-Way Bill via IRIS API');
+  }
+  return res.data;
+}
+
+export async function downloadAdminEwayBillPdf(poId: string, ewbNumber: string): Promise<void> {
+  const token = getAdminToken();
+  const response = await fetch(`${API_BASE_URL}/admin/purchase-orders/${poId}/eway-bill/download`, {
+    method: 'GET',
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+
+  if (!response.ok) {
+    const json = await response.json().catch(() => ({}));
+    throw new Error(json.error?.message || 'E-Way Bill PDF not available for download');
+  }
+
+  const blob = await response.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `EWayBill_${ewbNumber.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  window.URL.revokeObjectURL(url);
+  document.body.removeChild(a);
+}
+
+// ─── Product Issue List / Delivery Challan API Functions ───
+
+export async function adminGenerateProductIssueList(
+  poId: string,
+  data?: {
+    carrierName?: string;
+    vehicleNumber?: string;
+    receivedByName?: string;
+    notes?: string;
+  }
+): Promise<any> {
+  const res = await fetchAdminApi(`/admin/purchase-orders/${poId}/generate-issue-list`, {
+    method: 'POST',
+    body: JSON.stringify(data || {}),
+  });
+  if (!res.success) {
+    throw new Error(res.error?.message || 'Failed to generate Product Issue List');
+  }
+  return res.data;
+}
+
+export async function downloadAdminProductIssueListPdf(poId: string, issueNumber: string): Promise<void> {
+  const token = getAdminToken();
+  const response = await fetch(`${API_BASE_URL}/admin/purchase-orders/${poId}/issue-list/download`, {
+    method: 'GET',
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+
+  if (!response.ok) {
+    const json = await response.json().catch(() => ({}));
+    throw new Error(json.error?.message || 'Product Issue List PDF not available for download');
+  }
+
+  const blob = await response.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `ProductIssueSlip_${issueNumber.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  window.URL.revokeObjectURL(url);
+  document.body.removeChild(a);
+}
+
+// ─── Customer Specific Advance Percentage API Function ───
+
+export async function adminUpdateCustomerAdvancePercentage(
+  customerId: string,
+  advancePercentage: number
+): Promise<any> {
+  const res = await fetchAdminApi(`/admin/purchase-orders/users/${customerId}/b2b-advance-percentage`, {
+    method: 'PATCH',
+    body: JSON.stringify({ advancePercentage }),
+  });
+  if (!res.success) {
+    throw new Error(res.error?.message || 'Failed to update customer advance percentage');
+  }
+  return res.data;
 }
 

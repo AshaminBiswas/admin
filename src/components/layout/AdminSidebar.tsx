@@ -34,6 +34,7 @@ import {
   Heart,
   Navigation,
   Coins,
+  FileSpreadsheet,
   X,
 } from "lucide-react";
 import { useAdminAuth } from "../../context/AdminAuthContext";
@@ -84,6 +85,7 @@ export function AdminSidebar({
     { id: "cart", label: "Shopping Carts", category: "Sales & Fulfillment", icon: <ShoppingBag size={18} /> },
     { id: "quotes", label: "B2B Quotes", category: "Sales & Fulfillment", icon: <FileText size={18} />, badge: "2" },
     { id: "purchase-orders", label: "Purchase Orders (PO)", category: "Sales & Fulfillment", icon: <FileCheck size={18} />, badge: "PO" },
+    { id: "po-submissions", label: "PO Submissions (Intake)", category: "Sales & Fulfillment", icon: <FileSpreadsheet size={18} />, badge: "NEW" },
     { id: "appointments", label: "Appointments", category: "Sales & Fulfillment", icon: <Calendar size={18} /> },
     { id: "enquiries", label: "Enquiries", category: "Sales & Fulfillment", icon: <HelpCircle size={18} /> },
     { id: "invoice", label: "Invoices & GST", category: "Sales & Fulfillment", icon: <Receipt size={18} />, badge: "GST" },

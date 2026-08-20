@@ -247,6 +247,7 @@ export type AdminView =
   | 'products-edit'
   | 'quotes'
   | 'purchase-orders'
+  | 'po-submissions'
   | 'reports'
   | 'reviews'
   | 'roles'

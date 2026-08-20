@@ -13,10 +13,18 @@ import {
   getBankSettings,
   updateBankSetting,
   downloadAdminPackingListPdf,
+  adminGenerateProformaInvoice,
+  downloadAdminProformaInvoicePdf,
+  adminGenerateTaxInvoiceIris,
+  adminGenerateEwayBillIris,
+  downloadAdminEwayBillPdf,
   adminDispatchPo,
+  adminGenerateProductIssueList,
+  downloadAdminProductIssueListPdf,
   adminRegenerateInvoice,
   downloadAdminInvoicePdf,
   adminDeletePurchaseOrder,
+  adminUpdateCustomerAdvancePercentage,
   AdminPurchaseOrder,
   AdvanceSetting,
   BankSetting,
@@ -43,6 +51,11 @@ import {
   Trash2,
   Package,
   CreditCard,
+  Layers,
+  FileSpreadsheet,
+  QrCode,
+  ClipboardList,
+  Send,
 } from 'lucide-react';
 import { AsyncActionButton } from '../components/common/AsyncActionButton';
 
@@ -51,13 +64,11 @@ import { AsyncActionButton } from '../components/common/AsyncActionButton';
 function PurchaseOrderDetailSkeleton() {
   return (
     <div className="p-6 space-y-6 flex-1 text-xs text-[#FAFAFA] animate-pulse">
-      {/* Top Banner Notice */}
       <div className="flex items-center space-x-2 text-[#A1A1AA] pb-1">
         <RefreshCw className="w-3.5 h-3.5 animate-spin text-amber-400" />
         <span className="font-semibold text-[11px] text-[#A1A1AA]">Loading Purchase Order Details...</span>
       </div>
 
-      {/* Action Bar Skeleton */}
       <div className="bg-[#09090B] p-4 rounded-2xl border border-[#27272A] flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center space-x-2">
           <div className="h-8 w-28 bg-[#27272A] rounded-xl"></div>
@@ -67,7 +78,6 @@ function PurchaseOrderDetailSkeleton() {
         <div className="h-8 w-44 bg-[#27272A] rounded-xl"></div>
       </div>
 
-      {/* Primary Reference Metrics Card Skeleton */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-[#09090B] p-4 rounded-xl border border-[#27272A]">
         {Array.from({ length: 4 }).map((_, i) => (
           <div key={i} className="space-y-2">
@@ -75,76 +85,6 @@ function PurchaseOrderDetailSkeleton() {
             <div className="h-5 w-28 bg-[#27272A] rounded"></div>
           </div>
         ))}
-      </div>
-
-      {/* Payment Receipt Verification Panel Skeleton */}
-      <div className="bg-[#09090B] p-5 rounded-2xl space-y-4 border border-[#27272A]">
-        <div className="flex items-center justify-between border-b border-[#27272A] pb-3">
-          <div className="flex items-center space-x-2">
-            <div className="w-5 h-5 bg-[#27272A] rounded-full"></div>
-            <div className="h-4 w-40 bg-[#27272A] rounded"></div>
-          </div>
-          <div className="h-4 w-20 bg-[#27272A] rounded"></div>
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          <div className="h-14 bg-[#18181B] rounded-xl border border-[#27272A] p-2 space-y-1.5">
-            <div className="h-2 w-12 bg-[#27272A] rounded"></div>
-            <div className="h-4 w-24 bg-[#27272A] rounded"></div>
-          </div>
-          <div className="h-14 bg-[#18181B] rounded-xl border border-[#27272A] p-2 space-y-1.5">
-            <div className="h-2 w-12 bg-[#27272A] rounded"></div>
-            <div className="h-4 w-20 bg-[#27272A] rounded"></div>
-          </div>
-          <div className="h-14 bg-[#18181B] rounded-xl border border-[#27272A] p-2 space-y-1.5 col-span-2 sm:col-span-1">
-            <div className="h-2 w-16 bg-[#27272A] rounded"></div>
-            <div className="h-4 w-28 bg-[#27272A] rounded"></div>
-          </div>
-        </div>
-      </div>
-
-      {/* Customer & Shipping Details Skeleton */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-[#09090B] p-4 rounded-xl border border-[#27272A] space-y-3">
-          <div className="h-3 w-28 bg-[#27272A] rounded"></div>
-          <div className="space-y-2">
-            <div className="h-4 w-44 bg-[#27272A] rounded"></div>
-            <div className="h-3 w-56 bg-[#27272A] rounded"></div>
-            <div className="h-3 w-32 bg-[#27272A] rounded"></div>
-          </div>
-        </div>
-        <div className="bg-[#09090B] p-4 rounded-xl border border-[#27272A] space-y-3">
-          <div className="h-3 w-28 bg-[#27272A] rounded"></div>
-          <div className="space-y-2">
-            <div className="h-4 w-36 bg-[#27272A] rounded"></div>
-            <div className="h-3 w-48 bg-[#27272A] rounded"></div>
-            <div className="h-3 w-40 bg-[#27272A] rounded"></div>
-          </div>
-        </div>
-      </div>
-
-      {/* Line Items Table Skeleton */}
-      <div className="bg-[#09090B] rounded-xl border border-[#27272A] overflow-hidden p-4 space-y-3">
-        <div className="flex justify-between items-center pb-2 border-b border-[#27272A]">
-          <div className="h-3.5 w-28 bg-[#27272A] rounded"></div>
-          <div className="h-3.5 w-16 bg-[#27272A] rounded"></div>
-        </div>
-        <div className="space-y-2.5">
-          {Array.from({ length: 3 }).map((_, idx) => (
-            <div key={idx} className="flex items-center justify-between p-2.5 bg-[#18181B] rounded-lg border border-[#27272A]">
-              <div className="flex items-center space-x-3">
-                <div className="w-9 h-9 bg-[#27272A] rounded-md"></div>
-                <div className="space-y-1.5">
-                  <div className="h-3.5 w-36 bg-[#27272A] rounded"></div>
-                  <div className="h-2.5 w-20 bg-[#27272A] rounded"></div>
-                </div>
-              </div>
-              <div className="space-y-1.5 text-right">
-                <div className="h-3.5 w-16 bg-[#27272A] rounded ml-auto"></div>
-                <div className="h-2.5 w-12 bg-[#27272A] rounded ml-auto"></div>
-              </div>
-            </div>
-          ))}
-        </div>
       </div>
     </div>
   );
@@ -155,25 +95,16 @@ function PurchaseOrderDetailSkeleton() {
 export function PurchaseOrdersPageSkeleton() {
   return (
     <div className="space-y-6 max-w-[1600px] mx-auto animate-pulse">
-      {/* Top Header Skeleton */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#27272A] pb-4">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-tr-xl rounded-bl-xl bg-[#27272A]"></div>
           <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <div className="h-5 w-64 bg-[#27272A] rounded"></div>
-              <div className="h-4 w-24 bg-[#27272A] rounded-full"></div>
-            </div>
+            <div className="h-5 w-64 bg-[#27272A] rounded"></div>
             <div className="h-3 w-80 bg-[#27272A] rounded"></div>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="h-9 w-36 bg-[#27272A] rounded-tr-xl rounded-bl-xl"></div>
-          <div className="h-9 w-9 bg-[#27272A] rounded-tr-lg rounded-bl-lg"></div>
-        </div>
       </div>
 
-      {/* 6 KPI Cards Skeleton */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         {Array.from({ length: 6 }).map((_, i) => (
           <div key={i} className="p-3.5 rounded-tr-xl rounded-bl-xl bg-[#18181B] border border-[#27272A] space-y-2">
@@ -182,50 +113,6 @@ export function PurchaseOrdersPageSkeleton() {
             <div className="h-2.5 w-20 bg-[#27272A] rounded"></div>
           </div>
         ))}
-      </div>
-
-      {/* Filter Tabs & Search Skeleton */}
-      <div className="p-4 rounded-tr-2xl rounded-bl-2xl bg-[#18181B] border border-[#27272A] flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2 overflow-x-auto">
-          {Array.from({ length: 7 }).map((_, i) => (
-            <div key={i} className="h-7 w-28 bg-[#27272A] rounded-tr-lg rounded-bl-lg"></div>
-          ))}
-        </div>
-        <div className="h-8 w-64 bg-[#27272A] rounded-tr-lg rounded-bl-lg"></div>
-      </div>
-
-      {/* Main Table Skeleton */}
-      <div className="rounded-tr-2xl rounded-bl-2xl bg-[#18181B] border border-[#27272A] overflow-hidden shadow-lg">
-        <div className="p-3.5 bg-[#09090B] border-b border-[#27272A] flex justify-between">
-          <div className="h-3 w-40 bg-[#27272A] rounded"></div>
-          <div className="h-3 w-20 bg-[#27272A] rounded"></div>
-        </div>
-        <div className="divide-y divide-[#27272A]">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="p-4 flex items-center justify-between gap-4">
-              <div className="space-y-1.5 w-32">
-                <div className="h-4 w-28 bg-[#27272A] rounded"></div>
-                <div className="h-2.5 w-16 bg-[#27272A] rounded"></div>
-              </div>
-              <div className="h-4 w-24 bg-[#27272A] rounded"></div>
-              <div className="space-y-1.5 w-44">
-                <div className="h-4 w-36 bg-[#27272A] rounded"></div>
-                <div className="h-2.5 w-24 bg-[#27272A] rounded"></div>
-              </div>
-              <div className="h-4 w-24 bg-[#27272A] rounded"></div>
-              <div className="h-4 w-24 bg-[#27272A] rounded"></div>
-              <div className="h-5 w-24 bg-[#27272A] rounded-full"></div>
-              <div className="h-7 w-20 bg-[#27272A] rounded-lg"></div>
-            </div>
-          ))}
-        </div>
-        <div className="p-4 bg-[#09090B] border-t border-[#27272A] flex items-center justify-between">
-          <div className="h-3 w-36 bg-[#27272A] rounded"></div>
-          <div className="flex gap-2">
-            <div className="h-7 w-16 bg-[#27272A] rounded"></div>
-            <div className="h-7 w-16 bg-[#27272A] rounded"></div>
-          </div>
-        </div>
       </div>
     </div>
   );
@@ -246,6 +133,28 @@ export function PurchaseOrdersPage() {
   const [selectedPoId, setSelectedPoId] = useState<string | null>(null);
   const [selectedPo, setSelectedPo] = useState<AdminPurchaseOrder | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+
+  // PI Generation
+  const [generatingPi, setGeneratingPi] = useState(false);
+
+  // IRIS Tax Invoice
+  const [generatingTaxInvoice, setGeneratingTaxInvoice] = useState(false);
+
+  // IRIS E-Way Bill Modal
+  const [ewayModalOpen, setEwayModalOpen] = useState(false);
+  const [ewayVehicleNo, setEwayVehicleNo] = useState('DL01AB1234');
+  const [ewayCarrierName, setEwayCarrierName] = useState('BlueDart Express');
+  const [ewayTransDocNo, setEwayTransDocNo] = useState('');
+  const [ewayDistanceKm, setEwayDistanceKm] = useState<number>(120);
+  const [ewaySubmitting, setEwaySubmitting] = useState(false);
+
+  // Product Issue List Modal
+  const [issueListModalOpen, setIssueListModalOpen] = useState(false);
+  const [issueReceivedBy, setIssueReceivedBy] = useState('Transporter Driver / Representative');
+  const [issueVehicleNo, setIssueVehicleNo] = useState('');
+  const [issueCarrierName, setIssueCarrierName] = useState('BlueDart Express');
+  const [issueNotes, setIssueNotes] = useState('All architectural hardware goods inspected and dispatched intact.');
+  const [issueSubmitting, setIssueSubmitting] = useState(false);
 
   // Dispatch Modal
   const [dispatchModalOpen, setDispatchModalOpen] = useState(false);
@@ -324,9 +233,14 @@ export function PurchaseOrdersPage() {
     loadPos();
   }, [loadPos]);
 
-  // Deep linking: Open PO detail if URL matches /purchase-orders/:id
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    const sessionPoId = sessionStorage.getItem('selected_fulfillment_po_id');
+    if (sessionPoId) {
+      sessionStorage.removeItem('selected_fulfillment_po_id');
+      openDetail(sessionPoId);
+      return;
+    }
     const path = window.location.pathname;
     const match = path.match(/\/purchase-orders\/([a-zA-Z0-9_-]+)/);
     if (match && match[1]) {
@@ -345,6 +259,14 @@ export function PurchaseOrdersPage() {
       setSelectedPo(data);
       setAckAmount(Number(data.advanceAmount));
       setVerifyConfirmedAmount(Number(data.advanceAmount));
+      if (data.ewayBill?.vehicleNumber) {
+        setEwayVehicleNo(data.ewayBill.vehicleNumber);
+        setIssueVehicleNo(data.ewayBill.vehicleNumber);
+      }
+      if (data.ewayBill?.transporterName) {
+        setEwayCarrierName(data.ewayBill.transporterName);
+        setIssueCarrierName(data.ewayBill.transporterName);
+      }
     } catch (err: any) {
       alert(err.message || 'Failed to load PO details');
     } finally {
@@ -422,6 +344,71 @@ export function PurchaseOrdersPage() {
     }
   }
 
+  async function handleGeneratePiAction(poId: string) {
+    if (!poId) return;
+    setGeneratingPi(true);
+    try {
+      await adminGenerateProformaInvoice(poId);
+      await openDetail(poId);
+      await loadPos();
+    } catch (err: any) {
+      alert(err.message || 'Failed to generate Proforma Invoice');
+    } finally {
+      setGeneratingPi(false);
+    }
+  }
+
+  async function handleDownloadPi(poId: string, piNumber?: string) {
+    try {
+      await downloadAdminProformaInvoicePdf(poId, piNumber || `PI-${poId}`);
+    } catch (err: any) {
+      alert(err.message || 'Failed to download Proforma Invoice PDF');
+    }
+  }
+
+  async function handleGenerateTaxInvoiceIrisAction(poId: string) {
+    if (!poId) return;
+    setGeneratingTaxInvoice(true);
+    try {
+      await adminGenerateTaxInvoiceIris(poId);
+      await openDetail(poId);
+      await loadPos();
+    } catch (err: any) {
+      alert(err.message || 'Failed to generate GST Tax Invoice via IRIS API');
+    } finally {
+      setGeneratingTaxInvoice(false);
+    }
+  }
+
+  async function handleGenerateEwayBillSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!selectedPoId) return;
+    setEwaySubmitting(true);
+    try {
+      await adminGenerateEwayBillIris(selectedPoId, {
+        carrierName: ewayCarrierName,
+        vehicleNumber: ewayVehicleNo,
+        transporterDocNo: ewayTransDocNo || undefined,
+        approxDistanceKm: Number(ewayDistanceKm) || 120,
+      });
+      setEwayModalOpen(false);
+      await openDetail(selectedPoId);
+      await loadPos();
+    } catch (err: any) {
+      alert(err.message || 'Failed to generate E-Way Bill via IRIS API');
+    } finally {
+      setEwaySubmitting(false);
+    }
+  }
+
+  async function handleDownloadEwayBill(poId: string, ewbNumber?: string) {
+    try {
+      await downloadAdminEwayBillPdf(poId, ewbNumber || 'EWB');
+    } catch (err: any) {
+      alert(err.message || 'Failed to download E-Way Bill PDF');
+    }
+  }
+
   async function handleDispatchSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!selectedPoId) return;
@@ -442,6 +429,35 @@ export function PurchaseOrdersPage() {
       alert(err.message || 'Failed to dispatch order');
     } finally {
       setDispatchSubmitting(false);
+    }
+  }
+
+  async function handleGenerateIssueListSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!selectedPoId) return;
+    setIssueSubmitting(true);
+    try {
+      await adminGenerateProductIssueList(selectedPoId, {
+        carrierName: issueCarrierName,
+        vehicleNumber: issueVehicleNo,
+        receivedByName: issueReceivedBy,
+        notes: issueNotes,
+      });
+      setIssueListModalOpen(false);
+      await openDetail(selectedPoId);
+      await loadPos();
+    } catch (err: any) {
+      alert(err.message || 'Failed to generate Product Issue List');
+    } finally {
+      setIssueSubmitting(false);
+    }
+  }
+
+  async function handleDownloadIssueList(poId: string, issueNumber?: string) {
+    try {
+      await downloadAdminProductIssueListPdf(poId, issueNumber || 'ISSUE');
+    } catch (err: any) {
+      alert(err.message || 'Failed to download Product Issue List PDF');
     }
   }
 
@@ -485,6 +501,12 @@ export function PurchaseOrdersPage() {
           country: 'India',
         },
       });
+
+      // Also persist customer specific default advance %
+      if (selectedPo.customerId && editAdvancePercentage) {
+        await adminUpdateCustomerAdvancePercentage(selectedPo.customerId, editAdvancePercentage).catch(() => {});
+      }
+
       setEditModalOpen(false);
       await openDetail(selectedPo.id);
       await loadPos();
@@ -594,13 +616,15 @@ export function PurchaseOrdersPage() {
     PAYMENT_RECEIPT_SUBMITTED: pos.filter((p) => p.status === 'PAYMENT_RECEIPT_SUBMITTED').length,
     PAYMENT_ACKNOWLEDGED: pos.filter((p) => p.status === 'PAYMENT_ACKNOWLEDGED').length,
     PACKING_LIST_GENERATED: pos.filter((p) => ['PACKING_LIST_GENERATED', 'PAYMENT_VERIFIED'].includes(p.status)).length,
+    PI_GENERATED: pos.filter((p) => p.status === 'PI_GENERATED').length,
+    TAX_INVOICE_GENERATED: pos.filter((p) => p.status === 'TAX_INVOICE_GENERATED').length,
+    EWAY_BILL_GENERATED: pos.filter((p) => p.status === 'EWAY_BILL_GENERATED').length,
     DISPATCHED: pos.filter((p) => p.status === 'DISPATCHED').length,
-    INVOICED: pos.filter((p) => p.status === 'INVOICED').length,
+    ISSUE_LIST_GENERATED: pos.filter((p) => ['ISSUE_LIST_GENERATED', 'INVOICED'].includes(p.status)).length,
   };
 
   // Derive displayed items according to the active status filter and search query
   const displayedPos = pos.filter((po) => {
-    // Status filter matching
     if (statusFilter === 'AWAITING_ADVANCE_PAYMENT') {
       if (po.status !== 'AWAITING_ADVANCE_PAYMENT' && po.status !== 'SUBMITTED' && po.status !== 'DRAFT') {
         return false;
@@ -611,15 +635,20 @@ export function PurchaseOrdersPage() {
       if (po.status !== 'PAYMENT_ACKNOWLEDGED') return false;
     } else if (statusFilter === 'PACKING_LIST_GENERATED') {
       if (po.status !== 'PACKING_LIST_GENERATED' && po.status !== 'PAYMENT_VERIFIED') return false;
+    } else if (statusFilter === 'PI_GENERATED') {
+      if (po.status !== 'PI_GENERATED') return false;
+    } else if (statusFilter === 'TAX_INVOICE_GENERATED') {
+      if (po.status !== 'TAX_INVOICE_GENERATED') return false;
+    } else if (statusFilter === 'EWAY_BILL_GENERATED') {
+      if (po.status !== 'EWAY_BILL_GENERATED') return false;
     } else if (statusFilter === 'DISPATCHED') {
       if (po.status !== 'DISPATCHED') return false;
-    } else if (statusFilter === 'INVOICED') {
-      if (po.status !== 'INVOICED') return false;
+    } else if (statusFilter === 'ISSUE_LIST_GENERATED') {
+      if (po.status !== 'ISSUE_LIST_GENERATED' && po.status !== 'INVOICED') return false;
     } else if (statusFilter !== 'ALL') {
       if (po.status !== statusFilter) return false;
     }
 
-    // Search query matching
     if (search.trim()) {
       const q = search.toLowerCase().trim();
       const matchPo = po.poNumber?.toLowerCase().includes(q);
@@ -653,11 +682,11 @@ export function PurchaseOrdersPage() {
                 Purchase Orders (PO) Console
               </h1>
               <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                B2B Fulfillment
+                B2B Commercial Lifecycle
               </span>
             </div>
             <p className="text-xs text-[#A1A1AA]">
-              Audit commercial purchase orders, acknowledge advance bank transfers, digitally verify receipts, and generate packing lists.
+              Complete B2B Workflow: Awaiting Advance (% custom per client) → Receipt Uploaded → Acknowledged → Verified & Packing List → PI Generation → IRIS Tax Invoice → IRIS E-Way Bill → Dispatched → Product Issue List
             </p>
           </div>
         </div>
@@ -688,7 +717,7 @@ export function PurchaseOrdersPage() {
           { label: 'Receipt Uploaded', key: 'PAYMENT_RECEIPT_SUBMITTED', value: tabCounts.PAYMENT_RECEIPT_SUBMITTED, icon: <CreditCard size={16} />, color: 'text-blue-400', bg: 'bg-blue-500/10' },
           { label: 'Acknowledged', key: 'PAYMENT_ACKNOWLEDGED', value: tabCounts.PAYMENT_ACKNOWLEDGED, icon: <CheckCircle size={16} />, color: 'text-indigo-400', bg: 'bg-indigo-500/10' },
           { label: 'Packing List Ready', key: 'PACKING_LIST_GENERATED', value: tabCounts.PACKING_LIST_GENERATED, icon: <Package size={16} />, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
-          { label: 'Dispatched / Invoiced', key: 'DISPATCHED', value: tabCounts.DISPATCHED + tabCounts.INVOICED, icon: <Truck size={16} />, color: 'text-purple-400', bg: 'bg-purple-500/10' },
+          { label: 'Dispatched / Issue List', key: 'DISPATCHED', value: tabCounts.DISPATCHED + tabCounts.ISSUE_LIST_GENERATED, icon: <Truck size={16} />, color: 'text-purple-400', bg: 'bg-purple-500/10' },
         ].map((card) => (
           <button
             key={card.label}
@@ -723,8 +752,11 @@ export function PurchaseOrdersPage() {
               { label: 'Receipt Uploaded', key: 'PAYMENT_RECEIPT_SUBMITTED', count: tabCounts.PAYMENT_RECEIPT_SUBMITTED },
               { label: 'Acknowledged', key: 'PAYMENT_ACKNOWLEDGED', count: tabCounts.PAYMENT_ACKNOWLEDGED },
               { label: 'Verified & Packing List', key: 'PACKING_LIST_GENERATED', count: tabCounts.PACKING_LIST_GENERATED },
+              { label: 'PI Ready', key: 'PI_GENERATED', count: tabCounts.PI_GENERATED },
+              { label: 'Tax Invoiced (IRIS)', key: 'TAX_INVOICE_GENERATED', count: tabCounts.TAX_INVOICE_GENERATED },
+              { label: 'E-Way Bill (IRIS)', key: 'EWAY_BILL_GENERATED', count: tabCounts.EWAY_BILL_GENERATED },
               { label: 'Dispatched', key: 'DISPATCHED', count: tabCounts.DISPATCHED },
-              { label: 'Invoiced', key: 'INVOICED', count: tabCounts.INVOICED },
+              { label: 'Issue List Ready', key: 'ISSUE_LIST_GENERATED', count: tabCounts.ISSUE_LIST_GENERATED },
             ].map((tab) => (
               <button
                 key={tab.key}
@@ -742,9 +774,7 @@ export function PurchaseOrdersPage() {
                 <span>{tab.label}</span>
                 <span
                   className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold font-mono ${
-                    statusFilter === tab.key
-                      ? 'bg-slate-950/30 text-slate-950'
-                      : 'bg-[#27272A] text-[#A1A1AA]'
+                    statusFilter === tab.key ? 'bg-slate-950/20 text-slate-950' : 'bg-[#27272A] text-[#FAFAFA]'
                   }`}
                 >
                   {tab.count}
@@ -753,42 +783,35 @@ export function PurchaseOrdersPage() {
             ))}
           </div>
 
-          {/* Search Input */}
-          <div className="relative w-full sm:w-72">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#71717A]" />
+          {/* Search Box */}
+          <div className="relative min-w-[240px] flex-1 sm:flex-initial">
+            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[#71717A]" />
             <input
               type="text"
-              placeholder="Search PO / Quote No / Customer..."
+              placeholder="Search PO #, Client, Quotation..."
               value={search}
-              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-              className="w-full pl-9 pr-3 py-2 bg-[#09090B] border border-[#27272A] rounded-tr-lg rounded-bl-lg text-xs text-[#FAFAFA] placeholder-[#71717A] focus:outline-none focus:border-amber-400"
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
+              className="w-full pl-8 pr-4 py-1.5 bg-[#09090B] border border-[#27272A] rounded-tr-lg rounded-bl-lg text-xs text-[#FAFAFA] placeholder-[#71717A] focus:border-amber-400 outline-none transition-colors"
             />
-            {search && (
-              <button
-                onClick={() => { setSearch(''); setPage(1); }}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#71717A] hover:text-white"
-              >
-                <X size={12} />
-              </button>
-            )}
           </div>
         </div>
-      </div>
 
-      {/* ─── Main Purchase Orders Table ─── */}
-      <div className="rounded-tr-2xl rounded-bl-2xl bg-[#18181B] border border-[#27272A] overflow-hidden shadow-lg">
-        {loading ? (
-          <div className="overflow-x-auto">
+        {/* ─── PO Table ─── */}
+        {loading && pos.length === 0 ? (
+          <div className="p-8 text-center text-xs text-[#A1A1AA]">
             <table className="w-full text-xs text-left">
               <thead className="bg-[#09090B] border-b border-[#27272A] text-[#71717A] uppercase font-bold tracking-wider text-[10px]">
                 <tr>
-                  <th className="py-3 px-4">PO Number</th>
-                  <th className="py-3 px-4">Quotation Ref</th>
-                  <th className="py-3 px-4">Customer</th>
-                  <th className="py-3 px-4 text-right">Total Amount</th>
-                  <th className="py-3 px-4 text-right">Advance Due</th>
-                  <th className="py-3 px-4">Status</th>
-                  <th className="py-3 px-4 text-center">Actions</th>
+                  <th className="py-3.5 px-4">PO Number</th>
+                  <th className="py-3.5 px-4">Quotation Ref</th>
+                  <th className="py-3.5 px-4">Customer</th>
+                  <th className="py-3.5 px-4 text-right">Total Amount</th>
+                  <th className="py-3.5 px-4 text-right">Advance Due</th>
+                  <th className="py-3.5 px-4">Status</th>
+                  <th className="py-3.5 px-4 text-center">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#27272A] animate-pulse">
@@ -850,10 +873,14 @@ export function PurchaseOrdersPage() {
                     <td className="py-3.5 px-4">
                       <span
                         className={`text-[9px] font-extrabold px-2.5 py-1 rounded-full uppercase tracking-wider ${
-                          po.status === 'INVOICED'
+                          po.status === 'ISSUE_LIST_GENERATED' || po.status === 'INVOICED'
                             ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
                             : po.status === 'DISPATCHED'
                             ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
+                            : po.status === 'EWAY_BILL_GENERATED' || po.status === 'TAX_INVOICE_GENERATED'
+                            ? 'bg-teal-500/20 text-teal-300 border border-teal-500/30'
+                            : po.status === 'PI_GENERATED'
+                            ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
                             : po.status === 'PACKING_LIST_GENERATED' || po.status === 'PAYMENT_VERIFIED'
                             ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
                             : po.status === 'PAYMENT_ACKNOWLEDGED'
@@ -929,13 +956,13 @@ export function PurchaseOrdersPage() {
       {/* ─── DETAIL & AUDIT DRAWER MODAL ─── */}
       {selectedPoId && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex justify-end">
-          <div className="w-full max-w-3xl bg-[#18181B] text-[#FAFAFA] border-l border-[#27272A] h-full shadow-2xl overflow-y-auto flex flex-col">
+          <div className="w-full max-w-4xl bg-[#18181B] text-[#FAFAFA] border-l border-[#27272A] h-full shadow-2xl overflow-y-auto flex flex-col">
             
             {/* Modal Header */}
             <div className="p-6 bg-[#09090B] text-[#FAFAFA] flex items-center justify-between sticky top-0 z-10 border-b border-[#27272A]">
               <div>
                 <div className="flex items-center space-x-2">
-                  <span className="text-xs text-amber-400 font-bold tracking-wider uppercase">Purchase Order Audit</span>
+                  <span className="text-xs text-amber-400 font-bold tracking-wider uppercase">Purchase Order Fulfillment Workflow</span>
                   <span className="bg-[#27272A] text-amber-300 border border-[#3F3F46] text-[10px] px-2 py-0.5 rounded font-mono font-bold">
                     {selectedPo?.status || 'LOADING'}
                   </span>
@@ -959,110 +986,187 @@ export function PurchaseOrdersPage() {
             ) : (
               <div className="p-6 space-y-6 flex-1 text-xs text-[#FAFAFA]">
                 
-                {/* Action Bar */}
-                <div className="bg-[#09090B] p-4 rounded-2xl border border-[#27272A] flex flex-wrap items-center justify-between gap-3">
-                  <div className="flex items-center space-x-2">
+                {/* ─── 10-Stage Milestone Stepper ─── */}
+                <div className="bg-[#09090B] p-4 rounded-2xl border border-[#27272A] space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] uppercase font-bold text-[#71717A] tracking-wider">Fulfillment Lifecycle Progress</span>
+                    <span className="text-[10px] font-bold text-amber-400 font-mono">B2B Commercial Pipeline</span>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center text-[10px]">
+                    {[
+                      { label: '1. Awaiting Advance', done: Boolean(selectedPo.submittedAt), current: selectedPo.status === 'AWAITING_ADVANCE_PAYMENT' },
+                      { label: '2. Receipt Uploaded', done: Boolean(selectedPo.receipts?.length), current: selectedPo.status === 'PAYMENT_RECEIPT_SUBMITTED' },
+                      { label: '3. Acknowledged', done: ['PAYMENT_ACKNOWLEDGED', 'PAYMENT_VERIFIED', 'PACKING_LIST_GENERATED', 'PI_GENERATED', 'TAX_INVOICE_GENERATED', 'EWAY_BILL_GENERATED', 'DISPATCHED', 'ISSUE_LIST_GENERATED', 'INVOICED'].includes(selectedPo.status), current: selectedPo.status === 'PAYMENT_ACKNOWLEDGED' },
+                      { label: '4. Verified & Packing', done: ['PACKING_LIST_GENERATED', 'PI_GENERATED', 'TAX_INVOICE_GENERATED', 'EWAY_BILL_GENERATED', 'DISPATCHED', 'ISSUE_LIST_GENERATED', 'INVOICED'].includes(selectedPo.status) || Boolean(selectedPo.packingList), current: selectedPo.status === 'PACKING_LIST_GENERATED' },
+                      { label: '5. PI Generation', done: ['PI_GENERATED', 'TAX_INVOICE_GENERATED', 'EWAY_BILL_GENERATED', 'DISPATCHED', 'ISSUE_LIST_GENERATED', 'INVOICED'].includes(selectedPo.status) || Boolean(selectedPo.proformaInvoice), current: selectedPo.status === 'PI_GENERATED' },
+                      { label: '6. Tax Invoice (IRIS)', done: ['TAX_INVOICE_GENERATED', 'EWAY_BILL_GENERATED', 'DISPATCHED', 'ISSUE_LIST_GENERATED', 'INVOICED'].includes(selectedPo.status) || Boolean(selectedPo.invoice), current: selectedPo.status === 'TAX_INVOICE_GENERATED' },
+                      { label: '7. E-Way Bill (IRIS)', done: ['EWAY_BILL_GENERATED', 'DISPATCHED', 'ISSUE_LIST_GENERATED', 'INVOICED'].includes(selectedPo.status) || Boolean(selectedPo.ewayBill), current: selectedPo.status === 'EWAY_BILL_GENERATED' },
+                      { label: '8. Dispatched', done: ['DISPATCHED', 'ISSUE_LIST_GENERATED', 'INVOICED'].includes(selectedPo.status) || Boolean(selectedPo.dispatch), current: selectedPo.status === 'DISPATCHED' },
+                      { label: '9. Issue List Ready', done: ['ISSUE_LIST_GENERATED', 'INVOICED'].includes(selectedPo.status) || Boolean(selectedPo.issueList), current: selectedPo.status === 'ISSUE_LIST_GENERATED' || selectedPo.status === 'INVOICED' },
+                    ].map((step, idx) => (
+                      <div
+                        key={idx}
+                        className={`p-2 rounded-xl border flex flex-col items-center justify-center space-y-1 transition-all ${
+                          step.done
+                            ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-300'
+                            : step.current
+                            ? 'bg-amber-950/40 border-amber-500/60 text-amber-300 animate-pulse'
+                            : 'bg-[#18181B] border-[#27272A] text-[#71717A]'
+                        }`}
+                      >
+                        <span className="font-bold">{step.label}</span>
+                        {step.done ? (
+                          <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
+                        ) : step.current ? (
+                          <Clock className="w-3.5 h-3.5 text-amber-400" />
+                        ) : (
+                          <div className="w-2 h-2 rounded-full bg-[#3F3F46]" />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* ─── Action Stage Toolbar ─── */}
+                <div className="bg-[#09090B] p-4 rounded-2xl border border-[#27272A] space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] uppercase font-bold text-[#71717A] tracking-wider">Operational Stage Triggers</span>
                     <button
                       onClick={() => openEditModal(selectedPo)}
-                      className="bg-[#27272A] hover:bg-[#3F3F46] text-amber-400 border border-[#3F3F46] font-bold px-3 py-2 rounded-xl transition-all flex items-center space-x-1.5 shadow-sm text-xs"
+                      className="bg-[#27272A] hover:bg-[#3F3F46] text-amber-400 border border-[#3F3F46] font-bold px-2.5 py-1.5 rounded-lg transition-all flex items-center space-x-1 shadow-sm text-[11px]"
                     >
-                      <Pencil className="w-3.5 h-3.5 text-amber-400" />
-                      <span>Edit PO Details</span>
+                      <Pencil className="w-3 h-3 text-amber-400" />
+                      <span>Edit PO / Custom Advance %</span>
+                    </button>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    {/* 1. Proforma Invoice Trigger */}
+                    <button
+                      onClick={() => handleGeneratePiAction(selectedPo.id)}
+                      disabled={generatingPi}
+                      className="bg-indigo-700 text-white font-bold px-3.5 py-2 rounded-xl hover:bg-indigo-600 shadow-sm flex items-center space-x-1.5 text-xs transition-colors"
+                    >
+                      <FileSpreadsheet className="w-3.5 h-3.5 text-indigo-200" />
+                      <span>{generatingPi ? 'Generating PI…' : 'Generate Proforma Invoice (PI)'}</span>
                     </button>
 
+                    {/* 2. IRIS GST Tax Invoice Trigger */}
+                    <button
+                      onClick={() => handleGenerateTaxInvoiceIrisAction(selectedPo.id)}
+                      disabled={generatingTaxInvoice}
+                      className="bg-blue-700 text-white font-bold px-3.5 py-2 rounded-xl hover:bg-blue-600 shadow-sm flex items-center space-x-1.5 text-xs transition-colors"
+                    >
+                      <Receipt className="w-3.5 h-3.5 text-blue-200" />
+                      <span>{generatingTaxInvoice ? 'Generating via IRIS…' : 'Generate GST Tax Invoice (IRIS API)'}</span>
+                    </button>
+
+                    {/* 3. IRIS E-Way Bill Trigger */}
+                    <button
+                      onClick={() => setEwayModalOpen(true)}
+                      className="bg-teal-700 text-white font-bold px-3.5 py-2 rounded-xl hover:bg-teal-600 shadow-sm flex items-center space-x-1.5 text-xs transition-colors"
+                    >
+                      <QrCode className="w-3.5 h-3.5 text-teal-200" />
+                      <span>Generate E-Way Bill (IRIS API)</span>
+                    </button>
+
+                    {/* 4. Dispatch Trigger */}
+                    <button
+                      onClick={() => setDispatchModalOpen(true)}
+                      className="bg-cyan-700 text-white font-bold px-3.5 py-2 rounded-xl hover:bg-cyan-600 shadow-sm flex items-center space-x-1.5 text-xs transition-colors"
+                    >
+                      <Truck className="w-3.5 h-3.5 text-cyan-200" />
+                      <span>Record Dispatch</span>
+                    </button>
+
+                    {/* 5. Product Issue List Trigger */}
+                    <button
+                      onClick={() => setIssueListModalOpen(true)}
+                      className="bg-purple-700 text-white font-bold px-3.5 py-2 rounded-xl hover:bg-purple-600 shadow-sm flex items-center space-x-1.5 text-xs transition-colors"
+                    >
+                      <ClipboardList className="w-3.5 h-3.5 text-purple-200" />
+                      <span>Generate Product Issue List</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* ─── Official Commercial Documents Hub ─── */}
+                <div className="bg-[#09090B] p-4 rounded-2xl border border-[#27272A] space-y-3">
+                  <div className="flex items-center justify-between border-b border-[#27272A] pb-2">
+                    <span className="text-[10px] uppercase font-bold text-[#71717A] tracking-wider">Commercial Document Downloads</span>
+                    <span className="text-[10px] text-emerald-400 font-bold">Tamper-evident Audit PDFs</span>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     <AsyncActionButton
                       mode="download"
                       onAction={() => downloadAdminPoPdf(selectedPo.id, selectedPo.poNumber)}
-                      idleIcon={<Download className="w-3.5 h-3.5 text-blue-400" />}
-                      idleLabel="Download PO PDF"
+                      idleIcon={<Download className="w-3.5 h-3.5 text-amber-400" />}
+                      idleLabel="Official PO PDF"
                       loadingLabel="Preparing PO…"
-                      successLabel="Downloaded!"
-                      className="bg-[#27272A] hover:bg-[#3F3F46] text-[#FAFAFA] border border-[#3F3F46] font-bold px-3 py-2 rounded-xl transition-all shadow-sm text-xs"
+                      className="bg-[#18181B] hover:bg-[#27272A] text-[#FAFAFA] border border-[#27272A] font-bold px-3 py-2 rounded-xl text-xs"
                       variant="custom"
                     />
 
-                    <button
-                      onClick={() => handleDeletePo(selectedPo.id, selectedPo.poNumber)}
-                      className="bg-red-950/60 hover:bg-red-900/80 text-red-300 border border-red-800/80 font-bold px-3 py-2 rounded-xl transition-all flex items-center space-x-1.5 shadow-sm text-xs"
-                      title="Permanently Delete this Purchase Order"
-                    >
-                      <Trash2 className="w-3.5 h-3.5 text-red-400" />
-                      <span>Delete PO</span>
-                    </button>
+                    {selectedPo.proformaInvoice && (
+                      <AsyncActionButton
+                        mode="download"
+                        onAction={() => handleDownloadPi(selectedPo.id, selectedPo.proformaInvoice?.piNumber)}
+                        idleIcon={<Download className="w-3.5 h-3.5 text-indigo-400" />}
+                        idleLabel="Proforma Invoice (PI)"
+                        loadingLabel="Preparing PI…"
+                        className="bg-[#18181B] hover:bg-[#27272A] text-indigo-300 border border-indigo-500/40 font-bold px-3 py-2 rounded-xl text-xs"
+                        variant="custom"
+                      />
+                    )}
 
                     {selectedPo.packingList && (
                       <AsyncActionButton
                         mode="download"
                         onAction={() => downloadAdminPackingListPdf(selectedPo.id, selectedPo.poNumber)}
-                        idleIcon={<Download className="w-3.5 h-3.5" />}
+                        idleIcon={<Download className="w-3.5 h-3.5 text-emerald-400" />}
                         idleLabel="Packing List PDF"
-                        loadingLabel="Preparing Packing List…"
-                        successLabel="Downloaded!"
-                        className="bg-emerald-700 text-white font-bold px-3 py-2 rounded-xl hover:bg-emerald-600 transition-all shadow-sm text-xs"
+                        loadingLabel="Preparing List…"
+                        className="bg-[#18181B] hover:bg-[#27272A] text-emerald-300 border border-emerald-500/40 font-bold px-3 py-2 rounded-xl text-xs"
                         variant="custom"
                       />
                     )}
+
                     {selectedPo.invoice && (
                       <AsyncActionButton
                         mode="download"
                         onAction={() => handleDownloadInvoice(selectedPo.id, selectedPo.invoice?.invoiceNumber)}
-                        idleIcon={<Receipt className="w-3.5 h-3.5" />}
-                        idleLabel="Download Tax Invoice"
-                        loadingLabel="Generating Invoice…"
-                        successLabel="Downloaded!"
-                        className="bg-purple-700 text-white font-bold px-3 py-2 rounded-xl hover:bg-purple-600 transition-all shadow-sm text-xs"
+                        idleIcon={<Download className="w-3.5 h-3.5 text-blue-400" />}
+                        idleLabel="GST Tax Invoice"
+                        loadingLabel="Preparing Invoice…"
+                        className="bg-[#18181B] hover:bg-[#27272A] text-blue-300 border border-blue-500/40 font-bold px-3 py-2 rounded-xl text-xs"
                         variant="custom"
                       />
                     )}
-                  </div>
 
-                  <div className="flex items-center space-x-2">
-                    {selectedPo.status === 'PAYMENT_RECEIPT_SUBMITTED' && (
-                      <>
-                        <button
-                          onClick={() => setRejectModalOpen(true)}
-                          className="bg-red-950/60 text-red-300 border border-red-800 font-bold px-3 py-2 rounded-xl hover:bg-red-900/60 text-xs transition-colors"
-                        >
-                          Reject Receipt
-                        </button>
-                        <button
-                          onClick={() => setAckModalOpen(true)}
-                          className="bg-blue-600 text-white font-bold px-4 py-2 rounded-xl hover:bg-blue-500 shadow-sm text-xs transition-colors"
-                        >
-                          Acknowledge Payment
-                        </button>
-                      </>
+                    {selectedPo.ewayBill && (
+                      <AsyncActionButton
+                        mode="download"
+                        onAction={() => handleDownloadEwayBill(selectedPo.id, selectedPo.ewayBill?.ewayBillNumber)}
+                        idleIcon={<Download className="w-3.5 h-3.5 text-teal-400" />}
+                        idleLabel="GST E-Way Bill"
+                        loadingLabel="Preparing EWB…"
+                        className="bg-[#18181B] hover:bg-[#27272A] text-teal-300 border border-teal-500/40 font-bold px-3 py-2 rounded-xl text-xs"
+                        variant="custom"
+                      />
                     )}
 
-                    {(selectedPo.status === 'PAYMENT_ACKNOWLEDGED' || selectedPo.status === 'PAYMENT_RECEIPT_SUBMITTED') && (
-                      <button
-                        onClick={() => setVerifyModalOpen(true)}
-                        className="bg-emerald-700 text-white font-bold px-4 py-2 rounded-xl hover:bg-emerald-600 shadow-sm flex items-center space-x-1.5 text-xs transition-colors"
-                      >
-                        <ShieldCheck className="w-4 h-4" />
-                        <span>Digitally Verify & Generate Packing List</span>
-                      </button>
-                    )}
-
-                    {['PACKING_LIST_GENERATED', 'PAYMENT_VERIFIED'].includes(selectedPo.status) && (
-                      <button
-                        onClick={() => setDispatchModalOpen(true)}
-                        className="bg-blue-700 text-white font-bold px-4 py-2 rounded-xl hover:bg-blue-600 shadow-sm flex items-center space-x-1.5 text-xs transition-colors"
-                      >
-                        <Truck className="w-4 h-4" />
-                        <span>Record Dispatch & Generate Invoice</span>
-                      </button>
-                    )}
-
-                    {selectedPo.status === 'INVOICE_GENERATION_FAILED' && (
-                      <button
-                        onClick={() => handleRegenerateInvoice(selectedPo.id)}
-                        disabled={regeneratingInvoice}
-                        className="bg-orange-600 text-white font-bold px-4 py-2 rounded-xl hover:bg-orange-500 shadow-sm flex items-center space-x-1.5 text-xs"
-                      >
-                        <RefreshCw className={`w-4 h-4 ${regeneratingInvoice ? 'animate-spin' : ''}`} />
-                        <span>{regeneratingInvoice ? 'Regenerating...' : 'Retry Invoice Generation'}</span>
-                      </button>
+                    {selectedPo.issueList && (
+                      <AsyncActionButton
+                        mode="download"
+                        onAction={() => handleDownloadIssueList(selectedPo.id, selectedPo.issueList?.issueNumber)}
+                        idleIcon={<Download className="w-3.5 h-3.5 text-purple-400" />}
+                        idleLabel="Product Issue Slip"
+                        loadingLabel="Preparing Slip…"
+                        className="bg-[#18181B] hover:bg-[#27272A] text-purple-300 border border-purple-500/40 font-bold px-3 py-2 rounded-xl text-xs"
+                        variant="custom"
+                      />
                     )}
                   </div>
                 </div>
@@ -1085,18 +1189,6 @@ export function PurchaseOrdersPage() {
                     <span className="text-[10px] text-[#A1A1AA] uppercase block font-sans">Advance Required ({selectedPo.advancePercentage}%)</span>
                     <span className="font-bold text-amber-400">₹{Number(selectedPo.advanceAmount).toLocaleString('en-IN')}</span>
                   </div>
-                  {Number(selectedPo.shippingCost) > 0 && (
-                    <div className="col-span-2">
-                      <span className="text-[10px] text-[#A1A1AA] uppercase block font-sans">Shipping / Freight Included</span>
-                      <span className="font-bold text-blue-400">₹{Number(selectedPo.shippingCost).toLocaleString('en-IN')}</span>
-                    </div>
-                  )}
-                  {Number(selectedPo.balanceAmount) > 0 && (
-                    <div className="col-span-2">
-                      <span className="text-[10px] text-[#A1A1AA] uppercase block font-sans">Balance Payable on Dispatch</span>
-                      <span className="font-bold text-emerald-400">₹{Number(selectedPo.balanceAmount).toLocaleString('en-IN')}</span>
-                    </div>
-                  )}
                 </div>
 
                 {/* Active Receipt Verification Panel */}
@@ -1134,161 +1226,81 @@ export function PurchaseOrdersPage() {
                         </div>
                       </div>
 
-                      {activeReceipt.rejectionReason && (
-                        <div className="bg-red-950/60 border border-red-800/80 p-3 rounded-lg text-red-300">
-                          <span className="font-bold block">Rejection Reason:</span>
-                          <p>{activeReceipt.rejectionReason}</p>
-                        </div>
-                      )}
-
                       <div className="flex space-x-2 pt-2 border-t border-[#27272A]">
-                        <AsyncActionButton
-                          mode="view"
-                          onAction={() => handleViewReceipt(selectedPo.id, selectedPo.poNumber)}
-                          idleIcon={<ExternalLink className="w-3.5 h-3.5" />}
-                          idleLabel="View Receipt File"
-                          loadingLabel="Opening…"
-                          className="bg-[#27272A] hover:bg-[#3F3F46] text-[#FAFAFA] border border-[#3F3F46] font-bold px-3 py-1.5 rounded-lg text-xs"
-                          variant="custom"
-                        />
-                        <AsyncActionButton
-                          mode="download"
-                          onAction={() => handleDownloadReceipt(selectedPo.id, selectedPo.poNumber)}
-                          idleIcon={<Download className="w-3.5 h-3.5" />}
-                          idleLabel="Download Receipt"
-                          loadingLabel="Downloading…"
-                          successLabel="Downloaded!"
-                          className="bg-[#27272A] hover:bg-[#3F3F46] text-[#FAFAFA] border border-[#3F3F46] font-bold px-3 py-1.5 rounded-lg text-xs"
-                          variant="custom"
-                        />
+                        <button
+                          onClick={() => handleViewReceipt(selectedPo.id, selectedPo.poNumber)}
+                          className="bg-[#27272A] hover:bg-[#3F3F46] text-[#FAFAFA] px-3 py-1.5 rounded-lg flex items-center space-x-1.5 transition-colors font-bold"
+                        >
+                          <Eye className="w-3.5 h-3.5 text-amber-400" />
+                          <span>View Receipt</span>
+                        </button>
+                        <button
+                          onClick={() => handleDownloadReceipt(selectedPo.id, selectedPo.poNumber)}
+                          className="bg-[#27272A] hover:bg-[#3F3F46] text-[#FAFAFA] px-3 py-1.5 rounded-lg flex items-center space-x-1.5 transition-colors font-bold"
+                        >
+                          <Download className="w-3.5 h-3.5 text-blue-400" />
+                          <span>Download File</span>
+                        </button>
+                        {selectedPo.status === 'PAYMENT_RECEIPT_SUBMITTED' && (
+                          <button
+                            onClick={() => setAckModalOpen(true)}
+                            className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg font-bold ml-auto"
+                          >
+                            Acknowledge Payment
+                          </button>
+                        )}
+                        {['PAYMENT_ACKNOWLEDGED', 'PAYMENT_RECEIPT_SUBMITTED'].includes(selectedPo.status) && (
+                          <button
+                            onClick={() => setVerifyModalOpen(true)}
+                            className="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg font-bold ml-auto flex items-center space-x-1.5"
+                          >
+                            <ShieldCheck className="w-3.5 h-3.5" />
+                            <span>Verify & Auto-Packing List</span>
+                          </button>
+                        )}
                       </div>
                     </div>
                   ) : (
-                    <p className="text-xs text-[#A1A1AA]">No payment receipts uploaded by the customer yet.</p>
+                    <div className="p-4 bg-[#18181B] rounded-xl text-center text-[#71717A]">
+                      No payment receipt uploaded by customer yet.
+                    </div>
                   )}
                 </div>
 
-                {/* Customer & Shipping Addresses */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="bg-[#09090B] p-4 rounded-xl border border-[#27272A] space-y-1">
-                    <h4 className="font-bold text-xs uppercase text-[#A1A1AA] mb-2 flex items-center space-x-1">
-                      <Building className="w-3.5 h-3.5 text-amber-400" />
-                      <span>Billing Details</span>
-                    </h4>
-                    <p className="font-bold text-[#FAFAFA]">{selectedPo.billingAddress?.attentionTo || selectedPo.customer?.email}</p>
-                    <p className="text-[#A1A1AA]">{selectedPo.billingAddress?.companyName}</p>
-                    <p className="text-[#A1A1AA]">{selectedPo.billingAddress?.addressLine1}</p>
-                    <p className="text-[#A1A1AA]">{selectedPo.billingAddress?.city}, {selectedPo.billingAddress?.state} {selectedPo.billingAddress?.postalCode}</p>
-                    <p className="text-[#A1A1AA]">{selectedPo.billingAddress?.phone || selectedPo.customer?.phone}</p>
+                {/* ─── Line Items (Strictly Verified against PO) ─── */}
+                <div className="bg-[#09090B] rounded-2xl border border-[#27272A] p-4 space-y-3">
+                  <div className="flex items-center justify-between border-b border-[#27272A] pb-2">
+                    <h3 className="font-bold text-sm text-[#FAFAFA]">PO Line Items (Quantity & Rate Verification)</h3>
+                    <span className="text-[10px] text-amber-400 font-mono font-bold">{selectedPo.items?.length || 0} Products</span>
                   </div>
 
-                  <div className="bg-[#09090B] p-4 rounded-xl border border-[#27272A] space-y-1">
-                    <h4 className="font-bold text-xs uppercase text-[#A1A1AA] mb-2 flex items-center space-x-1">
-                      <Truck className="w-3.5 h-3.5 text-blue-400" />
-                      <span>Delivery / Shipping Address</span>
-                    </h4>
-                    <p className="font-bold text-[#FAFAFA]">{selectedPo.deliveryAddress?.attentionTo || selectedPo.customer?.email}</p>
-                    <p className="text-[#A1A1AA]">{selectedPo.deliveryAddress?.companyName}</p>
-                    <p className="text-[#A1A1AA]">{selectedPo.deliveryAddress?.addressLine1}</p>
-                    <p className="text-[#A1A1AA]">{selectedPo.deliveryAddress?.city}, {selectedPo.deliveryAddress?.state} {selectedPo.deliveryAddress?.postalCode}</p>
-                    <p className="text-[#A1A1AA]">{selectedPo.deliveryAddress?.phone}</p>
-                  </div>
-                </div>
-
-                {/* Delivery Notes */}
-                {selectedPo.deliveryInstructions && (
-                  <div className="bg-[#09090B] p-4 rounded-xl border border-[#27272A] space-y-1">
-                    <h4 className="font-bold text-xs uppercase text-amber-400">Special Delivery Instructions</h4>
-                    <p className="text-xs text-[#FAFAFA]">{selectedPo.deliveryInstructions}</p>
-                  </div>
-                )}
-
-                {/* Dispatch Information */}
-                {selectedPo.dispatch && (
-                  <div className="bg-[#09090B] p-4 rounded-xl border border-[#27272A] space-y-2">
-                    <div className="flex items-center space-x-2">
-                      <Truck className="w-4 h-4 text-blue-400" />
-                      <h4 className="font-bold text-xs uppercase text-[#FAFAFA]">Logistics & Dispatch Information</h4>
-                    </div>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
-                      <div>
-                        <span className="text-[#A1A1AA] block text-[10px]">Carrier Name</span>
-                        <span className="font-bold text-[#FAFAFA]">{selectedPo.dispatch.carrierName || 'N/A'}</span>
-                      </div>
-                      <div>
-                        <span className="text-[#A1A1AA] block text-[10px]">Tracking Number</span>
-                        <span className="font-mono font-bold text-blue-400">{selectedPo.dispatch.trackingNumber || 'N/A'}</span>
-                      </div>
-                      <div>
-                        <span className="text-[#A1A1AA] block text-[10px]">Dispatched On</span>
-                        <span className="text-[#FAFAFA]">{new Date(selectedPo.dispatch.dispatchedAt).toLocaleDateString('en-IN')}</span>
-                      </div>
-                    </div>
-                    {selectedPo.dispatch.dispatchNotes && (
-                      <div className="pt-2 border-t border-[#27272A]">
-                        <span className="text-[#A1A1AA] block text-[10px]">Dispatch Notes:</span>
-                        <p className="text-xs text-[#FAFAFA]">{selectedPo.dispatch.dispatchNotes}</p>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Line Items Table */}
-                <div className="bg-[#09090B] rounded-xl border border-[#27272A] overflow-hidden">
-                  <div className="p-3 bg-[#18181B] font-bold text-xs uppercase text-[#FAFAFA] border-b border-[#27272A] flex justify-between">
-                    <span>Ordered Products / Line Items ({selectedPo.items?.length || 0})</span>
-                    <span className="font-mono text-amber-400">Total: ₹{Number(selectedPo.totalAmount).toLocaleString('en-IN')}</span>
-                  </div>
-                  <table className="w-full text-xs">
-                    <thead className="bg-[#09090B] text-[#A1A1AA] border-b border-[#27272A] text-[10px] uppercase">
-                      <tr>
-                        <th className="py-2.5 px-3">Item Description</th>
-                        <th className="py-2.5 px-2 text-center">Qty</th>
-                        <th className="py-2.5 px-3 text-right">Unit Rate</th>
-                        <th className="py-2.5 px-3 text-right">Total</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-[#27272A]">
-                      {selectedPo.items?.map((item) => (
-                        <tr key={item.id} className="hover:bg-[#18181B]">
-                          <td className="py-3 px-3">
-                            <div className="font-bold text-[#FAFAFA]">{item.productName}</div>
-                            {item.sku && <div className="text-[10px] text-[#A1A1AA]">SKU: {item.sku}</div>}
-                          </td>
-                          <td className="py-3 px-2 text-center font-mono font-bold text-[#FAFAFA]">{item.quantity}</td>
-                          <td className="py-3 px-3 text-right font-mono text-[#A1A1AA]">₹{Number(item.rate).toLocaleString('en-IN')}</td>
-                          <td className="py-3 px-3 text-right font-mono font-bold text-[#FAFAFA]">₹{Number(item.total).toLocaleString('en-IN')}</td>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs text-left">
+                      <thead className="bg-[#18181B] text-[#71717A] text-[10px] uppercase font-bold">
+                        <tr>
+                          <th className="py-2 px-3">#</th>
+                          <th className="py-2 px-3">Item Description</th>
+                          <th className="py-2 px-3">SKU</th>
+                          <th className="py-2 px-3 text-center">Qty</th>
+                          <th className="py-2 px-3 text-right">Unit Rate</th>
+                          <th className="py-2 px-3 text-right">Total</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Audit Trail History */}
-                {selectedPo.auditLogs && selectedPo.auditLogs.length > 0 && (
-                  <div className="bg-[#09090B] p-4 rounded-xl border border-[#27272A] space-y-3">
-                    <h4 className="font-bold text-xs uppercase text-[#A1A1AA] flex items-center space-x-1.5">
-                      <Clock className="w-3.5 h-3.5 text-amber-400" />
-                      <span>Purchase Order Lifecycle & Audit History</span>
-                    </h4>
-                    <div className="space-y-2">
-                      {selectedPo.auditLogs.map((h) => (
-                        <div key={h.id} className="flex items-start space-x-2 text-[11px] pb-2 border-b border-[#27272A] last:border-0">
-                          <div className="w-2 h-2 rounded-full bg-amber-400 mt-1.5 flex-shrink-0"></div>
-                          <div className="flex-1">
-                            <div className="flex justify-between">
-                              <span className="font-bold text-[#FAFAFA]">{h.action.replace(/_/g, ' ')}</span>
-                              <span className="text-[#A1A1AA] text-[10px]">
-                                {h.createdAt ? new Date(h.createdAt).toLocaleString('en-IN') : ''}
-                              </span>
-                            </div>
-                            {h.performedByName && <p className="text-[#71717A] text-[10px]">By: {h.performedByName}</p>}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                      </thead>
+                      <tbody className="divide-y divide-[#27272A] text-[#FAFAFA]">
+                        {selectedPo.items?.map((item, idx) => (
+                          <tr key={item.id || idx}>
+                            <td className="py-2 px-3 font-mono text-[#71717A]">{item.slNo || idx + 1}</td>
+                            <td className="py-2 px-3 font-bold">{item.productName}</td>
+                            <td className="py-2 px-3 font-mono text-[#A1A1AA]">{item.sku || '—'}</td>
+                            <td className="py-2 px-3 text-center font-bold text-amber-400">{item.quantity} {item.unit}</td>
+                            <td className="py-2 px-3 text-right font-mono">₹{Number(item.rate).toLocaleString('en-IN')}</td>
+                            <td className="py-2 px-3 text-right font-mono font-bold">₹{Number(item.total || item.amount).toLocaleString('en-IN')}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
-                )}
+                </div>
 
               </div>
             )}
@@ -1296,18 +1308,158 @@ export function PurchaseOrdersPage() {
         </div>
       )}
 
-      {/* ─── MODALS ─── */}
+      {/* ─── E-WAY BILL IRIS MODAL ─── */}
+      {ewayModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-[#18181B] text-[#FAFAFA] border border-[#27272A] rounded-tr-2xl rounded-bl-2xl p-6 space-y-4 shadow-2xl">
+            <h3 className="font-bold text-sm text-[#FAFAFA] flex items-center space-x-2">
+              <QrCode className="w-4 h-4 text-teal-400" />
+              <span>Generate Official GST E-Way Bill (IRIS API)</span>
+            </h3>
+            <form onSubmit={handleGenerateEwayBillSubmit} className="space-y-3 text-xs">
+              <div>
+                <label className="block text-[#A1A1AA] mb-1">Carrier / Transporter Name *</label>
+                <input
+                  type="text"
+                  required
+                  value={ewayCarrierName}
+                  onChange={(e) => setEwayCarrierName(e.target.value)}
+                  className="w-full p-2.5 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] focus:border-teal-400 outline-none"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[#A1A1AA] mb-1">Vehicle Number *</label>
+                  <input
+                    type="text"
+                    required
+                    value={ewayVehicleNo}
+                    onChange={(e) => setEwayVehicleNo(e.target.value)}
+                    className="w-full p-2.5 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] focus:border-teal-400 outline-none font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[#A1A1AA] mb-1">Transporter LR / Doc No</label>
+                  <input
+                    type="text"
+                    placeholder="LR-889922"
+                    value={ewayTransDocNo}
+                    onChange={(e) => setEwayTransDocNo(e.target.value)}
+                    className="w-full p-2.5 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] focus:border-teal-400 outline-none font-mono"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-[#A1A1AA] mb-1">Approx Commercial Road Distance (KM) *</label>
+                <input
+                  type="number"
+                  min={1}
+                  required
+                  value={ewayDistanceKm}
+                  onChange={(e) => setEwayDistanceKm(Number(e.target.value))}
+                  className="w-full p-2.5 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] focus:border-teal-400 outline-none"
+                />
+              </div>
+              <div className="flex justify-end space-x-2 pt-2 border-t border-[#27272A]">
+                <button
+                  type="button"
+                  onClick={() => setEwayModalOpen(false)}
+                  className="px-4 py-2 bg-[#27272A] hover:bg-[#3F3F46] rounded-lg font-bold text-[#A1A1AA]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={ewaySubmitting}
+                  className="px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white rounded-lg font-bold disabled:opacity-50"
+                >
+                  {ewaySubmitting ? 'Generating via IRIS…' : 'Generate E-Way Bill'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
-      {/* 1. Acknowledge Payment Modal */}
+      {/* ─── PRODUCT ISSUE LIST MODAL ─── */}
+      {issueListModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-[#18181B] text-[#FAFAFA] border border-[#27272A] rounded-tr-2xl rounded-bl-2xl p-6 space-y-4 shadow-2xl">
+            <h3 className="font-bold text-sm text-[#FAFAFA] flex items-center space-x-2">
+              <ClipboardList className="w-4 h-4 text-purple-400" />
+              <span>Generate Product Issue List / Delivery Challan</span>
+            </h3>
+            <form onSubmit={handleGenerateIssueListSubmit} className="space-y-3 text-xs">
+              <div>
+                <label className="block text-[#A1A1AA] mb-1">Carrier Name</label>
+                <input
+                  type="text"
+                  value={issueCarrierName}
+                  onChange={(e) => setIssueCarrierName(e.target.value)}
+                  className="w-full p-2.5 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] outline-none"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[#A1A1AA] mb-1">Vehicle Number</label>
+                  <input
+                    type="text"
+                    value={issueVehicleNo}
+                    onChange={(e) => setIssueVehicleNo(e.target.value)}
+                    className="w-full p-2.5 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] outline-none font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[#A1A1AA] mb-1">Transporter Received By</label>
+                  <input
+                    type="text"
+                    value={issueReceivedBy}
+                    onChange={(e) => setIssueReceivedBy(e.target.value)}
+                    className="w-full p-2.5 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] outline-none"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-[#A1A1AA] mb-1">Inspection & Issue Notes</label>
+                <textarea
+                  rows={2}
+                  value={issueNotes}
+                  onChange={(e) => setIssueNotes(e.target.value)}
+                  className="w-full p-2.5 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] outline-none resize-none"
+                />
+              </div>
+              <div className="flex justify-end space-x-2 pt-2 border-t border-[#27272A]">
+                <button
+                  type="button"
+                  onClick={() => setIssueListModalOpen(false)}
+                  className="px-4 py-2 bg-[#27272A] hover:bg-[#3F3F46] rounded-lg font-bold text-[#A1A1AA]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={issueSubmitting}
+                  className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-bold disabled:opacity-50"
+                >
+                  {issueSubmitting ? 'Generating Slip…' : 'Generate Issue Slip'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ─── ACKNOWLEDGE MODAL ─── */}
       {ackModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="w-full max-w-md bg-[#18181B] text-[#FAFAFA] border border-[#27272A] rounded-tr-2xl rounded-bl-2xl p-6 space-y-4 shadow-2xl">
             <h3 className="font-bold text-sm text-[#FAFAFA]">Acknowledge Advance Payment</h3>
             <form onSubmit={handleAcknowledgeSubmit} className="space-y-3 text-xs">
               <div>
-                <label className="block text-[#A1A1AA] mb-1">Amount (₹)</label>
+                <label className="block text-[#A1A1AA] mb-1">Amount Received (₹) *</label>
                 <input
                   type="number"
+                  step="0.01"
                   required
                   value={ackAmount}
                   onChange={(e) => setAckAmount(Number(e.target.value))}
@@ -1315,49 +1467,14 @@ export function PurchaseOrdersPage() {
                 />
               </div>
               <div>
-                <label className="block text-[#A1A1AA] mb-1">UTR / Transaction Ref *</label>
+                <label className="block text-[#A1A1AA] mb-1">UTR / Bank Transaction Reference *</label>
                 <input
                   type="text"
                   required
-                  placeholder="Enter Bank UTR"
+                  placeholder="e.g. CMS9876543210"
                   value={ackUtr}
                   onChange={(e) => setAckUtr(e.target.value)}
                   className="w-full p-2.5 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] focus:border-amber-400 outline-none font-mono"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-[#A1A1AA] mb-1">Method</label>
-                  <select
-                    value={ackMethod}
-                    onChange={(e) => setAckMethod(e.target.value as any)}
-                    className="w-full p-2.5 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] focus:border-amber-400 outline-none"
-                  >
-                    <option value="NEFT">NEFT</option>
-                    <option value="RTGS">RTGS</option>
-                    <option value="IMPS">IMPS</option>
-                    <option value="UPI">UPI</option>
-                    <option value="CHEQUE">CHEQUE</option>
-                    <option value="OTHER">OTHER</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[#A1A1AA] mb-1">Payment Date</label>
-                  <input
-                    type="date"
-                    value={ackDate}
-                    onChange={(e) => setAckDate(e.target.value)}
-                    className="w-full p-2.5 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] focus:border-amber-400 outline-none"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-[#A1A1AA] mb-1">Remarks</label>
-                <textarea
-                  value={ackRemarks}
-                  onChange={(e) => setAckRemarks(e.target.value)}
-                  rows={2}
-                  className="w-full p-2.5 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] focus:border-amber-400 outline-none resize-none"
                 />
               </div>
               <div className="flex justify-end space-x-2 pt-2 border-t border-[#27272A]">
@@ -1371,9 +1488,9 @@ export function PurchaseOrdersPage() {
                 <button
                   type="submit"
                   disabled={ackSubmitting}
-                  className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-lg font-bold disabled:opacity-50"
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold disabled:opacity-50"
                 >
-                  {ackSubmitting ? 'Saving...' : 'Confirm Acknowledgment'}
+                  {ackSubmitting ? 'Logging...' : 'Confirm Acknowledgment'}
                 </button>
               </div>
             </form>
@@ -1381,16 +1498,17 @@ export function PurchaseOrdersPage() {
         </div>
       )}
 
-      {/* 2. Verify Payment Modal */}
+      {/* ─── VERIFY MODAL ─── */}
       {verifyModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="w-full max-w-md bg-[#18181B] text-[#FAFAFA] border border-[#27272A] rounded-tr-2xl rounded-bl-2xl p-6 space-y-4 shadow-2xl">
-            <h3 className="font-bold text-sm text-[#FAFAFA]">Verify Payment & Generate Packing List</h3>
+            <h3 className="font-bold text-sm text-[#FAFAFA]">Digitally Verify Payment & Generate Packing List</h3>
             <form onSubmit={handleVerifySubmit} className="space-y-3 text-xs">
               <div>
-                <label className="block text-[#A1A1AA] mb-1">Confirmed Amount (₹)</label>
+                <label className="block text-[#A1A1AA] mb-1">Confirmed Amount (₹) *</label>
                 <input
                   type="number"
+                  step="0.01"
                   required
                   value={verifyConfirmedAmount}
                   onChange={(e) => setVerifyConfirmedAmount(Number(e.target.value))}
@@ -1409,15 +1527,6 @@ export function PurchaseOrdersPage() {
                   I confirm funds have credited in company account
                 </label>
               </div>
-              <div>
-                <label className="block text-[#A1A1AA] mb-1">Verification Notes</label>
-                <textarea
-                  value={verifyNotes}
-                  onChange={(e) => setVerifyNotes(e.target.value)}
-                  rows={2}
-                  className="w-full p-2.5 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] focus:border-amber-400 outline-none resize-none"
-                />
-              </div>
               <div className="flex justify-end space-x-2 pt-2 border-t border-[#27272A]">
                 <button
                   type="button"
@@ -1431,7 +1540,7 @@ export function PurchaseOrdersPage() {
                   disabled={verifySubmitting || !verifyBankCredit}
                   className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold disabled:opacity-50"
                 >
-                  {verifySubmitting ? 'Verifying...' : 'Verify & Generate Packing List'}
+                  {verifySubmitting ? 'Verifying...' : 'Verify & Auto-Packing List'}
                 </button>
               </div>
             </form>
@@ -1439,7 +1548,7 @@ export function PurchaseOrdersPage() {
         </div>
       )}
 
-      {/* 3. Reject Receipt Modal */}
+      {/* ─── REJECT MODAL ─── */}
       {rejectModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="w-full max-w-md bg-[#18181B] text-[#FAFAFA] border border-[#27272A] rounded-tr-2xl rounded-bl-2xl p-6 space-y-4 shadow-2xl">
@@ -1449,7 +1558,7 @@ export function PurchaseOrdersPage() {
                 <label className="block text-[#A1A1AA] mb-1">Reason for Rejection *</label>
                 <textarea
                   required
-                  placeholder="e.g. UTR mismatch, invalid screenshot, partial amount..."
+                  placeholder="e.g. UTR mismatch, invalid screenshot..."
                   value={rejectReason}
                   onChange={(e) => setRejectReason(e.target.value)}
                   rows={3}
@@ -1477,11 +1586,11 @@ export function PurchaseOrdersPage() {
         </div>
       )}
 
-      {/* 4. Dispatch Modal */}
+      {/* ─── DISPATCH MODAL ─── */}
       {dispatchModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="w-full max-w-md bg-[#18181B] text-[#FAFAFA] border border-[#27272A] rounded-tr-2xl rounded-bl-2xl p-6 space-y-4 shadow-2xl">
-            <h3 className="font-bold text-sm text-[#FAFAFA]">Record Dispatch & Issue Invoice</h3>
+            <h3 className="font-bold text-sm text-[#FAFAFA]">Record Dispatch</h3>
             <form onSubmit={handleDispatchSubmit} className="space-y-3 text-xs">
               <div>
                 <label className="block text-[#A1A1AA] mb-1">Carrier Name *</label>
@@ -1490,16 +1599,16 @@ export function PurchaseOrdersPage() {
                   required
                   value={carrierName}
                   onChange={(e) => setCarrierName(e.target.value)}
-                  className="w-full p-2.5 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] focus:border-amber-400 outline-none"
+                  className="w-full p-2.5 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] outline-none"
                 />
               </div>
               <div>
-                <label className="block text-[#A1A1AA] mb-1">Tracking / Waybill Number</label>
+                <label className="block text-[#A1A1AA] mb-1">Tracking Number</label>
                 <input
                   type="text"
                   value={trackingNumber}
                   onChange={(e) => setTrackingNumber(e.target.value)}
-                  className="w-full p-2.5 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] focus:border-amber-400 outline-none font-mono"
+                  className="w-full p-2.5 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] outline-none font-mono"
                 />
               </div>
               <div>
@@ -1508,16 +1617,7 @@ export function PurchaseOrdersPage() {
                   type="date"
                   value={dispatchedAt}
                   onChange={(e) => setDispatchedAt(e.target.value)}
-                  className="w-full p-2.5 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] focus:border-amber-400 outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-[#A1A1AA] mb-1">Dispatch Notes</label>
-                <textarea
-                  value={dispatchNotes}
-                  onChange={(e) => setDispatchNotes(e.target.value)}
-                  rows={2}
-                  className="w-full p-2.5 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] focus:border-amber-400 outline-none resize-none"
+                  className="w-full p-2.5 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] outline-none"
                 />
               </div>
               <div className="flex justify-end space-x-2 pt-2 border-t border-[#27272A]">
@@ -1531,9 +1631,9 @@ export function PurchaseOrdersPage() {
                 <button
                   type="submit"
                   disabled={dispatchSubmitting}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold disabled:opacity-50"
+                  className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg font-bold disabled:opacity-50"
                 >
-                  {dispatchSubmitting ? 'Dispatching...' : 'Record Dispatch & Generate Invoice'}
+                  {dispatchSubmitting ? 'Dispatching...' : 'Record Dispatch'}
                 </button>
               </div>
             </form>
@@ -1541,7 +1641,7 @@ export function PurchaseOrdersPage() {
         </div>
       )}
 
-      {/* 5. Edit PO Modal */}
+      {/* ─── EDIT PO MODAL (WITH CUSTOM B2B ADVANCE %) ─── */}
       {editModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="w-full max-w-lg bg-[#18181B] text-[#FAFAFA] border border-[#27272A] rounded-tr-2xl rounded-bl-2xl p-6 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
@@ -1554,19 +1654,20 @@ export function PurchaseOrdersPage() {
                     type="text"
                     value={editPoRef}
                     onChange={(e) => setEditPoRef(e.target.value)}
-                    className="w-full p-2.5 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] focus:border-amber-400 outline-none"
+                    className="w-full p-2.5 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] outline-none"
                   />
                 </div>
                 <div>
-                  <label className="block text-[#A1A1AA] mb-1">Advance Required (%)</label>
+                  <label className="block text-[#A1A1AA] mb-1 font-bold text-amber-400">Custom Advance Required (%)</label>
                   <input
                     type="number"
                     min={0}
                     max={100}
                     value={editAdvancePercentage}
                     onChange={(e) => setEditAdvancePercentage(Number(e.target.value))}
-                    className="w-full p-2.5 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] focus:border-amber-400 outline-none"
+                    className="w-full p-2.5 bg-[#09090B] border border-amber-500/40 rounded-lg text-[#FAFAFA] outline-none font-bold"
                   />
+                  <span className="text-[10px] text-[#71717A] mt-0.5 block">Configurable per B2B customer.</span>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -1577,7 +1678,7 @@ export function PurchaseOrdersPage() {
                     min={0}
                     value={editShippingCost}
                     onChange={(e) => setEditShippingCost(Number(e.target.value))}
-                    className="w-full p-2.5 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] focus:border-amber-400 outline-none"
+                    className="w-full p-2.5 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] outline-none"
                   />
                 </div>
                 <div>
@@ -1586,99 +1687,8 @@ export function PurchaseOrdersPage() {
                     type="date"
                     value={editDeliveryDate}
                     onChange={(e) => setEditDeliveryDate(e.target.value)}
-                    className="w-full p-2.5 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] focus:border-amber-400 outline-none"
+                    className="w-full p-2.5 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] outline-none"
                   />
-                </div>
-              </div>
-              <div>
-                <label className="block text-[#A1A1AA] mb-1">Delivery Instructions</label>
-                <textarea
-                  value={editDeliveryInstructions}
-                  onChange={(e) => setEditDeliveryInstructions(e.target.value)}
-                  rows={2}
-                  className="w-full p-2.5 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] focus:border-amber-400 outline-none resize-none"
-                />
-              </div>
-
-              <div className="border-t border-[#27272A] pt-3 space-y-2">
-                <h4 className="font-bold text-xs uppercase text-amber-400">Delivery Address Details</h4>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="block text-[#71717A] mb-0.5">Attention To</label>
-                    <input
-                      type="text"
-                      value={editAttentionTo}
-                      onChange={(e) => setEditAttentionTo(e.target.value)}
-                      className="w-full p-2 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[#71717A] mb-0.5">Company Name</label>
-                    <input
-                      type="text"
-                      value={editCompanyName}
-                      onChange={(e) => setEditCompanyName(e.target.value)}
-                      className="w-full p-2 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] outline-none"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-[#71717A] mb-0.5">Address Line 1</label>
-                  <input
-                    type="text"
-                    value={editAddress1}
-                    onChange={(e) => setEditAddress1(e.target.value)}
-                    className="w-full p-2 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] outline-none"
-                  />
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                  <div>
-                    <label className="block text-[#71717A] mb-0.5">City</label>
-                    <input
-                      type="text"
-                      value={editCity}
-                      onChange={(e) => setEditCity(e.target.value)}
-                      className="w-full p-2 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[#71717A] mb-0.5">State</label>
-                    <input
-                      type="text"
-                      value={editState}
-                      onChange={(e) => setEditState(e.target.value)}
-                      className="w-full p-2 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[#71717A] mb-0.5">Postal Code</label>
-                    <input
-                      type="text"
-                      value={editPostalCode}
-                      onChange={(e) => setEditPostalCode(e.target.value)}
-                      className="w-full p-2 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] outline-none"
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="block text-[#71717A] mb-0.5">Contact Phone</label>
-                    <input
-                      type="text"
-                      value={editPhone}
-                      onChange={(e) => setEditPhone(e.target.value)}
-                      className="w-full p-2 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[#71717A] mb-0.5">Contact Email</label>
-                    <input
-                      type="email"
-                      value={editEmail}
-                      onChange={(e) => setEditEmail(e.target.value)}
-                      className="w-full p-2 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] outline-none"
-                    />
-                  </div>
                 </div>
               </div>
 
@@ -1703,13 +1713,13 @@ export function PurchaseOrdersPage() {
         </div>
       )}
 
-      {/* 6. Settings Modal */}
+      {/* ─── SETTINGS MODAL ─── */}
       {settingsModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="w-full max-w-lg bg-[#18181B] text-[#FAFAFA] border border-[#27272A] rounded-tr-2xl rounded-bl-2xl p-6 space-y-4 shadow-2xl">
             <h3 className="font-bold text-sm text-[#FAFAFA] flex items-center space-x-2">
               <Sliders size={16} className="text-amber-400" />
-              <span>Purchase Order & Bank Configuration</span>
+              <span>Global PO & Bank Configuration</span>
             </h3>
 
             {settingsLoading || !advanceSetting ? (
@@ -1720,79 +1730,19 @@ export function PurchaseOrdersPage() {
             ) : (
               <form onSubmit={handleSaveSettings} className="space-y-4 text-xs">
                 <div>
-                  <label className="block text-[#A1A1AA] mb-1 font-bold">Default Advance Percentage (%)</label>
+                  <label className="block text-[#A1A1AA] mb-1 font-bold">Global Default Advance Percentage (%)</label>
                   <input
                     type="number"
                     min={0}
                     max={100}
                     value={advanceSetting.defaultPercentage}
                     onChange={(e) => setAdvanceSetting({ ...advanceSetting, defaultPercentage: Number(e.target.value) })}
-                    className="w-full p-2.5 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] focus:border-amber-400 outline-none"
+                    className="w-full p-2.5 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] outline-none"
                   />
                   <span className="text-[10px] text-[#71717A] mt-1 block">
-                    Applied as default deposit required when B2B customers generate Purchase Orders.
+                    Default percentage applied if no customer-specific percentage is configured.
                   </span>
                 </div>
-
-                {bankSettings.length > 0 && (
-                  <div className="border-t border-[#27272A] pt-3 space-y-2">
-                    <h4 className="font-bold text-xs uppercase text-amber-400">Primary Bank Account for Wire Transfers</h4>
-                    <div>
-                      <label className="block text-[#71717A] mb-0.5">Bank Name</label>
-                      <input
-                        type="text"
-                        value={bankSettings[0].bankName}
-                        onChange={(e) => {
-                          const updated = [...bankSettings];
-                          updated[0].bankName = e.target.value;
-                          setBankSettings(updated);
-                        }}
-                        className="w-full p-2 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[#71717A] mb-0.5">Account Number</label>
-                      <input
-                        type="text"
-                        value={bankSettings[0].accountNumber}
-                        onChange={(e) => {
-                          const updated = [...bankSettings];
-                          updated[0].accountNumber = e.target.value;
-                          setBankSettings(updated);
-                        }}
-                        className="w-full p-2 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] font-mono outline-none"
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="block text-[#71717A] mb-0.5">IFSC / Routing Code</label>
-                        <input
-                          type="text"
-                          value={bankSettings[0].ifscOrRoutingNumber}
-                          onChange={(e) => {
-                            const updated = [...bankSettings];
-                            updated[0].ifscOrRoutingNumber = e.target.value;
-                            setBankSettings(updated);
-                          }}
-                          className="w-full p-2 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] font-mono outline-none"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[#71717A] mb-0.5">Branch Location</label>
-                        <input
-                          type="text"
-                          value={bankSettings[0].branch || 'Main Branch'}
-                          onChange={(e) => {
-                            const updated = [...bankSettings];
-                            updated[0].branch = e.target.value;
-                            setBankSettings(updated);
-                          }}
-                          className="w-full p-2 bg-[#09090B] border border-[#27272A] rounded-lg text-[#FAFAFA] outline-none"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                )}
 
                 <div className="flex justify-end space-x-2 pt-3 border-t border-[#27272A]">
                   <button

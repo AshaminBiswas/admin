@@ -15,6 +15,7 @@ const EditProductPage = lazy(() => import("../../pages/EditProductPage").then((m
 const OrdersPage = lazy(() => import("../../pages/OrdersPage").then((m) => ({ default: m.OrdersPage })));
 const QuotesPage = lazy(() => import("../../pages/QuotesPage").then((m) => ({ default: m.QuotesPage })));
 const PurchaseOrdersPage = lazy(() => import("../../pages/PurchaseOrdersPage").then((m) => ({ default: m.PurchaseOrdersPage })));
+const PoSubmissionsPage = lazy(() => import("../../pages/PoSubmissionsPage").then((m) => ({ default: m.PoSubmissionsPage })));
 const AppointmentsPage = lazy(() => import("../../pages/AppointmentsPage").then((m) => ({ default: m.AppointmentsPage })));
 const AuditPage = lazy(() => import("../../pages/AuditPage").then((m) => ({ default: m.AuditPage })));
 const AdminManagementPage = lazy(() => import("../../pages/AdminManagementPage").then((m) => ({ default: m.AdminManagementPage })));
@@ -168,6 +169,8 @@ export function AdminLayout() {
         return <QuotesPage />;
       case "purchase-orders":
         return <PurchaseOrdersPage />;
+      case "po-submissions":
+        return <PoSubmissionsPage />;
       case "appointments":
         return <AppointmentsPage />;
       case "enquiries":
