@@ -181,11 +181,15 @@ export async function fetchAdminApi<T = any>(
     cleanEndpoint.includes("/auth/2fa/authenticate");
 
   try {
-    let response = await fetch(url, { ...options, headers }).catch(async () => {
+    let response = await fetch(url, { ...options, headers }).catch(async (e) => {
       // Fallback to Render URL if localhost fails to connect
       if (API_BASE_URL.includes("localhost")) {
-        url = `https://prc-backend-6sw7.onrender.com/api/v1${cleanEndpoint}`;
-        return await fetch(url, { ...options, headers });
+        try {
+          const fallbackUrl = `https://prc-backend-6sw7.onrender.com/api/v1${cleanEndpoint}`;
+          return await fetch(fallbackUrl, { ...options, headers });
+        } catch (fallbackError) {
+          throw new Error("Network connection error");
+        }
       }
       throw new Error("Network connection error");
     });

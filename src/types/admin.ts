@@ -246,8 +246,7 @@ export type AdminView =
   | 'products-create'
   | 'products-edit'
   | 'quotes'
-  | 'purchase-orders'
-  | 'po-submissions'
+
   | 'reports'
   | 'reviews'
   | 'roles'
@@ -524,3 +523,4 @@ export const CANCEL_REASON_CODES: { code: string; label: string }[] = [
   { code: '3', label: 'Order Cancelled' },
   { code: '4', label: 'Others' },
 ];
+
