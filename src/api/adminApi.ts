@@ -90,14 +90,14 @@ function addRefreshSubscriber(cb: (token: string) => void) {
 // ─── Core Refresh Function ─────────────────────────────────────────────────────
 export async function refreshAdminToken(refreshToken: string): Promise<{
   success: boolean;
-  data?: { accessToken: string; refreshToken: string };
+  data?: { accessToken: string; refreshToken: string; user?: any };
   accessToken?: string;
   refreshToken?: string;
+  user?: any;
 }> {
   const body = JSON.stringify({ refreshToken });
   const headers = { "Content-Type": "application/json" };
 
-  // Try primary (local or configured) URL first
   try {
     const res = await fetch(`${API_BASE_URL}/auth/refresh-token`, {
       method: "POST",
@@ -105,19 +105,8 @@ export async function refreshAdminToken(refreshToken: string): Promise<{
       body,
     });
     if (res.ok) return await res.json();
-  } catch {
-    // fall through to production
-  }
-
-  // Fallback to production Render URL
-  try {
-    const prodRes = await fetch(
-      "https://prc-backend-6sw7.onrender.com/api/v1/auth/refresh-token",
-      { method: "POST", headers, body }
-    );
-    if (prodRes.ok) return await prodRes.json();
-  } catch {
-    // network failure
+  } catch (err) {
+    console.error("[PRC Admin] Token refresh network error:", err);
   }
 
   return { success: false };
@@ -141,9 +130,10 @@ export async function proactiveTokenRefresh(): Promise<boolean> {
     const newAccessToken = result.data?.accessToken || (result as any).accessToken;
     const newRefreshToken =
       result.data?.refreshToken || (result as any).refreshToken || refreshToken;
+    const refreshedUser = result.data?.user || (result as any).user;
 
     if (newAccessToken) {
-      setAdminTokens(newAccessToken, newRefreshToken);
+      setAdminTokens(newAccessToken, newRefreshToken, refreshedUser);
       onTokenRefreshed(newAccessToken);
       console.info("[PRC Admin] Token proactively refreshed — next refresh in 59 min.");
       return true;
@@ -181,18 +171,7 @@ export async function fetchAdminApi<T = any>(
     cleanEndpoint.includes("/auth/2fa/authenticate");
 
   try {
-    let response = await fetch(url, { ...options, headers }).catch(async (e) => {
-      // Fallback to Render URL if localhost fails to connect
-      if (API_BASE_URL.includes("localhost")) {
-        try {
-          const fallbackUrl = `https://prc-backend-6sw7.onrender.com/api/v1${cleanEndpoint}`;
-          return await fetch(fallbackUrl, { ...options, headers });
-        } catch (fallbackError) {
-          throw new Error("Network connection error");
-        }
-      }
-      throw new Error("Network connection error");
-    });
+    let response = await fetch(url, { ...options, headers });
 
     // Reactive refresh on 401/403 (token expired mid-session)
     if (
@@ -216,9 +195,10 @@ export async function fetchAdminApi<T = any>(
             refreshed.data?.refreshToken ||
             (refreshed as any).refreshToken ||
             storedRefreshToken;
+          const refreshedUser = refreshed.data?.user || (refreshed as any).user;
 
           if (newAccessToken) {
-            setAdminTokens(newAccessToken, newRefreshToken);
+            setAdminTokens(newAccessToken, newRefreshToken, refreshedUser);
             onTokenRefreshed(newAccessToken);
             headers["Authorization"] = `Bearer ${newAccessToken}`;
 

@@ -152,9 +152,9 @@ export function AdminHeader({ isCollapsed, onToggleCollapse, onToggleMobile }: A
 
   const displayName = adminUser?.firstName
     ? `${adminUser.firstName} ${adminUser.lastName || ""}`.trim()
-    : "Executive Admin";
-  const displayEmail = adminUser?.email || "admin@prchardware.com";
-  const displayPhone = adminUser?.phone || "+91 9876543210";
+    : "Administrator";
+  const displayEmail = adminUser?.email || "";
+  const displayPhone = adminUser?.phone || "";
   const rawRole = adminUser?.role as any;
   const roleString = typeof rawRole === "object" && rawRole !== null
     ? (rawRole.slug ?? rawRole.name ?? "super_admin")

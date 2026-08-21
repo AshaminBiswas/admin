@@ -143,6 +143,13 @@ export function AdminManagementPage() {
 
   const debouncedSearch = useDebounce(searchQuery, 300);
 
+  const isCustomerRole = (role?: any): boolean => {
+    if (!role) return false;
+    const slug = (typeof role === "object" && role !== null ? role.slug ?? role.name : role) || "";
+    const clean = String(slug).toLowerCase().replace(/_/g, "-").trim();
+    return ["customer", "b2b-customer", "b2b-buyer", "b2b_customer", "b2b_buyer", "user", "retail-customer"].includes(clean);
+  };
+
   // Fetch Admins & Roles
   const loadData = useCallback(async () => {
     setIsLoading(true);
@@ -154,19 +161,27 @@ export function AdminManagementPage() {
 
       if (rolesRes && rolesRes.success !== false) {
         const rData = rolesRes.data ?? (Array.isArray(rolesRes) ? rolesRes : []);
-        setRolesList(rData);
-        if (rData.length > 0) {
+        // Only staff/admin/custom roles can be assigned in AdminManagementPage
+        const staffRoles = rData.filter((r: Role) => !isCustomerRole(r));
+        setRolesList(staffRoles);
+        if (staffRoles.length > 0) {
           setSelectedRoleId((prev) => {
-            if (prev) return prev;
-            const defaultAdminRole = rData.find((r: Role) => r.slug === "admin" || r.slug === "super_admin") || rData[0];
-            return defaultAdminRole ? defaultAdminRole.id : rData[0].id;
+            if (prev && staffRoles.some((r: Role) => r.id === prev)) return prev;
+            const defaultAdminRole = staffRoles.find((r: Role) => r.slug === "admin" || r.slug === "super_admin" || r.slug === "super-admin") || staffRoles[0];
+            return defaultAdminRole ? defaultAdminRole.id : staffRoles[0].id;
           });
         }
       }
 
       if (usersRes && usersRes.success !== false) {
         const uData = usersRes.data ?? (Array.isArray(usersRes) ? usersRes : []);
-        setAdminsList(uData);
+        // Filter out retail & B2B customer accounts — strictly show only staff/admin/custom roles
+        const staffAdmins = uData.filter((u: any) => {
+          if (isCustomerRole(u.role)) return false;
+          if (!u.role && (u.companyName || u.gstin)) return false;
+          return true;
+        });
+        setAdminsList(staffAdmins);
       }
     } catch (err: any) {
       console.error("[Admin Fetch Error]:", err);
@@ -208,7 +223,7 @@ export function AdminManagementPage() {
         roleFilter === "ALL" ||
         (roleFilter === "SUPER_ADMIN" && adminRoleSlug.includes("super")) ||
         (roleFilter === "STORE_MANAGER" && (adminRoleSlug.includes("manager") || adminRoleSlug === "admin")) ||
-        (roleFilter === "SUPPORT" && adminRoleSlug.includes("support"));
+        (roleFilter === "SUPPORT" && (adminRoleSlug.includes("support") || (!adminRoleSlug.includes("super") && !adminRoleSlug.includes("manager") && adminRoleSlug !== "admin")));
 
       return matchSearch && matchStatus && matchRole;
     });
@@ -644,9 +659,9 @@ export function AdminManagementPage() {
                 </tr>
               ) : (
                 filteredAdmins.map((admin) => {
-                  const roleName = admin.role?.name || admin.role?.slug || admin.role || "Admin";
-                  const isRootSuper = (admin.role?.slug || admin.role?.name || admin.role || "").toLowerCase().includes("super");
-                  const isCustomRole = admin.role && admin.role.isSystem === false;
+                  const roleName = admin.role?.name || admin.role?.slug || (typeof admin.role === "string" ? admin.role : "Staff Member");
+                  const isRootSuper = (admin.role?.slug || admin.role?.name || (typeof admin.role === "string" ? admin.role : "")).toLowerCase().includes("super");
+                  const isCustomRole = admin.role && (admin.role.isSystem === false || (!isRootSuper && admin.role.slug !== "admin" && admin.role.slug !== "store_manager" && admin.role.slug !== "store-manager"));
 
                   return (
                     <tr key={admin.id} className="hover:bg-[#27272A]/40 transition-colors">

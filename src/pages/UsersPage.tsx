@@ -231,8 +231,26 @@ export function UsersPage({ onNavigateB2BPricing }: UsersPageProps) {
   // Create User
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!firstName || !lastName || !email || !roleId) {
+    if (!firstName || !lastName || !email) {
       setFeedback({ type: "error", text: "Please fill in all mandatory fields." });
+      return;
+    }
+
+    // Resolve proper customer / B2B role
+    let effectiveRoleId = roleId;
+    if (accountType === "B2B") {
+      const b2bRole =
+        roles.find((r) => ["b2b-customer", "b2b_customer", "b2b-buyer", "b2b_buyer"].includes(r.slug?.toLowerCase())) ||
+        roles.find((r) => r.slug === "customer") ||
+        roles[0];
+      if (b2bRole) effectiveRoleId = b2bRole.id;
+    } else {
+      const custRole = roles.find((r) => ["customer", "user"].includes(r.slug?.toLowerCase())) || roles[0];
+      if (custRole) effectiveRoleId = custRole.id;
+    }
+
+    if (!effectiveRoleId) {
+      setFeedback({ type: "error", text: "No valid customer role configured in the system." });
       return;
     }
 
@@ -247,7 +265,7 @@ export function UsersPage({ onNavigateB2BPricing }: UsersPageProps) {
         phone,
         companyName: accountType === "B2B" ? companyName : undefined,
         gstin: accountType === "B2B" ? gstin : undefined,
-        roleId,
+        roleId: effectiveRoleId,
         status,
       });
 

@@ -53,21 +53,8 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
     const storedUser = getStoredAdminUser();
     if (token && storedUser && !isSessionExpired()) {
       const fixed = normalizeRole(storedUser);
-      // Persist the fixed user back so localStorage no longer has the object-form role
       if (fixed) localStorage.setItem("prc_admin_user_session", JSON.stringify(fixed));
       return fixed;
-    }
-    if (token && !isSessionExpired()) {
-      return {
-        id: "admin-1",
-        email: "admin@prchardware.com",
-        firstName: "Executive",
-        lastName: "Admin",
-        role: "super_admin",
-        phone: "+91 9876543210",
-        status: "ACTIVE",
-        isTwoFactorEnabled: true,
-      };
     }
     return null;
   });
@@ -251,24 +238,16 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
       try {
         const res = await adminAuthService.getProfile();
         if (res.success && res.user) {
-          setAdminUser(res.user);
-          localStorage.setItem("prc_admin_user_session", JSON.stringify(res.user));
+          const norm = normalizeRole(res.user);
+          setAdminUser(norm);
+          if (norm) localStorage.setItem("prc_admin_user_session", JSON.stringify(norm));
         } else if (!storedUser) {
-          const defaultUser: AdminUser = {
-            id: "admin-1",
-            email: "admin@prchardware.com",
-            firstName: "Executive",
-            lastName: "Admin",
-            role: "super_admin",
-            phone: "+91 9876543210",
-            status: "ACTIVE",
-            isTwoFactorEnabled: true,
-          };
-          setAdminUser(defaultUser);
-          localStorage.setItem("prc_admin_user_session", JSON.stringify(defaultUser));
+          // If no stored session and getProfile fails, cleanly reset auth
+          clearAdminTokens();
+          setAdminUser(null);
         }
       } catch {
-        if (storedUser) setAdminUser(storedUser);
+        if (storedUser) setAdminUser(normalizeRole(storedUser));
       } finally {
         setIsLoading(false);
       }
