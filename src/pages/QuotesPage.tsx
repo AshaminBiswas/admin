@@ -284,7 +284,13 @@ export function QuotesPage() {
       setSelectedQuote(data);
       setEditItems(data.items || []);
       setEditShippingCost(data.shippingCost !== null && data.shippingCost !== undefined ? String(data.shippingCost) : "");
-      setEditAdvancePercentage(data.advancePercentage !== null && data.advancePercentage !== undefined ? String(data.advancePercentage) : "30");
+      if (data.customerProposedAdvancePercent !== null && data.customerProposedAdvancePercent !== undefined) {
+        setEditAdvancePercentage(String(data.customerProposedAdvancePercent));
+      } else if (data.advancePercentage !== null && data.advancePercentage !== undefined) {
+        setEditAdvancePercentage(String(data.advancePercentage));
+      } else {
+        setEditAdvancePercentage("30");
+      }
       setIsEditingItems(false);
     } catch {
       setErrorMsg("Failed to load quotation details.");
@@ -806,17 +812,24 @@ export function QuotesPage() {
                       ₹{q.grandTotal.toLocaleString("en-IN")}
                     </td>
                     <td className="py-3.5 px-3 text-center">
-                      <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full uppercase ${
-                        q.status === "APPROVED"
-                          ? "bg-emerald-950/80 text-emerald-400 border border-emerald-500/40"
-                          : q.status === "REJECTED"
-                          ? "bg-rose-950/80 text-rose-400 border border-rose-500/40"
-                          : q.status === "UNDER_REVIEW"
-                          ? "bg-blue-950/80 text-blue-400 border border-blue-500/40"
-                          : "bg-amber-950/80 text-amber-400 border border-amber-500/40"
-                      }`}>
-                        {q.status}
-                      </span>
+                      <div className="flex flex-col items-center gap-1">
+                        <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full uppercase ${
+                          q.status === "APPROVED"
+                            ? "bg-emerald-950/80 text-emerald-400 border border-emerald-500/40"
+                            : q.status === "REJECTED"
+                            ? "bg-rose-950/80 text-rose-400 border border-rose-500/40"
+                            : q.status === "UNDER_REVIEW"
+                            ? "bg-blue-950/80 text-blue-400 border border-blue-500/40"
+                            : "bg-amber-950/80 text-amber-400 border border-amber-500/40"
+                        }`}>
+                          {q.status}
+                        </span>
+                        {q.customerProposedAdvancePercent !== null && q.customerProposedAdvancePercent !== undefined && (
+                          <span className="text-[9px] font-mono text-amber-300 bg-amber-950/60 px-1.5 py-0.5 rounded border border-amber-500/30">
+                            Req: {q.customerProposedAdvancePercent}%
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="py-3.5 px-3 text-center">
                       {q.digitalSignature ? (
@@ -976,6 +989,55 @@ export function QuotesPage() {
                     )}
                   </div>
                 </div>
+
+                {/* Customer Terms Negotiation Request Card */}
+                {selectedQuote.customerProposedAdvancePercent !== null && selectedQuote.customerProposedAdvancePercent !== undefined && (
+                  <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-950/50 via-amber-900/30 to-amber-950/50 border border-amber-500/40 space-y-3 shadow-lg">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-amber-300 flex items-center gap-2 text-xs">
+                        <AlertCircle size={16} className="text-amber-400 shrink-0" />
+                        <span>Customer Requested Terms Revision</span>
+                      </span>
+                      <span className="text-[10px] font-mono font-bold text-amber-400 bg-amber-950 px-2.5 py-0.5 rounded-full border border-amber-500/40">
+                        Edit 1/1 Used
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 pt-1">
+                      <div className="p-3 bg-[#09090B] rounded-xl border border-[#27272A]">
+                        <span className="text-[10px] text-[#71717A] uppercase font-bold block">Previous Advance Rate:</span>
+                        <span className="font-mono font-bold text-[#FAFAFA] text-sm">
+                          {selectedQuote.advancePercentage !== null && selectedQuote.advancePercentage !== undefined
+                            ? `${selectedQuote.advancePercentage}%`
+                            : "30% (Default)"}
+                        </span>
+                      </div>
+                      <div className="p-3 bg-amber-950/80 rounded-xl border border-amber-500/50">
+                        <span className="text-[10px] text-amber-300 uppercase font-bold block">Customer Proposed Advance:</span>
+                        <span className="font-mono font-black text-amber-300 text-base">
+                          {selectedQuote.customerProposedAdvancePercent}%
+                        </span>
+                      </div>
+                    </div>
+
+                    {selectedQuote.customerEditRemark && (
+                      <div className="p-3 bg-[#09090B] rounded-xl border border-[#27272A]">
+                        <span className="text-[10px] text-amber-400 font-bold uppercase block">Customer Reason / Remark:</span>
+                        <p className="text-xs text-[#FAFAFA] italic mt-1 leading-relaxed">"{selectedQuote.customerEditRemark}"</p>
+                      </div>
+                    )}
+
+                    {editAdvancePercentage !== String(selectedQuote.customerProposedAdvancePercent) && (
+                      <button
+                        type="button"
+                        onClick={() => setEditAdvancePercentage(String(selectedQuote.customerProposedAdvancePercent))}
+                        className="text-xs font-bold text-amber-300 hover:text-amber-200 underline pt-1 inline-flex items-center gap-1.5"
+                      >
+                        <span>Accept & Apply proposed {selectedQuote.customerProposedAdvancePercent}% to approval form →</span>
+                      </button>
+                    )}
+                  </div>
+                )}
 
                 {/* Status Transitions Bar */}
                 <div className="p-4 rounded-xl bg-[#09090B] border border-[#27272A] space-y-2">
@@ -1309,11 +1371,47 @@ export function QuotesPage() {
                     <Clock size={16} className="text-[#A855F7]" />
                     <span>Revision & Action Audit Trail</span>
                   </h4>
+
+                  {/* Customer / Admin Formal Revisions */}
+                  {selectedQuote.revisions && selectedQuote.revisions.length > 0 && (
+                    <div className="space-y-2 mb-3">
+                      <span className="text-[10px] uppercase font-bold text-amber-400 block">Formal Terms Revisions</span>
+                      {selectedQuote.revisions.map((rev) => (
+                        <div key={rev.id} className="p-3 bg-amber-950/20 border border-amber-500/30 rounded-xl space-y-1.5 text-xs">
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-amber-300">
+                              {rev.changedBy === "CUSTOMER" ? "Customer Revision Request" : "Admin Re-Approval & Sign"}
+                            </span>
+                            <span className="text-[10px] text-[#71717A]">
+                              {new Date(rev.createdAt).toLocaleString("en-IN")}
+                            </span>
+                          </div>
+                          {rev.remark && (
+                            <p className="text-xs text-[#FAFAFA] bg-[#09090B] p-2 rounded-lg border border-[#27272A] italic">
+                              "{rev.remark}"
+                            </p>
+                          )}
+                          <div className="flex flex-wrap gap-3 text-[10px] text-[#A1A1AA]">
+                            {rev.previousValues?.advancePercentage !== undefined && (
+                              <span>Prior Advance: <strong className="text-[#FAFAFA]">{rev.previousValues.advancePercentage}%</strong></span>
+                            )}
+                            {rev.newValues?.customerProposedAdvancePercent !== undefined && (
+                              <span>Proposed Advance: <strong className="text-amber-400">{rev.newValues.customerProposedAdvancePercent}%</strong></span>
+                            )}
+                            {rev.newValues?.advancePercentage !== undefined && (
+                              <span>Final Advance: <strong className="text-emerald-400">{rev.newValues.advancePercentage}%</strong></span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
                   <div className="space-y-2 max-h-48 overflow-y-auto">
-                    {selectedQuote.activityLogs?.length === 0 ? (
-                      <p className="text-xs text-[#71717A]">No activity recorded yet.</p>
+                    {(!selectedQuote.activityLogs || selectedQuote.activityLogs.length === 0) ? (
+                      <p className="text-xs text-[#71717A]">No activity logs recorded yet.</p>
                     ) : (
-                      selectedQuote.activityLogs?.map((log) => (
+                      selectedQuote.activityLogs.map((log) => (
                         <div key={log.id} className="p-3 bg-[#09090B] rounded-xl border border-[#27272A] flex items-start justify-between gap-3 text-xs">
                           <div>
                             <span className="font-bold text-xs text-[#FAFAFA] block">{log.note}</span>

@@ -34,6 +34,17 @@ export interface AdminQuoteActivityLog {
   };
 }
 
+export interface AdminQuoteRevision {
+  id: string;
+  quoteId?: string;
+  changedBy: string;
+  changedById?: string | null;
+  previousValues: any;
+  newValues: any;
+  remark: string;
+  createdAt: string;
+}
+
 export interface AdminQuoteDetail {
   id: string;
   quoteNumber: string;
@@ -58,6 +69,10 @@ export interface AdminQuoteDetail {
   taxTotal: number;
   grandTotal: number;
   advancePercentage?: number | null;
+  customerProposedAdvancePercent?: number | null;
+  customerEditCount?: number;
+  customerEditRemark?: string | null;
+  canCustomerEdit?: boolean;
   notes?: string | null;
   adminNotes?: string | null;
   termsAccepted: boolean;
@@ -75,6 +90,7 @@ export interface AdminQuoteDetail {
   updatedAt: string;
   items: AdminQuoteLineItem[];
   activityLogs: AdminQuoteActivityLog[];
+  revisions?: AdminQuoteRevision[];
   user?: {
     id: string;
     email: string;
