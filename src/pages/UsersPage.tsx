@@ -167,6 +167,29 @@ export function UsersPage({ onNavigateB2BPricing }: UsersPageProps) {
 
   const debouncedSearch = useDebounce(searchQuery, 300);
 
+  const isCustomerRole = (role?: any): boolean => {
+    if (!role) return true;
+    const slug = (typeof role === "object" && role !== null ? role.slug ?? role.name : role) || "";
+    const clean = String(slug).toLowerCase().replace(/_/g, "-").trim();
+    return ["customer", "b2b-customer", "b2b-buyer", "b2b_customer", "b2b_buyer", "user", "retail-customer", "client"].includes(clean);
+  };
+
+  const isStaffOrAdmin = (user: any): boolean => {
+    if (!user) return false;
+    const role = user.role;
+    if (!role) return false;
+    const slug = (typeof role === "object" && role !== null ? role.slug ?? role.name : role) || "";
+    const clean = String(slug).toLowerCase().replace(/_/g, "-").trim();
+    if ([
+      "super-admin", "super_admin", "admin", "staff", "manager", "support",
+      "operations", "sales", "accountant", "inventory-manager", "inventory_manager",
+      "custom-staff"
+    ].includes(clean)) {
+      return true;
+    }
+    return !isCustomerRole(role);
+  };
+
   const loadData = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -176,16 +199,20 @@ export function UsersPage({ onNavigateB2BPricing }: UsersPageProps) {
           limit,
           search: debouncedSearch.trim() || undefined,
           status: statusFilter !== "ALL" ? statusFilter : undefined,
+          type: "customer",
         }),
         getCachedRoles(),
       ]);
 
       if (rList && rList.length > 0) {
-        setRoles(rList);
+        // Only customer/B2B roles can be assigned in UsersPage
+        const customerRoles = rList.filter((r: Role) => isCustomerRole(r));
+        const availableRoles = customerRoles.length > 0 ? customerRoles : rList;
+        setRoles(availableRoles);
         setRoleId((prev) => {
-          if (prev) return prev;
-          const custRole = rList.find((r: Role) => r.slug === "customer") || rList[0];
-          return custRole ? custRole.id : rList[0].id;
+          if (prev && availableRoles.some((r: Role) => r.id === prev)) return prev;
+          const custRole = availableRoles.find((r: Role) => r.slug === "customer") || availableRoles[0];
+          return custRole ? custRole.id : availableRoles[0].id;
         });
       }
 
@@ -193,9 +220,11 @@ export function UsersPage({ onNavigateB2BPricing }: UsersPageProps) {
         const uData = uRes.data ?? (Array.isArray(uRes) ? uRes : []);
         const items = Array.isArray(uData) ? uData : uData.items || uData.users || [];
         const meta = uData.meta || uRes.meta || {};
-        setUsers(items);
-        setTotalCount(meta.total || items.length || 0);
-        setTotalPages(meta.totalPages || Math.ceil((meta.total || items.length || 1) / limit) || 1);
+        // Extra client-side guard: filter out any admin/staff accounts
+        const customerAccounts = items.filter((u: any) => !isStaffOrAdmin(u));
+        setUsers(customerAccounts);
+        setTotalCount(customerAccounts.length);
+        setTotalPages(Math.max(1, Math.ceil(customerAccounts.length / limit)));
       }
     } catch (err: any) {
       console.error("[Users Fetch Error]:", err);

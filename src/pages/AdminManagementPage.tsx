@@ -155,7 +155,7 @@ export function AdminManagementPage() {
     setIsLoading(true);
     try {
       const [usersRes, rolesRes] = await Promise.all([
-        usersApi.list({ limit: 100 }),
+        usersApi.list({ limit: 100, type: "admin" }),
         rolesApi.list(),
       ]);
 
