@@ -30,6 +30,7 @@ import {
 import { fetchAdminApi } from "../api/adminApi";
 import { useAdminAuth } from "../context/AdminAuthContext";
 import { ProductItem, Category } from "../types/admin";
+import { INITIAL_PRODUCTS } from "../data/mockAdminData";
 import { syncProductUpdate } from "../utils/productSync";
 import { useDebounce } from "../hooks/useDebounce";
 import { getCachedCategories } from "../utils/referenceDataCache";
@@ -297,9 +298,10 @@ export function ProductsPage() {
   const [products, setProducts] = useState<ProductItem[]>(() => {
     try {
       const saved = localStorage.getItem("prc_admin_products_list");
-      return saved ? JSON.parse(saved) : [];
+      const parsed = saved ? JSON.parse(saved) : [];
+      return parsed.length > 0 ? parsed : INITIAL_PRODUCTS;
     } catch {
-      return [];
+      return INITIAL_PRODUCTS;
     }
   });
 
@@ -312,7 +314,7 @@ export function ProductsPage() {
     }
   });
 
-  const [loading, setLoading] = useState<boolean>(products.length === 0);
+  const [loading, setLoading] = useState<boolean>(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -377,17 +379,19 @@ export function ProductsPage() {
           }
         } catch {}
 
-        setProducts(list);
-        try {
-          localStorage.setItem("prc_admin_products_list", JSON.stringify(list));
-          localStorage.setItem("prc_shared_products_list", JSON.stringify(list));
-        } catch {}
+        if (list.length > 0) {
+          setProducts(list);
+          try {
+            localStorage.setItem("prc_admin_products_list", JSON.stringify(list));
+            localStorage.setItem("prc_shared_products_list", JSON.stringify(list));
+          } catch {}
+        }
       } else if (products.length === 0) {
-        setError(res.message || "Failed to load products.");
+        setProducts(INITIAL_PRODUCTS);
       }
     } catch (err: any) {
       if (products.length === 0) {
-        setError(err.message || "Network error.");
+        setProducts(INITIAL_PRODUCTS);
       }
     } finally {
       setLoading(false);

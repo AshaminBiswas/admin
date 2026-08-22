@@ -170,8 +170,13 @@ export async function fetchAdminApi<T = any>(
     cleanEndpoint.includes("/auth/2fa/login") ||
     cleanEndpoint.includes("/auth/2fa/authenticate");
 
+  // Configure 3.5s timeout controller to prevent infinite hanging when server is sleeping/unreachable
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 3500);
+
   try {
-    let response = await fetch(url, { ...options, headers });
+    let response = await fetch(url, { ...options, headers, signal: options.signal || controller.signal });
+    clearTimeout(timeoutId);
 
     // Reactive refresh on 401/403 (token expired mid-session)
     if (
@@ -203,8 +208,16 @@ export async function fetchAdminApi<T = any>(
             headers["Authorization"] = `Bearer ${newAccessToken}`;
 
             // Retry the original request with the new token
-            const retryResponse = await fetch(url, { ...options, headers });
-            return await retryResponse.json();
+            const retryCtrl = new AbortController();
+            const retryTimeout = setTimeout(() => retryCtrl.abort(), 3500);
+            try {
+              const retryResponse = await fetch(url, { ...options, headers, signal: retryCtrl.signal });
+              clearTimeout(retryTimeout);
+              return await retryResponse.json();
+            } catch (retryErr) {
+              clearTimeout(retryTimeout);
+              return { success: false, error: { code: "RETRY_FAILED", message: "Retry request timed out or failed" } };
+            }
           } else {
             // Refresh token itself has expired — clear session
             clearAdminTokens();
@@ -219,12 +232,18 @@ export async function fetchAdminApi<T = any>(
           return new Promise((resolve) => {
             addRefreshSubscriber((newToken: string) => {
               headers["Authorization"] = `Bearer ${newToken}`;
-              fetch(url, { ...options, headers })
-                .then((r) => r.json())
+              const queueCtrl = new AbortController();
+              const queueTimeout = setTimeout(() => queueCtrl.abort(), 3500);
+              fetch(url, { ...options, headers, signal: queueCtrl.signal })
+                .then((r) => {
+                  clearTimeout(queueTimeout);
+                  return r.json();
+                })
                 .then(resolve)
-                .catch(() =>
-                  resolve({ success: false, message: "Token refresh failed" })
-                );
+                .catch(() => {
+                  clearTimeout(queueTimeout);
+                  resolve({ success: false, message: "Token refresh failed" });
+                });
             });
           });
         }
@@ -234,11 +253,15 @@ export async function fetchAdminApi<T = any>(
     const resData = await response.json();
     return resData;
   } catch (error: any) {
+    clearTimeout(timeoutId);
+    const isTimeout = error.name === "AbortError" || error.name === "TimeoutError";
     return {
       success: false,
       error: {
-        code: "NETWORK_ERROR",
-        message: error.message || "Failed to reach PRC Admin API server.",
+        code: isTimeout ? "TIMEOUT" : "NETWORK_ERROR",
+        message: isTimeout
+          ? "PRC Admin API connection timed out (3.5s)."
+          : error.message || "Failed to reach PRC Admin API server.",
       },
     };
   }

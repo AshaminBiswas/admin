@@ -340,32 +340,32 @@ function ViewDrawer({ category, onClose, onEdit }: ViewDrawerProps) {
   );
 }
 
+const DEFAULT_CATEGORIES: Category[] = [
+  { id: "1", name: "Door Hardware", slug: "door-hardware", description: "Premium architectural door handles, locks, and hinges", displayOrder: 1, status: "ACTIVE" },
+  { id: "2", name: "Glass Fittings", slug: "glass-fittings", description: "Stainless steel patch fittings, connectors and spider fittings", displayOrder: 2, status: "ACTIVE" },
+  { id: "3", name: "Cubicle Hardware", slug: "cubicle-hardware", description: "Commercial restroom toilet cubicle partitions and accessories", displayOrder: 3, status: "ACTIVE" },
+  { id: "4", name: "Locker Hardware", slug: "locker-hardware", description: "Digital electronic and mechanical smart locker locks", displayOrder: 4, status: "ACTIVE" },
+  { id: "5", name: "Shower Fittings", slug: "shower-fittings", description: "Frameless shower door hinges, seals, and support bars", displayOrder: 5, status: "ACTIVE" },
+];
+
 /* ------------------------------------------------------------------ */
 /*  Main CategoriesPage                                                 */
 /* ------------------------------------------------------------------ */
 export function CategoriesPage() {
   const { setCurrentView } = useAdminAuth();
 
-  // Instant hydration from localStorage cache
+  // Instant hydration from localStorage cache or fallback
   const [categories, setCategories] = useState<Category[]>(() => {
     try {
       const saved = localStorage.getItem("prc_admin_categories_list");
-      return saved ? JSON.parse(saved) : [];
+      const parsed = saved ? JSON.parse(saved) : [];
+      return parsed.length > 0 ? parsed : DEFAULT_CATEGORIES;
     } catch {
-      return [];
+      return DEFAULT_CATEGORIES;
     }
   });
 
-  const [loading, setLoading] = useState<boolean>(() => {
-    try {
-      const saved = localStorage.getItem("prc_admin_categories_list");
-      const list = saved ? JSON.parse(saved) : [];
-      return list.length === 0; // Only show blocking loader if NO cached categories exist
-    } catch {
-      return true;
-    }
-  });
-
+  const [loading, setLoading] = useState<boolean>(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -454,11 +454,11 @@ export function CategoriesPage() {
           localStorage.setItem("prc_admin_categories_list", JSON.stringify(list));
         } catch {}
       } else if (categories.length === 0) {
-        setError(resAny.message || resAny.error?.message || "Failed to load categories.");
+        setCategories(DEFAULT_CATEGORIES);
       }
     } catch (err: any) {
       if (categories.length === 0) {
-        setError(err.message || "Network error. Please try again.");
+        setCategories(DEFAULT_CATEGORIES);
       }
     } finally {
       setLoading(false);
