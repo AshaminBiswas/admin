@@ -103,75 +103,9 @@ export function VariantsPageSkeleton() {
 
 /* ─── Main Variants Page Component ───────────────────────────────────────────── */
 
-const FALLBACK_VARIANTS: ProductVariantItem[] = [
-  {
-    id: "VAR-101-1",
-    productId: "PRC-PROD-101",
-    sku: "PRC-MORT-COP-01-100MM",
-    name: "Antique Copper - 100mm Backset",
-    price: 3499,
-    salePrice: 3199,
-    offerPrice: 3199,
-    stock: 25,
-    isAvailable: true,
-    image: "https://images.unsplash.com/photo-1558002038-1055907df827?auto=format&fit=crop&w=600&q=80",
-    attributes: { Finish: "Antique Copper", Size: "100mm" },
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    product: {
-      id: "PRC-PROD-101",
-      name: "Architectural Mortise Door Handle Set - Antique Copper",
-      sku: "PRC-MORT-COP-01",
-      thumbnail: "https://images.unsplash.com/photo-1558002038-1055907df827?auto=format&fit=crop&w=600&q=80",
-    }
-  },
-  {
-    id: "VAR-101-2",
-    productId: "PRC-PROD-101",
-    sku: "PRC-MORT-COP-01-125MM",
-    name: "Antique Copper - 125mm Heavy",
-    price: 3899,
-    salePrice: 3499,
-    offerPrice: 3499,
-    stock: 20,
-    isAvailable: true,
-    image: "https://images.unsplash.com/photo-1558002038-1055907df827?auto=format&fit=crop&w=600&q=80",
-    attributes: { Finish: "Antique Copper", Size: "125mm" },
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    product: {
-      id: "PRC-PROD-101",
-      name: "Architectural Mortise Door Handle Set - Antique Copper",
-      sku: "PRC-MORT-COP-01",
-      thumbnail: "https://images.unsplash.com/photo-1558002038-1055907df827?auto=format&fit=crop&w=600&q=80",
-    }
-  },
-  {
-    id: "VAR-102-1",
-    productId: "PRC-PROD-102",
-    sku: "PRC-PATCH-SS304-SATIN",
-    name: "SS 304 Satin Finish Kit",
-    price: 2890,
-    salePrice: 2690,
-    offerPrice: 2690,
-    stock: 28,
-    isAvailable: true,
-    image: "https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=600&q=80",
-    attributes: { Material: "SS 304", Finish: "Satin Brush" },
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    product: {
-      id: "PRC-PROD-102",
-      name: "Stainless Steel 304 Glass Door Patch Fitting Set",
-      sku: "PRC-PATCH-SS304",
-      thumbnail: "https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=600&q=80",
-    }
-  }
-];
-
 export function VariantsPage() {
   // Data States
-  const [variantsList, setVariantsList] = useState<ProductVariantItem[]>(FALLBACK_VARIANTS);
+  const [variantsList, setVariantsList] = useState<ProductVariantItem[]>([]);
   const [productsList, setProductsList] = useState<ProductItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [loadingProducts, setLoadingProducts] = useState(false);
@@ -180,7 +114,7 @@ export function VariantsPage() {
   const [page, setPage] = useState(1);
   const [limit] = useState(25);
   const [totalPages, setTotalPages] = useState(1);
-  const [totalCount, setTotalCount] = useState(3);
+  const [totalCount, setTotalCount] = useState(0);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [productFilter, setProductFilter] = useState<string>("ALL");

@@ -30,7 +30,6 @@ import {
 import { fetchAdminApi } from "../api/adminApi";
 import { useAdminAuth } from "../context/AdminAuthContext";
 import { ProductItem, Category } from "../types/admin";
-import { INITIAL_PRODUCTS } from "../data/mockAdminData";
 import { syncProductUpdate } from "../utils/productSync";
 import { useDebounce } from "../hooks/useDebounce";
 import { getCachedCategories } from "../utils/referenceDataCache";
@@ -299,9 +298,9 @@ export function ProductsPage() {
     try {
       const saved = localStorage.getItem("prc_admin_products_list");
       const parsed = saved ? JSON.parse(saved) : [];
-      return parsed.length > 0 ? parsed : INITIAL_PRODUCTS;
+      return parsed;
     } catch {
-      return INITIAL_PRODUCTS;
+      return [];
     }
   });
 
@@ -387,11 +386,11 @@ export function ProductsPage() {
           } catch {}
         }
       } else if (products.length === 0) {
-        setProducts(INITIAL_PRODUCTS);
+        setProducts([]);
       }
     } catch (err: any) {
       if (products.length === 0) {
-        setProducts(INITIAL_PRODUCTS);
+        setProducts([]);
       }
     } finally {
       setLoading(false);

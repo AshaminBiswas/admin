@@ -278,7 +278,7 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
 
     if (res.success && res.requires2FA) {
       setPending2FA(true);
-      setMfaToken(res.mfaToken || `temp_mfa_${Date.now()}`);
+      setMfaToken(res.mfaToken || null);
       return { success: true, requires2FA: true, message: res.message };
     }
 

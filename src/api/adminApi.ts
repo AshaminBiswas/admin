@@ -13,6 +13,10 @@ export const MAX_SESSION_MS = 60 * 60 * 1000; // 60 min hard cap
 export const IDLE_TIMEOUT_MS = 10 * 60 * 1000; // 10 min inactivity timeout
 export const PROACTIVE_REFRESH_MS = 59 * 60 * 1000; // 59 min
 
+export function isOfflineToken(_token?: string | null): boolean {
+  return false;
+}
+
 export function getAdminToken(): string | null {
   return localStorage.getItem(ADMIN_TOKEN_KEY);
 }
@@ -121,7 +125,6 @@ export async function proactiveTokenRefresh(): Promise<boolean> {
   const refreshToken = getAdminRefreshToken();
   if (!refreshToken) return false;
 
-  // Skip if already refreshing (another request triggered it)
   if (isRefreshingToken) return false;
 
   isRefreshingToken = true;
@@ -170,9 +173,10 @@ export async function fetchAdminApi<T = any>(
     cleanEndpoint.includes("/auth/2fa/login") ||
     cleanEndpoint.includes("/auth/2fa/authenticate");
 
-  // Configure 3.5s timeout controller to prevent infinite hanging when server is sleeping/unreachable
+  // Configure timeout controller (25s for auth/login cold starts, 15s for general requests)
+  const timeoutMs = isAuthEndpoint ? 25000 : 15000;
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 3500);
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     let response = await fetch(url, { ...options, headers, signal: options.signal || controller.signal });
@@ -209,7 +213,7 @@ export async function fetchAdminApi<T = any>(
 
             // Retry the original request with the new token
             const retryCtrl = new AbortController();
-            const retryTimeout = setTimeout(() => retryCtrl.abort(), 3500);
+            const retryTimeout = setTimeout(() => retryCtrl.abort(), 15000);
             try {
               const retryResponse = await fetch(url, { ...options, headers, signal: retryCtrl.signal });
               clearTimeout(retryTimeout);
@@ -233,7 +237,7 @@ export async function fetchAdminApi<T = any>(
             addRefreshSubscriber((newToken: string) => {
               headers["Authorization"] = `Bearer ${newToken}`;
               const queueCtrl = new AbortController();
-              const queueTimeout = setTimeout(() => queueCtrl.abort(), 3500);
+              const queueTimeout = setTimeout(() => queueCtrl.abort(), 15000);
               fetch(url, { ...options, headers, signal: queueCtrl.signal })
                 .then((r) => {
                   clearTimeout(queueTimeout);
@@ -260,7 +264,7 @@ export async function fetchAdminApi<T = any>(
       error: {
         code: isTimeout ? "TIMEOUT" : "NETWORK_ERROR",
         message: isTimeout
-          ? "PRC Admin API connection timed out (3.5s)."
+          ? `PRC Admin API connection timed out (${Math.round(timeoutMs / 1000)}s). Server may be waking up from sleep, please try again.`
           : error.message || "Failed to reach PRC Admin API server.",
       },
     };

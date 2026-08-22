@@ -114,53 +114,6 @@ interface UsersPageProps {
   onNavigateB2BPricing?: (customerId?: string) => void;
 }
 
-const FALLBACK_USERS: any[] = [
-  {
-    id: "USR-001",
-    firstName: "Rahul",
-    lastName: "Sharma",
-    email: "rahul.sharma@example.com",
-    phone: "+91 9876543210",
-    status: "ACTIVE",
-    role: { id: "r-cust", name: "Retail Customer", slug: "customer" },
-    createdAt: "2026-08-01T10:00:00.000Z",
-  },
-  {
-    id: "USR-002",
-    firstName: "Pankaj",
-    lastName: "Mehta",
-    companyName: "Acme Constructions Ltd",
-    gstin: "27AAAAA0000A1Z5",
-    email: "procurement@acmeconstructions.in",
-    phone: "+91 9811223344",
-    status: "ACTIVE",
-    role: { id: "r-b2b", name: "B2B Contractor", slug: "b2b_buyer" },
-    createdAt: "2026-07-28T14:30:00.000Z",
-  },
-  {
-    id: "USR-003",
-    firstName: "Vikram",
-    lastName: "Singh",
-    companyName: "Pacific Design Studio",
-    gstin: "07BBBBB1111B2Z8",
-    email: "projects@pacificdesigns.com",
-    phone: "+91 9765432109",
-    status: "ACTIVE",
-    role: { id: "r-b2b", name: "B2B Architect", slug: "b2b_buyer" },
-    createdAt: "2026-08-03T09:15:00.000Z",
-  },
-  {
-    id: "USR-004",
-    firstName: "Sneha",
-    lastName: "Reddy",
-    email: "sneha.reddy@gmail.com",
-    phone: "+91 9988776655",
-    status: "ACTIVE",
-    role: { id: "r-cust", name: "Retail Customer", slug: "customer" },
-    createdAt: "2026-08-05T16:20:00.000Z",
-  },
-];
-
 export function UsersPage({ onNavigateB2BPricing }: UsersPageProps) {
   const { adminUser } = useAdminAuth();
   const rawRole = adminUser?.role as any;
@@ -169,7 +122,7 @@ export function UsersPage({ onNavigateB2BPricing }: UsersPageProps) {
     : (rawRole ?? "super_admin");
   const isSuperAdmin = roleSlug === "super_admin";
 
-  const [users, setUsers] = useState<any[]>(FALLBACK_USERS);
+  const [users, setUsers] = useState<any[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -179,7 +132,7 @@ export function UsersPage({ onNavigateB2BPricing }: UsersPageProps) {
   // Pagination
   const [page, setPage] = useState(1);
   const [limit] = useState(25);
-  const [totalCount, setTotalCount] = useState(4);
+  const [totalCount, setTotalCount] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
 
   // Modals

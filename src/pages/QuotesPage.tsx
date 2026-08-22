@@ -171,90 +171,15 @@ export function QuotesPageSkeleton() {
   );
 }
 
-const FALLBACK_QUOTES: AdminQuoteDetail[] = [
-  {
-    id: "Q-701",
-    quoteNumber: "PRC-QUOTE-2026-701",
-    referenceNo: "PRC-QUOTE-2026-701",
-    financialYear: "2026-27",
-    sequenceNo: 701,
-    projectName: "Office Restroom Cubicle Installation",
-    firstName: "Amit",
-    lastName: "Kapoor",
-    companyName: "Kapoor & Associates Architects",
-    gstNo: "27AAACK1234A1Z5",
-    email: "amit@kapoorarch.com",
-    phone: "+91 9820011223",
-    status: "PENDING",
-    basicPrice: 355932,
-    gstAmount: 64068,
-    subtotal: 355932,
-    taxTotal: 64068,
-    grandTotal: 420000,
-    termsAccepted: true,
-    customerResponse: "pending",
-    isDeleted: false,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    items: [
-      {
-        productId: "PRC-PROD-103",
-        productNameSnapshot: "Commercial Toilet Cubicle Hardware Kit (Nylon Black)",
-        unit: "SET",
-        quantity: 50,
-        rate: 5490,
-        amount: 274500,
-      }
-    ],
-    activityLogs: [],
-  },
-  {
-    id: "Q-702",
-    quoteNumber: "PRC-QUOTE-2026-702",
-    referenceNo: "PRC-QUOTE-2026-702",
-    financialYear: "2026-27",
-    sequenceNo: 702,
-    projectName: "Corporate Smart Locker Lockout",
-    firstName: "Sunita",
-    lastName: "Deshmukh",
-    companyName: "Metro Office Workspaces Pvt Ltd",
-    gstNo: "27AAACM9876B1Z2",
-    email: "sunita@metroworkspaces.com",
-    phone: "+91 9930044556",
-    status: "APPROVED",
-    basicPrice: 576271,
-    gstAmount: 103729,
-    subtotal: 576271,
-    taxTotal: 103729,
-    grandTotal: 680000,
-    termsAccepted: true,
-    customerResponse: "accepted",
-    isDeleted: false,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    items: [
-      {
-        productId: "PRC-PROD-104",
-        productNameSnapshot: "Heavy Duty Digital Electronic Locker Lock",
-        unit: "PCS",
-        quantity: 80,
-        rate: 8500,
-        amount: 680000,
-      }
-    ],
-    activityLogs: [],
-  }
-];
-
 export function QuotesPage() {
-  const [quotes, setQuotes] = useState<AdminQuoteDetail[]>(FALLBACK_QUOTES);
+  const [quotes, setQuotes] = useState<AdminQuoteDetail[]>([]);
   const [metrics, setMetrics] = useState<QuoteMetrics>({
-    total: 2,
-    pending: 1,
+    total: 0,
+    pending: 0,
     underReview: 0,
-    approved: 1,
+    approved: 0,
     rejected: 0,
-    digitallySigned: 1,
+    digitallySigned: 0,
   });
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");

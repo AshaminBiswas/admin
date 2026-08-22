@@ -117,54 +117,11 @@ export function AppointmentsPageSkeleton() {
 
 /* ─── Main Appointments Page Component ───────────────────────────────────────── */
 
-const FALLBACK_APPOINTMENTS: AdminAppointmentItem[] = [
-  {
-    id: "APT-301",
-    customerName: "Deepak Verma",
-    customerEmail: "deepak.verma@example.com",
-    customerPhone: "+91 9871122334",
-    serviceId: "srv-1",
-    serviceName: "Restroom Cubicle Hardware Installation",
-    service: {
-      id: "srv-1",
-      name: "Restroom Cubicle Hardware Installation",
-      durationMinutes: 120,
-      price: 2500,
-    },
-    date: "2026-08-10",
-    startTime: "11:00",
-    endTime: "13:00",
-    status: "CONFIRMED",
-    notes: "Site address: Plot 42, Sector 18, Cyber City, Gurugram",
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: "APT-302",
-    customerName: "Priya Nair",
-    customerEmail: "priya.nair@example.com",
-    customerPhone: "+91 9967788990",
-    serviceId: "srv-2",
-    serviceName: "Glass Door Patch Fitting Alignment",
-    service: {
-      id: "srv-2",
-      name: "Glass Door Patch Fitting Alignment",
-      durationMinutes: 90,
-      price: 1800,
-    },
-    date: "2026-08-09",
-    startTime: "14:30",
-    endTime: "16:00",
-    status: "CONFIRMED",
-    notes: "Site address: Tower B, Floor 14, BKC Commercial Hub, Mumbai",
-    createdAt: new Date().toISOString(),
-  },
-];
-
 export function AppointmentsPage() {
   const [activeTab, setActiveTab] = useState<"BOOKINGS" | "SERVICES">("BOOKINGS");
 
   // Bookings State
-  const [appointments, setAppointments] = useState<AdminAppointmentItem[]>(FALLBACK_APPOINTMENTS);
+  const [appointments, setAppointments] = useState<AdminAppointmentItem[]>([]);
   const [loadingBookings, setLoadingBookings] = useState<boolean>(false);
   const [errorBookings, setErrorBookings] = useState<string>("");
   const [successMsg, setSuccessMsg] = useState<string>("");

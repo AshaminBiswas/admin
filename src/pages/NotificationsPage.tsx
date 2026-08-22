@@ -229,7 +229,10 @@ export function NotificationsPage() {
       getAdminToken() ||
       localStorage.getItem("admin_access_token") ||
       localStorage.getItem("token");
-    if (!token) return;
+    if (!token) {
+      setSseConnected(false);
+      return;
+    }
 
     const sseUrl = `${API_BASE_URL}/events/stream?token=${encodeURIComponent(token)}`;
 

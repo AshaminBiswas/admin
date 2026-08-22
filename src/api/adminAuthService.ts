@@ -1,4 +1,4 @@
-import { fetchAdminApi, setAdminTokens, clearAdminTokens, getAdminRefreshToken } from "./adminApi";
+import { fetchAdminApi, setAdminTokens, clearAdminTokens, getAdminRefreshToken, getStoredAdminUser } from "./adminApi";
 import { AdminUser, TwoFactorLoginResult, TwoFactorSetupData, CreateAdminPayload, CreatedAdminResult } from "../types/admin";
 import { logAdminActivity } from "./auditService";
 
@@ -275,8 +275,8 @@ export const adminAuthService = {
     if (res.success && res.data) {
       const backendRequires2FA = res.data.requires2FA || res.data.twoFactorRequired;
       const local2FA = isLocal2FAEnabled();
-      const accessToken = res.data.accessToken || "demo_access_token";
-      const refreshToken = res.data.refreshToken || "demo_refresh_token";
+      const accessToken = res.data.accessToken;
+      const refreshToken = res.data.refreshToken;
       const rawUser = res.data.user || res.data;
       // role can be a string slug OR an object { id, name, slug } from the API
       const resolvedRole = typeof rawUser.role === "object" && rawUser.role !== null
@@ -312,41 +312,6 @@ export const adminAuthService = {
       };
     }
 
-    // 2. Local Fallback Authentication: Check created local admins
-    const createdAdmins = getStoredCreatedAdmins();
-    const matchedCreatedAdmin = createdAdmins.find(
-      (a) => a.email.toLowerCase() === cleanEmail && a.pass === password
-    );
-
-    if (matchedCreatedAdmin) {
-      const is2FA = isLocal2FAEnabled();
-      const user: AdminUser = matchedCreatedAdmin.user;
-      const userSecret = getAdminSecretForUser(cleanEmail);
-      const mfaToken = `temp_mfa_local_${Date.now()}`;
-      pendingMfaSessions.set(mfaToken, {
-        accessToken: `local_token_${Date.now()}`,
-        refreshToken: `local_refresh_${Date.now()}`,
-        user,
-        secret: userSecret,
-      });
-
-      if (is2FA) {
-        return {
-          success: true,
-          requires2FA: true,
-          mfaToken,
-          message: "Enter 6-digit Authenticator code to finalize login.",
-        };
-      }
-
-      setAdminTokens(`local_token_${Date.now()}`, `local_refresh_${Date.now()}`, user);
-      return {
-        success: true,
-        user,
-        message: "Executive authorization granted.",
-      };
-    }
-
     return {
       success: false,
       message: res.error?.message || res.message || "Invalid executive email or password credentials.",
@@ -370,16 +335,13 @@ export const adminAuthService = {
     const userEmail = pendingSession?.user?.email || "admin@prchardware.com";
     const activeSecret = pendingSession?.secret || getAdminSecretForUser(userEmail);
 
-    // 1. Strictly verify the candidate code against RFC 6238 TOTP Authenticator Key FIRST
+    // 1. Verify against TOTP Authenticator Key or Emergency Backup Codes
     const isLiveTOTPMatch = await verifyTOTPCode(activeSecret, cleanCode);
-
-    // 2. Check Emergency Backup Codes (One-Time Use)
     const validBackupCodes = getBackupCodesForUser(userEmail);
     const isBackupMatch = validBackupCodes.some(
       (b) => b.replace(/[\s-]+/g, "").toUpperCase() === cleanCode.toUpperCase()
     );
 
-    // STRICT SECURITY GATE: If code does NOT match real TOTP or backup code, REJECT IMMEDIATELY!
     if (!isLiveTOTPMatch && !isBackupMatch) {
       return {
         success: false,
@@ -387,7 +349,7 @@ export const adminAuthService = {
       };
     }
 
-    // 3. Optional: Sync with backend /auth/2fa/login if available
+    // 2. Sync with backend /auth/2fa/login
     let remoteAccessToken = "";
     let remoteRefreshToken = "";
     try {
@@ -400,10 +362,10 @@ export const adminAuthService = {
         remoteRefreshToken = res.data.refreshToken || "";
       }
     } catch {
-      // offline fallback
+      // Backend sync failed — use session tokens from login step
     }
 
-    // 4. Grant verified access
+    // 3. Grant verified access
     const verifiedUser: AdminUser = pendingSession?.user || {
       id: "admin-1",
       email: userEmail,
@@ -412,8 +374,15 @@ export const adminAuthService = {
       role: "super_admin",
       isTwoFactorEnabled: true,
     };
-    const accessToken = remoteAccessToken || pendingSession?.accessToken || "demo_admin_access_token_2fa";
-    const refreshToken = remoteRefreshToken || pendingSession?.refreshToken || "demo_admin_refresh_token_2fa";
+    const accessToken = remoteAccessToken || pendingSession?.accessToken || "";
+    const refreshToken = remoteRefreshToken || pendingSession?.refreshToken || "";
+
+    if (!accessToken) {
+      return {
+        success: false,
+        message: "Authentication failed: no access token received. Please log in again.",
+      };
+    }
 
     if (isBackupMatch) {
       consumeBackupCode(userEmail, cleanCode);
@@ -574,12 +543,7 @@ export const adminAuthService = {
       return { success: false, message: "Please provide your admin password or 2FA authenticator code to confirm." };
     }
 
-    // 1. Local Credential & 2FA Validation FIRST
-    const createdAdmins = getStoredCreatedAdmins();
-    const isPasswordMatch =
-      cleanStr === "AdminPass123!" ||
-      createdAdmins.some((a) => a.pass === cleanStr);
-
+    // 1. Local 2FA Validation — must provide valid TOTP code or backup code
     const activeSecret = getAdminSecretForUser("admin@prchardware.com");
     const isLiveTOTPMatch = await verifyTOTPCode(activeSecret, cleanStr);
 
@@ -588,10 +552,10 @@ export const adminAuthService = {
       (b) => b.replace(/[\s-]+/g, "").toUpperCase() === cleanStr.replace(/[\s-]+/g, "").toUpperCase()
     );
 
-    if (!isPasswordMatch && !isLiveTOTPMatch && !isBackupMatch) {
+    if (!isLiveTOTPMatch && !isBackupMatch) {
       return {
         success: false,
-        message: "Invalid admin password or authenticator OTP code! Two-Factor Authentication remains active for security.",
+        message: "Invalid authenticator OTP code or backup code! Two-Factor Authentication remains active for security.",
       };
     }
 
@@ -613,26 +577,34 @@ export const adminAuthService = {
   },
 
   async getProfile(): Promise<{ success: boolean; user?: AdminUser }> {
-    const res = await fetchAdminApi("/auth/me");
     const local2FA = isLocal2FAEnabled();
+    const cachedUser = getStoredAdminUser();
 
-    if (res.success && res.data) {
-      const resRole = res.data.role;
-      const resolvedRole = typeof resRole === "object" && resRole !== null
-        ? (resRole.slug ?? resRole.name ?? "super_admin")
-        : (resRole ?? "super_admin");
-      return {
-        success: true,
-        user: {
-          id: res.data.id || "admin-1",
-          email: res.data.email,
-          firstName: res.data.firstName || "Executive",
-          lastName: res.data.lastName || "Admin",
-          role: resolvedRole,
-          isTwoFactorEnabled: local2FA,
-        },
-      };
+    try {
+      const res = await fetchAdminApi("/auth/me");
+      if (res.success && res.data) {
+        const resRole = res.data.role;
+        const resolvedRole = typeof resRole === "object" && resRole !== null
+          ? (resRole.slug ?? resRole.name ?? "super_admin")
+          : (resRole ?? "super_admin");
+        return {
+          success: true,
+          user: {
+            id: res.data.id || "admin-1",
+            email: res.data.email,
+            firstName: res.data.firstName || "Executive",
+            lastName: res.data.lastName || "Admin",
+            role: resolvedRole,
+            isTwoFactorEnabled: local2FA,
+          },
+        };
+      }
+    } catch {}
+
+    if (cachedUser) {
+      return { success: true, user: { ...cachedUser, isTwoFactorEnabled: local2FA } };
     }
+
     return { success: false };
   },
 

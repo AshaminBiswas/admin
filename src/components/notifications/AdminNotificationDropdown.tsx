@@ -107,7 +107,10 @@ export function AdminNotificationDropdown({
   // Real-time Server-Sent Events (SSE) Listener
   useEffect(() => {
     const token = getAdminToken();
-    if (!token) return;
+    if (!token) {
+      setSseConnected(false);
+      return;
+    }
 
     const sseUrl = `${API_BASE_URL}/events/stream?token=${encodeURIComponent(token)}`;
 
