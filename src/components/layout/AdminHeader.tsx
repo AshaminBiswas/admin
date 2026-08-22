@@ -226,7 +226,7 @@ export function AdminHeader({ isCollapsed, onToggleCollapse, onToggleMobile }: A
 
           {/* Storefront Link */}
           <a
-            href={(import.meta as any).env?.VITE_STOREFRONT_URL || (import.meta.env.PROD ? "https://frontend-sage-pi-65.vercel.app" : "http://localhost:5173")}
+            href={(import.meta as any).env?.VITE_STOREFRONT_URL || ((import.meta as any).env?.PROD ? "https://frontend-sage-pi-65.vercel.app" : "http://localhost:5173")}
             target="_blank"
             rel="noopener noreferrer"
             className="hidden sm:flex items-center gap-1.5 bg-[#8B5CF6]/10 dark:bg-[#8B5CF6]/15 border border-[#8B5CF6]/40 hover:bg-[#8B5CF6] hover:text-white text-[#8B5CF6] dark:text-[#A855F7] font-bold text-xs px-3 py-1.5 rounded-tr-lg rounded-bl-lg transition-all duration-200"
