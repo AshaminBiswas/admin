@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import {
   Package,
   Search,
-  PlusMinus,
+  Settings2,
   RefreshCw,
   Box,
   MapPin,
@@ -280,7 +280,7 @@ export function InventoryStockPage() {
                         onClick={() => openAdjustModal(stock)}
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 dark:bg-[#27272A] hover:bg-indigo-50 hover:text-indigo-600 dark:hover:bg-indigo-500/20 dark:hover:text-indigo-400 text-slate-700 dark:text-[#E4E4E7] rounded-lg font-bold text-xs transition-colors"
                       >
-                        <PlusMinus size={14} />
+                        <Settings2 size={14} />
                         Adjust
                       </button>
                     </td>
@@ -324,7 +324,7 @@ export function InventoryStockPage() {
           <div className="relative bg-white dark:bg-[#18181B] w-full max-w-lg rounded-2xl shadow-2xl border border-slate-200 dark:border-[#27272A] overflow-hidden animate-in zoom-in-95 duration-200">
             <div className="px-6 py-4 border-b border-slate-200 dark:border-[#27272A] flex items-center justify-between bg-slate-50 dark:bg-[#1F1929]">
               <h3 className="text-lg font-bold text-slate-900 dark:text-[#FAFAFA] flex items-center gap-2">
-                <PlusMinus className="text-[#8B5CF6]" size={18} />
+                <Settings2 className="text-[#8B5CF6]" size={18} />
                 Adjust Stock
               </h3>
               <button onClick={() => setAdjustModalOpen(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-[#FAFAFA] transition-colors">
