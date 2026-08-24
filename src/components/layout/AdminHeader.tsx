@@ -243,8 +243,8 @@ export function AdminHeader({ isCollapsed, onToggleCollapse, onToggleMobile }: A
               className="flex items-center gap-1.5 p-1 rounded-full hover:bg-slate-100 dark:hover:bg-[#27272A] transition-all focus:outline-none"
               title="Account Profile & Settings"
             >
-              <div className="w-8 h-8 md:w-9 md:h-9 rounded-full bg-[#8B5CF6]/20 border-2 border-[#8B5CF6] flex items-center justify-center text-[#8B5CF6] dark:text-[#FAFAFA] font-black text-xs md:text-sm shadow-md shadow-[#8B5CF6]/20 hover:scale-105 transition-transform">
-                {displayInitial}
+              <div className="w-8 h-8 md:w-9 md:h-9 rounded-full bg-[#EACEAA] border-2 border-[#8B5CF6] flex items-center justify-center overflow-hidden shadow-md shadow-[#8B5CF6]/20 hover:scale-105 transition-transform">
+                <img src="/prc-logo.png" alt="PRC Logo" className="w-full h-full object-cover" />
               </div>
               <ChevronDown
                 size={14}
@@ -259,8 +259,8 @@ export function AdminHeader({ isCollapsed, onToggleCollapse, onToggleMobile }: A
               <div className="absolute right-0 mt-3 w-80 rounded-2xl bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] shadow-2xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
                 {/* Header Info */}
                 <div className="p-4 bg-gradient-to-r from-purple-50 to-white dark:from-[#1F1929] dark:to-[#18181B] border-b border-slate-200 dark:border-[#27272A] flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-full bg-[#8B5CF6] text-white flex items-center justify-center font-black text-lg shadow-lg shadow-[#8B5CF6]/30">
-                    {displayInitial}
+                  <div className="w-12 h-12 rounded-full bg-[#EACEAA] flex items-center justify-center overflow-hidden shadow-lg shadow-[#8B5CF6]/30 border-2 border-[#D39858]">
+                    <img src="/prc-logo.png" alt="PRC Logo" className="w-full h-full object-cover" />
                   </div>
                   <div className="min-w-0 flex-1">
                     <h3 className="text-sm font-bold text-slate-900 dark:text-[#FAFAFA] truncate">{displayName}</h3>
