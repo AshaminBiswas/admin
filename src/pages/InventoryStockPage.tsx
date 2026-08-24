@@ -181,13 +181,36 @@ export function InventoryStockPage() {
           <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-[#A1A1AA]" />
         </div>
         
-        <button
-          onClick={fetchStock}
-          className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-100 dark:bg-[#27272A] hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-[#FAFAFA] rounded-xl font-bold text-sm transition-all"
-        >
-          <RefreshCw size={16} className={isLoading ? "animate-spin" : ""} />
-          Refresh
-        </button>
+        <div className="flex gap-2 w-full sm:w-auto">
+          <button
+            onClick={async () => {
+              try {
+                setFeedback({ type: "success", text: "Syncing missing products..." });
+                const res = await fetchAdminApi("/inventory/stock/sync-legacy", { method: "POST" });
+                if (res?.success !== false) {
+                  setFeedback({ type: "success", text: `Successfully synced ${res.data?.synced || 0} products to inventory.` });
+                  fetchStock();
+                } else {
+                  setFeedback({ type: "error", text: res.message || "Failed to sync products." });
+                }
+              } catch(e: any) {
+                setFeedback({ type: "error", text: e.message || "Error syncing products." });
+              }
+            }}
+            className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-50 dark:bg-indigo-500/10 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-500/20 rounded-xl font-bold text-sm transition-all"
+          >
+            <RefreshCw size={16} />
+            Sync Missing Products
+          </button>
+          
+          <button
+            onClick={fetchStock}
+            className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-100 dark:bg-[#27272A] hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-[#FAFAFA] rounded-xl font-bold text-sm transition-all"
+          >
+            <RefreshCw size={16} className={isLoading ? "animate-spin" : ""} />
+            Refresh
+          </button>
+        </div>
       </div>
 
       {/* Table */}
