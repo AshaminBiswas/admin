@@ -221,6 +221,22 @@ export interface Role {
 }
 
 export type AdminView =
+  | 'inventory-analytics'
+  | 'inventory-audit'
+  | 'inventory-barcode'
+  | 'inventory-dashboard'
+  | 'inventory-dispatches'
+  | 'inventory-pos'
+  | 'inventory-products'
+  | 'inventory-purchases'
+  | 'inventory-reports'
+  | 'inventory-search'
+  | 'inventory-stock'
+  | 'inventory-suppliers'
+  | 'inventory-transfers'
+  | 'inventory-ventures'
+  | 'inventory-warehouses'
+  | 'inventory-allocation'
   | 'allocation'
   | 'appointments'
   | 'auth'

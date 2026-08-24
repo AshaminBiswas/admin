@@ -35,7 +35,7 @@ import {
   Navigation,
   Coins,
   FileSpreadsheet,
-  X,
+  X, ChevronDown,
 } from "lucide-react";
 import { useAdminAuth } from "../../context/AdminAuthContext";
 import { AdminView } from "../../types/admin";
@@ -46,6 +46,7 @@ interface NavItem {
   category: string;
   icon: React.ReactNode;
   badge?: string | number;
+  subItems?: { id: AdminView; label: string }[];
 }
 
 interface AdminSidebarProps {
@@ -63,6 +64,7 @@ export function AdminSidebar({
 }: AdminSidebarProps) {
   const { currentView, setCurrentView } = useAdminAuth();
   const [navSearch, setNavSearch] = useState("");
+  const [expandedMenus, setExpandedMenus] = useState<Record<string, boolean>>({ "inventory": true });
 
   const ALL_NAV_ITEMS: NavItem[] = [
     // Core & Intelligence
@@ -75,7 +77,24 @@ export function AdminSidebar({
     { id: "products", label: "Products Catalog", category: "Catalog & Stock", icon: <Package size={18} />, badge: "5" },
     { id: "categories", label: "Categories", category: "Catalog & Stock", icon: <FolderTree size={18} /> },
     { id: "variants", label: "Variants & SKUs", category: "Catalog & Stock", icon: <Sliders size={18} /> },
-    { id: "inventory", label: "Inventory Stock", category: "Catalog & Stock", icon: <Boxes size={18} />, badge: "Alert" },
+    { id: "inventory", label: "Inventory Module", category: "Catalog & Stock", icon: <Boxes size={18} />, subItems: [
+      { id: "inventory-dashboard", label: "Dashboard" },
+      { id: "inventory-stock", label: "Stock" },
+      { id: "inventory-products", label: "Products" },
+      { id: "inventory-warehouses", label: "Warehouses" },
+      { id: "inventory-allocation", label: "Allocation" },
+      { id: "inventory-dispatches", label: "Dispatches" },
+      { id: "inventory-transfers", label: "Transfers" },
+      { id: "inventory-purchases", label: "Purchases" },
+      { id: "inventory-suppliers", label: "Suppliers" },
+      { id: "inventory-pos", label: "POS" },
+      { id: "inventory-reports", label: "Reports" },
+      { id: "inventory-analytics", label: "Analytics" },
+      { id: "inventory-audit", label: "Audit" },
+      { id: "inventory-barcode", label: "Barcode" },
+      { id: "inventory-search", label: "Search" },
+      { id: "inventory-ventures", label: "Ventures" }
+    ] },
     { id: "allocation", label: "Stock Allocation", category: "Catalog & Stock", icon: <Layers size={18} /> },
     { id: "upload", label: "Media Uploads", category: "Catalog & Stock", icon: <Upload size={18} /> },
 
@@ -207,41 +226,80 @@ export function AdminSidebar({
                   currentView === item.id ||
                   (item.id === "variants" && currentView === "varients") ||
                   (item.id === "varients" && currentView === "variants");
+                  
+                const isExpanded = expandedMenus[item.id];
+                const hasActiveSub = item.subItems?.some(s => s.id === currentView);
+                const isParentActive = isActive || hasActiveSub;
+                
                 return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => handleNavClick(item.id)}
-                    title={isCollapsed ? `${item.label} (${item.category})` : undefined}
-                    className={`w-full flex items-center py-2 rounded-tr-xl rounded-bl-xl text-xs font-semibold transition-all duration-150 group relative ${
-                      isCollapsed ? "justify-center px-2" : "justify-between px-3"
-                    } ${
-                      isActive
-                        ? "bg-[#8B5CF6] text-white shadow-md shadow-[#8B5CF6]/25 font-bold"
-                        : "text-slate-600 dark:text-[#A1A1AA] hover:bg-slate-100 dark:hover:bg-[#27272A] hover:text-slate-900 dark:hover:text-[#FAFAFA]"
-                    }`}
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <span className={isActive ? "text-white" : "text-[#8B5CF6] group-hover:scale-110 transition-transform"}>
-                        {item.icon}
-                      </span>
-                      {!isCollapsed && <span className="truncate">{item.label}</span>}
-                    </div>
-                    {!isCollapsed && item.badge && (
-                      <span
-                        className={`text-[9px] font-bold px-1.5 py-0.2 rounded-full ${
-                          isActive
-                            ? "bg-slate-900 dark:bg-[#09090B] text-white"
-                            : "bg-[#8B5CF6]/15 text-[#8B5CF6] dark:bg-[#8B5CF6]/20 dark:text-[#A855F7]"
-                        }`}
-                      >
-                        {item.badge}
-                      </span>
+                  <div key={item.id} className="flex flex-col">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (item.subItems && !isCollapsed) {
+                          setExpandedMenus(prev => ({ ...prev, [item.id]: !prev[item.id] }));
+                        } else {
+                          handleNavClick(item.id);
+                        }
+                      }}
+                      title={isCollapsed ? `${item.label} (${item.category})` : undefined}
+                      className={`w-full flex items-center py-2 rounded-tr-xl rounded-bl-xl text-xs font-semibold transition-all duration-150 group relative ${
+                        isCollapsed ? "justify-center px-2" : "justify-between px-3"
+                      } ${
+                        (isParentActive && !item.subItems)
+                          ? "bg-[#8B5CF6] text-white shadow-md shadow-[#8B5CF6]/25 font-bold"
+                          : isParentActive
+                          ? "text-[#8B5CF6] bg-[#8B5CF6]/10 dark:bg-[#8B5CF6]/10"
+                          : "text-slate-600 dark:text-[#A1A1AA] hover:bg-slate-100 dark:hover:bg-[#27272A] hover:text-slate-900 dark:hover:text-[#FAFAFA]"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <span className={(isParentActive && !item.subItems) ? "text-white" : "text-[#8B5CF6] group-hover:scale-110 transition-transform"}>
+                          {item.icon}
+                        </span>
+                        {!isCollapsed && <span className="truncate">{item.label}</span>}
+                      </div>
+                      
+                      {!isCollapsed && (
+                        <div className="flex items-center gap-1.5">
+                          {item.badge && (
+                            <span
+                              className={`text-[9px] font-bold px-1.5 py-0.2 rounded-full ${
+                                (isParentActive && !item.subItems)
+                                  ? "bg-slate-900 dark:bg-[#09090B] text-white"
+                                  : "bg-[#8B5CF6]/15 text-[#8B5CF6] dark:bg-[#8B5CF6]/20 dark:text-[#A855F7]"
+                              }`}
+                            >
+                              {item.badge}
+                            </span>
+                          )}
+                          {item.subItems && (
+                            <ChevronDown size={14} className={`transition-transform text-slate-400 ${isExpanded ? "rotate-180" : ""}`} />
+                          )}
+                        </div>
+                      )}
+                    </button>
+                    
+                    {/* Sub-items Dropdown */}
+                    {item.subItems && isExpanded && !isCollapsed && (
+                      <div className="mt-1 ml-6 pl-2 border-l border-slate-200 dark:border-[#27272A] space-y-1">
+                        {item.subItems.map(subItem => (
+                          <button
+                            key={subItem.id}
+                            type="button"
+                            onClick={() => handleNavClick(subItem.id as any)}
+                            className={`w-full flex items-center px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-colors ${
+                              currentView === subItem.id
+                                ? "bg-[#8B5CF6] text-white shadow-sm shadow-[#8B5CF6]/25"
+                                : "text-slate-500 dark:text-[#A1A1AA] hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#27272A]"
+                            }`}
+                          >
+                            {subItem.label}
+                          </button>
+                        ))}
+                      </div>
                     )}
-                    {isCollapsed && item.badge && (
-                      <span className="w-2 h-2 rounded-full bg-[#8B5CF6] absolute top-1.5 right-1.5" />
-                    )}
-                  </button>
+                  </div>
                 );
               })}
             </div>
