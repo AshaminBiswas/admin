@@ -155,6 +155,7 @@ export function AdminNotificationDropdown({
       es.addEventListener("system:alert", handleIncomingNotification);
 
       es.onerror = () => {
+        es.close();
         setSseConnected(false);
       };
 

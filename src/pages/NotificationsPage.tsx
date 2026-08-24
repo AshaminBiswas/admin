@@ -272,6 +272,7 @@ export function NotificationsPage() {
       es.addEventListener("system:alert", handleRealtimeEvent);
 
       es.onerror = () => {
+        es.close();
         setSseConnected(false);
       };
 
