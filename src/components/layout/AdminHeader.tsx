@@ -88,6 +88,8 @@ export function AdminHeader({ isCollapsed, onToggleCollapse, onToggleMobile }: A
       case "products": return "Hardware Products & SKU Inventory Catalog";
       case "orders": return "Customer Orders & B2B Fulfillment Control";
       case "quotes": return "B2B Bulk Price Quotations & Approvals";
+      case "inventory-stock": return "Warehouse Stock Levels";
+      case "inventory": return "Inventory Management";
       case "appointments": return "Installation & Repair Service Appointments";
       case "enquiries": return "Customer Enquiries & Ticket Management";
       case "audit": return "System Security & Audit Activity Logs";

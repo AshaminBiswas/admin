@@ -124,6 +124,8 @@ export function AdminLayout() {
       case "variants":
       case "varients":
         return <VariantsPage />;
+      case "inventory-stock":
+        return <InventoryStockPage />;
       case "inventory":
         return (
           <ModelManagementPage
