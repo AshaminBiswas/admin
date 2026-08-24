@@ -54,6 +54,9 @@ export function InventoryStockPage() {
   const [totalPages, setTotalPages] = useState(1);
   const limit = 20;
 
+  // Venture context — required by requireVenture middleware
+  const [ventureId, setVentureId] = useState<string | null>(null);
+
   // Adjustment Modal
   const [adjustModalOpen, setAdjustModalOpen] = useState(false);
   const [selectedStock, setSelectedStock] = useState<InventoryStock | null>(null);
@@ -63,6 +66,17 @@ export function InventoryStockPage() {
   
   // Feedback
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  // Fetch the first available venture so we can pass it to all inventory endpoints
+  useEffect(() => {
+    fetchAdminApi("/inventory/ventures?limit=1").then((res) => {
+      const v = res?.data?.[0] ?? res?.data?.data?.[0];
+      if (v?.id) setVentureId(v.id);
+    }).catch(() => {});
+  }, []);
+
+  const inventoryHeaders: Record<string, string> = ventureId ? { "x-venture-id": ventureId } : {};
 
   const fetchStock = useCallback(async () => {
     setIsLoading(true);
@@ -73,7 +87,7 @@ export function InventoryStockPage() {
         limit: limit.toString(),
         ...(debouncedSearch && { search: debouncedSearch })
       });
-      const res = await fetchAdminApi(`/inventory/stock?${qs.toString()}`);
+      const res = await fetchAdminApi(`/inventory/stock?${qs.toString()}`, { headers: inventoryHeaders });
       
       if (res?.success !== false) {
         setStocks(res.data || []);
@@ -88,9 +102,7 @@ export function InventoryStockPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [page, limit, debouncedSearch]);
-
-  const [error, setError] = useState<string | null>(null);
+  }, [page, limit, debouncedSearch, ventureId]);
 
   useEffect(() => {
     fetchStock();
@@ -112,7 +124,8 @@ export function InventoryStockPage() {
       
       const res = await fetchAdminApi("/inventory/stock/adjustment", {
         method: "POST",
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
+        headers: inventoryHeaders
       });
 
       if (res?.success !== false) {
@@ -186,7 +199,7 @@ export function InventoryStockPage() {
             onClick={async () => {
               try {
                 setFeedback({ type: "success", text: "Syncing missing products..." });
-                const res = await fetchAdminApi("/inventory/stock/sync-legacy", { method: "POST" });
+                const res = await fetchAdminApi("/inventory/stock/sync-legacy", { method: "POST", headers: inventoryHeaders });
                 if (res?.success !== false) {
                   setFeedback({ type: "success", text: `Successfully synced ${res.data?.synced || 0} products to inventory.` });
                   fetchStock();
