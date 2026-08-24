@@ -73,7 +73,7 @@ export function InventoryStockPage() {
         limit: limit.toString(),
         ...(debouncedSearch && { search: debouncedSearch })
       });
-      const res = await fetchAdminApi(\`/inventory/stock?\${qs.toString()}\`);
+      const res = await fetchAdminApi(`/inventory/stock?${qs.toString()}`);
       
       if (res?.success !== false) {
         setStocks(res.data || []);
@@ -154,11 +154,11 @@ export function InventoryStockPage() {
       {/* Feedback Toast */}
       {feedback && (
         <div
-          className={\`mb-6 p-4 rounded-xl flex items-center gap-3 border \${
+          className={`mb-6 p-4 rounded-xl flex items-center gap-3 border ${
             feedback.type === "success"
               ? "bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-500/10 dark:border-emerald-500/20 dark:text-emerald-400"
               : "bg-rose-50 border-rose-200 text-rose-800 dark:bg-rose-500/10 dark:border-rose-500/20 dark:text-rose-400"
-          }\`}
+          }`}
         >
           {feedback.type === "success" ? <CheckCircle2 size={18} /> : <XCircle size={18} />}
           <p className="text-sm font-semibold">{feedback.text}</p>
@@ -252,13 +252,13 @@ export function InventoryStockPage() {
                       </p>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <span className={\`inline-flex items-center justify-center min-w-[3rem] px-2 py-1 rounded-md font-bold \${
+                      <span className={`inline-flex items-center justify-center min-w-[3rem] px-2 py-1 rounded-md font-bold ${
                         stock.quantity > 10
                           ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400"
                           : stock.quantity > 0
                           ? "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400"
                           : "bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-400"
-                      }\`}>
+                      }`}>
                         {stock.quantity}
                       </span>
                     </td>
