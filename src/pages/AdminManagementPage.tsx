@@ -127,13 +127,13 @@ export function AdminManagementPage({ onViewAdmin }: AdminManagementPageProps = 
   const [deletingAdmin, setDeletingAdmin] = useState<any | null>(null);
   const [viewingAdmin, setViewingAdmin] = useState<any | null>(null);
 
-  // Create Form fields
+  // Create Form fields (all clean, empty defaults)
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("Password@123");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
-  const [phone, setPhone] = useState("+91 ");
+  const [phone, setPhone] = useState("");
   const [selectedRoleId, setSelectedRoleId] = useState<string>("");
   const [adminStatus, setAdminStatus] = useState<"ACTIVE" | "INACTIVE">("ACTIVE");
   const [mustChangePassword, setMustChangePassword] = useState(true);
@@ -158,14 +158,59 @@ export function AdminManagementPage({ onViewAdmin }: AdminManagementPageProps = 
 
   const debouncedSearch = useDebounce(searchQuery, 300);
 
-  // Password Generator Helper
+  // Cryptographically Secure Password Generator (Zero prefixes, purely random character distribution)
   const generateRandomPassword = () => {
-    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%&*";
-    let pwd = "PRC#";
-    for (let i = 0; i < 8; i++) {
-      pwd += chars.charAt(Math.floor(Math.random() * chars.length));
+    const upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+    const lower = "abcdefghijkmnpqrstuvwxyz";
+    const digits = "23456789";
+    const symbols = "!@#$%^&*";
+    const allChars = upper + lower + digits + symbols;
+
+    const getRandomChar = (chars: string) => {
+      const array = new Uint32Array(1);
+      window.crypto.getRandomValues(array);
+      return chars[array[0] % chars.length];
+    };
+
+    // Ensure at least 1 upper, 1 lower, 1 digit, and 1 symbol
+    const pwdArray: string[] = [
+      getRandomChar(upper),
+      getRandomChar(lower),
+      getRandomChar(digits),
+      getRandomChar(symbols),
+    ];
+
+    // Generate remaining 10 characters randomly
+    for (let i = 4; i < 14; i++) {
+      pwdArray.push(getRandomChar(allChars));
     }
-    setPassword(pwd);
+
+    // Cryptographic Fisher-Yates shuffle
+    for (let i = pwdArray.length - 1; i > 0; i--) {
+      const array = new Uint32Array(1);
+      window.crypto.getRandomValues(array);
+      const j = array[0] % (i + 1);
+      [pwdArray[i], pwdArray[j]] = [pwdArray[j], pwdArray[i]];
+    }
+
+    const securePwd = pwdArray.join("");
+    setPassword(securePwd);
+  };
+
+  const handleOpenCreateModal = () => {
+    setEmail("");
+    setPassword("");
+    setShowPassword(false);
+    setFirstName("");
+    setLastName("");
+    setPhone("");
+    setAdminStatus("ACTIVE");
+    setMustChangePassword(true);
+    setCopiedCredentials(false);
+    setCreationResult(null);
+    const firstRole = rolesList[0]?.id || "";
+    setSelectedRoleId(firstRole);
+    setShowCreateModal(true);
   };
 
   const isCustomerRole = (role?: any): boolean => {
@@ -434,7 +479,7 @@ export function AdminManagementPage({ onViewAdmin }: AdminManagementPageProps = 
           {isSuperAdmin ? (
             <button
               type="button"
-              onClick={() => setShowCreateModal(true)}
+              onClick={handleOpenCreateModal}
               className="bg-[#8B5CF6] hover:bg-[#7C3AED] text-white font-bold text-xs px-4 py-2 rounded-tr-xl rounded-bl-xl transition-all shadow-sm flex items-center gap-2"
             >
               <UserPlus size={15} />
@@ -480,7 +525,7 @@ export function AdminManagementPage({ onViewAdmin }: AdminManagementPageProps = 
           </div>
           <button
             type="button"
-            onClick={() => setShowCreateModal(true)}
+            onClick={handleOpenCreateModal}
             className="text-[11px] font-bold text-[#A855F7] hover:text-purple-300 underline"
           >
             + Provision New Staff Account

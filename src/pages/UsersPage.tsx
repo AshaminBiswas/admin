@@ -28,6 +28,8 @@ import {
   Layers,
   ChevronLeft,
   ChevronRight,
+  EyeOff,
+  Key,
 } from "lucide-react";
 import { usersApi, rolesApi } from "../api/adminApi";
 import { useAdminAuth } from "../context/AdminAuthContext";
@@ -143,13 +145,14 @@ export function UsersPage({ onNavigateB2BPricing, onViewCustomer }: UsersPagePro
   const [deletingUser, setDeletingUser] = useState<any | null>(null);
   const [viewingUser, setViewingUser] = useState<any | null>(null);
 
-  // Create Form State
+  // Create Form State (clean empty defaults)
   const [accountType, setAccountType] = useState<"B2C" | "B2B">("B2C");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("Password@123");
-  const [phone, setPhone] = useState("+91 ");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [phone, setPhone] = useState("");
   const [companyName, setCompanyName] = useState("");
   const [gstin, setGstin] = useState("");
   const [roleId, setRoleId] = useState("");
@@ -167,6 +170,56 @@ export function UsersPage({ onNavigateB2BPricing, onViewCustomer }: UsersPagePro
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const debouncedSearch = useDebounce(searchQuery, 300);
+
+  // Cryptographically Secure Password Generator
+  const generateRandomPassword = () => {
+    const upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+    const lower = "abcdefghijkmnpqrstuvwxyz";
+    const digits = "23456789";
+    const symbols = "!@#$%^&*";
+    const allChars = upper + lower + digits + symbols;
+
+    const getRandomChar = (chars: string) => {
+      const array = new Uint32Array(1);
+      window.crypto.getRandomValues(array);
+      return chars[array[0] % chars.length];
+    };
+
+    const pwdArray: string[] = [
+      getRandomChar(upper),
+      getRandomChar(lower),
+      getRandomChar(digits),
+      getRandomChar(symbols),
+    ];
+
+    for (let i = 4; i < 14; i++) {
+      pwdArray.push(getRandomChar(allChars));
+    }
+
+    for (let i = pwdArray.length - 1; i > 0; i--) {
+      const array = new Uint32Array(1);
+      window.crypto.getRandomValues(array);
+      const j = array[0] % (i + 1);
+      [pwdArray[i], pwdArray[j]] = [pwdArray[j], pwdArray[i]];
+    }
+
+    setPassword(pwdArray.join(""));
+  };
+
+  const handleOpenCreateModal = () => {
+    setFirstName("");
+    setLastName("");
+    setEmail("");
+    setPassword("");
+    setShowPassword(false);
+    setPhone("");
+    setCompanyName("");
+    setGstin("");
+    setAccountType("B2C");
+    setStatus("ACTIVE");
+    setRoleId(roles[0]?.id || "");
+    setShowCreateModal(true);
+  };
 
   const handleInspectUser = (u: any) => {
     if (typeof window !== "undefined" && u?.id) {
@@ -319,8 +372,8 @@ export function UsersPage({ onNavigateB2BPricing, onViewCustomer }: UsersPagePro
         setEmail("");
         setCompanyName("");
         setGstin("");
-        setPhone("+91 ");
-        setPassword("Password@123");
+        setPhone("");
+        setPassword("");
         await loadData();
       } else {
         setFeedback({ type: "error", text: res.message || res.error?.message || "Failed to create user account." });
@@ -466,7 +519,7 @@ export function UsersPage({ onNavigateB2BPricing, onViewCustomer }: UsersPagePro
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => setShowCreateModal(true)}
+            onClick={handleOpenCreateModal}
             className="bg-[#8B5CF6] hover:bg-[#7C3AED] text-white font-bold text-xs px-4 py-2 rounded-tr-xl rounded-bl-xl transition-all shadow-sm flex items-center gap-2"
           >
             <UserPlus size={15} />
@@ -1039,14 +1092,38 @@ export function UsersPage({ onNavigateB2BPricing, onViewCustomer }: UsersPagePro
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[11px] text-[#A1A1AA] font-semibold">Initial Password</label>
-                  <input
-                    type="text"
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full bg-[#09090B] border border-[#27272A] rounded-xl px-3 py-2 font-mono text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
-                  />
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] text-[#A1A1AA] font-semibold flex items-center gap-1">
+                      <Key size={11} className="text-amber-400" />
+                      <span>Initial Password *</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={generateRandomPassword}
+                      className="text-[10px] font-bold text-amber-400 hover:text-amber-300 flex items-center gap-1"
+                    >
+                      <Sparkles size={10} />
+                      <span>Generate Strong</span>
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      required
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="••••••••••••"
+                      className="w-full bg-[#09090B] border border-[#27272A] rounded-xl pl-3 pr-9 py-2 font-mono text-[#FAFAFA] text-xs focus:outline-none focus:border-[#8B5CF6]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#71717A] hover:text-[#FAFAFA]"
+                      title={showPassword ? "Hide password" : "Show password"}
+                    >
+                      {showPassword ? <EyeOff size={13} /> : <Eye size={13} />}
+                    </button>
+                  </div>
                 </div>
               </div>
 
