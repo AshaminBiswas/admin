@@ -1,4 +1,4 @@
-﻿export interface AdminUser {
+export interface AdminUser {
   id: string;
   email: string;
   firstName?: string;
@@ -253,6 +253,8 @@ export type AdminView =
   | 'shippings'
   | 'upload'
   | 'users'
+  | 'user-detail'
+  | 'customer-detail'
   | 'variants'
   | 'varients'
   | 'wishlist'

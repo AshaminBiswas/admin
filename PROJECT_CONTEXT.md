@@ -227,10 +227,10 @@ The Storefront was architected and optimized for native app-like responsiveness 
   1. **Registration Duplicate Prevention**: Pre-checks Email, GSTIN, and Company Name before creation. Rejects duplicates with a 1-click **"Reset Password →"** action that pre-fills their identifier into account recovery.
   2. **Phone Number Multi-Account Limit**: Enforces a strict maximum of **3 accounts per phone number**; 4th registration triggers `PHONE_LIMIT_EXCEEDED`.
   3. **Unified Password Reset via Email OR GSTIN with 6-Digit OTP**: Customers can initiate recovery by typing either their Email or GSTIN. A 6-digit OTP is dispatched to their registered email with interactive OTP entry and instant password reset.
-- **Admin Customer 360° Master Profile & Unified Search (`/api/v1/users/:id/360`, `CustomerDossierModal.tsx`, `UsersPage.tsx`)**:
+- **Admin Customer 360° Master Profile & Full-Page Dossier Hub (`/api/v1/users/:id/360`, `CustomerDossierPage.tsx`, `UsersPage.tsx`, `/user-detail`)**:
   1. **Unified Search Engine**: Admin can instantly find accounts by 15-digit GSTIN, Email, 10-digit Phone number, Company Name, or First/Last name.
   2. **Customer Longevity & Seniority**: Real-time calculation of platform membership duration (Years, Months, Days).
-  3. **360° Multi-Tab Dossier Hub**: Complete customer command center featuring Identity & Legal credentials, Address Book with 1-click Google Maps GPS navigation and WhatsApp indicators, Order History with line items and fulfillment status, RFQ Quotations pipeline with digital seals, GST Tax Invoices register, Proforma Invoices (PI) & Purchase Orders (PO) tracking, B2B Custom Matrix Pricing rates with live discount margins, and security logs (Profile update history & Password recovery OTP audit trail).
+  3. **Full-Page 360° Dossier View**: Converted from popup modal into a dedicated full-page experience (`CustomerDossierPage.tsx`, route `/user-detail` / `/customer-detail`) with top breadcrumb navigation, "Back to Directory" action, customer identity hero card, WhatsApp integration, and 7 deep tabs: Identity & Legal credentials, Address Book with 1-click Google Maps GPS navigation and WhatsApp indicators, Order History with line items and fulfillment status, RFQ Quotations pipeline with digital seals, GST Tax Invoices register, Proforma Invoices (PI) & Purchase Orders (PO) tracking, B2B Custom Matrix Pricing rates with live discount margins, and security logs (Profile update history & Password recovery OTP audit trail).
 
 ---
 
@@ -259,4 +259,4 @@ The Admin Panel has been comprehensively restructured for mobile devices (320px�
 
 ---
 
-*Last Updated: 2026-08-25 (Complete Admin Panel Mobile Responsiveness Overhaul across All Paths & Zero-Error Validation)*
+*Last Updated: 2026-08-25 (Dedicated Full-Page Customer 360° Dossier View & Full-Stack Zero-Error Verification)*

@@ -32,6 +32,7 @@ const MediaUploadManager = lazy(() => import("../../pages/MediaUploadManager").t
 const EnquiriesPage = lazy(() => import("../../pages/EnquiriesPage").then((m) => ({ default: m.EnquiriesPage })));
 const ReviewsPage = lazy(() => import("../../pages/ReviewsPage").then((m) => ({ default: m.ReviewsPage })));
 const UsersPage = lazy(() => import("../../pages/UsersPage").then((m) => ({ default: m.UsersPage })));
+const CustomerDossierPage = lazy(() => import("../../pages/CustomerDossierPage").then((m) => ({ default: m.CustomerDossierPage })));
 const ShippingsPage = lazy(() => import("../../pages/ShippingsPage").then((m) => ({ default: m.ShippingsPage })));
 const ModelManagementPage = lazy(() => import("../../pages/ModelManagementPage").then((m) => ({ default: m.ModelManagementPage })));
 const B2BPricingPage = lazy(() => import("../../pages/B2BPricingPage").then((m) => ({ default: m.B2BPricingPage })));
@@ -80,6 +81,7 @@ export function AdminLayout() {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [b2bTargetCustomerId, setB2bTargetCustomerId] = useState<string | undefined>();
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | undefined>();
 
   const toggleSidebar = () => setIsCollapsed((prev) => !prev);
   const toggleMobileSidebar = () => setIsMobileOpen((prev) => !prev);
@@ -170,6 +172,25 @@ export function AdminLayout() {
       case "users":
         return (
           <UsersPage
+            onNavigateB2BPricing={(custId) => {
+              setB2bTargetCustomerId(custId);
+              setCurrentView("b2b-pricing");
+            }}
+            onViewCustomer={(custId) => {
+              setSelectedCustomerId(custId);
+              if (typeof window !== "undefined") {
+                localStorage.setItem("prc_admin_selected_customer_id", custId);
+              }
+              setCurrentView("user-detail");
+            }}
+          />
+        );
+      case "user-detail":
+      case "customer-detail":
+        return (
+          <CustomerDossierPage
+            userId={selectedCustomerId}
+            onBack={() => setCurrentView("users")}
             onNavigateB2BPricing={(custId) => {
               setB2bTargetCustomerId(custId);
               setCurrentView("b2b-pricing");

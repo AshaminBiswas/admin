@@ -35,7 +35,7 @@ import { Role } from "../types/admin";
 import { useDebounce } from "../hooks/useDebounce";
 import { getCachedRoles } from "../utils/referenceDataCache";
 import { AsyncActionButton } from "../components/common/AsyncActionButton";
-import { CustomerDossierModal } from "../components/users/CustomerDossierModal";
+import { CustomerDossierPage } from "./CustomerDossierPage";
 
 /* ─── Skeleton Loading Body for Users Page ───────────────────────────────────── */
 
@@ -113,9 +113,10 @@ export function UsersPageSkeleton() {
 
 interface UsersPageProps {
   onNavigateB2BPricing?: (customerId?: string) => void;
+  onViewCustomer?: (customerId: string) => void;
 }
 
-export function UsersPage({ onNavigateB2BPricing }: UsersPageProps) {
+export function UsersPage({ onNavigateB2BPricing, onViewCustomer }: UsersPageProps) {
   const { adminUser } = useAdminAuth();
   const rawRole = adminUser?.role as any;
   const roleSlug = typeof rawRole === "object" && rawRole !== null
@@ -165,8 +166,18 @@ export function UsersPage({ onNavigateB2BPricing }: UsersPageProps) {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
-
   const debouncedSearch = useDebounce(searchQuery, 300);
+
+  const handleInspectUser = (u: any) => {
+    if (typeof window !== "undefined" && u?.id) {
+      localStorage.setItem("prc_admin_selected_customer_id", u.id);
+    }
+    if (onViewCustomer && u?.id) {
+      onViewCustomer(u.id);
+    } else {
+      setViewingUser(u);
+    }
+  };
 
   const isCustomerRole = (role?: any): boolean => {
     if (!role) return true;
@@ -409,6 +420,20 @@ export function UsersPage({ onNavigateB2BPricing }: UsersPageProps) {
     link.click();
     document.body.removeChild(link);
   };
+
+  if (viewingUser) {
+    return (
+      <CustomerDossierPage
+        userId={viewingUser.id}
+        onBack={() => setViewingUser(null)}
+        onNavigateB2BPricing={onNavigateB2BPricing}
+        onOpenEdit={(u) => {
+          setViewingUser(null);
+          handleOpenEdit(u);
+        }}
+      />
+    );
+  }
 
   if (isLoading && users.length === 0) {
     return <UsersPageSkeleton />;
@@ -705,7 +730,7 @@ export function UsersPage({ onNavigateB2BPricing }: UsersPageProps) {
                     )}
                     <button
                       type="button"
-                      onClick={() => setViewingUser(user)}
+                      onClick={() => handleInspectUser(user)}
                       className="p-1.5 bg-[#27272A] text-[#FAFAFA] rounded-lg"
                       title="Inspect Profile"
                     >
@@ -762,7 +787,7 @@ export function UsersPage({ onNavigateB2BPricing }: UsersPageProps) {
                     <tr key={user.id} className="hover:bg-[#27272A]/40 transition-colors group">
                       <td
                         className="py-3.5 px-4 cursor-pointer"
-                        onClick={() => setViewingUser(user)}
+                        onClick={() => handleInspectUser(user)}
                         title="Click to view 360° Customer Profile Dossier"
                       >
                         <p className="font-bold text-[#FAFAFA] group-hover:text-[#A855F7] transition-colors flex items-center gap-1.5">
@@ -784,7 +809,7 @@ export function UsersPage({ onNavigateB2BPricing }: UsersPageProps) {
                       </td>
                       <td
                         className="py-3.5 px-4 cursor-pointer"
-                        onClick={() => setViewingUser(user)}
+                        onClick={() => handleInspectUser(user)}
                         title="Click to view 360° Customer Profile Dossier"
                       >
                         {isB2B ? (
@@ -840,7 +865,7 @@ export function UsersPage({ onNavigateB2BPricing }: UsersPageProps) {
                           )}
                           <button
                             type="button"
-                            onClick={() => setViewingUser(user)}
+                            onClick={() => handleInspectUser(user)}
                             className="p-1.5 bg-[#27272A] hover:bg-[#3F3F46] text-[#FAFAFA] rounded-lg transition-colors"
                             title="Inspect Profile"
                           >
@@ -1183,19 +1208,6 @@ export function UsersPage({ onNavigateB2BPricing }: UsersPageProps) {
             </div>
           </div>
         </div>
-      )}
-
-      {/* ─── MODAL 4: 360° CUSTOMER DOSSIER & PROFILE MASTER ─── */}
-      {viewingUser && (
-        <CustomerDossierModal
-          userId={viewingUser.id}
-          onClose={() => setViewingUser(null)}
-          onNavigateB2BPricing={onNavigateB2BPricing}
-          onOpenEdit={(u) => {
-            setViewingUser(null);
-            handleOpenEdit(u);
-          }}
-        />
       )}
 
     </div>

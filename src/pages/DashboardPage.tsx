@@ -45,7 +45,7 @@ export function DashboardPage() {
       const [statsRes, ordersRes, analyticsRes] = await Promise.all([
         fetchAdminApi("/dashboard/stats"),
         fetchAdminApi("/orders?limit=5&sortBy=createdAt&sortOrder=desc"),
-        fetchAdminApi("/analytics/revenue?period=monthly"),
+        fetchAdminApi("/dashboard/sales-chart?groupBy=month&period=1y"),
       ]);
 
       if (statsRes.success && statsRes.data) {
@@ -66,7 +66,7 @@ export function DashboardPage() {
       const ordList = ordersRes.data?.items || ordersRes.data?.orders || ordersRes.data || [];
       setRecentOrders(Array.isArray(ordList) ? ordList.slice(0, 5) : []);
 
-      const monthlyList = analyticsRes.data?.monthly || analyticsRes.data || [];
+      const monthlyList = analyticsRes.data?.monthly || analyticsRes.data?.chart || (Array.isArray(analyticsRes.data) ? analyticsRes.data : []);
       setSalesData(Array.isArray(monthlyList) ? monthlyList : []);
     } catch (err: any) {
       setError("Failed to load dashboard data. Please check your connection.");
