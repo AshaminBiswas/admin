@@ -242,9 +242,103 @@ export function InvoiceListView({ onCreateNew, onViewInvoice, onEditInvoice }: P
         ))}
       </div>
 
-      {/* Table */}
+      {/* Table & Mobile Card Stream */}
       <div className="rounded-tr-2xl rounded-bl-2xl border border-[#27272A] overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* Mobile Touch Cards View (sm:hidden) */}
+        <div className="sm:hidden p-3.5 space-y-3 bg-[#18181B]">
+          {loading ? (
+            <div className="py-12 text-center text-[#71717A] text-xs">
+              <RefreshCw size={20} className="animate-spin mx-auto mb-2 text-[#8B5CF6]" />
+              Loading invoices…
+            </div>
+          ) : invoices.length === 0 ? (
+            <div className="py-12 text-center text-[#71717A] text-xs">
+              <Receipt size={32} className="mx-auto mb-2 opacity-30" />
+              <p className="font-semibold text-sm">No invoices found</p>
+              <p className="text-[11px] mt-1">Create a new GST tax invoice to get started.</p>
+            </div>
+          ) : (
+            invoices.map((inv) => {
+              const gstTotal = inv.cgst_amount + inv.sgst_amount + inv.igst_amount;
+              return (
+                <div
+                  key={inv.id}
+                  className="p-4 rounded-xl bg-[#09090B] border border-[#27272A] space-y-2.5 hover:border-[#8B5CF6]/50 transition-colors"
+                >
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="font-mono font-bold text-xs text-[#8B5CF6] block">{inv.invoice_number}</span>
+                      <span className="text-[10px] text-[#71717A]">{formatDate(inv.invoice_date)}</span>
+                    </div>
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider ${
+                        STATUS_BADGE[inv.status as GSTInvoiceStatus] || 'bg-slate-500/20 text-slate-400'
+                      }`}
+                    >
+                      {inv.status.replace('_', ' ')}
+                    </span>
+                  </div>
+
+                  <div className="text-xs space-y-1">
+                    <p className="font-bold text-[#FAFAFA]">{inv.customer_legal_name}</p>
+                    {inv.customer_gstin && (
+                      <p className="text-[10px] font-mono text-[#A855F7]">GSTIN: {inv.customer_gstin}</p>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 pt-2 border-t border-[#27272A] text-xs">
+                    <div>
+                      <span className="text-[10px] text-[#71717A] block">Taxable: {formatCurrency(inv.taxable_amount)}</span>
+                      <span className="text-[10px] text-[#71717A] block">GST: {formatCurrency(gstTotal)}</span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[10px] text-[#71717A] block uppercase">Grand Total</span>
+                      <span className="font-extrabold text-sm text-[#FAFAFA]">
+                        {formatCurrency(inv.grand_total)}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 flex items-center justify-end gap-2 border-t border-[#27272A]">
+                    <AsyncActionButton
+                      mode="download"
+                      onAction={() => handleDownloadPdf(inv)}
+                      idleIcon={<Download size={13} />}
+                      idleLabel="PDF"
+                      loadingLabel="PDF…"
+                      successLabel="Done!"
+                      className="bg-[#27272A] hover:bg-emerald-600 text-[#FAFAFA] text-xs px-2.5 py-1.5 rounded-lg font-bold"
+                      variant="custom"
+                      title="Download PDF"
+                    />
+                    <AsyncActionButton
+                      mode="view"
+                      onAction={() => onViewInvoice(inv.id)}
+                      idleIcon={<Eye size={13} />}
+                      idleLabel="View"
+                      loadingLabel="…"
+                      className="bg-[#8B5CF6] text-white text-xs px-3 py-1.5 rounded-lg font-bold shadow-md shadow-[#8B5CF6]/30"
+                      variant="custom"
+                      title="View invoice"
+                    />
+                    {inv.status === 'DRAFT' && (
+                      <button
+                        onClick={() => onEditInvoice(inv.id)}
+                        className="py-1.5 px-2 rounded-lg text-xs font-bold text-blue-400 bg-blue-500/10"
+                        title="Edit draft"
+                      >
+                        <Pencil size={13} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* Desktop Table View (hidden sm:block) */}
+        <div className="hidden sm:block overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
               <tr className="bg-[#18181B] border-b border-[#27272A]">

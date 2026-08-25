@@ -257,7 +257,7 @@ export function AdminHeader({ isCollapsed, onToggleCollapse, onToggleMobile }: A
 
             {/* Profile Dropdown Modal */}
             {isProfileOpen && (
-              <div className="absolute right-0 mt-3 w-80 rounded-2xl bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] shadow-2xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="absolute right-0 mt-3 w-[calc(100vw-32px)] sm:w-80 max-w-[340px] rounded-2xl bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] shadow-2xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
                 {/* Header Info */}
                 <div className="p-4 bg-gradient-to-r from-purple-50 to-white dark:from-[#1F1929] dark:to-[#18181B] border-b border-slate-200 dark:border-[#27272A] flex items-center gap-3">
                   <div className="w-12 h-12 rounded-full bg-[#EACEAA] flex items-center justify-center overflow-hidden shadow-lg shadow-[#8B5CF6]/30 border-2 border-[#D39858]">

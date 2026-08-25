@@ -126,8 +126,7 @@ export function DashboardPage() {
               <p className="text-xl font-extrabold text-[#8B5CF6]">
                 ₹{stats ? (stats.totalRevenue / 100000).toFixed(2) : "0.00"}L
               </p>
-            )}
-          </div>
+            )}          </div>
           <button
             onClick={fetchDashboard}
             disabled={loading}
@@ -138,74 +137,73 @@ export function DashboardPage() {
           </button>
         </div>
       </div>
-
       {/* 4 Executive Metric Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {loading ? (
           Array.from({ length: 4 }).map((_, i) => <StatCardSkeleton key={i} />)
         ) : (
           <>
             {/* Metric 1 */}
-            <div className="p-5 rounded-tr-2xl rounded-bl-2xl bg-[#18181B] border border-[#27272A] shadow-md flex items-center justify-between hover:border-[#8B5CF6]/60 transition-all">
+            <div className="p-3.5 sm:p-5 rounded-tr-2xl rounded-bl-2xl bg-[#18181B] border border-[#27272A] shadow-md flex items-start sm:items-center justify-between hover:border-[#8B5CF6]/60 transition-all">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-[#A1A1AA] mb-1">Total Revenue</p>
-                <h4 className="text-2xl font-extrabold text-[#FAFAFA]">₹{((stats?.totalRevenue || 0) / 100000).toFixed(2)}L</h4>
+                <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-[#A1A1AA] mb-1">Total Revenue</p>
+                <h4 className="text-lg sm:text-2xl font-extrabold text-[#FAFAFA]">₹{((stats?.totalRevenue || 0) / 100000).toFixed(2)}L</h4>
                 {stats?.revenueGrowth != null && (
-                  <div className="flex items-center gap-1 text-[11px] font-bold text-[#8B5CF6] mt-2">
-                    <TrendingUp size={14} />
-                    <span>+{stats.revenueGrowth}% vs last month</span>
+                  <div className="flex items-center gap-1 text-[10px] sm:text-[11px] font-bold text-[#8B5CF6] mt-1 sm:mt-2">
+                    <TrendingUp size={12} className="sm:w-3.5 sm:h-3.5" />
+                    <span>+{stats.revenueGrowth}%</span>
                   </div>
                 )}
               </div>
-              <div className="w-12 h-12 rounded-tr-xl rounded-bl-xl bg-[#8B5CF6]/20 border border-[#8B5CF6]/40 flex items-center justify-center text-[#8B5CF6]">
-                <IndianRupee size={22} />
+              <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-tr-xl rounded-bl-xl bg-[#8B5CF6]/20 border border-[#8B5CF6]/40 flex items-center justify-center text-[#8B5CF6] flex-shrink-0">
+                <IndianRupee size={18} className="sm:w-5 sm:h-5" />
               </div>
             </div>
 
             {/* Metric 2 */}
-            <div className="p-5 rounded-tr-2xl rounded-bl-2xl bg-[#18181B] border border-[#27272A] shadow-md flex items-center justify-between hover:border-[#8B5CF6]/60 transition-all">
+            <div className="p-3.5 sm:p-5 rounded-tr-2xl rounded-bl-2xl bg-[#18181B] border border-[#27272A] shadow-md flex items-start sm:items-center justify-between hover:border-[#8B5CF6]/60 transition-all">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-[#A1A1AA] mb-1">Total Orders</p>
-                <h4 className="text-2xl font-extrabold text-[#FAFAFA]">{stats?.totalOrders || 0}</h4>
+                <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-[#A1A1AA] mb-1">Total Orders</p>
+                <h4 className="text-lg sm:text-2xl font-extrabold text-[#FAFAFA]">{stats?.totalOrders || 0}</h4>
                 {stats?.ordersGrowth != null && (
-                  <div className="flex items-center gap-1 text-[11px] font-bold text-[#8B5CF6] mt-2">
-                    <TrendingUp size={14} />
-                    <span>+{stats.ordersGrowth}% fulfillment rate</span>
+                  <div className="flex items-center gap-1 text-[10px] sm:text-[11px] font-bold text-[#8B5CF6] mt-1 sm:mt-2">
+                    <TrendingUp size={12} className="sm:w-3.5 sm:h-3.5" />
+                    <span>+{stats.ordersGrowth}%</span>
                   </div>
                 )}
               </div>
-              <div className="w-12 h-12 rounded-tr-xl rounded-bl-xl bg-[#8B5CF6]/20 border border-[#8B5CF6]/40 flex items-center justify-center text-[#8B5CF6]">
-                <ShoppingBag size={22} />
+              <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-tr-xl rounded-bl-xl bg-[#8B5CF6]/20 border border-[#8B5CF6]/40 flex items-center justify-center text-[#8B5CF6] flex-shrink-0">
+                <ShoppingBag size={18} className="sm:w-5 sm:h-5" />
               </div>
             </div>
 
             {/* Metric 3 */}
-            <div className="p-5 rounded-tr-2xl rounded-bl-2xl bg-[#18181B] border border-[#27272A] shadow-md flex items-center justify-between hover:border-[#8B5CF6]/60 transition-all">
+            <div className="p-3.5 sm:p-5 rounded-tr-2xl rounded-bl-2xl bg-[#18181B] border border-[#27272A] shadow-md flex items-start sm:items-center justify-between hover:border-[#8B5CF6]/60 transition-all">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-[#A1A1AA] mb-1">Active B2B Quotes</p>
-                <h4 className="text-2xl font-extrabold text-[#FAFAFA]">{stats?.activeQuotes || 0}</h4>
-                <div className="flex items-center gap-1 text-[11px] font-bold text-[#8B5CF6] mt-2">
-                  <Clock size={14} />
-                  <span>Requires approval</span>
+                <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-[#A1A1AA] mb-1">Active Quotes</p>
+                <h4 className="text-lg sm:text-2xl font-extrabold text-[#FAFAFA]">{stats?.activeQuotes || 0}</h4>
+                <div className="flex items-center gap-1 text-[10px] sm:text-[11px] font-bold text-[#8B5CF6] mt-1 sm:mt-2">
+                  <Clock size={12} className="sm:w-3.5 sm:h-3.5" />
+                  <span>Approval req.</span>
                 </div>
               </div>
-              <div className="w-12 h-12 rounded-tr-xl rounded-bl-xl bg-[#8B5CF6]/20 border border-[#8B5CF6]/40 flex items-center justify-center text-[#8B5CF6]">
-                <FileText size={22} />
+              <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-tr-xl rounded-bl-xl bg-[#8B5CF6]/20 border border-[#8B5CF6]/40 flex items-center justify-center text-[#8B5CF6] flex-shrink-0">
+                <FileText size={18} className="sm:w-5 sm:h-5" />
               </div>
             </div>
 
             {/* Metric 4 */}
-            <div className="p-5 rounded-tr-2xl rounded-bl-2xl bg-[#18181B] border border-[#27272A] shadow-md flex items-center justify-between hover:border-amber-500/60 transition-all">
+            <div className="p-3.5 sm:p-5 rounded-tr-2xl rounded-bl-2xl bg-[#18181B] border border-[#27272A] shadow-md flex items-start sm:items-center justify-between hover:border-amber-500/60 transition-all">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-[#A1A1AA] mb-1">Low Stock Alerts</p>
-                <h4 className="text-2xl font-extrabold text-amber-400">{stats?.lowStockCount || 0}</h4>
-                <div className="flex items-center gap-1 text-[11px] font-bold text-amber-400 mt-2">
-                  <AlertTriangle size={14} />
-                  <span>SKUs under min threshold</span>
+                <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-[#A1A1AA] mb-1">Low Stock</p>
+                <h4 className="text-lg sm:text-2xl font-extrabold text-amber-400">{stats?.lowStockCount || 0}</h4>
+                <div className="flex items-center gap-1 text-[10px] sm:text-[11px] font-bold text-amber-400 mt-1 sm:mt-2">
+                  <AlertTriangle size={12} className="sm:w-3.5 sm:h-3.5" />
+                  <span>Low SKUs</span>
                 </div>
               </div>
-              <div className="w-12 h-12 rounded-tr-xl rounded-bl-xl bg-amber-950/60 border border-amber-500/40 flex items-center justify-center text-amber-400">
-                <AlertTriangle size={22} />
+              <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-tr-xl rounded-bl-xl bg-amber-950/60 border border-amber-500/40 flex items-center justify-center text-amber-400 flex-shrink-0">
+                <AlertTriangle size={18} className="sm:w-5 sm:h-5" />
               </div>
             </div>
           </>
@@ -214,14 +212,14 @@ export function DashboardPage() {
 
       {/* Revenue Chart Section */}
       {salesData.length > 0 && (
-        <div className="p-6 rounded-tr-2xl rounded-bl-2xl bg-[#18181B] border border-[#27272A] shadow-lg">
-          <div className="flex items-center justify-between mb-6">
+        <div className="p-4 sm:p-6 rounded-tr-2xl rounded-bl-2xl bg-[#18181B] border border-[#27272A] shadow-lg">
+          <div className="flex items-center justify-between mb-4 sm:mb-6">
             <div>
-              <h4 className="text-base font-bold text-[#FAFAFA] font-serif">Revenue &amp; Sales Performance</h4>
-              <p className="text-xs text-[#A1A1AA]">Monthly revenue trend across B2C &amp; B2B orders</p>
+              <h4 className="text-sm sm:text-base font-bold text-[#FAFAFA] font-serif">Revenue &amp; Sales Performance</h4>
+              <p className="text-[11px] sm:text-xs text-[#A1A1AA]">Monthly revenue trend across B2C &amp; B2B orders</p>
             </div>
           </div>
-          <div className="h-64 w-full">
+          <div className="h-52 sm:h-64 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={salesData}>
                 <defs>
@@ -230,8 +228,8 @@ export function DashboardPage() {
                     <stop offset="95%" stopColor="#8B5CF6" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <XAxis dataKey="month" stroke="#A1A1AA" strokeOpacity={0.5} tick={{ fontSize: 12 }} />
-                <YAxis stroke="#A1A1AA" strokeOpacity={0.5} tick={{ fontSize: 12 }} tickFormatter={(v) => `₹${v/1000}k`} />
+                <XAxis dataKey="month" stroke="#A1A1AA" strokeOpacity={0.5} tick={{ fontSize: 11 }} />
+                <YAxis stroke="#A1A1AA" strokeOpacity={0.5} tick={{ fontSize: 11 }} tickFormatter={(v) => `₹${v/1000}k`} />
                 <Tooltip
                   contentStyle={{ backgroundColor: "#09090B", borderColor: "#8B5CF6", borderRadius: "8px", color: "#FAFAFA" }}
                   formatter={(val: any) => [`₹${Number(val).toLocaleString('en-IN')}`, "Revenue"]}
@@ -244,72 +242,121 @@ export function DashboardPage() {
       )}
 
       {/* Recent Orders Stream */}
-      <div className="p-6 rounded-tr-2xl rounded-bl-2xl bg-[#18181B] border border-[#27272A] shadow-lg">
+      <div className="p-4 sm:p-6 rounded-tr-2xl rounded-bl-2xl bg-[#18181B] border border-[#27272A] shadow-lg">
         <div className="flex items-center justify-between mb-4">
-          <h4 className="text-base font-bold text-[#FAFAFA] font-serif">Recent Live Orders</h4>
-          <span className="text-xs text-[#8B5CF6] font-bold">Showing latest 5 orders</span>
+          <h4 className="text-sm sm:text-base font-bold text-[#FAFAFA] font-serif">Recent Live Orders</h4>
+          <span className="text-[11px] sm:text-xs text-[#8B5CF6] font-bold">Latest 5 orders</span>
         </div>
 
         {loading ? (
           <div className="space-y-3">
             {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="h-10 bg-[#27272A] rounded animate-pulse" />
+              <div key={i} className="h-12 bg-[#27272A] rounded-xl animate-pulse" />
             ))}
           </div>
         ) : recentOrders.length === 0 ? (
-          <p className="text-center text-[#71717A] text-sm py-8">No orders found.</p>
+          <p className="text-center text-[#71717A] text-xs sm:text-sm py-8">No orders found.</p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-[#FAFAFA]">
-              <thead className="bg-[#09090B] text-[#A855F7] uppercase font-bold text-[10px] tracking-wider border-b border-[#27272A]">
-                <tr>
-                  <th className="py-3 px-4">Order ID</th>
-                  <th className="py-3 px-4">Customer / Firm</th>
-                  <th className="py-3 px-4">Type</th>
-                  <th className="py-3 px-4">Amount</th>
-                  <th className="py-3 px-4">Status</th>
-                  <th className="py-3 px-4">Date</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#27272A]">
-                {recentOrders.map((ord) => (
-                  <tr key={ord.id} className="hover:bg-[#09090B]/50 transition-colors">
-                    <td className="py-3 px-4 font-mono font-bold text-[#8B5CF6]">{ord.orderNumber || ord.id}</td>
-                    <td className="py-3 px-4">
+          <>
+            {/* Mobile Touch Cards View (sm:hidden) */}
+            <div className="space-y-3 sm:hidden">
+              {recentOrders.map((ord) => (
+                <div
+                  key={ord.id}
+                  className="p-3.5 rounded-xl bg-[#09090B] border border-[#27272A] space-y-2 hover:border-[#8B5CF6]/40 transition-colors"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono font-bold text-xs text-[#8B5CF6]">{ord.orderNumber || ord.id}</span>
+                    <span
+                      className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                        ord.orderStatus === "DELIVERED"
+                          ? "bg-emerald-950/80 text-emerald-400 border border-emerald-500/40"
+                          : ord.orderStatus === "SHIPPED"
+                          ? "bg-blue-950/80 text-blue-400 border border-blue-500/40"
+                          : "bg-amber-950/80 text-amber-400 border border-amber-500/40"
+                      }`}
+                    >
+                      {ord.orderStatus}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs">
+                    <div>
                       <p className="font-semibold text-[#FAFAFA]">{ord.customerName}</p>
                       <p className="text-[10px] text-[#A1A1AA]">{ord.email}</p>
-                    </td>
-                    <td className="py-3 px-4">
-                      {ord.isB2B ? (
-                        <span className="bg-[#8B5CF6]/20 text-[#A855F7] font-bold text-[10px] px-2 py-0.5 rounded-full border border-[#8B5CF6]/40">
-                          B2B Bulk GST
-                        </span>
-                      ) : (
-                        <span className="bg-[#27272A] text-[#A1A1AA] font-semibold text-[10px] px-2 py-0.5 rounded-full">
-                          B2C Retail
-                        </span>
-                      )}
-                    </td>
-                    <td className="py-3 px-4 font-bold text-[#FAFAFA]">₹{(ord.totalAmount || 0).toLocaleString('en-IN')}</td>
-                    <td className="py-3 px-4">
-                      <span
-                        className={`text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider ${
-                          ord.orderStatus === "DELIVERED"
-                            ? "bg-emerald-950/80 text-emerald-400 border border-emerald-500/40"
-                            : ord.orderStatus === "SHIPPED"
-                            ? "bg-blue-950/80 text-blue-400 border border-blue-500/40"
-                            : "bg-amber-950/80 text-amber-400 border border-amber-500/40"
-                        }`}
-                      >
-                        {ord.orderStatus}
+                    </div>
+                    <div className="text-right">
+                      <p className="font-extrabold text-[#FAFAFA]">₹{(ord.totalAmount || 0).toLocaleString('en-IN')}</p>
+                      <span className="text-[10px] text-[#71717A]">{ord.createdAt}</span>
+                    </div>
+                  </div>
+                  <div className="pt-1 flex items-center justify-between border-t border-[#27272A]/60">
+                    {ord.isB2B ? (
+                      <span className="bg-[#8B5CF6]/20 text-[#A855F7] font-bold text-[9px] px-2 py-0.5 rounded-full border border-[#8B5CF6]/40">
+                        B2B Bulk GST
                       </span>
-                    </td>
-                    <td className="py-3 px-4 text-[#A1A1AA] text-[11px]">{ord.createdAt}</td>
+                    ) : (
+                      <span className="bg-[#27272A] text-[#A1A1AA] font-semibold text-[9px] px-2 py-0.5 rounded-full">
+                        B2C Retail
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Desktop Full Table View (hidden sm:block) */}
+            <div className="hidden sm:block overflow-x-auto">
+              <table className="w-full text-left text-xs text-[#FAFAFA]">
+                <thead className="bg-[#09090B] text-[#A855F7] uppercase font-bold text-[10px] tracking-wider border-b border-[#27272A]">
+                  <tr>
+                    <th className="py-3 px-4">Order ID</th>
+                    <th className="py-3 px-4">Customer / Firm</th>
+                    <th className="py-3 px-4">Type</th>
+                    <th className="py-3 px-4">Amount</th>
+                    <th className="py-3 px-4">Status</th>
+                    <th className="py-3 px-4">Date</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-[#27272A]">
+                  {recentOrders.map((ord) => (
+                    <tr key={ord.id} className="hover:bg-[#09090B]/50 transition-colors">
+                      <td className="py-3 px-4 font-mono font-bold text-[#8B5CF6]">{ord.orderNumber || ord.id}</td>
+                      <td className="py-3 px-4">
+                        <p className="font-semibold text-[#FAFAFA]">{ord.customerName}</p>
+                        <p className="text-[10px] text-[#A1A1AA]">{ord.email}</p>
+                      </td>
+                      <td className="py-3 px-4">
+                        {ord.isB2B ? (
+                          <span className="bg-[#8B5CF6]/20 text-[#A855F7] font-bold text-[10px] px-2 py-0.5 rounded-full border border-[#8B5CF6]/40">
+                            B2B Bulk GST
+                          </span>
+                        ) : (
+                          <span className="bg-[#27272A] text-[#A1A1AA] font-semibold text-[10px] px-2 py-0.5 rounded-full">
+                            B2C Retail
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4 font-bold text-[#FAFAFA]">₹{(ord.totalAmount || 0).toLocaleString('en-IN')}</td>
+                      <td className="py-3 px-4">
+                        <span
+                          className={`text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider ${
+                            ord.orderStatus === "DELIVERED"
+                              ? "bg-emerald-950/80 text-emerald-400 border border-emerald-500/40"
+                              : ord.orderStatus === "SHIPPED"
+                              ? "bg-blue-950/80 text-blue-400 border border-blue-500/40"
+                              : "bg-amber-950/80 text-amber-400 border border-amber-500/40"
+                          }`}
+                        >
+                          {ord.orderStatus}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-[#A1A1AA] text-[11px]">{ord.createdAt}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
     </div>

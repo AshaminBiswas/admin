@@ -551,8 +551,123 @@ export function ProductsPage() {
           </div>
         )}
 
-        <div className="bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] rounded-xl overflow-hidden shadow-sm">
-          <div className="overflow-x-auto">
+        <div className="bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] rounded-2xl overflow-hidden shadow-sm">
+          {/* Mobile Touch Cards View (sm:hidden) */}
+          <div className="sm:hidden p-3.5 space-y-3">
+            {loading ? (
+              <div className="py-12 text-center">
+                <Loader2 size={24} className="animate-spin text-[#8B5CF6] mx-auto mb-2" />
+                <span className="text-slate-500 dark:text-[#71717A] text-xs font-medium">Loading products...</span>
+              </div>
+            ) : error ? (
+              <div className="py-8 text-center space-y-2">
+                <AlertTriangle size={20} className="text-rose-500 mx-auto" />
+                <p className="text-xs text-slate-700 dark:text-[#FAFAFA]">{error}</p>
+                <button onClick={fetchData} className="text-xs text-[#8B5CF6] font-bold">Try Again</button>
+              </div>
+            ) : paginated.length === 0 ? (
+              <div className="py-10 text-center text-xs text-slate-400 dark:text-[#71717A]">
+                <Package size={24} className="mx-auto mb-2 text-slate-500" />
+                No products found.
+              </div>
+            ) : (
+              paginated.map((p) => {
+                const st = normalizeStatus(p.status);
+                const catName = categories.find((c) => String(c.id) === String(p.categoryId))?.name || "Uncategorized";
+                return (
+                  <div
+                    key={p.id}
+                    className="p-3.5 rounded-xl bg-slate-50 dark:bg-[#09090B] border border-slate-200 dark:border-[#27272A] space-y-3"
+                  >
+                    <div className="flex items-start gap-3">
+                      {p.image || p.images?.[0] ? (
+                        <img
+                          src={p.image || p.images?.[0]}
+                          alt={p.name}
+                          className="w-14 h-14 object-cover rounded-xl border border-slate-200 dark:border-[#27272A] flex-shrink-0"
+                        />
+                      ) : (
+                        <div className="w-14 h-14 rounded-xl bg-[#8B5CF6]/10 dark:bg-[#8B5CF6]/15 flex items-center justify-center text-[#8B5CF6] font-black text-base border border-[#8B5CF6]/20 flex-shrink-0">
+                          {p.name?.[0]?.toUpperCase() || "P"}
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="text-[10px] font-mono text-[#8B5CF6] dark:text-[#A855F7] truncate">
+                            {p.sku || `#${p.id}`}
+                          </span>
+                          <span
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold flex-shrink-0 ${
+                              st === "ACTIVE"
+                                ? "bg-emerald-100 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20"
+                                : st === "OUT_OF_STOCK"
+                                ? "bg-amber-100 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-500/20"
+                                : "bg-rose-100 dark:bg-rose-500/10 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-500/20"
+                            }`}
+                          >
+                            {st === "ACTIVE" ? <CheckCircle2 size={10} /> : <AlertTriangle size={10} />}
+                            {st.replace(/_/g, " ")}
+                          </span>
+                        </div>
+                        <h4 className="text-xs font-bold text-slate-900 dark:text-[#FAFAFA] line-clamp-1 mt-0.5">
+                          {p.name}
+                        </h4>
+                        <p className="text-[10px] text-slate-500 dark:text-[#A1A1AA] mt-0.5">{catName}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-2 border-t border-slate-200 dark:border-[#27272A] text-xs">
+                      <div>
+                        <span className="text-[10px] text-slate-400 dark:text-[#71717A] block">Selling Price</span>
+                        <span className="font-extrabold text-sm text-slate-900 dark:text-[#FAFAFA]">
+                          ₹{(p.price || 0).toLocaleString("en-IN")}
+                        </span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[10px] text-slate-400 dark:text-[#71717A] block">Stock Level</span>
+                        <div className="flex items-center gap-1 justify-end">
+                          <span className="font-bold text-slate-800 dark:text-[#FAFAFA]">{p.stock} units</span>
+                          {p.reorderLevel !== undefined && p.stock <= p.reorderLevel && (
+                            <span className="bg-amber-500/10 text-amber-500 text-[9px] font-bold px-1 rounded">Low</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-200 dark:border-[#27272A]/60">
+                      <button
+                        type="button"
+                        onClick={() => setViewDrawer(p)}
+                        className="py-1.5 px-2.5 rounded-lg text-xs font-bold bg-slate-200 dark:bg-[#27272A] text-slate-700 dark:text-[#FAFAFA] flex items-center gap-1"
+                      >
+                        <Eye size={13} /> View
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          localStorage.setItem("prc_admin_edit_product", JSON.stringify(p));
+                          setCurrentView("products-edit");
+                        }}
+                        className="py-1.5 px-2.5 rounded-lg text-xs font-bold bg-[#8B5CF6] text-white flex items-center gap-1 shadow-sm"
+                      >
+                        <Pencil size={13} /> Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDeleteModal(p)}
+                        className="py-1.5 px-2 rounded-lg text-xs font-bold text-rose-500 bg-rose-500/10 hover:bg-rose-500 hover:text-white"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* Desktop Detailed Table View (hidden sm:block) */}
+          <div className="hidden sm:block overflow-x-auto">
             <table className="w-full text-left text-xs min-w-[720px]">
               <thead className="bg-slate-50 dark:bg-[#09090B] text-slate-500 dark:text-[#71717A] border-b border-slate-200 dark:border-[#27272A] font-bold uppercase tracking-wider text-[10px]">
                 <tr>

@@ -39,9 +39,19 @@ D:\
 ### 2.2 Admin Console (`D:\admin`)
 - **Framework**: React 18, Vite 6, TypeScript.
 - **Styling**: Tailwind CSS, Radix UI primitives, Lucide React icons.
+- **Mobile Native App & PWA Architecture**:
+  - Viewport-fit cover, theme color `#18181B`, standalone mobile web app capability (`apple-mobile-web-app-capable`).
+  - Persistent Mobile Bottom Navigation Dock (`AdminLayout.tsx`) with 5 core tabs (Dashboard, Orders, Products, Quotes, All Views Drawer) and safe-area padding (`pb-24 sm:pb-6`).
+  - Dual-mode responsive view architecture across all core operational hubs (`sm:hidden` touch cards + `hidden sm:block` full tables):
+    - **Dashboard (`DashboardPage.tsx`)**: 2x2 mobile metric cards, responsive charts, live recent order cards.
+    - **Orders Management (`OrdersPage.tsx`)**: Mobile order cards with customer details, order type badges, amount, and responsive modals.
+    - **Products Hub (`ProductsPage.tsx`)**: Mobile product cards with thumbnail, SKU, live stock badge, selling price, and quick action drawer triggers.
+    - **B2B Quotations Pipeline (`QuotesPage.tsx`)**: Mobile RFQ cards with reference numbers, company info, totals, status pills, and 1-tap PDF downloads.
+    - **B2B Custom Pricing Matrix (`B2BPricingPage.tsx`)**: Mobile touch override cards with standard MRP vs custom B2B rate input, MOQ stepper, and live margin badges.
+    - **GST Tax Invoice Hub (`InvoiceListView.tsx`)**: Mobile invoice stream with legal name, GSTIN, tax breakdown, and instant PDF action buttons.
+    - **Customer Accounts Directory (`UsersPage.tsx`)**: Mobile customer cards with contact chips, B2B enterprise details, and role badges.
 - **State & Auth**: `AdminAuthContext` (JWT in localStorage), `ThemeContext` (Light/Dark mode).
-- **Architecture**: Dynamic lazy-loaded modular pages (`AdminLayout.tsx`, `AdminSidebar.tsx`, `AdminHeader.tsx`).
-- **Features**: Dashboard analytics, product/category/variant CRUD, customer orders, B2B quotes & approvals, B2B custom pricing, GST Tax Invoice Hub, RBAC roles & permissions, CMS/Banner management, media upload studio.
+- **Features**: Real-time SSE notification stream, executive analytics, product/variant CRUD, quotation pipeline, GST Tax Invoice Hub, custom B2B pricing, RBAC roles & permissions, media studio.
 
 ### 2.3 Storefront (`D:\frontend`)
 - **Framework**: React 18, Vite 6, React Router v7, TypeScript.

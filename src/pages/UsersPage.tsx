@@ -618,9 +618,118 @@ export function UsersPage({ onNavigateB2BPricing }: UsersPageProps) {
         </div>
       </div>
 
-      {/* ─── Main Users Table ─── */}
+      {/* ─── Main Users Table & Mobile Card Stream ─── */}
       <div className="rounded-2xl bg-[#18181B] border border-[#27272A] shadow-lg overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* Mobile Touch Cards View (sm:hidden) */}
+        <div className="sm:hidden p-3.5 space-y-3">
+          {filteredUsers.length === 0 ? (
+            <div className="py-12 text-center text-xs text-[#71717A]">
+              <Users size={32} className="mx-auto mb-2 text-[#3F3F46]" />
+              No customer accounts found matching criteria.
+            </div>
+          ) : (
+            filteredUsers.map((user) => {
+              const isB2B = Boolean(user.companyName || user.gstin || user.role?.slug === "b2b_buyer");
+
+              return (
+                <div
+                  key={user.id}
+                  className="p-4 rounded-xl bg-[#09090B] border border-[#27272A] space-y-3 hover:border-[#8B5CF6]/50 transition-colors"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <h4 className="font-bold text-sm text-[#FAFAFA]">
+                        {user.firstName} {user.lastName}
+                      </h4>
+                      <p className="text-xs text-[#A1A1AA] flex items-center gap-1 mt-0.5">
+                        <Mail size={11} className="text-[#71717A]" />
+                        {user.email}
+                      </p>
+                      {user.phone && (
+                        <p className="text-xs text-[#A1A1AA] font-mono flex items-center gap-1 mt-0.5">
+                          <Phone size={11} className="text-[#71717A]" />
+                          {user.phone}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex flex-col items-end gap-1">
+                      <span
+                        className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase ${
+                          isB2B
+                            ? "bg-purple-950/80 text-[#A855F7] border border-purple-500/40"
+                            : "bg-emerald-950/80 text-emerald-400 border border-emerald-500/40"
+                        }`}
+                      >
+                        {user.role?.name || (isB2B ? "B2B Buyer" : "Customer")}
+                      </span>
+                      <span
+                        className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase ${
+                          user.status === "ACTIVE"
+                            ? "bg-emerald-950/80 text-emerald-400 border border-emerald-500/40"
+                            : "bg-zinc-800 text-zinc-400 border border-zinc-700"
+                        }`}
+                      >
+                        {user.status || "ACTIVE"}
+                      </span>
+                    </div>
+                  </div>
+
+                  {isB2B && (
+                    <div className="p-2.5 rounded-lg bg-[#18181B] border border-[#27272A] text-xs space-y-1">
+                      <p className="font-bold text-[#A855F7] flex items-center gap-1.5">
+                        <Building2 size={13} />
+                        {user.companyName || "B2B Enterprise"}
+                      </p>
+                      {user.gstin && (
+                        <p className="text-[10px] font-mono text-[#A1A1AA]">GST: {user.gstin}</p>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="pt-2 flex items-center justify-end gap-1.5 border-t border-[#27272A]">
+                    {isB2B && onNavigateB2BPricing && (
+                      <button
+                        type="button"
+                        onClick={() => onNavigateB2BPricing(user.id)}
+                        className="px-2.5 py-1.5 bg-[#8B5CF6]/20 text-purple-300 border border-purple-500/40 rounded-lg font-bold flex items-center gap-1 text-xs"
+                      >
+                        <Coins size={12} />
+                        <span>B2B Rates</span>
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setViewingUser(user)}
+                      className="p-1.5 bg-[#27272A] text-[#FAFAFA] rounded-lg"
+                      title="Inspect Profile"
+                    >
+                      <Eye size={13} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenEdit(user)}
+                      className="p-1.5 bg-[#27272A] text-amber-400 rounded-lg"
+                      title="Edit Account"
+                    >
+                      <Edit2 size={13} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDeletingUser(user)}
+                      className="p-1.5 bg-rose-950/40 text-rose-400 border border-rose-500/30 rounded-lg"
+                      title="Delete Account"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* Desktop Table View (hidden sm:block) */}
+        <div className="hidden sm:block overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead className="bg-[#09090B] text-[#A1A1AA] border-b border-[#27272A] font-bold uppercase tracking-wider text-[10px]">
               <tr>

@@ -749,9 +749,107 @@ export function QuotesPage() {
         </form>
       </div>
 
-      {/* Main Quotations Table */}
+      {/* Main Quotations Table / Mobile Card Stream */}
       <div className="rounded-2xl bg-[#18181B] border border-[#27272A] shadow-lg overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* Mobile Touch Cards View (sm:hidden) */}
+        <div className="sm:hidden p-3.5 space-y-3">
+          {loading ? (
+            <div className="py-12 text-center text-xs text-[#A1A1AA]">
+              <RefreshCw className="w-5 h-5 animate-spin text-[#8B5CF6] mx-auto mb-2" />
+              Loading quotations...
+            </div>
+          ) : quotes.length === 0 ? (
+            <div className="py-12 text-center text-xs text-[#71717A]">
+              <FileText size={32} className="mx-auto mb-2 text-[#3F3F46]" />
+              No quotations found matching your criteria.
+            </div>
+          ) : (
+            quotes.map((q) => (
+              <div
+                key={q.id}
+                className="p-4 rounded-xl bg-[#09090B] border border-[#27272A] space-y-3 hover:border-[#8B5CF6]/50 transition-colors"
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="font-mono font-bold text-xs text-[#A855F7] block">{q.referenceNo}</span>
+                    <span className="text-[10px] text-[#71717A]">
+                      {new Date(q.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+                    </span>
+                  </div>
+                  <div className="flex flex-col items-end gap-1">
+                    <span
+                      className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase ${
+                        q.status === "APPROVED"
+                          ? "bg-emerald-950/80 text-emerald-400 border border-emerald-500/40"
+                          : q.status === "REJECTED"
+                          ? "bg-rose-950/80 text-rose-400 border border-rose-500/40"
+                          : q.status === "UNDER_REVIEW"
+                          ? "bg-blue-950/80 text-blue-400 border border-blue-500/40"
+                          : "bg-amber-950/80 text-amber-400 border border-amber-500/40"
+                      }`}
+                    >
+                      {q.status}
+                    </span>
+                    {q.digitalSignature && (
+                      <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-emerald-400">
+                        <CheckCircle2 size={10} /> Signed
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="text-xs space-y-1">
+                  <p className="font-bold text-[#FAFAFA]">{q.companyName || "N/A"}</p>
+                  <p className="text-[11px] text-[#A1A1AA]">{q.firstName} {q.lastName}</p>
+                  {q.projectName && (
+                    <p className="text-[10px] text-[#8B5CF6] truncate">Project: {q.projectName}</p>
+                  )}
+                </div>
+
+                <div className="pt-2 flex items-center justify-between border-t border-[#27272A] text-xs">
+                  <div>
+                    <span className="text-[10px] text-[#71717A] block uppercase">Items: {q.items?.length || 0}</span>
+                    <span className="font-extrabold text-sm text-[#FAFAFA]">
+                      ₹{q.grandTotal.toLocaleString("en-IN")}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    <AsyncActionButton
+                      mode="download"
+                      onAction={() => quotesService.downloadQuotePdf(q.id, q.referenceNo || q.quoteNumber)}
+                      idleIcon={<Download size={13} />}
+                      idleLabel="PDF"
+                      loadingLabel="PDF…"
+                      successLabel="Done!"
+                      className="bg-[#27272A] hover:bg-emerald-600 text-[#FAFAFA] text-xs px-2.5 py-1.5 rounded-lg font-bold"
+                      variant="custom"
+                    />
+                    <AsyncActionButton
+                      mode="view"
+                      onAction={() => handleOpenDetail(q.id)}
+                      idleIcon={<Eye size={13} />}
+                      idleLabel="Review"
+                      loadingLabel="…"
+                      className="bg-[#8B5CF6] text-white text-xs px-3 py-1.5 rounded-lg font-bold shadow-md shadow-[#8B5CF6]/30"
+                      variant="custom"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setQuoteToDelete(q)}
+                      className="p-1.5 text-rose-400 hover:text-rose-300 hover:bg-rose-950/50 rounded-lg"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Desktop Detailed Table View (hidden sm:block) */}
+        <div className="hidden sm:block overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead className="bg-[#09090B] text-[#A1A1AA] border-b border-[#27272A] font-bold uppercase tracking-wider text-[10px]">
               <tr>

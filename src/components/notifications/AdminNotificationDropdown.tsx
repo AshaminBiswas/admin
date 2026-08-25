@@ -218,7 +218,7 @@ export function AdminNotificationDropdown({
   const filteredNotifications = notifications.filter((n) => (activeTab === "unread" ? !n.isRead : true));
 
   return (
-    <div className="absolute right-0 top-full mt-2 w-80 sm:w-96 bg-[#18181B] border border-[#27272A] rounded-2xl shadow-2xl z-50 overflow-hidden flex flex-col font-sans animate-in fade-in zoom-in-95 duration-150">
+    <div className="absolute right-0 top-full mt-2 w-[calc(100vw-32px)] sm:w-96 max-w-[380px] bg-[#18181B] border border-[#27272A] rounded-2xl shadow-2xl z-50 overflow-hidden flex flex-col font-sans animate-in fade-in zoom-in-95 duration-150">
       {/* Header */}
       <div className="p-3.5 bg-[#09090B] border-b border-[#27272A] flex items-center justify-between">
         <div className="flex items-center gap-2">

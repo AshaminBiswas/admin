@@ -118,76 +118,142 @@ export function OrdersPage() {
             No orders found.
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-[#FAFAFA]">
-              <thead className="bg-[#09090B] text-[#A855F7] uppercase font-bold text-[10px] tracking-wider border-b border-[#27272A]">
-                <tr>
-                  <th className="py-3 px-4">Order ID</th>
-                  <th className="py-3 px-4">Customer Info</th>
-                  <th className="py-3 px-4">Account Type</th>
-                  <th className="py-3 px-4">Total Amount</th>
-                  <th className="py-3 px-4">Order Status</th>
-                  <th className="py-3 px-4 text-right">Details</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#27272A]">
-                {filteredOrders.map((ord) => (
-                  <tr key={ord.id} className="hover:bg-[#09090B]/50 transition-colors">
-                    <td className="py-3 px-4 font-mono font-bold text-[#8B5CF6]">{ord.orderNumber || ord.id}</td>
-                    <td className="py-3 px-4">
-                      <p className="font-bold text-[#FAFAFA]">{ord.customerName}</p>
-                      <p className="text-[10px] text-[#A1A1AA]">{ord.email} • {ord.phone}</p>
-                    </td>
-                    <td className="py-3 px-4">
+          <>
+            {/* Mobile Touch Cards View (sm:hidden) */}
+            <div className="space-y-3 sm:hidden">
+              {filteredOrders.map((ord) => (
+                <div
+                  key={ord.id}
+                  className="p-4 rounded-2xl bg-[#09090B] border border-[#27272A] space-y-2.5 hover:border-[#8B5CF6]/50 transition-colors"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono font-bold text-xs text-[#8B5CF6]">{ord.orderNumber || ord.id}</span>
+                    <span
+                      className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                        ord.orderStatus === "DELIVERED"
+                          ? "bg-emerald-950/80 text-emerald-400 border border-emerald-500/40"
+                          : ord.orderStatus === "SHIPPED"
+                          ? "bg-blue-950/80 text-blue-400 border border-blue-500/40"
+                          : "bg-amber-950/80 text-amber-400 border border-amber-500/40"
+                      }`}
+                    >
+                      {ord.orderStatus}
+                    </span>
+                  </div>
+
+                  <div className="space-y-1 text-xs">
+                    <p className="font-bold text-[#FAFAFA]">{ord.customerName}</p>
+                    <p className="text-[11px] text-[#A1A1AA]">{ord.email} • {ord.phone}</p>
+                    {ord.companyName && (
+                      <p className="text-[10px] text-[#8B5CF6] font-semibold">Firm: {ord.companyName}</p>
+                    )}
+                  </div>
+
+                  <div className="pt-2 flex items-center justify-between border-t border-[#27272A] text-xs">
+                    <div>
+                      <span className="text-[10px] text-[#71717A] block uppercase">Total Amount</span>
+                      <span className="font-extrabold text-sm text-[#FAFAFA]">
+                        ₹{(ord.totalAmount || 0).toLocaleString("en-IN")}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
                       {ord.isB2B ? (
-                        <div>
-                          <span className="bg-[#8B5CF6]/20 text-[#A855F7] font-bold text-[10px] px-2 py-0.5 rounded-full border border-[#8B5CF6]/40">
-                            B2B Bulk GST
-                          </span>
-                          {ord.gstin && <p className="text-[10px] font-mono text-[#A855F7]/80 mt-0.5">{ord.gstin}</p>}
-                        </div>
+                        <span className="bg-[#8B5CF6]/20 text-[#A855F7] font-bold text-[9px] px-2 py-0.5 rounded-full border border-[#8B5CF6]/40">
+                          B2B GST
+                        </span>
                       ) : (
-                        <span className="bg-[#27272A] text-[#A1A1AA] font-semibold text-[10px] px-2 py-0.5 rounded-full">
-                          B2C Retail
+                        <span className="bg-[#27272A] text-[#A1A1AA] font-semibold text-[9px] px-2 py-0.5 rounded-full">
+                          B2C
                         </span>
                       )}
-                    </td>
-                    <td className="py-3 px-4 font-bold text-[#FAFAFA]">₹{(ord.totalAmount || 0).toLocaleString('en-IN')}</td>
-                    <td className="py-3 px-4">
-                      <span
-                        className={`text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider ${
-                          ord.orderStatus === "DELIVERED"
-                            ? "bg-emerald-950/80 text-emerald-400 border border-emerald-500/40"
-                            : ord.orderStatus === "SHIPPED"
-                            ? "bg-blue-950/80 text-blue-400 border border-blue-500/40"
-                            : "bg-amber-950/80 text-amber-400 border border-amber-500/40"
-                        }`}
-                      >
-                        {ord.orderStatus}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 text-right">
+
                       <button
                         type="button"
                         onClick={() => setSelectedOrder(ord)}
-                        className="p-1.5 bg-[#8B5CF6]/20 text-[#A855F7] hover:bg-[#8B5CF6] hover:text-[#FAFAFA] rounded-lg transition-colors font-bold text-[11px] flex items-center gap-1 ml-auto"
+                        className="py-1.5 px-3 bg-[#8B5CF6] text-white rounded-lg font-bold text-xs flex items-center gap-1 shadow-md shadow-[#8B5CF6]/30 active:scale-95"
                       >
-                        <Eye size={14} />
+                        <Eye size={13} />
                         <span>Manage</span>
                       </button>
-                    </td>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Desktop Table View (hidden sm:block) */}
+            <div className="hidden sm:block overflow-x-auto">
+              <table className="w-full text-left text-xs text-[#FAFAFA]">
+                <thead className="bg-[#09090B] text-[#A855F7] uppercase font-bold text-[10px] tracking-wider border-b border-[#27272A]">
+                  <tr>
+                    <th className="py-3 px-4">Order ID</th>
+                    <th className="py-3 px-4">Customer Info</th>
+                    <th className="py-3 px-4">Account Type</th>
+                    <th className="py-3 px-4">Total Amount</th>
+                    <th className="py-3 px-4">Order Status</th>
+                    <th className="py-3 px-4 text-right">Details</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-[#27272A]">
+                  {filteredOrders.map((ord) => (
+                    <tr key={ord.id} className="hover:bg-[#09090B]/50 transition-colors">
+                      <td className="py-3 px-4 font-mono font-bold text-[#8B5CF6]">{ord.orderNumber || ord.id}</td>
+                      <td className="py-3 px-4">
+                        <p className="font-bold text-[#FAFAFA]">{ord.customerName}</p>
+                        <p className="text-[10px] text-[#A1A1AA]">{ord.email} • {ord.phone}</p>
+                      </td>
+                      <td className="py-3 px-4">
+                        {ord.isB2B ? (
+                          <div>
+                            <span className="bg-[#8B5CF6]/20 text-[#A855F7] font-bold text-[10px] px-2 py-0.5 rounded-full border border-[#8B5CF6]/40">
+                              B2B Bulk GST
+                            </span>
+                            {ord.gstin && <p className="text-[10px] font-mono text-[#A855F7]/80 mt-0.5">{ord.gstin}</p>}
+                          </div>
+                        ) : (
+                          <span className="bg-[#27272A] text-[#A1A1AA] font-semibold text-[10px] px-2 py-0.5 rounded-full">
+                            B2C Retail
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4 font-bold text-[#FAFAFA]">₹{(ord.totalAmount || 0).toLocaleString('en-IN')}</td>
+                      <td className="py-3 px-4">
+                        <span
+                          className={`text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider ${
+                            ord.orderStatus === "DELIVERED"
+                              ? "bg-emerald-950/80 text-emerald-400 border border-emerald-500/40"
+                              : ord.orderStatus === "SHIPPED"
+                              ? "bg-blue-950/80 text-blue-400 border border-blue-500/40"
+                              : "bg-amber-950/80 text-amber-400 border border-amber-500/40"
+                          }`}
+                        >
+                          {ord.orderStatus}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-right">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedOrder(ord)}
+                          className="p-1.5 bg-[#8B5CF6]/20 text-[#A855F7] hover:bg-[#8B5CF6] hover:text-[#FAFAFA] rounded-lg transition-colors font-bold text-[11px] flex items-center gap-1 ml-auto"
+                        >
+                          <Eye size={14} />
+                          <span>Manage</span>
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
 
       {/* Order Detail Modal */}
       {selectedOrder && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#09090B]/80 backdrop-blur-md">
-          <div className="relative w-full max-w-lg bg-[#18181B] border border-[#27272A] rounded-tr-3xl rounded-bl-3xl shadow-2xl p-6 text-[#FAFAFA] space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-[#09090B]/80 backdrop-blur-md">
+          <div className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto bg-[#18181B] border border-[#27272A] rounded-tr-3xl rounded-bl-3xl shadow-2xl p-5 sm:p-6 text-[#FAFAFA] space-y-4">
             <button
               type="button"
               onClick={() => setSelectedOrder(null)}

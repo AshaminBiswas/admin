@@ -659,9 +659,158 @@ export const B2BPricingPage: React.FC<B2BPricingPageProps> = ({
         </div>
       </div>
 
-      {/* ─── Pricing Matrix Table ─── */}
+      {/* ─── Pricing Matrix Table / Mobile Stream ─── */}
       <div className="rounded-2xl bg-[#18181B] border border-[#27272A] shadow-lg overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* Mobile Touch Cards View (sm:hidden) */}
+        <div className="sm:hidden p-3.5 space-y-3">
+          {paginatedProducts.length === 0 ? (
+            <div className="py-12 text-center text-xs text-[#71717A]">
+              <Coins size={32} className="mx-auto mb-2 text-[#3F3F46]" />
+              No products matching search criteria.
+            </div>
+          ) : (
+            paginatedProducts.map((prod) => {
+              const draft = draftChanges.get(prod.productId);
+              const effectivePrice = draft ? draft.price : (prod.customPrice ?? prod.standardPrice);
+              const effectiveMoq = draft ? draft.minQuantity : prod.minQuantity || 1;
+              const isDirty = draft?.dirty;
+              const isCustom = draft ? draft.price !== prod.standardPrice : prod.hasCustomPrice;
+
+              const discountPct =
+                prod.standardPrice > 0
+                  ? Math.round(((prod.standardPrice - effectivePrice) / prod.standardPrice) * 100)
+                  : 0;
+
+              return (
+                <div
+                  key={prod.productId}
+                  className={`p-4 rounded-xl bg-[#09090B] border space-y-3 transition-colors ${
+                    isDirty ? "border-amber-500/60 bg-amber-950/10" : "border-[#27272A]"
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    {prod.thumbnail ? (
+                      <img
+                        src={prod.thumbnail}
+                        alt={prod.name}
+                        className="w-12 h-12 object-cover rounded-lg border border-[#27272A] bg-[#09090B] flex-shrink-0"
+                      />
+                    ) : (
+                      <div className="w-12 h-12 rounded-lg bg-[#27272A] flex items-center justify-center text-[#71717A] flex-shrink-0">
+                        <Layers size={18} />
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="text-[10px] font-mono text-[#A855F7] truncate">{prod.sku}</span>
+                        {isCustom && (
+                          <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-purple-500/20 text-[#A855F7] border border-purple-500/30">
+                            Custom B2B
+                          </span>
+                        )}
+                      </div>
+                      <h4 className="text-xs font-bold text-[#FAFAFA] line-clamp-1 mt-0.5">{prod.name}</h4>
+                      <p className="text-[10px] text-[#A1A1AA] mt-0.5">
+                        Retail MRP: <span className="line-through font-mono">₹{prod.standardPrice.toLocaleString("en-IN")}</span>
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 pt-2 border-t border-[#27272A]">
+                    <div>
+                      <label className="text-[10px] uppercase font-bold text-[#A855F7] block mb-1">
+                        B2B Rate (₹)
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-mono text-[#71717A]">
+                          ₹
+                        </span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={effectivePrice}
+                          onChange={(e) =>
+                            handlePriceChange(
+                              prod.productId,
+                              parseFloat(e.target.value) || 0,
+                              effectiveMoq
+                            )
+                          }
+                          className={`w-full pl-6 pr-2 py-2 bg-[#18181B] border rounded-lg text-xs font-mono font-bold focus:outline-none ${
+                            isCustom
+                              ? "border-purple-500/60 text-purple-300 ring-1 ring-purple-500/30"
+                              : "border-[#27272A] text-[#FAFAFA]"
+                          }`}
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] uppercase font-bold text-[#A1A1AA] block mb-1">
+                        Min Order Qty (MOQ)
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={effectiveMoq}
+                        onChange={(e) =>
+                          handleMoqChange(
+                            prod.productId,
+                            parseInt(e.target.value, 10) || 1,
+                            effectivePrice
+                          )
+                        }
+                        className="w-full px-3 py-2 bg-[#18181B] border border-[#27272A] rounded-lg text-xs font-mono text-center text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-2 border-t border-[#27272A] text-xs">
+                    <div className="flex items-center gap-1.5">
+                      {discountPct > 0 ? (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-950/80 text-emerald-400 border border-emerald-500/30">
+                          {discountPct}% OFF
+                        </span>
+                      ) : discountPct < 0 ? (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-950/80 text-rose-400 border border-rose-500/30">
+                          +{Math.abs(discountPct)}%
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-[#71717A]">Retail Parity</span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {isCustom && (
+                        <button
+                          type="button"
+                          onClick={() => handleResetRow(prod.productId)}
+                          className="p-1.5 rounded-lg text-[#71717A] hover:text-amber-400 hover:bg-amber-950/30 text-xs"
+                          title="Reset to retail price"
+                        >
+                          <RotateCcw size={13} />
+                        </button>
+                      )}
+                      {isDirty && (
+                        <button
+                          type="button"
+                          onClick={() => handleSaveSingle(prod.productId)}
+                          className="py-1 px-2.5 rounded-lg bg-[#8B5CF6] text-white font-bold text-xs flex items-center gap-1 shadow-sm"
+                        >
+                          <Save size={12} /> Save
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* Desktop Table View (hidden sm:block) */}
+        <div className="hidden sm:block overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead className="bg-[#09090B] text-[#A1A1AA] border-b border-[#27272A] font-bold uppercase tracking-wider text-[10px]">
               <tr>
