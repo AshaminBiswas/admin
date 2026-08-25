@@ -98,7 +98,11 @@ export function AdminManagementPageSkeleton() {
 
 /* ─── Main Admin Management Page Component ───────────────────────────────────── */
 
-export function AdminManagementPage() {
+export interface AdminManagementPageProps {
+  onViewAdmin?: (adminId: string) => void;
+}
+
+export function AdminManagementPage({ onViewAdmin }: AdminManagementPageProps = {}) {
   const { adminUser } = useAdminAuth();
   const rawRole = adminUser?.role as any;
   const roleSlug = typeof rawRole === "object" && rawRole !== null
@@ -695,9 +699,9 @@ export function AdminManagementPage() {
                 <div className="pt-2 border-t border-[#27272A] flex items-center justify-end gap-1.5">
                   <button
                     type="button"
-                    onClick={() => setViewingAdmin(admin)}
+                    onClick={() => onViewAdmin ? onViewAdmin(admin.id) : setViewingAdmin(admin)}
                     className="p-1 text-[#A1A1AA] hover:text-[#8B5CF6]"
-                    title="Inspect"
+                    title="Inspect 360 Activity Dossier"
                   >
                     <Eye size={14} />
                   </button>
@@ -817,9 +821,9 @@ export function AdminManagementPage() {
                         <div className="flex items-center justify-end gap-1.5">
                           <button
                             type="button"
-                            onClick={() => setViewingAdmin(admin)}
-                            className="p-1.5 bg-[#27272A] hover:bg-[#3F3F46] text-[#FAFAFA] rounded-lg transition-colors"
-                            title="Inspect Details"
+                            onClick={() => onViewAdmin ? onViewAdmin(admin.id) : setViewingAdmin(admin)}
+                            className="p-1.5 bg-[#27272A] hover:bg-[#8B5CF6] text-[#FAFAFA] rounded-lg transition-colors"
+                            title="Inspect 360 Activity Dossier"
                           >
                             <Eye size={13} />
                           </button>

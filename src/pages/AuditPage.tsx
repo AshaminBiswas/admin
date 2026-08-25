@@ -27,6 +27,7 @@ import { AsyncActionButton } from "../components/common/AsyncActionButton";
 import { useAdminAuth } from "../context/AdminAuthContext";
 import { AuditLogItem } from "../types/admin";
 import { getAuditLogs, logAdminActivity, clearAuditLogs } from "../api/auditService";
+import { auditApi } from "../api/adminApi";
 
 export function AuditPage() {
   const { setCurrentView, adminUser } = useAdminAuth();
@@ -38,15 +39,24 @@ export function AuditPage() {
   const [copiedPayload, setCopiedPayload] = useState(false);
   const [isLiveActive, setIsLiveActive] = useState(true);
 
-  // Load audit logs on mount & setup auto-refresh poll
-  const loadLogs = () => {
-    const data = getAuditLogs();
-    setLogs(data);
+  // Load audit logs from backend database with local fallback
+  const loadLogs = async () => {
+    try {
+      const res = await auditApi.listLogs({ limit: 100 });
+      if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+        setLogs(res.data as any);
+        return;
+      }
+    } catch {
+      // Ignore and use fallback
+    }
+    const localData = getAuditLogs();
+    setLogs(localData);
   };
 
   useEffect(() => {
     loadLogs();
-    const interval = setInterval(loadLogs, 3000); // 3-second live refresh
+    const interval = setInterval(loadLogs, 5000); // 5-second live refresh
     return () => clearInterval(interval);
   }, []);
 

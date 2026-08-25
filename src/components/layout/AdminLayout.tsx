@@ -33,6 +33,7 @@ const EnquiriesPage = lazy(() => import("../../pages/EnquiriesPage").then((m) =>
 const ReviewsPage = lazy(() => import("../../pages/ReviewsPage").then((m) => ({ default: m.ReviewsPage })));
 const UsersPage = lazy(() => import("../../pages/UsersPage").then((m) => ({ default: m.UsersPage })));
 const CustomerDossierPage = lazy(() => import("../../pages/CustomerDossierPage").then((m) => ({ default: m.CustomerDossierPage })));
+const AdminDossierPage = lazy(() => import("../../pages/AdminDossierPage").then((m) => ({ default: m.AdminDossierPage })));
 const ShippingsPage = lazy(() => import("../../pages/ShippingsPage").then((m) => ({ default: m.ShippingsPage })));
 const ModelManagementPage = lazy(() => import("../../pages/ModelManagementPage").then((m) => ({ default: m.ModelManagementPage })));
 const B2BPricingPage = lazy(() => import("../../pages/B2BPricingPage").then((m) => ({ default: m.B2BPricingPage })));
@@ -84,6 +85,12 @@ export function AdminLayout() {
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | undefined>(() => {
     if (typeof window !== "undefined") {
       return localStorage.getItem("prc_admin_selected_customer_id") || undefined;
+    }
+    return undefined;
+  });
+  const [selectedAdminId, setSelectedAdminId] = useState<string | undefined>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("prc_admin_selected_admin_id") || undefined;
     }
     return undefined;
   });
@@ -212,7 +219,24 @@ export function AdminLayout() {
       case "roles":
         return <RolesPage />;
       case "admins":
-        return <AdminManagementPage />;
+        return (
+          <AdminManagementPage
+            onViewAdmin={(adminId) => {
+              setSelectedAdminId(adminId);
+              if (typeof window !== "undefined") {
+                localStorage.setItem("prc_admin_selected_admin_id", adminId);
+              }
+              setCurrentView("admin-detail");
+            }}
+          />
+        );
+      case "admin-detail":
+        return (
+          <AdminDossierPage
+            adminId={selectedAdminId}
+            onBack={() => setCurrentView("admins")}
+          />
+        );
       case "auth":
       case "audit":
         return <AuditPage />;

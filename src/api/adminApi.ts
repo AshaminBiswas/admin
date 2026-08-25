@@ -607,5 +607,38 @@ export const notificationsApi = {
     }),
 };
 
+/* ─── Enterprise Audit & Admin 360° API ──────────────────────────────────────── */
+export const auditApi = {
+  /** GET /audit/admin/:id/360 — Super-admin exclusive admin 360 dossier */
+  getAdmin360: (adminId: string) =>
+    fetchAdminApi<any>(`/audit/admin/${adminId}/360`),
+
+  /** GET /audit/logs — paginated & filterable activity log feed */
+  listLogs: (params?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    entity?: string;
+    action?: string;
+    severity?: string;
+    adminUserId?: string;
+    startDate?: string;
+    endDate?: string;
+  }) => {
+    const query = new URLSearchParams();
+    if (params?.page) query.append('page', String(params.page));
+    if (params?.limit) query.append('limit', String(params.limit));
+    if (params?.search) query.append('search', params.search);
+    if (params?.entity && params.entity !== 'ALL') query.append('entity', params.entity);
+    if (params?.action && params.action !== 'ALL') query.append('action', params.action);
+    if (params?.severity && params.severity !== 'ALL') query.append('severity', params.severity);
+    if (params?.adminUserId) query.append('adminUserId', params.adminUserId);
+    if (params?.startDate) query.append('startDate', params.startDate);
+    if (params?.endDate) query.append('endDate', params.endDate);
+    const qs = query.toString();
+    return fetchAdminApi<any>(`/audit/logs${qs ? `?${qs}` : ''}`);
+  },
+};
+
 
 

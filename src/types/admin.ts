@@ -261,9 +261,77 @@ export type AdminView =
   | 'analytics'
   | 'audit'
   | 'admins'
+  | 'admin-detail'
   | 'b2b-pricing'
   | 'invoice-create'
   | 'invoice-detail';
+
+/* ─── Admin 360° Profile & Audit Dossier Types ────────────────────────────── */
+
+export interface AdminAuditLogEntry {
+  id: string;
+  userId: string;
+  adminEmail: string;
+  adminName?: string;
+  adminRole?: string;
+  action: string;
+  entity: string;
+  entityId?: string;
+  entityName?: string;
+  details: string;
+  severity: 'INFO' | 'SUCCESS' | 'WARNING' | 'CRITICAL' | 'SECURITY';
+  metadata?: Record<string, any> | null;
+  ipAddress?: string;
+  userAgent?: string;
+  createdAt: string;
+}
+
+export interface AdminActionSummary {
+  totalOperations: number;
+  quotesApproved: number;
+  invoicesGenerated: number;
+  productsManaged: number;
+  customersManaged: number;
+  securityActionsCount: number;
+}
+
+export interface AdminDossierData {
+  admin: {
+    id: string;
+    email: string;
+    firstName: string;
+    lastName: string;
+    phone?: string | null;
+    avatar?: string | null;
+    status: string;
+    isVerified: boolean;
+    twoFactorEnabled: boolean;
+    mustChangePassword?: boolean;
+    lastLoginAt?: string | null;
+    createdAt: string;
+    updatedAt: string;
+    isSuperAdmin: boolean;
+    role?: Role | null;
+    roles?: Role[];
+    permissions?: { id: string; name: string; slug: string; module: string; description?: string }[];
+    seniority: {
+      totalDays: number;
+      years: number;
+      months: number;
+      days: number;
+      label: string;
+    };
+  };
+  summary: AdminActionSummary;
+  sections: {
+    quoteActions: AdminAuditLogEntry[];
+    invoiceActions: AdminAuditLogEntry[];
+    catalogActions: AdminAuditLogEntry[];
+    customerActions: AdminAuditLogEntry[];
+    securityActions: AdminAuditLogEntry[];
+    allLogs: AdminAuditLogEntry[];
+  };
+}
 
 /* ─── B2B Customer Custom Pricing ─────────────────────────────────────────── */
 
