@@ -414,7 +414,10 @@ export function CustomerDossierPage({
               { id: "orders", label: `Orders (${data.orders?.length || 0})`, icon: <ShoppingBag size={13} /> },
               { id: "quotes", label: `RFQ Quotes (${data.quotes?.length || 0})`, icon: <FileText size={13} /> },
               { id: "financials", label: `Invoices & PO/PI (${data.invoices?.length || 0})`, icon: <Receipt size={13} /> },
-              { id: "b2b_rates", label: `B2B Rates (${data.b2bPrices?.length || 0})`, icon: <Coins size={13} /> },
+              // Only show B2B Rates tab for verified B2B enterprise customers (those with company name or GSTIN)
+              ...(user.companyName || user.gstin
+                ? [{ id: "b2b_rates", label: `B2B Rates (${data.b2bPrices?.length || 0})`, icon: <Coins size={13} /> }]
+                : []),
               { id: "activity_logs", label: `Audit & Security (${(data.activityLogs?.length || 0) + (data.passwordResets?.length || 0)})`, icon: <Activity size={13} /> },
             ].map((tab) => (
               <button

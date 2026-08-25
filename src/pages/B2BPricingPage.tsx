@@ -117,6 +117,7 @@ interface CustomerOption {
   email: string;
   companyName?: string | null;
   gstin?: string | null;
+  b2bAdvancePercentage?: number | null;
   role?: { name: string; slug: string } | null;
 }
 
@@ -165,6 +166,10 @@ export const B2BPricingPage: React.FC<B2BPricingPageProps> = ({
   const [discountCategory, setDiscountCategory] = useState<string>("all");
   const [applyingDiscount, setApplyingDiscount] = useState(false);
 
+  // B2B Advance Payment Percentage
+  const [advancePercent, setAdvancePercent] = useState<number>(70);
+  const [savingAdvance, setSavingAdvance] = useState(false);
+
   // Feedback notifications
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
 
@@ -173,27 +178,33 @@ export const B2BPricingPage: React.FC<B2BPricingPageProps> = ({
     setTimeout(() => setToast(null), 3500);
   };
 
-  // Load Customers
+  // Load B2B Customers only
   const loadCustomers = useCallback(async () => {
     setLoadingCustomers(true);
     try {
-      const res = await usersApi.list({ limit: 100 });
+      // Fetch with type=b2b filter to only load enterprise/wholesale buyers
+      const res = await usersApi.list({ limit: 200, type: "b2b" as any });
       if (res && res.success !== false) {
         const userList = Array.isArray(res.data) ? res.data : res.data?.items || res.data?.users || [];
-        const opts: CustomerOption[] = userList.map((u: any) => ({
+        // Fallback: if backend doesn't support type=b2b, filter client-side by companyName/gstin
+        const b2bList = userList.filter((u: any) => u.companyName || u.gstin);
+        const opts: CustomerOption[] = b2bList.map((u: any) => ({
           id: u.id,
           name: `${u.firstName || ""} ${u.lastName || ""}`.trim() || u.email,
           email: u.email,
           companyName: u.companyName,
           gstin: u.gstin,
+          b2bAdvancePercentage: u.b2bAdvancePercentage ?? 70,
           role: u.role,
         }));
         setCustomers(opts);
         if (opts.length > 0) {
           setSelectedCustomerId((prev) => {
-            if (prev) return prev;
-            const firstB2B = opts.find((c) => Boolean(c.companyName || c.gstin)) || opts[0];
-            return firstB2B ? firstB2B.id : "";
+            const id = prev || (opts[0]?.id ?? "");
+            // Sync advance percent for the resolved customer
+            const found = opts.find((o) => o.id === id);
+            setAdvancePercent(found?.b2bAdvancePercentage ?? 70);
+            return id;
           });
         }
       }
@@ -233,8 +244,33 @@ export const B2BPricingPage: React.FC<B2BPricingPageProps> = ({
   useEffect(() => {
     if (selectedCustomerId) {
       loadPricingMatrix(selectedCustomerId);
+      // Sync advance percent from customer list
+      const found = customers.find((c) => c.id === selectedCustomerId);
+      if (found) setAdvancePercent(found.b2bAdvancePercentage ?? 70);
     }
-  }, [selectedCustomerId, loadPricingMatrix]);
+  }, [selectedCustomerId, loadPricingMatrix, customers]);
+
+  // Save B2B Advance Payment Percentage for selected customer
+  const handleSaveAdvance = async () => {
+    if (!selectedCustomerId) return;
+    setSavingAdvance(true);
+    try {
+      const res = await usersApi.update(selectedCustomerId, { b2bAdvancePercentage: advancePercent } as any);
+      if (res && res.success !== false) {
+        // Update local customers list with new value
+        setCustomers((prev) =>
+          prev.map((c) => c.id === selectedCustomerId ? { ...c, b2bAdvancePercentage: advancePercent } : c)
+        );
+        showToast(`Advance payment requirement updated to ${advancePercent}% for this B2B buyer`);
+      } else {
+        showToast(res.message || "Failed to update advance payment requirement", "error");
+      }
+    } catch (err: any) {
+      showToast(err.message || "Failed to save advance percent", "error");
+    } finally {
+      setSavingAdvance(false);
+    }
+  };
 
   // Filtered categories
   const categoriesList = useMemo(() => {
@@ -543,6 +579,71 @@ export const B2BPricingPage: React.FC<B2BPricingPageProps> = ({
           </button>
         </div>
       </div>
+
+      {/* ─── B2B Advance Payment Requirement Card ─── */}
+      {selectedCustomerId && (
+        <div className="p-4 rounded-tr-2xl rounded-bl-2xl bg-[#18181B] border border-amber-500/25 shadow-sm">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <label className="text-[11px] uppercase font-bold text-amber-400 tracking-wider flex items-center gap-1.5">
+                <Percent size={13} />
+                <span>B2B Advance Payment Req.</span>
+                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 ml-1">
+                  DEFAULT 70%
+                </span>
+              </label>
+              <p className="text-[11px] text-[#A1A1AA]">
+                Minimum advance payment % required before processing this enterprise buyer's orders. Applied automatically to all approved quotations.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3 flex-shrink-0">
+              {/* Preset quick-select buttons */}
+              <div className="flex items-center gap-1.5">
+                {[30, 50, 70, 100].map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => setAdvancePercent(preset)}
+                    className={`px-2.5 py-1.5 rounded-lg text-[10px] font-bold transition-all border ${
+                      advancePercent === preset
+                        ? "bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-sm"
+                        : "bg-[#09090B] text-[#71717A] border-[#27272A] hover:border-amber-500/30 hover:text-amber-400"
+                    }`}
+                  >
+                    {preset}%
+                  </button>
+                ))}
+              </div>
+
+              {/* Custom numeric input */}
+              <div className="flex items-center gap-1.5 bg-[#09090B] border border-[#27272A] rounded-xl px-3 py-1.5 focus-within:border-amber-500/50">
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={5}
+                  value={advancePercent}
+                  onChange={(e) => setAdvancePercent(Math.min(100, Math.max(0, Number(e.target.value))))}
+                  className="w-12 bg-transparent text-xs font-bold text-[#FAFAFA] text-right outline-none"
+                />
+                <span className="text-xs text-[#71717A] font-semibold">%</span>
+              </div>
+
+              {/* Save button */}
+              <button
+                type="button"
+                disabled={savingAdvance}
+                onClick={handleSaveAdvance}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-500/90 hover:bg-amber-500 disabled:opacity-50 text-[#09090B] text-xs font-bold transition-all shadow-sm"
+              >
+                <Save size={13} />
+                <span>{savingAdvance ? "Saving…" : "Save Advance %"}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ─── 4 Interactive KPI Cards ─── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
