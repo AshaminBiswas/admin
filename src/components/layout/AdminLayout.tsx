@@ -81,7 +81,12 @@ export function AdminLayout() {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [b2bTargetCustomerId, setB2bTargetCustomerId] = useState<string | undefined>();
-  const [selectedCustomerId, setSelectedCustomerId] = useState<string | undefined>();
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | undefined>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("prc_admin_selected_customer_id") || undefined;
+    }
+    return undefined;
+  });
 
   const toggleSidebar = () => setIsCollapsed((prev) => !prev);
   const toggleMobileSidebar = () => setIsMobileOpen((prev) => !prev);

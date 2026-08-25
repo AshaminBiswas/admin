@@ -60,17 +60,64 @@ export function CustomerDossierPage({
   >("overview");
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
-  const fetchDossier = async (id: string) => {
+  const fetchDossier = async (id: string, isRetry = false) => {
     setLoading(true);
     setError(null);
     try {
-      const res = await usersApi.getCustomer360(id);
+      let res = await usersApi.getCustomer360(id);
+
+      // Auto-retry once on failure (for cold-starts, Render sleep wakeups, or initial network latency)
+      if (!res.success && !isRetry) {
+        await new Promise((r) => setTimeout(r, 600));
+        res = await usersApi.getCustomer360(id);
+      }
+
       if (res.success && res.data) {
         setData(res.data);
       } else {
-        setError(res.message || "Failed to load customer profile");
+        // Fallback to basic user endpoint if 360 endpoint had a temporary timeout
+        const fallbackRes = await usersApi.getById(id);
+        if (fallbackRes.success && fallbackRes.data) {
+          const u = fallbackRes.data;
+          setData({
+            user: u,
+            addresses: u.addresses || [],
+            orders: u.orders || [],
+            quotes: u.quotes || [],
+            financials: { invoices: [], proformaInvoices: [], purchaseOrders: [] },
+            b2bRates: u.b2bCustomerPrices || [],
+            activityLogs: u.activityLogs || [],
+            passwordResetLogs: [],
+            summary: {
+              seniority: {
+                label: "Active Member",
+                years: 0,
+                months: 0,
+                days: 0,
+                totalDays: 0,
+              },
+              totalSpend: (u.orders || []).reduce((acc: number, curr: any) => acc + Number(curr.grandTotal || 0), 0),
+              totalOrdersCount: (u.orders || []).length,
+              totalQuotesCount: (u.quotes || []).length,
+              activeQuotesCount: 0,
+              invoicesCount: 0,
+              customPricesCount: (u.b2bCustomerPrices || []).length,
+            },
+          });
+        } else {
+          const errMsg =
+            res.error?.message ||
+            res.message ||
+            fallbackRes.error?.message ||
+            fallbackRes.message ||
+            "Failed to load customer profile";
+          setError(errMsg);
+        }
       }
     } catch (err: any) {
+      if (!isRetry) {
+        return fetchDossier(id, true);
+      }
       setError(err?.message || "Failed to load customer profile dossier");
     } finally {
       setLoading(false);
