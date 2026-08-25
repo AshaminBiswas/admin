@@ -179,62 +179,62 @@ export function AuditPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3 sm:space-y-5 md:space-y-6">
       {/* Top Header & Back Navigation Button */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] p-5 rounded-tr-2xl rounded-bl-2xl shadow-sm">
-        <div className="flex items-center gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] p-3.5 sm:p-5 rounded-tr-2xl rounded-bl-2xl shadow-sm">
+        <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={() => setCurrentView("dashboard")}
-            className="p-2.5 rounded-xl bg-slate-100 dark:bg-[#09090B] text-slate-700 dark:text-[#FAFAFA] border border-slate-200 dark:border-[#27272A] hover:bg-[#8B5CF6] hover:text-white transition-all flex items-center gap-2 text-xs font-bold shadow-sm active:scale-95"
+            className="p-1.5 sm:p-2 rounded-xl bg-slate-100 dark:bg-[#09090B] text-slate-700 dark:text-[#FAFAFA] border border-slate-200 dark:border-[#27272A] hover:bg-[#8B5CF6] hover:text-white transition-all flex items-center gap-1.5 text-[11px] sm:text-xs font-bold shadow-sm active:scale-95 flex-shrink-0"
             title="Return to Executive Dashboard"
           >
-            <ArrowLeft size={16} />
-            <span>Back to Dashboard</span>
+            <ArrowLeft size={14} />
+            <span className="hidden sm:inline">Back to Dashboard</span>
           </button>
 
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-xl font-bold font-serif text-slate-900 dark:text-[#FAFAFA]">
+              <h2 className="text-base sm:text-xl font-bold font-serif text-slate-900 dark:text-[#FAFAFA]">
                 Log Records & Audit Trail
               </h2>
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
-                <span>Live Stream Active</span>
+                <span>Live</span>
               </span>
             </div>
-            <p className="text-xs text-slate-500 dark:text-[#A1A1AA] mt-0.5">
+            <p className="text-[11px] sm:text-xs text-slate-500 dark:text-[#A1A1AA] mt-0.5">
               Real-time cryptographic activity trail of executive logins, 2FA authentications, stock edits & system policies.
             </p>
           </div>
         </div>
 
         {/* Header Action Buttons */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <button
             type="button"
             onClick={handleSimulateActivity}
-            className="px-3 py-2 rounded-xl bg-[#8B5CF6]/15 text-[#8B5CF6] dark:text-[#A855F7] border border-[#8B5CF6]/30 hover:bg-[#8B5CF6] hover:text-white text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm active:scale-95"
+            className="px-2.5 py-1.5 rounded-xl bg-[#8B5CF6]/15 text-[#8B5CF6] dark:text-[#A855F7] border border-[#8B5CF6]/30 hover:bg-[#8B5CF6] hover:text-white text-[11px] sm:text-xs font-bold transition-all flex items-center gap-1 shadow-sm active:scale-95"
           >
-            <Plus size={14} />
-            <span>Simulate Log Event</span>
+            <Plus size={13} />
+            <span>Simulate Log</span>
           </button>
 
           <AsyncActionButton
             mode="download"
             onAction={handleExportJSON}
-            idleIcon={<Download size={14} />}
+            idleIcon={<Download size={13} />}
             idleLabel="Export JSON"
             loadingLabel="Exporting…"
             successLabel="Exported!"
-            className="px-3 py-2 rounded-xl bg-slate-100 dark:bg-[#09090B] text-slate-700 dark:text-[#FAFAFA] border border-slate-200 dark:border-[#27272A] hover:border-[#8B5CF6] text-xs font-bold transition-all shadow-sm"
+            className="px-2.5 py-1.5 rounded-xl bg-slate-100 dark:bg-[#09090B] text-slate-700 dark:text-[#FAFAFA] border border-slate-200 dark:border-[#27272A] hover:border-[#8B5CF6] text-[11px] sm:text-xs font-bold transition-all shadow-sm"
             variant="custom"
           />
         </div>
       </div>
 
       {/* Control Bar: Search & Category Filters */}
-      <div className="bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] p-4 rounded-tr-2xl rounded-bl-2xl shadow-sm space-y-4">
+      <div className="bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] p-3 sm:p-4 rounded-tr-2xl rounded-bl-2xl shadow-sm space-y-3">
         <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
           {/* Search Field */}
           <div className="relative flex-1">

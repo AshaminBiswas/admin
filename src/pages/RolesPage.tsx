@@ -652,25 +652,25 @@ export function RolesPage() {
   }
 
   return (
-    <div className="space-y-6 text-[#FAFAFA] max-w-[1600px] mx-auto" style={{ fontFamily: "Inter, sans-serif" }}>
+    <div className="space-y-3 sm:space-y-5 md:space-y-6 text-[#FAFAFA] max-w-[1600px] mx-auto" style={{ fontFamily: "Inter, sans-serif" }}>
 
       {/* ─── Top Header ─── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#27272A] pb-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-tr-xl rounded-bl-xl bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-[#A855F7]">
-            <ShieldCheck size={20} />
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 border-b border-[#27272A] pb-3 sm:pb-4">
+        <div className="flex items-center gap-2.5 sm:gap-3">
+          <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-tr-xl rounded-bl-xl bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-[#A855F7] flex-shrink-0">
+            <ShieldCheck size={18} />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-xl font-bold text-[#FAFAFA]">
-                Roles & Granular RBAC Permissions
+            <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+              <h1 className="text-base sm:text-xl font-bold text-[#FAFAFA]">
+                Roles & RBAC Permissions
               </h1>
-              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-purple-500/20 text-[#A855F7] border border-purple-500/30">
-                CRUD SECURITY GOVERNANCE
+              <span className="text-[9px] sm:text-[10px] font-extrabold px-1.5 py-0.2 rounded-full bg-purple-500/20 text-[#A855F7] border border-purple-500/30">
+                CRUD GOVERNANCE
               </span>
             </div>
-            <p className="text-xs text-[#A1A1AA]">
-              Define custom privilege roles, grant granular Create, Read, Update, Delete (CRUD) actions, and manage system-wide security policies.
+            <p className="text-[11px] sm:text-xs text-[#A1A1AA]">
+              Define custom privilege roles, grant granular Create, Read, Update, Delete actions.
             </p>
           </div>
         </div>

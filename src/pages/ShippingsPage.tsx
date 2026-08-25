@@ -9,25 +9,53 @@ export function ShippingsPage() {
   ]);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 rounded-2xl bg-gradient-to-r from-[#18181B] via-[#1F1929] to-[#18181B] border border-[#27272A] shadow-xl">
-        <div className="space-y-1">
+    <div className="space-y-3 sm:space-y-5 md:space-y-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 p-3.5 sm:p-5 rounded-2xl bg-[#18181B] border border-[#27272A] shadow-xl">
+        <div className="space-y-0.5">
           <div className="flex items-center gap-2">
-            <Truck size={20} className="text-[#8B5CF6]" />
-            <h1 className="text-2xl font-extrabold text-[#FAFAFA] tracking-tight">Shipping Rates & Zones</h1>
+            <Truck size={18} className="text-[#8B5CF6]" />
+            <h1 className="text-base sm:text-xl font-extrabold text-[#FAFAFA] tracking-tight">Shipping Rates & Zones</h1>
           </div>
-          <p className="text-xs text-[#A1A1AA]">Configure courier partners, shipping zone rates, SLA timelines, and freight rules.</p>
+          <p className="text-[11px] sm:text-xs text-[#A1A1AA]">Configure courier partners, shipping zone rates, SLA timelines, and freight rules.</p>
         </div>
         <button
           type="button"
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#8B5CF6] text-[#FAFAFA] text-xs font-bold hover:bg-[#7C3AED] shadow-lg shadow-[#8B5CF6]/25 transition-all self-start md:self-auto"
+          className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#8B5CF6] text-[#FAFAFA] text-[11px] sm:text-xs font-bold hover:bg-[#7C3AED] shadow-lg shadow-[#8B5CF6]/25 transition-all self-start md:self-auto"
         >
-          <Plus size={16} />
+          <Plus size={14} />
           <span>Add Shipping Zone</span>
         </button>
       </div>
 
-      <div className="rounded-xl bg-[#18181B] border border-[#27272A] overflow-hidden shadow-lg">
+      {/* ─── Mobile Shipping Cards (sm:hidden) ─── */}
+      <div className="sm:hidden space-y-2.5">
+        {shippingZones.map((z) => (
+          <div
+            key={z.id}
+            className="p-3 rounded-xl bg-[#18181B] border border-[#27272A] space-y-2 shadow-sm"
+          >
+            <div className="flex items-center justify-between">
+              <p className="font-bold text-xs text-[#FAFAFA]">{z.name}</p>
+              <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                {z.status}
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between text-[11px]">
+              <span className="text-[#8B5CF6] font-semibold">{z.carrier}</span>
+              <span className="font-mono text-emerald-400 font-bold">{z.rate}</span>
+            </div>
+
+            <div className="pt-2 border-t border-[#27272A] flex items-center justify-between text-[10px] text-[#A1A1AA]">
+              <span>Delivery Time:</span>
+              <span className="font-medium text-[#FAFAFA]">{z.deliveryTime}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* ─── Desktop Shipping Table (hidden sm:block) ─── */}
+      <div className="hidden sm:block rounded-xl bg-[#18181B] border border-[#27272A] overflow-hidden shadow-lg">
         <table className="w-full text-left text-xs">
           <thead className="bg-[#09090B] text-[#A1A1AA] border-b border-[#27272A] font-bold uppercase tracking-wider text-[10px]">
             <tr>

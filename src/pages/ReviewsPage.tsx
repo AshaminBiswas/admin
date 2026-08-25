@@ -9,18 +9,60 @@ export function ReviewsPage() {
   ]);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 rounded-2xl bg-gradient-to-r from-[#18181B] via-[#1F1929] to-[#18181B] border border-[#27272A] shadow-xl">
-        <div className="space-y-1">
+    <div className="space-y-3 sm:space-y-5 md:space-y-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 p-3.5 sm:p-5 rounded-2xl bg-[#18181B] border border-[#27272A] shadow-xl">
+        <div className="space-y-0.5">
           <div className="flex items-center gap-2">
-            <Star size={20} className="text-[#8B5CF6]" />
-            <h1 className="text-2xl font-extrabold text-[#FAFAFA] tracking-tight">Customer Ratings & Reviews</h1>
+            <Star size={18} className="text-[#8B5CF6]" />
+            <h1 className="text-base sm:text-xl font-extrabold text-[#FAFAFA] tracking-tight">Customer Ratings & Reviews</h1>
           </div>
-          <p className="text-xs text-[#A1A1AA]">Moderate customer reviews, rating scores, and product feedback.</p>
+          <p className="text-[11px] sm:text-xs text-[#A1A1AA]">Moderate customer reviews, rating scores, and product feedback.</p>
         </div>
       </div>
 
-      <div className="rounded-xl bg-[#18181B] border border-[#27272A] overflow-hidden shadow-lg">
+      {/* ─── Mobile Review Cards (sm:hidden) ─── */}
+      <div className="sm:hidden space-y-2.5">
+        {reviews.map((r) => (
+          <div
+            key={r.id}
+            className="p-3 rounded-xl bg-[#18181B] border border-[#27272A] space-y-2 shadow-sm"
+          >
+            <div className="flex items-center justify-between">
+              <p className="font-bold text-xs text-[#FAFAFA] truncate">{r.product}</p>
+              <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${r.status === 'APPROVED' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'}`}>
+                {r.status}
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between text-[11px]">
+              <span className="text-[#A855F7] font-semibold">{r.user}</span>
+              <div className="flex items-center text-amber-400 font-bold text-xs">
+                {"★".repeat(r.rating)}
+                <span className="text-[#A1A1AA] text-[10px] ml-1">({r.rating}/5)</span>
+              </div>
+            </div>
+
+            <p className="text-[11px] text-[#A1A1AA]">
+              {r.comment}
+            </p>
+
+            <div className="pt-2 border-t border-[#27272A] flex items-center justify-between text-[10px]">
+              <span className="text-[#71717A]">{r.date}</span>
+              <div className="flex items-center gap-2">
+                <button type="button" className="p-1 rounded text-[#A1A1AA] hover:text-emerald-400">
+                  <CheckCircle2 size={14} />
+                </button>
+                <button type="button" className="p-1 rounded text-[#A1A1AA] hover:text-rose-400">
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* ─── Desktop Reviews Table (hidden sm:block) ─── */}
+      <div className="hidden sm:block rounded-xl bg-[#18181B] border border-[#27272A] overflow-hidden shadow-lg">
         <table className="w-full text-left text-xs">
           <thead className="bg-[#09090B] text-[#A1A1AA] border-b border-[#27272A] font-bold uppercase tracking-wider text-[10px]">
             <tr>

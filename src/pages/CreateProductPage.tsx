@@ -291,39 +291,39 @@ export function CreateProductPage() {
     }
   };
 
-  const inputClass = "w-full bg-slate-50 dark:bg-[#09090B] text-slate-900 dark:text-[#FAFAFA] px-4 py-2.5 rounded-xl text-sm border border-slate-200 dark:border-[#27272A] focus:outline-none focus:border-[#8B5CF6] focus:ring-1 focus:ring-[#8B5CF6]/20 transition-all";
-  const labelClass = "block text-xs font-bold text-slate-700 dark:text-[#A1A1AA] mb-1.5";
-  const sectionTitleClass = "text-sm font-bold text-slate-900 dark:text-[#FAFAFA] mb-4 flex items-center gap-2";
-  const sectionContainerClass = "bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] rounded-2xl p-6 shadow-sm";
+  const inputClass = "w-full bg-slate-50 dark:bg-[#09090B] text-slate-900 dark:text-[#FAFAFA] px-3 py-1.5 sm:py-2 text-xs rounded-xl border border-slate-200 dark:border-[#27272A] focus:outline-none focus:border-[#8B5CF6] focus:ring-1 focus:ring-[#8B5CF6]/20 transition-all";
+  const labelClass = "block text-[11px] sm:text-xs font-bold text-slate-700 dark:text-[#A1A1AA] mb-1";
+  const sectionTitleClass = "text-xs sm:text-sm font-bold text-slate-900 dark:text-[#FAFAFA] mb-3 flex items-center gap-1.5";
+  const sectionContainerClass = "bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] rounded-2xl p-3.5 sm:p-5 shadow-sm";
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6 pb-12">
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+    <div className="max-w-5xl mx-auto space-y-3 sm:space-y-5 md:space-y-6 pb-8">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
         <div>
           <button
             onClick={() => setCurrentView("products")}
-            className="flex items-center gap-1.5 text-[11px] font-bold text-slate-500 hover:text-[#8B5CF6] transition-colors mb-2"
+            className="flex items-center gap-1 text-[10px] sm:text-[11px] font-bold text-slate-500 hover:text-[#8B5CF6] transition-colors mb-1"
           >
             <ChevronLeft size={12} />
             Back to Products
           </button>
-          <h3 className="text-xl font-extrabold text-slate-900 dark:text-[#FAFAFA] tracking-tight">
+          <h3 className="text-base sm:text-xl font-extrabold text-slate-900 dark:text-[#FAFAFA] tracking-tight">
             Create New Product
           </h3>
-          <p className="text-xs text-slate-500 dark:text-[#71717A] mt-1">
+          <p className="text-[11px] sm:text-xs text-slate-500 dark:text-[#71717A] mt-0.5">
             Add a new product to your catalog with comprehensive details
           </p>
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-3 gap-3.5 sm:gap-6">
         
         {/* ── Left Column (Main Form) ── */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className="lg:col-span-2 space-y-3.5 sm:space-y-6">
           {error && (
-            <div className="bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/30 text-rose-600 dark:text-rose-400 p-4 rounded-xl flex items-start gap-3">
-              <AlertTriangle size={18} className="flex-shrink-0 mt-0.5" />
-              <p className="text-sm font-semibold">{error}</p>
+            <div className="bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/30 text-rose-600 dark:text-rose-400 p-3 sm:p-4 rounded-xl flex items-start gap-2.5">
+              <AlertTriangle size={16} className="flex-shrink-0 mt-0.5" />
+              <p className="text-xs sm:text-sm font-semibold">{error}</p>
             </div>
           )}
 

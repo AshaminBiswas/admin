@@ -46,58 +46,58 @@ export function AnalyticsPage() {
   ];
 
   return (
-    <div className="space-y-8 pb-12">
+    <div className="space-y-3 sm:space-y-5 md:space-y-6 pb-8">
       {/* Export Toast Notification */}
       {exportNotice && (
-        <div className="fixed bottom-6 right-6 z-50 bg-[#18181B] border border-[#8B5CF6] text-[#FAFAFA] px-4 py-3 rounded-tr-xl rounded-bl-xl shadow-2xl flex items-center gap-3 animate-bounce">
-          <CheckCircle2 size={20} className="text-[#8B5CF6]" />
+        <div className="fixed bottom-6 right-6 z-50 bg-[#18181B] border border-[#8B5CF6] text-[#FAFAFA] px-3.5 py-2 rounded-tr-xl rounded-bl-xl shadow-2xl flex items-center gap-2.5 animate-bounce">
+          <CheckCircle2 size={16} className="text-[#8B5CF6]" />
           <span className="text-xs font-bold">{exportNotice}</span>
         </div>
       )}
 
       {/* Header Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-[#18181B] p-6 rounded-tr-3xl rounded-bl-3xl border border-[#27272A]">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-[#18181B] p-3.5 sm:p-5 rounded-tr-3xl rounded-bl-3xl border border-[#27272A]">
         <div>
-          <h1 className="text-2xl font-bold font-serif text-[#FAFAFA]">Executive Analytics & Performance</h1>
-          <p className="text-xs text-[#A1A1AA] mt-1">
+          <h1 className="text-base sm:text-xl font-bold font-serif text-[#FAFAFA]">Executive Analytics & Performance</h1>
+          <p className="text-[11px] sm:text-xs text-[#A1A1AA] mt-0.5">
             Real-time commercial revenue metrics, B2B quote conversion rates & financial reports.
           </p>
         </div>
 
         {/* Timeframe selector */}
-        <div className="flex items-center gap-2 bg-[#09090B] p-1.5 rounded-tr-xl rounded-bl-xl border border-[#27272A]">
-          <Filter size={14} className="text-[#8B5CF6] ml-2" />
+        <div className="flex items-center gap-1 bg-[#09090B] p-1 rounded-tr-xl rounded-bl-xl border border-[#27272A] overflow-x-auto">
+          <Filter size={12} className="text-[#8B5CF6] ml-1 flex-shrink-0" />
           <button
             type="button"
             onClick={() => setTimeframe("7d")}
-            className={`px-3 py-1 rounded-tr-lg rounded-bl-lg text-xs font-bold transition-colors ${
+            className={`px-2.5 py-1 rounded-tr-lg rounded-bl-lg text-[10px] sm:text-xs font-bold transition-colors whitespace-nowrap ${
               timeframe === "7d" ? "bg-[#8B5CF6] text-[#FAFAFA]" : "text-[#A1A1AA] hover:text-[#FAFAFA]"
             }`}
           >
-            Last 7 Days
+            7 Days
           </button>
           <button
             type="button"
             onClick={() => setTimeframe("30d")}
-            className={`px-3 py-1 rounded-tr-lg rounded-bl-lg text-xs font-bold transition-colors ${
+            className={`px-2.5 py-1 rounded-tr-lg rounded-bl-lg text-[10px] sm:text-xs font-bold transition-colors whitespace-nowrap ${
               timeframe === "30d" ? "bg-[#8B5CF6] text-[#FAFAFA]" : "text-[#A1A1AA] hover:text-[#FAFAFA]"
             }`}
           >
-            Last 30 Days
+            30 Days
           </button>
           <button
             type="button"
             onClick={() => setTimeframe("quarter")}
-            className={`px-3 py-1 rounded-tr-lg rounded-bl-lg text-xs font-bold transition-colors ${
+            className={`px-2.5 py-1 rounded-tr-lg rounded-bl-lg text-[10px] sm:text-xs font-bold transition-colors whitespace-nowrap ${
               timeframe === "quarter" ? "bg-[#8B5CF6] text-[#FAFAFA]" : "text-[#A1A1AA] hover:text-[#FAFAFA]"
             }`}
           >
-            This Quarter
+            Quarter
           </button>
           <button
             type="button"
             onClick={() => setTimeframe("ytd")}
-            className={`px-3 py-1 rounded-tr-lg rounded-bl-lg text-xs font-bold transition-colors ${
+            className={`px-2.5 py-1 rounded-tr-lg rounded-bl-lg text-[10px] sm:text-xs font-bold transition-colors whitespace-nowrap ${
               timeframe === "ytd" ? "bg-[#8B5CF6] text-[#FAFAFA]" : "text-[#A1A1AA] hover:text-[#FAFAFA]"
             }`}
           >
@@ -107,34 +107,34 @@ export function AnalyticsPage() {
       </div>
 
       {/* KPI Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
         {/* Total Revenue */}
-        <div className="bg-[#18181B] p-6 rounded-tr-2xl rounded-bl-2xl border border-[#27272A] relative overflow-hidden group hover:border-[#8B5CF6]/50 transition-all">
+        <div className="bg-[#18181B] p-3 sm:p-5 rounded-tr-2xl rounded-bl-2xl border border-[#27272A] relative overflow-hidden group hover:border-[#8B5CF6]/50 transition-all">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-[#A1A1AA]">Gross Sales Revenue</span>
-            <div className="w-10 h-10 rounded-tr-xl rounded-bl-xl bg-[#8B5CF6]/15 text-[#A855F7] flex items-center justify-center">
-              <DollarSign size={20} />
+            <span className="text-[9px] sm:text-xs font-bold uppercase tracking-wider text-[#A1A1AA]">Gross Sales Revenue</span>
+            <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-tr-xl rounded-bl-xl bg-[#8B5CF6]/15 text-[#A855F7] flex items-center justify-center flex-shrink-0">
+              <DollarSign size={16} />
             </div>
           </div>
-          <p className="text-3xl font-extrabold text-[#FAFAFA] font-serif mt-3">₹1,248,500</p>
-          <div className="flex items-center gap-1.5 mt-3 text-xs font-semibold text-[#10B981]">
-            <TrendingUp size={16} />
-            <span>+24.8% vs previous period</span>
+          <p className="text-base sm:text-2xl font-extrabold text-[#FAFAFA] font-serif mt-1.5 sm:mt-2">₹1,248,500</p>
+          <div className="flex items-center gap-1 mt-1 sm:mt-2 text-[10px] sm:text-xs font-semibold text-[#10B981]">
+            <TrendingUp size={12} />
+            <span>+24.8%</span>
           </div>
         </div>
 
         {/* B2B Orders Count */}
-        <div className="bg-[#18181B] p-6 rounded-tr-2xl rounded-bl-2xl border border-[#27272A] relative overflow-hidden group hover:border-[#8B5CF6]/50 transition-all">
+        <div className="bg-[#18181B] p-3 sm:p-5 rounded-tr-2xl rounded-bl-2xl border border-[#27272A] relative overflow-hidden group hover:border-[#8B5CF6]/50 transition-all">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-[#A1A1AA]">Total B2B Orders</span>
-            <div className="w-10 h-10 rounded-tr-xl rounded-bl-xl bg-[#3B82F6]/15 text-[#3B82F6] flex items-center justify-center">
-              <ShoppingCart size={20} />
+            <span className="text-[9px] sm:text-xs font-bold uppercase tracking-wider text-[#A1A1AA]">Total B2B Orders</span>
+            <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-tr-xl rounded-bl-xl bg-[#3B82F6]/15 text-[#3B82F6] flex items-center justify-center flex-shrink-0">
+              <ShoppingCart size={16} />
             </div>
           </div>
-          <p className="text-3xl font-extrabold text-[#FAFAFA] font-serif mt-3">342</p>
-          <div className="flex items-center gap-1.5 mt-3 text-xs font-semibold text-[#10B981]">
-            <TrendingUp size={16} />
-            <span>+18.2% order volume</span>
+          <p className="text-base sm:text-2xl font-extrabold text-[#FAFAFA] font-serif mt-1.5 sm:mt-2">342</p>
+          <div className="flex items-center gap-1 mt-1 sm:mt-2 text-[10px] sm:text-xs font-semibold text-[#10B981]">
+            <TrendingUp size={12} />
+            <span>+18.2%</span>
           </div>
         </div>
 

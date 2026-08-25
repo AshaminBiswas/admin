@@ -370,54 +370,54 @@ export function ReportsPage() {
   const currentReportObj = REPORTS_LIST.find((r) => r.type === selectedReport);
 
   return (
-    <div className="space-y-8 pb-12">
+    <div className="space-y-3 sm:space-y-5 md:space-y-6 pb-8">
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-[#18181B] border border-[#8B5CF6] text-[#FAFAFA] px-4 py-3 rounded-tr-xl rounded-bl-xl shadow-2xl flex items-center gap-3 animate-bounce">
-          <CheckCircle2 size={20} className="text-[#8B5CF6]" />
+        <div className="fixed bottom-6 right-6 z-50 bg-[#18181B] border border-[#8B5CF6] text-[#FAFAFA] px-3.5 py-2.5 rounded-tr-xl rounded-bl-xl shadow-2xl flex items-center gap-2.5 animate-bounce">
+          <CheckCircle2 size={18} className="text-[#8B5CF6]" />
           <span className="text-xs font-bold">{toastMessage}</span>
         </div>
       )}
 
       {/* Header Bar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-[#18181B] p-6 rounded-tr-3xl rounded-bl-3xl border border-[#27272A]">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-[#18181B] p-3.5 sm:p-5 rounded-tr-3xl rounded-bl-3xl border border-[#27272A]">
         <div>
           <div className="flex items-center gap-2 text-[#8B5CF6]">
-            <FileSpreadsheet size={22} />
-            <h1 className="text-2xl font-bold font-serif text-[#FAFAFA]">Reports & Downloads Center</h1>
+            <FileSpreadsheet size={18} />
+            <h1 className="text-base sm:text-xl font-bold font-serif text-[#FAFAFA]">Reports & Downloads Center</h1>
           </div>
-          <p className="text-xs text-[#A1A1AA] mt-1">
+          <p className="text-[11px] sm:text-xs text-[#A1A1AA] mt-0.5">
             Download structured executive audit reports strictly in formatted **Excel (.xlsx)** or **PDF (.pdf)** formats.
           </p>
         </div>
 
         {/* Global Export Action Buttons */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 flex-wrap">
           <AsyncActionButton
             mode="download"
             onAction={exportToExcel}
-            idleIcon={<FileSpreadsheet size={16} />}
-            idleLabel="Download Excel (.xlsx)"
-            loadingLabel="Generating XLSX…"
+            idleIcon={<FileSpreadsheet size={14} />}
+            idleLabel="Excel (.xlsx)"
+            loadingLabel="Generating…"
             successLabel="Downloaded!"
-            className="flex items-center gap-2 bg-[#10B981] hover:bg-[#059669] text-[#FAFAFA] font-bold text-xs px-4 py-2.5 rounded-tr-xl rounded-bl-xl shadow-lg shadow-[#10B981]/20 transition-all"
+            className="flex items-center gap-1.5 bg-[#10B981] hover:bg-[#059669] text-[#FAFAFA] font-bold text-[11px] sm:text-xs px-3 py-1.5 sm:py-2 rounded-tr-xl rounded-bl-xl shadow-lg shadow-[#10B981]/20 transition-all"
             variant="custom"
           />
 
           <AsyncActionButton
             mode="view"
             onAction={exportToPDF}
-            idleIcon={<Printer size={16} />}
-            idleLabel="Download PDF (.pdf)"
-            loadingLabel="Generating PDF…"
-            className="flex items-center gap-2 bg-[#8B5CF6] hover:bg-[#7C3AED] text-[#FAFAFA] font-bold text-xs px-4 py-2.5 rounded-tr-xl rounded-bl-xl shadow-lg shadow-[#8B5CF6]/20 transition-all"
+            idleIcon={<Printer size={14} />}
+            idleLabel="PDF (.pdf)"
+            loadingLabel="Generating…"
+            className="flex items-center gap-1.5 bg-[#8B5CF6] hover:bg-[#7C3AED] text-[#FAFAFA] font-bold text-[11px] sm:text-xs px-3 py-1.5 sm:py-2 rounded-tr-xl rounded-bl-xl shadow-lg shadow-[#8B5CF6]/20 transition-all"
             variant="custom"
           />
         </div>
       </div>
 
       {/* Reports Selection Tabs / Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3.5">
         {REPORTS_LIST.map((rep) => {
           const isSelected = selectedReport === rep.type;
           return (
@@ -425,23 +425,23 @@ export function ReportsPage() {
               key={rep.id}
               type="button"
               onClick={() => setSelectedReport(rep.type)}
-              className={`p-4 rounded-tr-2xl rounded-bl-2xl border text-left transition-all duration-200 relative ${
+              className={`p-2.5 sm:p-3.5 rounded-tr-2xl rounded-bl-2xl border text-left transition-all duration-200 relative ${
                 isSelected
                   ? "bg-[#8B5CF6]/15 border-[#8B5CF6] text-[#FAFAFA] shadow-lg shadow-[#8B5CF6]/10"
                   : "bg-[#18181B] border-[#27272A] text-[#A1A1AA] hover:border-[#8B5CF6]/50 hover:text-[#FAFAFA]"
               }`}
             >
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-[#09090B] text-[#A855F7] border border-[#27272A]">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-[#09090B] text-[#A855F7] border border-[#27272A]">
                   {rep.category}
                 </span>
-                {isSelected && <CheckCircle2 size={16} className="text-[#8B5CF6]" />}
+                {isSelected && <CheckCircle2 size={14} className="text-[#8B5CF6]" />}
               </div>
-              <h3 className="text-xs font-bold text-[#FAFAFA]">{rep.name}</h3>
-              <p className="text-[10px] text-[#A1A1AA] mt-1 line-clamp-2">{rep.description}</p>
-              <div className="mt-3 flex items-center justify-between text-[10px] text-[#A1A1AA] pt-2 border-t border-[#27272A]/50">
+              <h3 className="text-xs font-bold text-[#FAFAFA] line-clamp-1">{rep.name}</h3>
+              <p className="text-[10px] text-[#A1A1AA] mt-0.5 line-clamp-2">{rep.description}</p>
+              <div className="mt-2 flex items-center justify-between text-[9px] text-[#A1A1AA] pt-1.5 border-t border-[#27272A]/50">
                 <span>{rep.dateRange}</span>
-                <span className="font-bold text-[#FAFAFA]">{rep.recordsCount} records</span>
+                <span className="font-bold text-[#FAFAFA]">{rep.recordsCount} rows</span>
               </div>
             </button>
           );
@@ -449,48 +449,48 @@ export function ReportsPage() {
       </div>
 
       {/* Active Selected Report Preview Card */}
-      <div className="bg-[#18181B] rounded-tr-3xl rounded-bl-3xl border border-[#27272A] p-6 space-y-6">
+      <div className="bg-[#18181B] rounded-tr-3xl rounded-bl-3xl border border-[#27272A] p-3.5 sm:p-5 space-y-3.5 sm:space-y-5">
         {/* Table Search & Controls */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h2 className="text-lg font-bold text-[#FAFAFA] font-serif flex items-center gap-2">
+            <h2 className="text-sm sm:text-base font-bold text-[#FAFAFA] font-serif flex items-center gap-2">
               <span>{currentReportObj?.name}</span>
-              <span className="text-xs font-normal text-[#A1A1AA]">({currentReportObj?.recordsCount} Entries)</span>
+              <span className="text-[11px] font-normal text-[#A1A1AA]">({currentReportObj?.recordsCount} Entries)</span>
             </h2>
-            <p className="text-xs text-[#A1A1AA] mt-0.5">{currentReportObj?.description}</p>
+            <p className="text-[11px] text-[#A1A1AA] mt-0.5">{currentReportObj?.description}</p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             {/* Table Search */}
-            <div className="relative w-64">
+            <div className="relative w-full sm:w-64">
               <input
                 type="text"
                 placeholder="Search report rows..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full bg-[#09090B] text-[#FAFAFA] placeholder-[#A1A1AA]/50 pl-9 pr-3 py-1.5 rounded-tr-xl rounded-bl-xl text-xs border border-[#27272A] focus:outline-none focus:border-[#8B5CF6]"
+                className="w-full bg-[#09090B] text-[#FAFAFA] placeholder-[#A1A1AA]/50 pl-8 pr-3 py-1.5 rounded-tr-xl rounded-bl-xl text-xs border border-[#27272A] focus:outline-none focus:border-[#8B5CF6]"
               />
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8B5CF6]" />
+              <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#8B5CF6]" />
             </div>
 
             {/* Excel Download Direct */}
             <button
               type="button"
               onClick={exportToExcel}
-              className="p-2 bg-[#09090B] border border-[#27272A] hover:border-[#10B981] text-[#10B981] rounded-tr-xl rounded-bl-xl transition-colors"
+              className="p-1.5 bg-[#09090B] border border-[#27272A] hover:border-[#10B981] text-[#10B981] rounded-tr-xl rounded-bl-xl transition-colors"
               title="Download Excel (.xlsx)"
             >
-              <FileSpreadsheet size={18} />
+              <FileSpreadsheet size={16} />
             </button>
 
             {/* PDF Download Direct */}
             <button
               type="button"
               onClick={exportToPDF}
-              className="p-2 bg-[#09090B] border border-[#27272A] hover:border-[#8B5CF6] text-[#8B5CF6] rounded-tr-xl rounded-bl-xl transition-colors"
+              className="p-1.5 bg-[#09090B] border border-[#27272A] hover:border-[#8B5CF6] text-[#8B5CF6] rounded-tr-xl rounded-bl-xl transition-colors"
               title="Download PDF (.pdf)"
             >
-              <Printer size={18} />
+              <Printer size={16} />
             </button>
           </div>
         </div>

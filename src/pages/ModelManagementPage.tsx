@@ -162,60 +162,60 @@ export function ModelManagementPage({
   const tableData = getModelTableData();
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3 sm:space-y-5 md:space-y-6">
       {/* Header Banner */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 rounded-2xl bg-gradient-to-r from-white via-purple-50 to-white dark:from-[#18181B] dark:via-[#1F1929] dark:to-[#18181B] border border-slate-200 dark:border-[#27272A] shadow-md dark:shadow-xl relative overflow-hidden transition-colors">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 p-3.5 sm:p-5 rounded-2xl bg-gradient-to-r from-white via-purple-50 to-white dark:from-[#18181B] dark:via-[#1F1929] dark:to-[#18181B] border border-slate-200 dark:border-[#27272A] shadow-md dark:shadow-xl relative overflow-hidden transition-colors">
         <div className="absolute top-0 right-0 w-96 h-96 bg-[#8B5CF6]/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="space-y-1 z-10">
-          <div className="flex items-center gap-2">
-            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#8B5CF6]/15 text-[#8B5CF6] dark:bg-[#8B5CF6]/20 dark:text-[#A855F7] border border-[#8B5CF6]/30">
+        <div className="space-y-0.5 z-10">
+          <div className="flex items-center gap-1.5">
+            <span className="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-[#8B5CF6]/15 text-[#8B5CF6] dark:bg-[#8B5CF6]/20 dark:text-[#A855F7] border border-[#8B5CF6]/30">
               API Model View
             </span>
-            <span className="text-xs text-slate-500 dark:text-[#A1A1AA] font-mono">/{modelKey}</span>
+            <span className="text-[10px] text-slate-500 dark:text-[#A1A1AA] font-mono">/{modelKey}</span>
           </div>
-          <h1 className="text-2xl font-extrabold text-slate-900 dark:text-[#FAFAFA] tracking-tight">{title}</h1>
-          <p className="text-xs text-slate-600 dark:text-[#A1A1AA] max-w-xl">{description}</p>
+          <h1 className="text-base sm:text-xl font-extrabold text-slate-900 dark:text-[#FAFAFA] tracking-tight">{title}</h1>
+          <p className="text-[11px] sm:text-xs text-slate-600 dark:text-[#A1A1AA] max-w-xl">{description}</p>
         </div>
 
-        <div className="flex items-center gap-3 z-10">
+        <div className="flex items-center gap-2 z-10 flex-wrap">
           <button
             type="button"
             onClick={handleRefresh}
-            className={`p-2.5 rounded-xl bg-slate-100 dark:bg-[#09090B] border border-slate-200 dark:border-[#27272A] text-slate-700 dark:text-[#A1A1AA] hover:text-slate-900 dark:hover:text-[#FAFAFA] hover:bg-slate-200 dark:hover:bg-[#27272A] transition-all ${
+            className={`p-1.5 sm:p-2 rounded-xl bg-slate-100 dark:bg-[#09090B] border border-slate-200 dark:border-[#27272A] text-slate-700 dark:text-[#A1A1AA] hover:text-slate-900 dark:hover:text-[#FAFAFA] hover:bg-slate-200 dark:hover:bg-[#27272A] transition-all ${
               isRefreshing ? "animate-spin text-[#8B5CF6]" : ""
             }`}
             title="Refresh Data"
           >
-            <RefreshCw size={18} />
+            <RefreshCw size={14} />
           </button>
           <button
             type="button"
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-[#09090B] border border-slate-200 dark:border-[#27272A] text-slate-800 dark:text-[#FAFAFA] text-xs font-bold hover:bg-slate-200 dark:hover:bg-[#27272A] transition-all"
+            className="flex items-center gap-1.5 px-3 py-1.5 sm:py-2 rounded-xl bg-slate-100 dark:bg-[#09090B] border border-slate-200 dark:border-[#27272A] text-slate-800 dark:text-[#FAFAFA] text-[11px] sm:text-xs font-bold hover:bg-slate-200 dark:hover:bg-[#27272A] transition-all"
           >
-            <Download size={16} />
-            <span>Export Data</span>
+            <Download size={13} />
+            <span>Export</span>
           </button>
           <button
             type="button"
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#8B5CF6] text-white text-xs font-bold hover:bg-[#7C3AED] shadow-lg shadow-[#8B5CF6]/25 transition-all"
+            className="flex items-center gap-1.5 px-3 py-1.5 sm:py-2 rounded-xl bg-[#8B5CF6] text-white text-[11px] sm:text-xs font-bold hover:bg-[#7C3AED] shadow-lg shadow-[#8B5CF6]/25 transition-all"
           >
-            <Plus size={16} />
+            <Plus size={13} />
             <span>New Entry</span>
           </button>
         </div>
       </div>
 
       {/* KPI Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3.5">
         {stats.map((st, i) => (
           <div
             key={i}
-            className="p-4 rounded-xl bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] flex flex-col justify-between hover:border-[#8B5CF6]/50 transition-colors shadow-sm dark:shadow-none group"
+            className="p-2.5 sm:p-3.5 rounded-xl bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] flex flex-col justify-between hover:border-[#8B5CF6]/50 transition-colors shadow-sm dark:shadow-none group"
           >
-            <p className="text-xs text-slate-500 dark:text-[#A1A1AA] font-semibold">{st.label}</p>
-            <div className="mt-3 flex items-baseline justify-between">
-              <span className={`text-xl font-black ${st.color}`}>{st.value}</span>
-              <span className="text-[10px] font-bold text-slate-600 dark:text-[#A1A1AA] bg-slate-100 dark:bg-[#09090B] px-2 py-0.5 rounded-md border border-slate-200 dark:border-[#27272A]">
+            <p className="text-[10px] sm:text-xs text-slate-500 dark:text-[#A1A1AA] font-semibold">{st.label}</p>
+            <div className="mt-1.5 flex items-baseline justify-between">
+              <span className={`text-sm sm:text-lg font-black ${st.color}`}>{st.value}</span>
+              <span className="text-[9px] font-bold text-slate-600 dark:text-[#A1A1AA] bg-slate-100 dark:bg-[#09090B] px-1.5 py-0.5 rounded border border-slate-200 dark:border-[#27272A]">
                 {st.change}
               </span>
             </div>
@@ -224,25 +224,25 @@ export function ModelManagementPage({
       </div>
 
       {/* Toolbar & Filter Bar */}
-      <div className="p-4 rounded-xl bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm dark:shadow-none">
+      <div className="p-2.5 sm:p-4 rounded-xl bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] flex flex-col sm:flex-row items-center justify-between gap-2.5 sm:gap-4 shadow-sm dark:shadow-none">
         <div className="relative w-full sm:w-80">
-          <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-[#A1A1AA]" />
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-[#A1A1AA]" />
           <input
             type="text"
             placeholder={`Search ${title} records...`}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 rounded-lg bg-slate-100 dark:bg-[#09090B] border border-slate-200 dark:border-[#27272A] text-xs text-slate-900 dark:text-[#FAFAFA] placeholder-slate-400 dark:placeholder-[#71717A] focus:outline-none focus:border-[#8B5CF6] transition-colors"
+            className="w-full pl-9 pr-3 py-1.5 rounded-lg bg-slate-100 dark:bg-[#09090B] border border-slate-200 dark:border-[#27272A] text-xs text-slate-900 dark:text-[#FAFAFA] placeholder-slate-400 dark:placeholder-[#71717A] focus:outline-none focus:border-[#8B5CF6] transition-colors"
           />
         </div>
 
-        <div className="flex items-center gap-3 w-full sm:w-auto">
-          <div className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-100 dark:bg-[#09090B] border border-slate-200 dark:border-[#27272A] text-xs text-slate-700 dark:text-[#A1A1AA]">
-            <Filter size={14} className="text-[#8B5CF6]" />
+        <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+          <div className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-[#09090B] border border-slate-200 dark:border-[#27272A] text-xs text-slate-700 dark:text-[#A1A1AA]">
+            <Filter size={12} className="text-[#8B5CF6]" />
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="bg-transparent text-slate-900 dark:text-[#FAFAFA] font-medium focus:outline-none cursor-pointer"
+              className="bg-transparent text-slate-900 dark:text-[#FAFAFA] text-xs font-medium focus:outline-none cursor-pointer"
             >
               <option value="ALL">All Statuses</option>
               <option value="ACTIVE">Active</option>
@@ -250,19 +250,55 @@ export function ModelManagementPage({
               <option value="COMPLETED">Completed</option>
             </select>
           </div>
-
-          <button
-            type="button"
-            className="p-2 rounded-lg bg-slate-100 dark:bg-[#09090B] border border-slate-200 dark:border-[#27272A] text-slate-600 dark:text-[#A1A1AA] hover:text-slate-900 dark:hover:text-[#FAFAFA] transition-colors"
-            title="Custom View Options"
-          >
-            <SlidersHorizontal size={16} />
-          </button>
         </div>
       </div>
 
-      {/* Data Table */}
-      <div className="rounded-xl bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] overflow-hidden shadow-sm dark:shadow-lg">
+      {/* ─── Mobile Cards (sm:hidden) ─── */}
+      <div className="sm:hidden space-y-2.5">
+        {tableData.map((item) => (
+          <div
+            key={item.id}
+            className="p-3 bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] rounded-xl space-y-2 shadow-sm"
+          >
+            <div className="flex items-center justify-between">
+              <span className="font-mono text-xs font-bold text-[#8B5CF6] dark:text-[#A855F7]">{item.id}</span>
+              <span
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold ${
+                  item.status === "ACTIVE"
+                    ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
+                    : item.status === "PENDING"
+                    ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20"
+                    : "bg-[#8B5CF6]/10 text-[#8B5CF6] dark:text-[#A855F7] border border-[#8B5CF6]/20"
+                }`}
+              >
+                {item.status}
+              </span>
+            </div>
+
+            <div>
+              <p className="font-bold text-xs text-slate-900 dark:text-[#FAFAFA]">{item.title}</p>
+              <div className="flex items-center gap-2 text-[10px] text-slate-500 dark:text-[#A1A1AA] mt-0.5">
+                <span>{item.category}</span>
+                <span>•</span>
+                <span className="font-mono">{item.code}</span>
+              </div>
+            </div>
+
+            <div className="pt-2 border-t border-slate-100 dark:border-[#27272A] flex items-center justify-between">
+              <span className="font-bold text-xs text-slate-900 dark:text-[#FAFAFA]">{item.metric}</span>
+              <button
+                type="button"
+                className="p-1 text-slate-400 dark:text-[#A1A1AA] hover:text-[#8B5CF6]"
+              >
+                <ExternalLink size={13} />
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* ─── Desktop Data Table (hidden sm:block) ─── */}
+      <div className="hidden sm:block rounded-xl bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] overflow-hidden shadow-sm dark:shadow-lg">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-100 dark:bg-[#09090B] text-slate-500 dark:text-[#A1A1AA] border-b border-slate-200 dark:border-[#27272A] font-bold uppercase tracking-wider text-[10px]">

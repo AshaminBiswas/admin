@@ -264,23 +264,23 @@ export function BannersPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-[#09090B] text-slate-900 dark:text-[#FAFAFA] font-sans pb-20 p-6 space-y-6">
+    <div className="space-y-3 sm:space-y-5 md:space-y-6">
       
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Banner Portal</h1>
-        <p className="text-sm text-slate-500 dark:text-[#A1A1AA] mt-1">Upload, manage, and schedule banners across all viewports.</p>
+        <h1 className="text-base sm:text-xl font-bold tracking-tight">Banner Portal</h1>
+        <p className="text-[11px] sm:text-xs text-slate-500 dark:text-[#A1A1AA] mt-0.5">Upload, manage, and schedule banners across all viewports.</p>
       </div>
 
       {/* Position Selector */}
-      <div className="bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] rounded-xl p-6 shadow-sm">
-        <div className="flex flex-col md:flex-row gap-6 items-start md:items-center justify-between">
+      <div className="bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] rounded-xl p-3.5 sm:p-5 shadow-sm">
+        <div className="flex flex-col md:flex-row gap-3 sm:gap-6 items-start md:items-center justify-between">
           <div className="flex-1 w-full">
-            <label className="block text-xs font-bold text-slate-500 dark:text-[#71717A] uppercase tracking-wider mb-2">Placement Position</label>
+            <label className="block text-[10px] sm:text-xs font-bold text-slate-500 dark:text-[#71717A] uppercase tracking-wider mb-1.5">Placement Position</label>
             <select 
               value={activePosition} 
               onChange={(e) => setActivePosition(e.target.value)}
-              className="w-full md:max-w-md bg-slate-50 dark:bg-[#09090B] border border-slate-200 dark:border-[#27272A] text-slate-900 dark:text-[#FAFAFA] px-4 py-2.5 rounded-lg focus:outline-none focus:border-[#8B5CF6] transition-colors"
+              className="w-full md:max-w-md bg-slate-50 dark:bg-[#09090B] border border-slate-200 dark:border-[#27272A] text-slate-900 dark:text-[#FAFAFA] px-3 py-1.5 sm:py-2 text-xs rounded-lg focus:outline-none focus:border-[#8B5CF6] transition-colors"
             >
               {POSITIONS.map(p => (
                 <option key={p.id} value={p.id}>{p.label} — {p.desc}</option>

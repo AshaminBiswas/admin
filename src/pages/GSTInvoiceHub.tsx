@@ -59,30 +59,30 @@ export default function GSTInvoiceHub() {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3 sm:space-y-5 md:space-y-6">
       {/* Top Banner / Breadcrumb */}
-      <div className="flex items-center justify-between border-b border-[#27272A] pb-4 flex-wrap gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-tr-xl rounded-bl-xl bg-[#8B5CF6]/20 border border-[#8B5CF6]/40 flex items-center justify-center text-[#8B5CF6]">
-            <Receipt size={20} />
+      <div className="flex items-center justify-between border-b border-[#27272A] pb-3 sm:pb-4 flex-wrap gap-3 sm:gap-4">
+        <div className="flex items-center gap-2.5 sm:gap-3">
+          <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-tr-xl rounded-bl-xl bg-[#8B5CF6]/20 border border-[#8B5CF6]/40 flex items-center justify-center text-[#8B5CF6] flex-shrink-0">
+            <Receipt size={18} />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-lg font-bold text-slate-900 dark:text-[#FAFAFA]">
+            <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+              <h1 className="text-base sm:text-lg font-bold text-slate-900 dark:text-[#FAFAFA]">
                 GST Tax Invoicing & Government E-Invoice
               </h1>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#8B5CF6]/20 text-[#8B5CF6] border border-[#8B5CF6]/30">
+              <span className="px-1.5 py-0.2 rounded-full text-[9px] sm:text-[10px] font-bold bg-[#8B5CF6]/20 text-[#8B5CF6] border border-[#8B5CF6]/30">
                 IRIS IRP 6
               </span>
             </div>
-            <p className="text-xs text-[#A1A1AA]">
+            <p className="text-[11px] sm:text-xs text-[#A1A1AA]">
               India Statutory Compliance · IRN Generation · Signed QR Codes · B2B / B2C Supply
             </p>
           </div>
         </div>
 
         {/* Global Tab Navigation */}
-        <div className="flex items-center gap-1 bg-[#18181B] border border-[#27272A] p-1 rounded-tr-xl rounded-bl-xl overflow-x-auto">
+        <div className="flex items-center gap-1 bg-[#18181B] border border-[#27272A] p-1 rounded-tr-xl rounded-bl-xl overflow-x-auto max-w-full">
           {navTabs.map((tab) => {
             const isActive =
               subView === tab.id ||
@@ -96,7 +96,7 @@ export default function GSTInvoiceHub() {
                   setSubView(tab.id as GSTSubView);
                   setActiveInvoiceId(null);
                 }}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-tr-lg rounded-bl-lg text-xs font-semibold whitespace-nowrap transition-colors ${
+                className={`flex items-center gap-1 px-2.5 py-1 sm:py-1.5 rounded-tr-lg rounded-bl-lg text-[11px] sm:text-xs font-semibold whitespace-nowrap transition-colors ${
                   isActive
                     ? 'bg-[#8B5CF6] text-white shadow-sm'
                     : 'text-[#A1A1AA] hover:text-white hover:bg-[#27272A]'

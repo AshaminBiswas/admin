@@ -265,8 +265,8 @@ export function AdminLayout() {
           onToggleCollapse={toggleSidebar}
           onToggleMobile={toggleMobileSidebar}
         />
-        <main className="flex-1 p-3 sm:p-4 md:p-6 pb-24 md:pb-6 overflow-y-auto overflow-x-hidden min-h-0 w-full">
-          <div className="max-w-7xl mx-auto space-y-6 w-full min-w-0">
+        <main className="flex-1 p-2 sm:p-4 md:p-6 pb-20 md:pb-6 overflow-y-auto overflow-x-hidden min-h-0 w-full">
+          <div className="max-w-7xl mx-auto space-y-3 sm:space-y-5 md:space-y-6 w-full min-w-0">
             <Suspense fallback={<ViewLoadingSkeleton />}>
               {renderCurrentView()}
             </Suspense>
@@ -275,13 +275,13 @@ export function AdminLayout() {
       </div>
 
       {/* ─── Mobile Native App Bottom Navigation Dock ─── */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-[#18181B]/95 backdrop-blur-lg border-t border-slate-200 dark:border-[#27272A] px-2 py-1.5 flex items-center justify-around shadow-2xl safe-area-pb">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-[#18181B]/95 backdrop-blur-lg border-t border-slate-200 dark:border-[#27272A] px-1 py-1 flex items-center justify-around shadow-2xl safe-area-pb">
         {[
-          { id: "dashboard", label: "Home", icon: <LayoutDashboard size={18} /> },
-          { id: "orders", label: "Orders", icon: <ShoppingCart size={18} /> },
-          { id: "products", label: "Products", icon: <Package size={18} /> },
-          { id: "quotes", label: "Quotes", icon: <FileText size={18} /> },
-          { id: "menu", label: "All Menu", icon: <Menu size={18} />, isAction: true },
+          { id: "dashboard", label: "Home", icon: <LayoutDashboard size={16} /> },
+          { id: "orders", label: "Orders", icon: <ShoppingCart size={16} /> },
+          { id: "products", label: "Products", icon: <Package size={16} /> },
+          { id: "quotes", label: "Quotes", icon: <FileText size={16} /> },
+          { id: "menu", label: "All Menu", icon: <Menu size={16} />, isAction: true },
         ].map((item) => {
           const isActive =
             !item.isAction &&
@@ -299,20 +299,20 @@ export function AdminLayout() {
                   closeMobileSidebar();
                 }
               }}
-              className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all duration-200 min-w-[54px] relative active:scale-95 ${
+              className={`flex flex-col items-center justify-center py-0.5 px-2 rounded-lg transition-all duration-200 min-w-[50px] relative active:scale-95 ${
                 isActive
                   ? "text-[#8B5CF6] font-bold"
                   : "text-slate-500 dark:text-[#A1A1AA] hover:text-slate-900 dark:hover:text-[#FAFAFA]"
               }`}
             >
-              <span className={`transition-transform ${isActive ? "scale-110 text-[#8B5CF6]" : ""}`}>
+              <span className={`transition-transform ${isActive ? "scale-105 text-[#8B5CF6]" : ""}`}>
                 {item.icon}
               </span>
-              <span className="text-[10px] mt-0.5 tracking-tight font-semibold">
+              <span className="text-[9px] mt-0.5 tracking-tight font-semibold">
                 {item.label}
               </span>
               {isActive && (
-                <span className="absolute -top-1.5 w-6 h-0.5 rounded-full bg-[#8B5CF6] shadow-sm shadow-[#8B5CF6]/50" />
+                <span className="absolute -top-1 w-5 h-0.5 rounded-full bg-[#8B5CF6] shadow-sm shadow-[#8B5CF6]/50" />
               )}
             </button>
           );

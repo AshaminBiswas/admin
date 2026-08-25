@@ -562,8 +562,69 @@ export function EnquiriesPage() {
         </div>
       </div>
 
-      {/* ─── Main Enquiries Table ─── */}
-      <div className="rounded-2xl bg-[#18181B] border border-[#27272A] shadow-lg overflow-hidden">
+      {/* ─── Mobile Enquiries Cards (sm:hidden) ─── */}
+      <div className="sm:hidden space-y-2.5">
+        {enquiries.length === 0 ? (
+          <div className="p-8 text-center bg-[#18181B] border border-[#27272A] rounded-xl text-xs text-[#71717A]">
+            <MessageSquare size={28} className="mx-auto mb-2 text-[#3F3F46]" />
+            <p className="font-bold text-sm text-[#FAFAFA]">No Enquiries Found</p>
+            <p className="text-xs text-[#A1A1AA] mt-1">No messages match your current filter criteria.</p>
+          </div>
+        ) : (
+          enquiries.map((item) => (
+            <div
+              key={item.id}
+              className="p-3 bg-[#18181B] border border-[#27272A] rounded-xl space-y-2 shadow-sm"
+            >
+              <div className="flex items-center justify-between">
+                <p className="font-bold text-xs text-[#FAFAFA]">{item.name}</p>
+                <span
+                  className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase ${
+                    item.status === "RESOLVED"
+                      ? "bg-emerald-950/80 text-emerald-400 border border-emerald-500/40"
+                      : item.status === "IN_PROGRESS"
+                      ? "bg-blue-950/80 text-blue-400 border border-blue-500/40"
+                      : item.status === "CLOSED"
+                      ? "bg-zinc-800 text-zinc-400 border border-zinc-700"
+                      : "bg-purple-950/80 text-[#A855F7] border border-purple-500/40"
+                  }`}
+                >
+                  {item.status}
+                </span>
+              </div>
+
+              {item.companyName && (
+                <p className="text-[10px] text-[#8B5CF6] font-semibold flex items-center gap-1">
+                  <Building2 size={11} /> {item.companyName}
+                </p>
+              )}
+
+              <p className="text-[11px] font-semibold text-[#FAFAFA] line-clamp-1">
+                {item.subject}
+              </p>
+
+              <p className="text-[10px] text-[#A1A1AA] line-clamp-2">
+                {item.message}
+              </p>
+
+              <div className="pt-2 border-t border-[#27272A] flex items-center justify-between text-[10px]">
+                <span className="text-[#71717A]">{item.createdAt || "Recent"}</span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedEnquiry(item)}
+                  className="px-2 py-1 bg-[#8B5CF6] text-white rounded font-bold text-[10px] flex items-center gap-1"
+                >
+                  <Eye size={11} />
+                  <span>Inspect</span>
+                </button>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* ─── Desktop Enquiries Table (hidden sm:block) ─── */}
+      <div className="hidden sm:block rounded-2xl bg-[#18181B] border border-[#27272A] shadow-lg overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead className="bg-[#09090B] text-[#A1A1AA] border-b border-[#27272A] font-bold uppercase tracking-wider text-[10px]">

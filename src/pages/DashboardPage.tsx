@@ -103,107 +103,109 @@ export function DashboardPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3 sm:space-y-5 md:space-y-6">
       {/* Top Banner Message */}
-      <div className="p-4 rounded-tr-2xl rounded-bl-2xl bg-[#18181B] border border-[#27272A] flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-xl">
+      <div className="p-3 sm:p-4 rounded-tr-2xl rounded-bl-2xl bg-[#18181B] border border-[#27272A] flex flex-col md:flex-row md:items-center justify-between gap-2.5 sm:gap-4 shadow-xl">
         <div>
-          <span className="text-[10px] font-bold uppercase tracking-wider bg-[#8B5CF6] text-[#FAFAFA] px-2.5 py-0.5 rounded-full shadow-sm shadow-[#8B5CF6]/25">
+          <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider bg-[#8B5CF6] text-[#FAFAFA] px-2 py-0.5 rounded-full shadow-sm shadow-[#8B5CF6]/25">
             Executive Summary
           </span>
-          <h3 className="text-lg font-bold text-[#FAFAFA] mt-1 font-serif">
+          <h3 className="text-sm sm:text-lg font-bold text-[#FAFAFA] mt-1 font-serif">
             PRC Hardware Enterprise Control Center
           </h3>
-          <p className="text-xs text-[#A1A1AA]">
+          <p className="text-[11px] sm:text-xs text-[#A1A1AA]">
             Real-time sales revenue, inventory alerts &amp; B2B quotation pipeline.
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="text-right">
-            <p className="text-[10px] text-[#A1A1AA] uppercase tracking-wider">Live Revenue (MTD)</p>
+        <div className="flex items-center justify-between sm:justify-end gap-3 border-t sm:border-t-0 pt-2 sm:pt-0 border-[#27272A]/60">
+          <div className="text-left sm:text-right">
+            <p className="text-[9px] sm:text-[10px] text-[#A1A1AA] uppercase tracking-wider">Live Revenue (MTD)</p>
             {loading ? (
-              <div className="h-7 w-32 bg-[#27272A] rounded animate-pulse mt-1" />
+              <div className="h-6 sm:h-7 w-24 sm:w-32 bg-[#27272A] rounded animate-pulse mt-0.5" />
             ) : (
-              <p className="text-xl font-extrabold text-[#8B5CF6]">
+              <p className="text-base sm:text-xl font-extrabold text-[#8B5CF6]">
                 ₹{stats ? (stats.totalRevenue / 100000).toFixed(2) : "0.00"}L
               </p>
-            )}          </div>
+            )}
+          </div>
           <button
             onClick={fetchDashboard}
             disabled={loading}
-            className="p-2 rounded-lg bg-[#27272A] text-[#A1A1AA] hover:text-[#8B5CF6] transition-colors disabled:opacity-50"
+            className="p-1.5 sm:p-2 rounded-lg bg-[#27272A] text-[#A1A1AA] hover:text-[#8B5CF6] transition-colors disabled:opacity-50"
             title="Refresh dashboard"
           >
-            <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
+            <RefreshCw size={14} className={`sm:w-4 sm:h-4 ${loading ? "animate-spin" : ""}`} />
           </button>
         </div>
       </div>
+
       {/* 4 Executive Metric Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3.5">
         {loading ? (
           Array.from({ length: 4 }).map((_, i) => <StatCardSkeleton key={i} />)
         ) : (
           <>
             {/* Metric 1 */}
-            <div className="p-3.5 sm:p-5 rounded-tr-2xl rounded-bl-2xl bg-[#18181B] border border-[#27272A] shadow-md flex items-start sm:items-center justify-between hover:border-[#8B5CF6]/60 transition-all">
+            <div className="p-2.5 sm:p-4 rounded-tr-2xl rounded-bl-2xl bg-[#18181B] border border-[#27272A] shadow-md flex items-start sm:items-center justify-between hover:border-[#8B5CF6]/60 transition-all">
               <div>
-                <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-[#A1A1AA] mb-1">Total Revenue</p>
-                <h4 className="text-lg sm:text-2xl font-extrabold text-[#FAFAFA]">₹{((stats?.totalRevenue || 0) / 100000).toFixed(2)}L</h4>
+                <p className="text-[9px] sm:text-[11px] font-semibold uppercase tracking-wider text-[#A1A1AA] mb-0.5">Total Revenue</p>
+                <h4 className="text-base sm:text-xl font-extrabold text-[#FAFAFA]">₹{((stats?.totalRevenue || 0) / 100000).toFixed(2)}L</h4>
                 {stats?.revenueGrowth != null && (
-                  <div className="flex items-center gap-1 text-[10px] sm:text-[11px] font-bold text-[#8B5CF6] mt-1 sm:mt-2">
-                    <TrendingUp size={12} className="sm:w-3.5 sm:h-3.5" />
+                  <div className="flex items-center gap-1 text-[9px] sm:text-[10px] font-bold text-[#8B5CF6] mt-0.5 sm:mt-1.5">
+                    <TrendingUp size={11} className="sm:w-3 sm:h-3" />
                     <span>+{stats.revenueGrowth}%</span>
                   </div>
                 )}
               </div>
-              <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-tr-xl rounded-bl-xl bg-[#8B5CF6]/20 border border-[#8B5CF6]/40 flex items-center justify-center text-[#8B5CF6] flex-shrink-0">
-                <IndianRupee size={18} className="sm:w-5 sm:h-5" />
+              <div className="w-7 h-7 sm:w-10 sm:h-10 rounded-tr-xl rounded-bl-xl bg-[#8B5CF6]/20 border border-[#8B5CF6]/40 flex items-center justify-center text-[#8B5CF6] flex-shrink-0">
+                <IndianRupee size={15} className="sm:w-4 sm:h-4" />
               </div>
             </div>
 
             {/* Metric 2 */}
-            <div className="p-3.5 sm:p-5 rounded-tr-2xl rounded-bl-2xl bg-[#18181B] border border-[#27272A] shadow-md flex items-start sm:items-center justify-between hover:border-[#8B5CF6]/60 transition-all">
+            <div className="p-2.5 sm:p-4 rounded-tr-2xl rounded-bl-2xl bg-[#18181B] border border-[#27272A] shadow-md flex items-start sm:items-center justify-between hover:border-[#8B5CF6]/60 transition-all">
               <div>
-                <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-[#A1A1AA] mb-1">Total Orders</p>
-                <h4 className="text-lg sm:text-2xl font-extrabold text-[#FAFAFA]">{stats?.totalOrders || 0}</h4>
+                <p className="text-[9px] sm:text-[11px] font-semibold uppercase tracking-wider text-[#A1A1AA] mb-0.5">Total Orders</p>
+                <h4 className="text-base sm:text-xl font-extrabold text-[#FAFAFA]">{stats?.totalOrders || 0}</h4>
                 {stats?.ordersGrowth != null && (
-                  <div className="flex items-center gap-1 text-[10px] sm:text-[11px] font-bold text-[#8B5CF6] mt-1 sm:mt-2">
-                    <TrendingUp size={12} className="sm:w-3.5 sm:h-3.5" />
+                  <div className="flex items-center gap-1 text-[9px] sm:text-[10px] font-bold text-[#8B5CF6] mt-0.5 sm:mt-1.5">
+                    <TrendingUp size={11} className="sm:w-3 sm:h-3" />
                     <span>+{stats.ordersGrowth}%</span>
                   </div>
                 )}
               </div>
-              <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-tr-xl rounded-bl-xl bg-[#8B5CF6]/20 border border-[#8B5CF6]/40 flex items-center justify-center text-[#8B5CF6] flex-shrink-0">
-                <ShoppingBag size={18} className="sm:w-5 sm:h-5" />
+              <div className="w-7 h-7 sm:w-10 sm:h-10 rounded-tr-xl rounded-bl-xl bg-[#8B5CF6]/20 border border-[#8B5CF6]/40 flex items-center justify-center text-[#8B5CF6] flex-shrink-0">
+                <ShoppingBag size={15} className="sm:w-4 sm:h-4" />
               </div>
             </div>
 
             {/* Metric 3 */}
-            <div className="p-3.5 sm:p-5 rounded-tr-2xl rounded-bl-2xl bg-[#18181B] border border-[#27272A] shadow-md flex items-start sm:items-center justify-between hover:border-[#8B5CF6]/60 transition-all">
+            <div className="p-2.5 sm:p-4 rounded-tr-2xl rounded-bl-2xl bg-[#18181B] border border-[#27272A] shadow-md flex items-start sm:items-center justify-between hover:border-[#8B5CF6]/60 transition-all">
               <div>
-                <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-[#A1A1AA] mb-1">Active Quotes</p>
-                <h4 className="text-lg sm:text-2xl font-extrabold text-[#FAFAFA]">{stats?.activeQuotes || 0}</h4>
-                <div className="flex items-center gap-1 text-[10px] sm:text-[11px] font-bold text-[#8B5CF6] mt-1 sm:mt-2">
-                  <Clock size={12} className="sm:w-3.5 sm:h-3.5" />
+                <p className="text-[9px] sm:text-[11px] font-semibold uppercase tracking-wider text-[#A1A1AA] mb-0.5">Active Quotes</p>
+                <h4 className="text-base sm:text-xl font-extrabold text-[#FAFAFA]">{stats?.activeQuotes || 0}</h4>
+                <div className="flex items-center gap-1 text-[9px] sm:text-[10px] font-bold text-[#8B5CF6] mt-0.5 sm:mt-1.5">
+                  <Clock size={11} className="sm:w-3 sm:h-3" />
                   <span>Approval req.</span>
                 </div>
               </div>
-              <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-tr-xl rounded-bl-xl bg-[#8B5CF6]/20 border border-[#8B5CF6]/40 flex items-center justify-center text-[#8B5CF6] flex-shrink-0">
-                <FileText size={18} className="sm:w-5 sm:h-5" />
+              <div className="w-7 h-7 sm:w-10 sm:h-10 rounded-tr-xl rounded-bl-xl bg-[#8B5CF6]/20 border border-[#8B5CF6]/40 flex items-center justify-center text-[#8B5CF6] flex-shrink-0">
+                <FileText size={15} className="sm:w-4 sm:h-4" />
               </div>
             </div>
 
             {/* Metric 4 */}
-            <div className="p-3.5 sm:p-5 rounded-tr-2xl rounded-bl-2xl bg-[#18181B] border border-[#27272A] shadow-md flex items-start sm:items-center justify-between hover:border-amber-500/60 transition-all">
+            <div className="p-2.5 sm:p-4 rounded-tr-2xl rounded-bl-2xl bg-[#18181B] border border-[#27272A] shadow-md flex items-start sm:items-center justify-between hover:border-amber-500/60 transition-all">
               <div>
-                <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-[#A1A1AA] mb-1">Low Stock</p>
-                <h4 className="text-lg sm:text-2xl font-extrabold text-amber-400">{stats?.lowStockCount || 0}</h4>
-                <div className="flex items-center gap-1 text-[10px] sm:text-[11px] font-bold text-amber-400 mt-1 sm:mt-2">
-                  <AlertTriangle size={12} className="sm:w-3.5 sm:h-3.5" />
+                <p className="text-[9px] sm:text-[11px] font-semibold uppercase tracking-wider text-[#A1A1AA] mb-0.5">Low Stock</p>
+                <h4 className="text-base sm:text-xl font-extrabold text-amber-400">{stats?.lowStockCount || 0}</h4>
+                <div className="flex items-center gap-1 text-[9px] sm:text-[10px] font-bold text-amber-400 mt-0.5 sm:mt-1.5">
+                  <AlertTriangle size={11} className="sm:w-3 sm:h-3" />
                   <span>Low SKUs</span>
                 </div>
               </div>
-              <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-tr-xl rounded-bl-xl bg-amber-950/60 border border-amber-500/40 flex items-center justify-center text-amber-400 flex-shrink-0">
-                <AlertTriangle size={18} className="sm:w-5 sm:h-5" />
+              <div className="w-7 h-7 sm:w-10 sm:h-10 rounded-tr-xl rounded-bl-xl bg-amber-950/60 border border-amber-500/40 flex items-center justify-center text-amber-400 flex-shrink-0">
+                <AlertTriangle size={15} className="sm:w-4 sm:h-4" />
               </div>
             </div>
           </>
@@ -212,14 +214,14 @@ export function DashboardPage() {
 
       {/* Revenue Chart Section */}
       {salesData.length > 0 && (
-        <div className="p-4 sm:p-6 rounded-tr-2xl rounded-bl-2xl bg-[#18181B] border border-[#27272A] shadow-lg">
-          <div className="flex items-center justify-between mb-4 sm:mb-6">
+        <div className="p-3 sm:p-5 rounded-tr-2xl rounded-bl-2xl bg-[#18181B] border border-[#27272A] shadow-lg">
+          <div className="flex items-center justify-between mb-3 sm:mb-5">
             <div>
-              <h4 className="text-sm sm:text-base font-bold text-[#FAFAFA] font-serif">Revenue &amp; Sales Performance</h4>
-              <p className="text-[11px] sm:text-xs text-[#A1A1AA]">Monthly revenue trend across B2C &amp; B2B orders</p>
+              <h4 className="text-xs sm:text-base font-bold text-[#FAFAFA] font-serif">Revenue &amp; Sales Performance</h4>
+              <p className="text-[10px] sm:text-xs text-[#A1A1AA]">Monthly revenue trend across B2C &amp; B2B orders</p>
             </div>
           </div>
-          <div className="h-52 sm:h-64 w-full">
+          <div className="h-44 sm:h-64 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={salesData}>
                 <defs>
@@ -228,13 +230,13 @@ export function DashboardPage() {
                     <stop offset="95%" stopColor="#8B5CF6" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <XAxis dataKey="month" stroke="#A1A1AA" strokeOpacity={0.5} tick={{ fontSize: 11 }} />
-                <YAxis stroke="#A1A1AA" strokeOpacity={0.5} tick={{ fontSize: 11 }} tickFormatter={(v) => `₹${v/1000}k`} />
+                <XAxis dataKey="month" stroke="#A1A1AA" strokeOpacity={0.5} tick={{ fontSize: 10 }} />
+                <YAxis stroke="#A1A1AA" strokeOpacity={0.5} tick={{ fontSize: 10 }} tickFormatter={(v) => `₹${v/1000}k`} />
                 <Tooltip
                   contentStyle={{ backgroundColor: "#09090B", borderColor: "#8B5CF6", borderRadius: "8px", color: "#FAFAFA" }}
                   formatter={(val: any) => [`₹${Number(val).toLocaleString('en-IN')}`, "Revenue"]}
                 />
-                <Area type="monotone" dataKey="revenue" stroke="#8B5CF6" strokeWidth={3} fillOpacity={1} fill="url(#colorRev)" />
+                <Area type="monotone" dataKey="revenue" stroke="#8B5CF6" strokeWidth={2.5} fillOpacity={1} fill="url(#colorRev)" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -242,10 +244,10 @@ export function DashboardPage() {
       )}
 
       {/* Recent Orders Stream */}
-      <div className="p-4 sm:p-6 rounded-tr-2xl rounded-bl-2xl bg-[#18181B] border border-[#27272A] shadow-lg">
-        <div className="flex items-center justify-between mb-4">
-          <h4 className="text-sm sm:text-base font-bold text-[#FAFAFA] font-serif">Recent Live Orders</h4>
-          <span className="text-[11px] sm:text-xs text-[#8B5CF6] font-bold">Latest 5 orders</span>
+      <div className="p-3 sm:p-5 rounded-tr-2xl rounded-bl-2xl bg-[#18181B] border border-[#27272A] shadow-lg">
+        <div className="flex items-center justify-between mb-3">
+          <h4 className="text-xs sm:text-base font-bold text-[#FAFAFA] font-serif">Recent Live Orders</h4>
+          <span className="text-[10px] sm:text-xs text-[#8B5CF6] font-bold">Latest 5 orders</span>
         </div>
 
         {loading ? (

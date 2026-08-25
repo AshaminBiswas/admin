@@ -514,98 +514,90 @@ export function CategoriesPage() {
   /* ---- Render ---- */
   return (
     <>
-      <div className="space-y-5">
+      <div className="space-y-3 sm:space-y-5">
         {/* ── Page Header ─────────────────────────────────────────── */}
-        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
           <div>
-            <h3 className="text-xl font-extrabold text-slate-900 dark:text-[#FAFAFA] tracking-tight">
+            <h3 className="text-base sm:text-xl font-extrabold text-slate-900 dark:text-[#FAFAFA] tracking-tight">
               Categories
             </h3>
-            <nav className="flex items-center gap-1.5 mt-1 text-[11px] text-slate-500 dark:text-[#71717A]">
-              <Home size={11} className="text-slate-400 dark:text-[#52525B]" />
-              <BreadArrow size={11} className="text-slate-300 dark:text-[#52525B]" />
+            <nav className="flex items-center gap-1.5 mt-0.5 text-[10px] sm:text-[11px] text-slate-500 dark:text-[#71717A]">
+              <Home size={10} className="text-slate-400 dark:text-[#52525B]" />
+              <BreadArrow size={10} className="text-slate-300 dark:text-[#52525B]" />
               <span className="text-[#8B5CF6] font-semibold">Categories</span>
             </nav>
           </div>
           <button
             type="button"
             onClick={() => setCurrentView("categories-create")}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#8B5CF6] hover:bg-[#7C3AED] text-white text-xs font-bold shadow-lg shadow-[#8B5CF6]/25 transition-all self-start sm:self-auto flex-shrink-0"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#8B5CF6] hover:bg-[#7C3AED] text-white text-[11px] sm:text-xs font-bold shadow-lg shadow-[#8B5CF6]/25 transition-all self-start sm:self-auto flex-shrink-0"
           >
-            <Plus size={15} />
+            <Plus size={14} />
             Create Category
           </button>
         </div>
 
         {/* ── Toolbar ─────────────────────────────────────────────── */}
-        <div className="bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] rounded-xl px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
+        <div className="bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] rounded-xl px-3 py-2.5 sm:px-4 sm:py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 shadow-sm">
           {/* Left: "All Categories" label */}
           <div className="flex items-center gap-2 flex-shrink-0">
-            <FolderTree size={15} className="text-[#8B5CF6]" />
-            <span className="text-xs font-bold text-slate-700 dark:text-[#FAFAFA] uppercase tracking-wider">
+            <FolderTree size={14} className="text-[#8B5CF6]" />
+            <span className="text-[11px] sm:text-xs font-bold text-slate-700 dark:text-[#FAFAFA] uppercase tracking-wider">
               All Categories
             </span>
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#8B5CF6]/10 dark:bg-[#8B5CF6]/20 text-[#8B5CF6] dark:text-[#A855F7] border border-[#8B5CF6]/20">
+            <span className="text-[9px] sm:text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-[#8B5CF6]/10 dark:bg-[#8B5CF6]/20 text-[#8B5CF6] dark:text-[#A855F7] border border-[#8B5CF6]/20">
               {filtered.length}
             </span>
           </div>
 
           {/* Center: Search */}
           <div className="relative flex-1 max-w-md">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-[#52525B]" />
+            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-[#52525B]" />
             <input
               type="text"
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1); }}
               placeholder="Search by category name, ID or slug..."
-              className="w-full pl-9 pr-3 py-2 rounded-lg text-xs bg-slate-50 dark:bg-[#09090B] border border-slate-200 dark:border-[#27272A] text-slate-900 dark:text-[#FAFAFA] placeholder-slate-400 dark:placeholder-[#52525B] focus:outline-none focus:border-[#8B5CF6] focus:ring-1 focus:ring-[#8B5CF6]/20 transition-colors"
+              className="w-full pl-8 pr-3 py-1.5 sm:py-2 rounded-lg text-xs bg-slate-50 dark:bg-[#09090B] border border-slate-200 dark:border-[#27272A] text-slate-900 dark:text-[#FAFAFA] placeholder-slate-400 dark:placeholder-[#52525B] focus:outline-none focus:border-[#8B5CF6] focus:ring-1 focus:ring-[#8B5CF6]/20 transition-colors"
             />
           </div>
 
           {/* Right: Filter + Sort + Refresh */}
-          <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
             <button
               type="button"
               onClick={() => setShowFilters((v) => !v)}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold border transition-colors ${
+              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] sm:text-xs font-semibold border transition-colors ${
                 showFilters
                   ? "bg-[#8B5CF6] text-white border-[#8B5CF6]"
                   : "bg-slate-50 dark:bg-[#09090B] text-slate-600 dark:text-[#A1A1AA] border-slate-200 dark:border-[#27272A] hover:border-[#8B5CF6] hover:text-[#8B5CF6]"
               }`}
             >
-              <SlidersHorizontal size={13} />
+              <SlidersHorizontal size={12} />
               Filter
             </button>
             <button
               type="button"
-              onClick={() => setShowFilters((v) => !v)}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold border bg-slate-50 dark:bg-[#09090B] text-slate-600 dark:text-[#A1A1AA] border-slate-200 dark:border-[#27272A] hover:border-[#8B5CF6] hover:text-[#8B5CF6] transition-colors"
-            >
-              <ArrowUpDown size={13} />
-              Sort
-            </button>
-            <button
-              type="button"
               onClick={fetchCategories}
-              className="p-2 rounded-lg text-xs border bg-slate-50 dark:bg-[#09090B] text-slate-600 dark:text-[#A1A1AA] border-slate-200 dark:border-[#27272A] hover:border-[#8B5CF6] hover:text-[#8B5CF6] transition-colors"
+              className="p-1.5 sm:p-2 rounded-lg text-xs border bg-slate-50 dark:bg-[#09090B] text-slate-600 dark:text-[#A1A1AA] border-slate-200 dark:border-[#27272A] hover:border-[#8B5CF6] hover:text-[#8B5CF6] transition-colors"
               title="Refresh"
             >
-              <RefreshCw size={13} className={loading ? "animate-spin" : ""} />
+              <RefreshCw size={12} className={loading ? "animate-spin" : ""} />
             </button>
           </div>
         </div>
 
         {/* ── Filter Options (expandable) ───────────────────────────── */}
         {showFilters && (
-          <div className="bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] rounded-xl px-4 py-3 flex flex-wrap items-center gap-4 shadow-sm">
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-[#71717A]">Status:</span>
+          <div className="bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] rounded-xl px-3 py-2.5 sm:px-4 sm:py-3 flex flex-wrap items-center gap-2.5 sm:gap-4 shadow-sm">
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-[#71717A]">Status:</span>
               {(["ALL", "ACTIVE", "INACTIVE"] as FilterStatus[]).map((s) => (
                 <button
                   key={s}
                   type="button"
                   onClick={() => { setStatusFilter(s); setPage(1); }}
-                  className={`px-3 py-1 rounded-lg text-[11px] font-bold border transition-colors ${
+                  className={`px-2.5 py-0.5 rounded-lg text-[10px] sm:text-[11px] font-bold border transition-colors ${
                     statusFilter === s
                       ? "bg-[#8B5CF6] text-white border-[#8B5CF6]"
                       : "bg-slate-50 dark:bg-[#09090B] text-slate-600 dark:text-[#A1A1AA] border-slate-200 dark:border-[#27272A] hover:border-[#8B5CF6] hover:text-[#8B5CF6]"
@@ -615,33 +607,95 @@ export function CategoriesPage() {
                 </button>
               ))}
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-[#71717A]">Sort By:</span>
-              {([
-                { value: "displayOrder", label: "Order" },
-                { value: "name", label: "Name" },
-                { value: "status", label: "Status" },
-                { value: "id", label: "ID" },
-              ] as { value: SortField; label: string }[]).map((opt) => (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => handleSort(opt.value)}
-                  className={`px-3 py-1 rounded-lg text-[11px] font-bold border transition-colors ${
-                    sortField === opt.value
-                      ? "bg-[#8B5CF6] text-white border-[#8B5CF6]"
-                      : "bg-slate-50 dark:bg-[#09090B] text-slate-600 dark:text-[#A1A1AA] border-slate-200 dark:border-[#27272A] hover:border-[#8B5CF6] hover:text-[#8B5CF6]"
-                  }`}
-                >
-                  {opt.label} {sortField === opt.value ? (sortDir === "asc" ? "↑" : "↓") : ""}
-                </button>
-              ))}
-            </div>
           </div>
         )}
 
-        {/* ── Table ─────────────────────────────────────────────────── */}
-        <div className="bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] rounded-xl overflow-hidden shadow-sm">
+        {/* ── Mobile Category Cards (sm:hidden) ────────────────────── */}
+        <div className="sm:hidden space-y-2.5">
+          {loading ? (
+            <div className="p-8 text-center text-xs text-slate-400">Loading categories...</div>
+          ) : paginated.length === 0 ? (
+            <div className="p-8 text-center text-xs text-slate-400">No categories found.</div>
+          ) : (
+            paginated.map((cat) => {
+              const st = normalizeStatus(cat.status);
+              return (
+                <div
+                  key={cat.id}
+                  className="p-3 bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] rounded-xl space-y-2 shadow-sm"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="w-6 h-6 rounded-lg bg-[#8B5CF6]/10 flex items-center justify-center text-[#8B5CF6] font-black text-[10px] flex-shrink-0">
+                        {cat.name?.[0]?.toUpperCase() || "C"}
+                      </div>
+                      <span className="font-bold text-xs text-slate-900 dark:text-[#FAFAFA] truncate">
+                        {cat.name}
+                      </span>
+                    </div>
+                    <span
+                      className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase ${
+                        st === "ACTIVE"
+                          ? "bg-emerald-100 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+                          : "bg-rose-100 dark:bg-rose-500/10 text-rose-700 dark:text-rose-400"
+                      }`}
+                    >
+                      {st}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2 text-[10px] text-slate-500 dark:text-[#A1A1AA]">
+                    <span className="font-mono bg-slate-100 dark:bg-[#09090B] px-1.5 py-0.5 rounded">
+                      /{cat.slug}
+                    </span>
+                    <span>Order: #{cat.displayOrder ?? cat.position ?? "1"}</span>
+                  </div>
+
+                  {cat.description && (
+                    <p className="text-[11px] text-slate-500 dark:text-[#71717A] line-clamp-1">
+                      {cat.description}
+                    </p>
+                  )}
+
+                  <div className="pt-2 border-t border-slate-100 dark:border-[#27272A] flex items-center justify-between">
+                    <span className="font-mono text-[10px] text-[#8B5CF6]">
+                      #{String(cat.id).slice(0, 8)}
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setViewDrawer(cat)}
+                        className="p-1 text-slate-400 hover:text-[#8B5CF6]"
+                      >
+                        <Eye size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          localStorage.setItem("prc_admin_edit_category", JSON.stringify(cat));
+                          setCurrentView("categories-edit");
+                        }}
+                        className="p-1 text-slate-400 hover:text-amber-500"
+                      >
+                        <Pencil size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDeleteModal(cat)}
+                        className="p-1 text-slate-400 hover:text-rose-500"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* ── Desktop Table (hidden sm:block) ───────────────────────── */}
+        <div className="hidden sm:block bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] rounded-xl overflow-hidden shadow-sm">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs min-w-[720px]">
               <thead className="bg-slate-50 dark:bg-[#09090B] text-slate-500 dark:text-[#71717A] border-b border-slate-200 dark:border-[#27272A] font-bold uppercase tracking-wider text-[10px]">

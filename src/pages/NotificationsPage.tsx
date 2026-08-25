@@ -439,30 +439,30 @@ export function NotificationsPage() {
   }
 
   return (
-    <div className="p-6 md:p-8 space-y-6 md:space-y-8 max-w-7xl mx-auto font-sans text-[#FAFAFA] animate-in fade-in duration-150">
+    <div className="space-y-3 sm:space-y-5 md:space-y-6 max-w-7xl mx-auto font-sans text-[#FAFAFA] animate-in fade-in duration-150">
       {/* ─── Top Header ─── */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-[#27272A] pb-6">
-        <div className="space-y-1">
-          <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-[#FAFAFA] tracking-tight flex items-center gap-2.5">
-              <span className="w-8 h-8 rounded-xl bg-[#8B5CF6]/20 text-[#8B5CF6] border border-[#8B5CF6]/30 flex items-center justify-center">
-                <Bell size={18} />
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4 border-b border-[#27272A] pb-3 sm:pb-5">
+        <div className="space-y-0.5">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            <h1 className="text-base sm:text-xl font-extrabold text-[#FAFAFA] tracking-tight flex items-center gap-2">
+              <span className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-[#8B5CF6]/20 text-[#8B5CF6] border border-[#8B5CF6]/30 flex items-center justify-center flex-shrink-0">
+                <Bell size={16} />
               </span>
-              <span>Notifications & Real-Time Alerts</span>
+              <span>Notifications & Alerts</span>
             </h1>
             {sseConnected ? (
-              <span className="flex items-center gap-1.5 text-xs font-black text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-3 py-0.5 rounded-full">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                GATEWAY ACTIVE
+              <span className="flex items-center gap-1 text-[10px] font-black text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-2 py-0.5 rounded-full">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                ACTIVE
               </span>
             ) : (
-              <span className="flex items-center gap-1 text-xs font-bold text-[#71717A] bg-[#27272A] px-2.5 py-0.5 rounded-full">
-                POLLING MODE
+              <span className="flex items-center gap-1 text-[10px] font-bold text-[#71717A] bg-[#27272A] px-2 py-0.5 rounded-full">
+                POLLING
               </span>
             )}
           </div>
-          <p className="text-xs sm:text-sm text-[#A1A1AA] leading-relaxed">
-            Monitor real-time domain events, broadcast customer-wide promotions, and audit operations alerts pushed via EventBus & SSE.
+          <p className="text-[11px] sm:text-xs text-[#A1A1AA]">
+            Streamlined real-time operational feeds, inventory threshold alerts, and commercial notifications.
           </p>
         </div>
 

@@ -714,8 +714,74 @@ export function AppointmentsPage() {
             </div>
           </div>
 
-          {/* Main Bookings Table */}
-          <div className="rounded-2xl bg-[#18181B] border border-[#27272A] shadow-lg overflow-hidden">
+          {/* ─── Mobile Booking Cards (sm:hidden) ─── */}
+          <div className="sm:hidden space-y-2.5">
+            {appointments.length === 0 ? (
+              <div className="p-8 text-center bg-[#18181B] border border-[#27272A] rounded-xl text-xs text-[#71717A]">
+                <Calendar size={28} className="mx-auto mb-2 text-[#3F3F46]" />
+                <p className="font-bold text-sm text-[#FAFAFA]">No Appointments Found</p>
+                <p className="text-xs text-[#A1A1AA] mt-1">No bookings match your current filter criteria.</p>
+              </div>
+            ) : (
+              appointments.map((apt) => (
+                <div
+                  key={apt.id}
+                  className="p-3 bg-[#18181B] border border-[#27272A] rounded-xl space-y-2 shadow-sm"
+                >
+                  <div className="flex items-center justify-between">
+                    <p className="font-bold text-xs text-[#FAFAFA]">{apt.customerName}</p>
+                    <span
+                      className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase ${
+                        apt.status === "COMPLETED"
+                          ? "bg-emerald-950/80 text-emerald-400 border border-emerald-500/40"
+                          : apt.status === "CONFIRMED"
+                          ? "bg-blue-950/80 text-blue-400 border border-blue-500/40"
+                          : apt.status === "CANCELLED"
+                          ? "bg-rose-950/80 text-rose-400 border border-rose-500/40"
+                          : "bg-amber-950/80 text-amber-400 border border-amber-500/40"
+                      }`}
+                    >
+                      {apt.status}
+                    </span>
+                  </div>
+
+                  <div className="space-y-1 text-[11px] text-[#A1A1AA]">
+                    <div className="flex items-center gap-1.5 text-[#FAFAFA] font-medium">
+                      <Wrench size={12} className="text-[#8B5CF6]" />
+                      <span>{apt.service?.name || apt.serviceName || "Hardware Consultation"}</span>
+                    </div>
+                    <div className="flex items-center gap-1 text-[10px]">
+                      <Clock size={11} className="text-[#71717A]" />
+                      <span>{new Date(apt.date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })} • {apt.startTime || "Scheduled"}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-[10px] text-[#71717A]">
+                      <span>{apt.customerEmail}</span>
+                      {apt.customerPhone && <span>• {apt.customerPhone}</span>}
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-[#27272A] flex items-center justify-between">
+                    <span className="font-mono text-[9px] text-[#71717A]">
+                      ID: {apt.id.slice(0, 8)}
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => handleOpenDetail(apt)}
+                        className="px-2 py-1 bg-[#8B5CF6] text-white rounded text-[10px] font-bold flex items-center gap-1"
+                      >
+                        <Eye size={11} />
+                        <span>Manage</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* ─── Desktop Bookings Table (hidden sm:block) ─── */}
+          <div className="hidden sm:block rounded-2xl bg-[#18181B] border border-[#27272A] shadow-lg overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead className="bg-[#09090B] text-[#A1A1AA] border-b border-[#27272A] font-bold uppercase tracking-wider text-[10px]">

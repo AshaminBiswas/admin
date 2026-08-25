@@ -258,28 +258,28 @@ export function CreateCategoryPage() {
   };
 
   const inputBase =
-    "w-full px-3.5 py-2.5 rounded-xl text-sm bg-slate-50 dark:bg-[#09090B] border border-slate-200 dark:border-[#27272A] text-slate-900 dark:text-[#FAFAFA] placeholder-slate-400 dark:placeholder-[#52525B] focus:outline-none focus:border-[#8B5CF6] focus:ring-2 focus:ring-[#8B5CF6]/20 transition-colors";
+    "w-full px-3 py-1.5 sm:py-2 text-xs rounded-xl bg-slate-50 dark:bg-[#09090B] border border-slate-200 dark:border-[#27272A] text-slate-900 dark:text-[#FAFAFA] placeholder-slate-400 dark:placeholder-[#52525B] focus:outline-none focus:border-[#8B5CF6] focus:ring-2 focus:ring-[#8B5CF6]/20 transition-colors";
   const inputError = "border-rose-400 dark:border-rose-500 focus:border-rose-500 focus:ring-rose-500/20";
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-3 sm:space-y-5 md:space-y-6">
       {/* ── Page Header ─────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 sm:gap-3">
         {/* Left: Breadcrumb */}
         <div>
-          <h3 className="text-xl font-extrabold text-slate-900 dark:text-[#FAFAFA] tracking-tight">
+          <h3 className="text-base sm:text-xl font-extrabold text-slate-900 dark:text-[#FAFAFA] tracking-tight">
             Create Category
           </h3>
-          <nav className="flex items-center gap-1.5 mt-1 text-[11px] text-slate-500 dark:text-[#71717A]">
-            <Home size={11} className="text-slate-400 dark:text-[#52525B]" />
-            <ChevronRight size={11} className="text-slate-300 dark:text-[#52525B]" />
+          <nav className="flex items-center gap-1.5 mt-0.5 text-[10px] sm:text-[11px] text-slate-500 dark:text-[#71717A]">
+            <Home size={10} className="text-slate-400 dark:text-[#52525B]" />
+            <ChevronRight size={10} className="text-slate-300 dark:text-[#52525B]" />
             <button
               onClick={() => setCurrentView("categories")}
               className="hover:text-[#8B5CF6] transition-colors font-medium"
             >
               Categories
             </button>
-            <ChevronRight size={11} className="text-slate-300 dark:text-[#52525B]" />
+            <ChevronRight size={10} className="text-slate-300 dark:text-[#52525B]" />
             <span className="text-[#8B5CF6] font-semibold">Create New</span>
           </nav>
         </div>
@@ -288,9 +288,9 @@ export function CreateCategoryPage() {
         <button
           type="button"
           onClick={() => setCurrentView("categories")}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold border border-slate-200 dark:border-[#27272A] text-slate-700 dark:text-[#A1A1AA] hover:border-[#8B5CF6] hover:text-[#8B5CF6] dark:hover:text-[#8B5CF6] bg-white dark:bg-[#18181B] transition-all self-start sm:self-auto flex-shrink-0"
+          className="flex items-center gap-1.5 px-3 py-1.5 sm:py-2 rounded-xl text-[11px] sm:text-xs font-bold border border-slate-200 dark:border-[#27272A] text-slate-700 dark:text-[#A1A1AA] hover:border-[#8B5CF6] hover:text-[#8B5CF6] dark:hover:text-[#8B5CF6] bg-white dark:bg-[#18181B] transition-all self-start sm:self-auto flex-shrink-0"
         >
-          <ArrowLeft size={14} />
+          <ArrowLeft size={13} />
           Back to Categories
         </button>
       </div>

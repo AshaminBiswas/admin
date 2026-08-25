@@ -705,8 +705,112 @@ export function VariantsPage() {
         </div>
       </div>
 
-      {/* ─── Main Variants Table ─── */}
-      <div className="rounded-2xl bg-[#18181B] border border-[#27272A] shadow-lg overflow-hidden">
+      {/* ─── Mobile Variant Cards (sm:hidden) ─── */}
+      <div className="sm:hidden space-y-2.5">
+        {variantsList.length === 0 ? (
+          <div className="p-8 text-center bg-[#18181B] border border-[#27272A] rounded-xl text-xs text-[#71717A]">
+            <Sliders size={28} className="mx-auto mb-2 text-[#3F3F46]" />
+            <p className="font-bold text-sm text-[#FAFAFA]">No Variants Found</p>
+            <p className="text-xs text-[#A1A1AA] mt-1">Try adjusting search filters or create a new variant.</p>
+          </div>
+        ) : (
+          variantsList.map((variant) => {
+            const hasStock = Number(variant.stock || 0) > 0;
+            const attrEntries = Object.entries(variant.attributes || {});
+
+            return (
+              <div
+                key={variant.id}
+                className="p-3 bg-[#18181B] border border-[#27272A] rounded-xl space-y-2 shadow-sm"
+              >
+                <div className="flex items-start gap-2.5">
+                  <div className="w-11 h-11 rounded-lg bg-[#09090B] border border-[#27272A] overflow-hidden flex items-center justify-center flex-shrink-0">
+                    {variant.image ? (
+                      <img src={variant.image} alt={variant.sku} className="w-full h-full object-cover" />
+                    ) : variant.product?.thumbnail ? (
+                      <img src={variant.product.thumbnail} alt={variant.sku} className="w-full h-full object-cover" />
+                    ) : (
+                      <Package size={16} className="text-[#71717A]" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <p className="font-mono font-bold text-xs text-[#8B5CF6] truncate">{variant.sku}</p>
+                      <span
+                        className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${
+                          hasStock
+                            ? "bg-emerald-950/80 text-emerald-400 border border-emerald-500/40"
+                            : "bg-rose-950/80 text-rose-400 border border-rose-500/40"
+                        }`}
+                      >
+                        {variant.stock} Left
+                      </span>
+                    </div>
+                    <p className="text-[11px] font-semibold text-[#FAFAFA] truncate">
+                      {variant.name || variant.product?.name || "Variant Item"}
+                    </p>
+                    <p className="text-[10px] text-[#A1A1AA] truncate">
+                      Parent: {variant.product?.name || "N/A"}
+                    </p>
+                  </div>
+                </div>
+
+                {attrEntries.length > 0 && (
+                  <div className="flex flex-wrap gap-1 pt-1">
+                    {attrEntries.map(([k, v]) => (
+                      <span
+                        key={k}
+                        className="text-[9px] px-1.5 py-0.5 rounded bg-[#09090B] border border-[#27272A] text-purple-300 font-mono"
+                      >
+                        {k}: {String(v)}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                <div className="pt-2 border-t border-[#27272A] flex items-center justify-between">
+                  <div>
+                    <span className="font-mono font-bold text-xs text-[#FAFAFA]">
+                      ₹{Number(variant.price).toLocaleString()}
+                    </span>
+                    {variant.salePrice !== null && variant.salePrice !== undefined && Number(variant.salePrice) > 0 && (
+                      <span className="text-[10px] font-mono text-emerald-400 ml-1.5">
+                        Sale: ₹{Number(variant.salePrice).toLocaleString()}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setViewingVariant(variant)}
+                      className="p-1 text-[#A1A1AA] hover:text-[#8B5CF6]"
+                    >
+                      <Eye size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenEdit(variant)}
+                      className="p-1 text-[#A1A1AA] hover:text-amber-400"
+                    >
+                      <Edit2 size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDeletingVariant(variant)}
+                      className="p-1 text-[#A1A1AA] hover:text-rose-400"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {/* ─── Desktop Variants Table (hidden sm:block) ─── */}
+      <div className="hidden sm:block rounded-2xl bg-[#18181B] border border-[#27272A] shadow-lg overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead className="bg-[#09090B] text-[#A1A1AA] border-b border-[#27272A] font-bold uppercase tracking-wider text-[10px]">

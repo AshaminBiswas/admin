@@ -636,8 +636,98 @@ export function AdminManagementPage() {
         </div>
       </div>
 
-      {/* ─── Main Admin Table ─── */}
-      <div className="rounded-2xl bg-[#18181B] border border-[#27272A] shadow-lg overflow-hidden">
+      {/* ─── Mobile Admin User Cards (sm:hidden) ─── */}
+      <div className="sm:hidden space-y-2.5">
+        {filteredAdmins.length === 0 ? (
+          <div className="p-8 text-center bg-[#18181B] border border-[#27272A] rounded-xl text-xs text-[#71717A]">
+            <ShieldCheck size={28} className="mx-auto mb-2 text-[#3F3F46]" />
+            <p className="font-bold text-sm text-[#FAFAFA]">No Administrators Found</p>
+            <p className="text-xs text-[#A1A1AA] mt-1">No accounts match your current filter criteria.</p>
+          </div>
+        ) : (
+          filteredAdmins.map((admin) => {
+            const roleName = admin.role?.name || admin.role?.slug || (typeof admin.role === "string" ? admin.role : "Staff Member");
+            const isRootSuper = (admin.role?.slug || admin.role?.name || (typeof admin.role === "string" ? admin.role : "")).toLowerCase().includes("super");
+
+            return (
+              <div
+                key={admin.id}
+                className="p-3 bg-[#18181B] border border-[#27272A] rounded-xl space-y-2 shadow-sm"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-full bg-[#8B5CF6]/20 border border-[#8B5CF6]/40 flex items-center justify-center text-[#A855F7] font-bold text-xs">
+                      {admin.firstName?.[0] || "A"}
+                    </div>
+                    <div>
+                      <p className="font-bold text-xs text-[#FAFAFA]">
+                        {admin.firstName} {admin.lastName}
+                      </p>
+                      <p className="text-[10px] text-[#A1A1AA]">{admin.email}</p>
+                    </div>
+                  </div>
+                  <span
+                    className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase ${
+                      admin.status === "ACTIVE"
+                        ? "bg-emerald-950/80 text-emerald-400 border border-emerald-500/40"
+                        : "bg-zinc-800 text-zinc-400 border border-zinc-700"
+                    }`}
+                  >
+                    {admin.status || "ACTIVE"}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between pt-1 text-[10px]">
+                  <span
+                    className={`px-2 py-0.5 rounded font-bold uppercase ${
+                      isRootSuper
+                        ? "bg-amber-950/80 text-amber-300 border border-amber-500/40"
+                        : "bg-purple-950/80 text-[#A855F7] border border-purple-500/40"
+                    }`}
+                  >
+                    {roleName}
+                  </span>
+                  <span className="text-[#71717A]">
+                    {admin.isTwoFactorEnabled ? "2FA Enabled" : "2FA Off"}
+                  </span>
+                </div>
+
+                <div className="pt-2 border-t border-[#27272A] flex items-center justify-end gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setViewingAdmin(admin)}
+                    className="p-1 text-[#A1A1AA] hover:text-[#8B5CF6]"
+                    title="Inspect"
+                  >
+                    <Eye size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleOpenEdit(admin)}
+                    className="p-1 text-[#A1A1AA] hover:text-amber-400"
+                    title="Edit"
+                  >
+                    <Edit2 size={14} />
+                  </button>
+                  {!isRootSuper && (
+                    <button
+                      type="button"
+                      onClick={() => setDeletingAdmin(admin)}
+                      className="p-1 text-[#A1A1AA] hover:text-rose-400"
+                      title="Delete"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {/* ─── Main Desktop Admin Table (hidden sm:block) ─── */}
+      <div className="hidden sm:block rounded-2xl bg-[#18181B] border border-[#27272A] shadow-lg overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead className="bg-[#09090B] text-[#A1A1AA] border-b border-[#27272A] font-bold uppercase tracking-wider text-[10px]">

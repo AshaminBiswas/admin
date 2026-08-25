@@ -247,15 +247,15 @@ export function MediaUploadManager() {
   ];
 
   return (
-    <div className="font-sans space-y-6">
+    <div className="font-sans space-y-3 sm:space-y-5 md:space-y-6">
       
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-[#18181B] dark:text-[#FAFAFA]">Media & Upload Center</h1>
-        <p className="text-sm text-[#52525B] dark:text-[#A1A1AA] mt-1">Upload and manage media assets directly to your connected CDN.</p>
+        <h1 className="text-base sm:text-xl font-bold tracking-tight text-[#18181B] dark:text-[#FAFAFA]">Media & Upload Center</h1>
+        <p className="text-[11px] sm:text-xs text-[#52525B] dark:text-[#A1A1AA] mt-0.5">Upload and manage media assets directly to your connected CDN.</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3.5 sm:gap-6">
         
         {/* Upload Zone (Left Column) */}
         <div className="lg:col-span-1 space-y-6">

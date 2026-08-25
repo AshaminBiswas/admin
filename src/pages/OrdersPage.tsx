@@ -65,16 +65,16 @@ export function OrdersPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3 sm:space-y-5 md:space-y-6">
       {/* Filter Bar */}
-      <div className="p-4 rounded-tr-2xl rounded-bl-2xl bg-[#18181B] border border-[#27272A] flex items-center justify-between gap-4 shadow-md">
-        <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide py-1">
+      <div className="p-2.5 sm:p-4 rounded-tr-2xl rounded-bl-2xl bg-[#18181B] border border-[#27272A] flex items-center justify-between gap-2.5 sm:gap-4 shadow-md">
+        <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto scrollbar-hide py-0.5">
           {["ALL", "PENDING", "PROCESSING", "SHIPPED", "DELIVERED"].map((st) => (
             <button
               key={st}
               type="button"
               onClick={() => setStatusFilter(st)}
-              className={`px-3 py-1.5 text-xs font-bold rounded-tr-lg rounded-bl-lg transition-all ${
+              className={`px-2.5 py-1 text-[11px] sm:text-xs font-bold rounded-tr-lg rounded-bl-lg transition-all whitespace-nowrap ${
                 statusFilter === st
                   ? "bg-[#8B5CF6] text-[#FAFAFA] shadow-sm shadow-[#8B5CF6]/25"
                   : "bg-[#09090B] text-[#A1A1AA] hover:text-[#FAFAFA] border border-[#27272A]"
@@ -88,15 +88,15 @@ export function OrdersPage() {
           type="button"
           onClick={fetchOrders}
           disabled={loading}
-          className="p-2 rounded-lg bg-[#27272A] text-[#A1A1AA] hover:text-[#8B5CF6] transition-colors disabled:opacity-50 flex items-center gap-1.5 text-xs font-bold"
+          className="p-1.5 sm:p-2 rounded-lg bg-[#27272A] text-[#A1A1AA] hover:text-[#8B5CF6] transition-colors disabled:opacity-50 flex items-center gap-1 text-[11px] sm:text-xs font-bold flex-shrink-0"
         >
-          <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
-          <span>Refresh</span>
+          <RefreshCw size={13} className={loading ? "animate-spin" : ""} />
+          <span className="hidden xs:inline">Refresh</span>
         </button>
       </div>
 
       {/* Orders List */}
-      <div className="p-6 rounded-tr-2xl rounded-bl-2xl bg-[#18181B] border border-[#27272A] shadow-lg">
+      <div className="p-3 sm:p-6 rounded-tr-2xl rounded-bl-2xl bg-[#18181B] border border-[#27272A] shadow-lg">
         {loading ? (
           <div className="py-12 text-center text-[#A1A1AA] flex flex-col items-center gap-3">
             <RefreshCw className="animate-spin text-[#8B5CF6]" size={24} />

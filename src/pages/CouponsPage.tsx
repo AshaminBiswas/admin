@@ -662,8 +662,95 @@ export function CouponsPage() {
         </div>
       </div>
 
-      {/* ─── Coupons Data Table ─── */}
-      <div className="rounded-2xl bg-[#18181B] border border-[#27272A] shadow-lg overflow-hidden">
+      {/* ─── Mobile Coupon Cards (sm:hidden) ─── */}
+      <div className="sm:hidden space-y-2.5">
+        {filteredCoupons.length === 0 ? (
+          <div className="p-8 text-center bg-[#18181B] border border-[#27272A] rounded-xl text-xs text-[#71717A]">
+            <Ticket size={28} className="mx-auto mb-2 text-[#3F3F46]" />
+            <p className="font-bold text-sm text-[#FAFAFA]">No Coupons Found</p>
+            <p className="text-xs text-[#A1A1AA] mt-1">Try adjusting your search or filters.</p>
+          </div>
+        ) : (
+          filteredCoupons.map((c) => {
+            const isPercentage = c.discountType === "PERCENTAGE";
+            const isExpired = c.isExpired || (c.endDate ? new Date(c.endDate) < new Date() : false);
+
+            return (
+              <div
+                key={c.id}
+                className="p-3 bg-[#18181B] border border-[#27272A] rounded-xl space-y-2 shadow-sm"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-mono font-black text-[#A855F7] tracking-wider text-xs bg-purple-950/60 px-2 py-0.5 rounded border border-purple-500/30">
+                    {c.code}
+                  </span>
+                  <span
+                    className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${
+                      isExpired
+                        ? "bg-rose-950/80 text-rose-400 border border-rose-500/40"
+                        : c.isActive
+                        ? "bg-emerald-950/80 text-emerald-400 border border-emerald-500/40"
+                        : "bg-zinc-800 text-zinc-400 border border-zinc-700"
+                    }`}
+                  >
+                    {isExpired ? "Expired" : c.isActive ? "Active" : "Inactive"}
+                  </span>
+                </div>
+
+                <div className="flex items-baseline justify-between">
+                  <p className="font-bold text-emerald-400 text-sm">
+                    {isPercentage ? `${c.discountValue}% OFF` : `₹${Number(c.discountValue).toLocaleString("en-IN")} FLAT`}
+                  </p>
+                  <span className="text-[10px] text-[#A1A1AA]">
+                    {c.minOrderAmount ? `Min: ₹${Number(c.minOrderAmount).toLocaleString("en-IN")}` : "No Min."}
+                  </span>
+                </div>
+
+                {c.description && (
+                  <p className="text-[11px] text-[#A1A1AA] line-clamp-1">
+                    {c.description}
+                  </p>
+                )}
+
+                <div className="pt-2 border-t border-[#27272A] flex items-center justify-between text-[10px]">
+                  <span className="text-[#71717A]">
+                    Uses: {c.usedCount} {c.usageLimit ? `/ ${c.usageLimit}` : ""}
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => handleCopyCode(c.code)}
+                      className="p-1 text-[#A1A1AA] hover:text-[#FAFAFA]"
+                      title="Copy Code"
+                    >
+                      <Copy size={13} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenEdit(c)}
+                      className="p-1 text-[#A1A1AA] hover:text-amber-400"
+                      title="Edit"
+                    >
+                      <Edit2 size={13} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDeletingCoupon(c)}
+                      className="p-1 text-[#A1A1AA] hover:text-rose-400"
+                      title="Delete"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {/* ─── Coupons Desktop Data Table (hidden sm:block) ─── */}
+      <div className="hidden sm:block rounded-2xl bg-[#18181B] border border-[#27272A] shadow-lg overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead className="bg-[#09090B] text-[#A1A1AA] border-b border-[#27272A] font-bold uppercase tracking-wider text-[10px]">

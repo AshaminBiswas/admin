@@ -166,21 +166,21 @@ export function AdminHeader({ isCollapsed, onToggleCollapse, onToggleMobile }: A
 
   return (
     <>
-      <header className="h-16 bg-white dark:bg-[#18181B] border-b border-slate-200 dark:border-[#27272A] px-4 md:px-6 flex items-center justify-between flex-shrink-0 sticky top-0 z-30 shadow-sm dark:shadow-md transition-colors w-full min-w-0">
+      <header className="h-13 sm:h-16 bg-white dark:bg-[#18181B] border-b border-slate-200 dark:border-[#27272A] px-2.5 sm:px-4 md:px-6 flex items-center justify-between flex-shrink-0 sticky top-0 z-30 shadow-sm dark:shadow-md transition-colors w-full min-w-0">
         {/* Left: Mobile Menu Toggle & Page Title */}
-        <div className="flex items-center gap-3 min-w-0">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           {onToggleMobile && (
             <button
               type="button"
               onClick={onToggleMobile}
-              className="md:hidden text-slate-600 dark:text-[#A1A1AA] hover:text-[#8B5CF6] p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-[#27272A]"
+              className="md:hidden text-slate-600 dark:text-[#A1A1AA] hover:text-[#8B5CF6] p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-[#27272A]"
               aria-label="Toggle Mobile Menu"
             >
-              <Menu size={20} />
+              <Menu size={18} />
             </button>
           )}
 
-          <h2 className="text-sm md:text-lg font-bold text-slate-900 dark:text-[#FAFAFA] font-serif tracking-tight truncate">
+          <h2 className="text-xs sm:text-base md:text-lg font-bold text-slate-900 dark:text-[#FAFAFA] font-serif tracking-tight truncate">
             {getViewTitle()}
           </h2>
         </div>
