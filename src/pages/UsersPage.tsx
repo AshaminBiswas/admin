@@ -35,6 +35,7 @@ import { Role } from "../types/admin";
 import { useDebounce } from "../hooks/useDebounce";
 import { getCachedRoles } from "../utils/referenceDataCache";
 import { AsyncActionButton } from "../components/common/AsyncActionButton";
+import { CustomerDossierModal } from "../components/users/CustomerDossierModal";
 
 /* ─── Skeleton Loading Body for Users Page ───────────────────────────────────── */
 
@@ -636,10 +637,15 @@ export function UsersPage({ onNavigateB2BPricing }: UsersPageProps) {
                   key={user.id}
                   className="p-4 rounded-xl bg-[#09090B] border border-[#27272A] space-y-3 hover:border-[#8B5CF6]/50 transition-colors"
                 >
-                  <div className="flex items-start justify-between gap-2">
+                  <div
+                    className="flex items-start justify-between gap-2 cursor-pointer"
+                    onClick={() => setViewingUser(user)}
+                    title="Tap to open 360° Customer Profile Dossier"
+                  >
                     <div>
-                      <h4 className="font-bold text-sm text-[#FAFAFA]">
-                        {user.firstName} {user.lastName}
+                      <h4 className="font-bold text-sm text-[#FAFAFA] hover:text-[#A855F7] transition-colors flex items-center gap-1.5">
+                        <span>{user.firstName} {user.lastName}</span>
+                        <Sparkles size={11} className="text-[#8B5CF6]" />
                       </h4>
                       <p className="text-xs text-[#A1A1AA] flex items-center gap-1 mt-0.5">
                         <Mail size={11} className="text-[#71717A]" />
@@ -753,10 +759,15 @@ export function UsersPage({ onNavigateB2BPricing }: UsersPageProps) {
                   const isB2B = Boolean(user.companyName || user.gstin || user.role?.slug === "b2b_buyer");
 
                   return (
-                    <tr key={user.id} className="hover:bg-[#27272A]/40 transition-colors">
-                      <td className="py-3.5 px-4">
-                        <p className="font-bold text-[#FAFAFA]">
-                          {user.firstName} {user.lastName}
+                    <tr key={user.id} className="hover:bg-[#27272A]/40 transition-colors group">
+                      <td
+                        className="py-3.5 px-4 cursor-pointer"
+                        onClick={() => setViewingUser(user)}
+                        title="Click to view 360° Customer Profile Dossier"
+                      >
+                        <p className="font-bold text-[#FAFAFA] group-hover:text-[#A855F7] transition-colors flex items-center gap-1.5">
+                          <span>{user.firstName} {user.lastName}</span>
+                          <Sparkles size={11} className="opacity-0 group-hover:opacity-100 text-[#8B5CF6] transition-opacity" />
                         </p>
                         <div className="flex flex-col text-[11px] text-[#A1A1AA] space-y-0.5 mt-0.5">
                           <span className="flex items-center gap-1">
@@ -771,7 +782,11 @@ export function UsersPage({ onNavigateB2BPricing }: UsersPageProps) {
                           )}
                         </div>
                       </td>
-                      <td className="py-3.5 px-4">
+                      <td
+                        className="py-3.5 px-4 cursor-pointer"
+                        onClick={() => setViewingUser(user)}
+                        title="Click to view 360° Customer Profile Dossier"
+                      >
                         {isB2B ? (
                           <div className="space-y-0.5">
                             <p className="font-bold text-[#A855F7] flex items-center gap-1">
@@ -1170,69 +1185,17 @@ export function UsersPage({ onNavigateB2BPricing }: UsersPageProps) {
         </div>
       )}
 
-      {/* ─── DRAWER: INSPECT USER ─── */}
+      {/* ─── MODAL 4: 360° CUSTOMER DOSSIER & PROFILE MASTER ─── */}
       {viewingUser && (
-        <div className="fixed inset-0 z-50 flex justify-end bg-black/70 backdrop-blur-sm">
-          <div className="bg-[#18181B] border-l border-[#27272A] w-full max-w-md h-full flex flex-col justify-between shadow-2xl p-6 overflow-y-auto">
-            <div className="space-y-6">
-              <div className="flex items-center justify-between border-b border-[#27272A] pb-4">
-                <div>
-                  <span className="text-[10px] uppercase font-bold text-[#A855F7] tracking-wider">
-                    Profile Directory
-                  </span>
-                  <h2 className="text-lg font-bold text-[#FAFAFA]">
-                    {viewingUser.firstName} {viewingUser.lastName}
-                  </h2>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setViewingUser(null)}
-                  className="p-1.5 rounded-lg bg-[#27272A] text-[#A1A1AA] hover:text-[#FAFAFA]"
-                >
-                  <X size={16} />
-                </button>
-              </div>
-
-              <div className="space-y-3 text-xs">
-                <div className="p-3 bg-[#09090B] rounded-xl border border-[#27272A] space-y-1">
-                  <span className="text-[10px] text-[#71717A] uppercase font-bold">Email Address</span>
-                  <p className="font-bold text-[#FAFAFA] break-all">{viewingUser.email}</p>
-                </div>
-
-                {viewingUser.companyName && (
-                  <div className="p-3 bg-[#09090B] rounded-xl border border-[#27272A] space-y-1">
-                    <span className="text-[10px] text-[#71717A] uppercase font-bold">Enterprise Organization</span>
-                    <p className="font-bold text-purple-400">{viewingUser.companyName}</p>
-                  </div>
-                )}
-
-                {viewingUser.gstin && (
-                  <div className="p-3 bg-[#09090B] rounded-xl border border-[#27272A] space-y-1">
-                    <span className="text-[10px] text-[#71717A] uppercase font-bold">GSTIN Registration</span>
-                    <p className="font-mono font-bold text-[#FAFAFA]">{viewingUser.gstin}</p>
-                  </div>
-                )}
-
-                <div className="p-3 bg-[#09090B] rounded-xl border border-[#27272A] space-y-1">
-                  <span className="text-[10px] text-[#71717A] uppercase font-bold">Account Tier</span>
-                  <p className="font-bold text-[#FAFAFA]">
-                    {viewingUser.role?.name || "Standard Customer"}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="border-t border-[#27272A] pt-4 mt-6">
-              <button
-                type="button"
-                onClick={() => setViewingUser(null)}
-                className="w-full py-2.5 bg-[#27272A] hover:bg-[#3F3F46] rounded-xl text-xs text-[#FAFAFA] font-bold"
-              >
-                Close Inspector
-              </button>
-            </div>
-          </div>
-        </div>
+        <CustomerDossierModal
+          userId={viewingUser.id}
+          onClose={() => setViewingUser(null)}
+          onNavigateB2BPricing={onNavigateB2BPricing}
+          onOpenEdit={(u) => {
+            setViewingUser(null);
+            handleOpenEdit(u);
+          }}
+        />
       )}
 
     </div>

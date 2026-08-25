@@ -227,7 +227,11 @@ The Storefront was architected and optimized for native app-like responsiveness 
   1. **Registration Duplicate Prevention**: Pre-checks Email, GSTIN, and Company Name before creation. Rejects duplicates with a 1-click **"Reset Password →"** action that pre-fills their identifier into account recovery.
   2. **Phone Number Multi-Account Limit**: Enforces a strict maximum of **3 accounts per phone number**; 4th registration triggers `PHONE_LIMIT_EXCEEDED`.
   3. **Unified Password Reset via Email OR GSTIN with 6-Digit OTP**: Customers can initiate recovery by typing either their Email or GSTIN. A 6-digit OTP is dispatched to their registered email with interactive OTP entry and instant password reset.
+- **Admin Customer 360° Master Profile & Unified Search (`/api/v1/users/:id/360`, `CustomerDossierModal.tsx`, `UsersPage.tsx`)**:
+  1. **Unified Search Engine**: Admin can instantly find accounts by 15-digit GSTIN, Email, 10-digit Phone number, Company Name, or First/Last name.
+  2. **Customer Longevity & Seniority**: Real-time calculation of platform membership duration (Years, Months, Days).
+  3. **360° Multi-Tab Dossier Hub**: Complete customer command center featuring Identity & Legal credentials, Address Book with 1-click Google Maps GPS navigation and WhatsApp indicators, Order History with line items and fulfillment status, RFQ Quotations pipeline with digital seals, GST Tax Invoices register, Proforma Invoices (PI) & Purchase Orders (PO) tracking, B2B Custom Matrix Pricing rates with live discount margins, and security logs (Profile update history & Password recovery OTP audit trail).
 
 ---
 
-*Last Updated: 2026-08-25 (Duplicate Account Prevention, Max 3 Phone Limit & Email/GSTIN OTP Recovery)*
+*Last Updated: 2026-08-25 (Customer 360° Master Dossier Hub, Unified GSTIN/Phone/Email Search & Admin Dossier Modal)*

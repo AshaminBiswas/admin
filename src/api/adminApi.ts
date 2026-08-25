@@ -326,6 +326,9 @@ export const usersApi = {
   /** GET /users/:id — get user details */
   getById: (id: string) => fetchAdminApi<any>(`/users/${id}`),
 
+  /** GET /users/:id/360 — get comprehensive 360 customer dossier */
+  getCustomer360: (id: string) => fetchAdminApi<any>(`/users/${id}/360`),
+
   /** POST /users — create new user/admin/b2b */
   create: (payload: {
     email: string;
