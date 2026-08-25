@@ -20,6 +20,9 @@ import {
   Shield,
   Phone,
   Eye,
+  EyeOff,
+  Check,
+  Key,
   AlertTriangle,
   Sliders,
   CheckSquare,
@@ -127,11 +130,14 @@ export function AdminManagementPage({ onViewAdmin }: AdminManagementPageProps = 
   // Create Form fields
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("Password@123");
+  const [showPassword, setShowPassword] = useState(false);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [phone, setPhone] = useState("+91 ");
   const [selectedRoleId, setSelectedRoleId] = useState<string>("");
   const [adminStatus, setAdminStatus] = useState<"ACTIVE" | "INACTIVE">("ACTIVE");
+  const [mustChangePassword, setMustChangePassword] = useState(true);
+  const [copiedCredentials, setCopiedCredentials] = useState(false);
 
   // Edit Form fields
   const [editFirstName, setEditFirstName] = useState("");
@@ -143,9 +149,24 @@ export function AdminManagementPage({ onViewAdmin }: AdminManagementPageProps = 
   // UI state
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
-  const [creationResult, setCreationResult] = useState<CreatedAdminResult | null>(null);
+  const [creationResult, setCreationResult] = useState<{
+    user: any;
+    temporaryPassword?: string;
+    roleName?: string;
+    roleSlug?: string;
+  } | null>(null);
 
   const debouncedSearch = useDebounce(searchQuery, 300);
+
+  // Password Generator Helper
+  const generateRandomPassword = () => {
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%&*";
+    let pwd = "PRC#";
+    for (let i = 0; i < 8; i++) {
+      pwd += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    setPassword(pwd);
+  };
 
   const isCustomerRole = (role?: any): boolean => {
     if (!role) return false;
@@ -241,37 +262,55 @@ export function AdminManagementPage({ onViewAdmin }: AdminManagementPageProps = 
       return;
     }
 
-    if (!email || !firstName || !lastName || !selectedRoleId) {
-      setFeedback({ type: "error", text: "Please fill in all mandatory fields." });
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanFirstName = firstName.trim();
+    const cleanLastName = lastName.trim();
+
+    if (!cleanEmail || !cleanFirstName || !cleanLastName || !selectedRoleId || !password.trim()) {
+      setFeedback({ type: "error", text: "Please fill in all mandatory fields (First Name, Last Name, Email, Role, and Password)." });
+      return;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(cleanEmail)) {
+      setFeedback({ type: "error", text: "Please provide a valid corporate email address." });
       return;
     }
 
     setIsSubmitting(true);
     setFeedback(null);
     try {
-      const res = await adminAuthService.createAdminUser({
-        email,
-        password,
-        firstName,
-        lastName,
-        phone,
+      const res = await usersApi.create({
+        email: cleanEmail,
+        password: password.trim(),
+        firstName: cleanFirstName,
+        lastName: cleanLastName,
+        phone: phone.trim() ? phone.trim() : undefined,
         roleId: selectedRoleId,
         status: adminStatus,
+        mustChangePassword,
+        sendWelcomeEmail: true,
       });
 
       if (res && res.success !== false) {
-        setCreationResult(res as any);
-        setShowCreateModal(false);
-        setFeedback({ type: "success", text: `Admin ${firstName} ${lastName} provisioned successfully with assigned role!` });
-        // Reset form
-        setEmail("");
-        setFirstName("");
-        setLastName("");
-        setPhone("+91 ");
-        setPassword("Password@123");
+        const assignedRole = rolesList.find((r) => r.id === selectedRoleId);
+        setCreationResult({
+          user: res.data || {
+            id: `admin-${Date.now()}`,
+            email: cleanEmail,
+            firstName: cleanFirstName,
+            lastName: cleanLastName,
+            phone: phone.trim(),
+            status: adminStatus,
+          },
+          temporaryPassword: password.trim(),
+          roleName: assignedRole?.name || assignedRole?.slug || "Administrator",
+          roleSlug: assignedRole?.slug || "admin",
+        });
+        setFeedback({ type: "success", text: `Admin ${cleanFirstName} ${cleanLastName} provisioned successfully with assigned role '${assignedRole?.name || "Admin"}'!` });
         await loadData();
       } else {
-        setFeedback({ type: "error", text: res.message || "Failed to create administrator." });
+        setFeedback({ type: "error", text: res.error?.message || res.message || "Failed to create administrator." });
       }
     } catch (err: any) {
       setFeedback({ type: "error", text: err.message || "Failed to create administrator." });
@@ -527,51 +566,6 @@ export function AdminManagementPage({ onViewAdmin }: AdminManagementPageProps = 
         >
           {feedback.type === "success" ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
           <span>{feedback.text}</span>
-        </div>
-      )}
-
-      {/* 2FA Provisioning Success Card */}
-      {creationResult && (
-        <div className="p-5 rounded-2xl bg-[#18181B] border border-purple-500/40 shadow-xl space-y-4">
-          <div className="flex items-center justify-between border-b border-[#27272A] pb-3">
-            <div className="flex items-center gap-2 text-[#A855F7] font-bold text-sm">
-              <QrCode size={18} />
-              <span>Admin Account Provisioned & 2FA Secret Key</span>
-            </div>
-            <button
-              type="button"
-              onClick={() => setCreationResult(null)}
-              className="text-[#71717A] hover:text-[#FAFAFA]"
-            >
-              <X size={16} />
-            </button>
-          </div>
-          <p className="text-xs text-[#A1A1AA]">
-            Please share these initial credentials with the newly created administrator (<strong>{creationResult.user?.email || "Account"}</strong>).
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {creationResult.twoFactorSetup?.qrCodeUrl && (
-              <div className="p-3 bg-white rounded-xl flex items-center justify-center w-48 h-48 mx-auto">
-                <img
-                  src={creationResult.twoFactorSetup.qrCodeUrl}
-                  alt="2FA QR Code"
-                  className="w-full h-full object-contain"
-                />
-              </div>
-            )}
-            <div className="space-y-2 text-xs">
-              <div className="p-2.5 bg-[#09090B] rounded-lg border border-[#27272A] space-y-1">
-                <span className="text-[10px] text-[#71717A] uppercase font-bold">2FA Manual Setup Key</span>
-                <p className="font-mono text-purple-300 font-bold break-all">
-                  {creationResult.twoFactorSetup?.secret || "Configured"}
-                </p>
-              </div>
-              <div className="p-2.5 bg-[#09090B] rounded-lg border border-[#27272A] space-y-1">
-                <span className="text-[10px] text-[#71717A] uppercase font-bold">Initial Password</span>
-                <p className="font-mono text-[#FAFAFA] font-bold">{password}</p>
-              </div>
-            </div>
-          </div>
         </div>
       )}
 
@@ -862,121 +856,330 @@ export function AdminManagementPage({ onViewAdmin }: AdminManagementPageProps = 
 
       {/* ─── MODAL 1: CREATE ADMIN / MANAGER MODAL (Super Admin Only) ─── */}
       {showCreateModal && isSuperAdmin && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-          <div className="bg-[#18181B] border border-[#27272A] rounded-2xl w-full max-w-lg shadow-2xl p-6 space-y-4">
-            <div className="flex items-center justify-between border-b border-[#27272A] pb-3">
-              <h3 className="font-bold text-sm text-[#FAFAFA] flex items-center gap-2">
-                <Crown size={16} className="text-amber-400" />
-                <span>Provision Staff Admin / Manager</span>
-              </h3>
-              <button
-                type="button"
-                onClick={() => setShowCreateModal(false)}
-                className="text-[#71717A] hover:text-[#FAFAFA]"
-              >
-                <X size={16} />
-              </button>
-            </div>
-
-            <form onSubmit={handleCreateAdmin} className="space-y-3.5 text-xs">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-[11px] text-[#A1A1AA] font-semibold">First Name *</label>
-                  <input
-                    type="text"
-                    required
-                    value={firstName}
-                    onChange={(e) => setFirstName(e.target.value)}
-                    placeholder="e.g. Ramesh"
-                    className="w-full bg-[#09090B] border border-[#27272A] rounded-xl px-3 py-2 text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[11px] text-[#A1A1AA] font-semibold">Last Name *</label>
-                  <input
-                    type="text"
-                    required
-                    value={lastName}
-                    onChange={(e) => setLastName(e.target.value)}
-                    placeholder="e.g. Sharma"
-                    className="w-full bg-[#09090B] border border-[#27272A] rounded-xl px-3 py-2 text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[11px] text-[#A1A1AA] font-semibold">Corporate Email *</label>
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="ramesh.sharma@prchardware.com"
-                  className="w-full bg-[#09090B] border border-[#27272A] rounded-xl px-3 py-2 text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-[11px] text-[#A1A1AA] font-semibold">Phone Number</label>
-                  <input
-                    type="text"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="+91 9876543210"
-                    className="w-full bg-[#09090B] border border-[#27272A] rounded-xl px-3 py-2 text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[11px] text-[#A1A1AA] font-semibold flex items-center justify-between">
-                    <span>Assign Custom / Standard Role *</span>
-                  </label>
-                  <select
-                    value={selectedRoleId}
-                    onChange={(e) => setSelectedRoleId(e.target.value)}
-                    className="w-full bg-[#09090B] border border-[#27272A] rounded-xl px-3 py-2 text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-[#18181B] border border-[#27272A] rounded-2xl w-full max-w-xl shadow-2xl p-6 space-y-5 my-8">
+            
+            {creationResult ? (
+              /* ─── ONBOARDING & CREDENTIALS SUMMARY CARD ─── */
+              <div className="space-y-5">
+                <div className="flex items-center justify-between border-b border-[#27272A] pb-3">
+                  <div className="flex items-center gap-2 text-emerald-400">
+                    <CheckCircle2 size={20} />
+                    <h3 className="font-bold text-sm text-[#FAFAFA]">Staff Account Provisioned Successfully</h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCreationResult(null);
+                      setShowCreateModal(false);
+                    }}
+                    className="text-[#71717A] hover:text-[#FAFAFA]"
                   >
-                    {rolesList.map((r) => (
-                      <option key={r.id} value={r.id}>
-                        {r.name} {!r.isSystem ? "— [Custom Role]" : `— [${r.slug}]`}
-                      </option>
-                    ))}
-                  </select>
+                    <X size={16} />
+                  </button>
+                </div>
+
+                <div className="p-4 rounded-xl bg-emerald-950/40 border border-emerald-500/30 space-y-2">
+                  <p className="text-xs text-emerald-300 font-medium">
+                    The administrator account for <strong>{creationResult.user.firstName} {creationResult.user.lastName}</strong> has been created with role <strong className="text-white">[{creationResult.roleName}]</strong>.
+                  </p>
+                  <p className="text-[11px] text-[#A1A1AA]">
+                    Please share the credentials below with the team member.
+                  </p>
+                </div>
+
+                {/* Credentials summary box */}
+                <div className="p-4 rounded-xl bg-[#09090B] border border-[#27272A] space-y-3">
+                  <div className="flex items-center justify-between border-b border-[#27272A] pb-2">
+                    <span className="text-[11px] font-bold text-[#A855F7] uppercase tracking-wider">
+                      Account Access Credentials
+                    </span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-bold">
+                      {creationResult.user.status || "ACTIVE"}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
+                    <div>
+                      <span className="text-[10px] text-[#71717A] uppercase font-semibold">Corporate Email</span>
+                      <p className="font-bold text-[#FAFAFA] font-mono select-all truncate">{creationResult.user.email}</p>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-[#71717A] uppercase font-semibold">Assigned Role</span>
+                      <p className="font-bold text-purple-400 select-all">{creationResult.roleName}</p>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <span className="text-[10px] text-[#71717A] uppercase font-semibold">Temporary Password</span>
+                      <div className="flex items-center gap-2 mt-1">
+                        <code className="flex-1 bg-[#18181B] border border-[#27272A] rounded-lg px-3 py-2 text-amber-300 font-mono text-xs select-all">
+                          {creationResult.temporaryPassword}
+                        </code>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-center gap-2 pt-2 border-t border-[#27272A]">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const text = `PRC Executive Admin Credentials:\nEmail: ${creationResult.user.email}\nTemporary Password: ${creationResult.temporaryPassword}\nAssigned Role: ${creationResult.roleName}\nPortal URL: ${window.location.origin}`;
+                      navigator.clipboard.writeText(text);
+                      setCopiedCredentials(true);
+                      setTimeout(() => setCopiedCredentials(false), 2500);
+                    }}
+                    className="w-full sm:flex-1 py-2.5 bg-[#27272A] hover:bg-[#3F3F46] border border-[#3F3F46] text-[#FAFAFA] rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2"
+                  >
+                    {copiedCredentials ? (
+                      <>
+                        <Check size={14} className="text-emerald-400" />
+                        <span className="text-emerald-400">Copied to Clipboard!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy size={14} />
+                        <span>Copy All Credentials</span>
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCreationResult(null);
+                      setShowCreateModal(false);
+                    }}
+                    className="w-full sm:w-auto px-6 py-2.5 bg-[#8B5CF6] hover:bg-[#7C3AED] text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-[#8B5CF6]/20"
+                  >
+                    Done & Back to Directory
+                  </button>
                 </div>
               </div>
+            ) : (
+              /* ─── CREATE ADMIN FORM ─── */
+              <>
+                <div className="flex items-center justify-between border-b border-[#27272A] pb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-400 flex items-center justify-center">
+                      <Crown size={15} />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-sm text-[#FAFAFA]">Provision Staff Admin / Manager</h3>
+                      <p className="text-[11px] text-[#A1A1AA]">Create an internal account with custom or standard role-based access.</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowCreateModal(false)}
+                    className="text-[#71717A] hover:text-[#FAFAFA]"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
 
-              <div className="space-y-1">
-                <label className="text-[11px] text-[#A1A1AA] font-semibold">Initial Temporary Password</label>
-                <input
-                  type="text"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full bg-[#09090B] border border-[#27272A] rounded-xl px-3 py-2 text-[#FAFAFA] font-mono focus:outline-none focus:border-[#8B5CF6]"
-                />
-              </div>
+                <form onSubmit={handleCreateAdmin} className="space-y-4 text-xs">
+                  {/* Name Fields */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-[11px] text-[#A1A1AA] font-semibold flex items-center gap-1">
+                        <User size={12} className="text-[#8B5CF6]" />
+                        <span>First Name *</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={firstName}
+                        onChange={(e) => setFirstName(e.target.value)}
+                        placeholder="e.g. Ramesh"
+                        className="w-full bg-[#09090B] border border-[#27272A] rounded-xl px-3 py-2 text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] text-[#A1A1AA] font-semibold flex items-center gap-1">
+                        <User size={12} className="text-[#8B5CF6]" />
+                        <span>Last Name *</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={lastName}
+                        onChange={(e) => setLastName(e.target.value)}
+                        placeholder="e.g. Sharma"
+                        className="w-full bg-[#09090B] border border-[#27272A] rounded-xl px-3 py-2 text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
+                      />
+                    </div>
+                  </div>
 
-              <div className="p-3 bg-purple-950/20 border border-purple-500/30 rounded-xl text-[11px] text-purple-200">
-                👑 <strong>Super Admin Guarantee:</strong> This user will receive internal dashboard access governed by the selected role's granular permission matrix.
-              </div>
+                  {/* Corporate Email & Phone */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-[11px] text-[#A1A1AA] font-semibold flex items-center gap-1">
+                        <Mail size={12} className="text-[#8B5CF6]" />
+                        <span>Corporate Email *</span>
+                      </label>
+                      <input
+                        type="email"
+                        required
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="admin.user@prchardware.com"
+                        className="w-full bg-[#09090B] border border-[#27272A] rounded-xl px-3 py-2 text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] text-[#A1A1AA] font-semibold flex items-center gap-1">
+                        <Phone size={12} className="text-[#8B5CF6]" />
+                        <span>Contact Phone</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                        placeholder="+91 9876543210"
+                        className="w-full bg-[#09090B] border border-[#27272A] rounded-xl px-3 py-2 text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
+                      />
+                    </div>
+                  </div>
 
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-[#27272A]">
-                <button
-                  type="button"
-                  onClick={() => setShowCreateModal(false)}
-                  className="px-4 py-2 bg-[#27272A] hover:bg-[#3F3F46] rounded-xl text-[#FAFAFA] font-bold"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="px-5 py-2 bg-[#8B5CF6] hover:bg-[#7C3AED] disabled:opacity-50 text-white rounded-xl font-bold shadow"
-                >
-                  {isSubmitting ? "Provisioning..." : "Provision Staff Account"}
-                </button>
-              </div>
-            </form>
+                  {/* Role Assignment */}
+                  <div className="space-y-2">
+                    <label className="text-[11px] text-[#A1A1AA] font-semibold flex items-center justify-between">
+                      <span className="flex items-center gap-1">
+                        <ShieldCheck size={12} className="text-[#8B5CF6]" />
+                        <span>Assign Role & Authority *</span>
+                      </span>
+                      <span className="text-[10px] text-[#71717A]">
+                        {rolesList.length} roles available
+                      </span>
+                    </label>
+
+                    <select
+                      value={selectedRoleId}
+                      onChange={(e) => setSelectedRoleId(e.target.value)}
+                      className="w-full bg-[#09090B] border border-[#27272A] rounded-xl px-3 py-2.5 text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6] font-semibold"
+                    >
+                      {rolesList.map((r) => (
+                        <option key={r.id} value={r.id}>
+                          {r.name} {!r.isSystem ? "— [Custom Role]" : `— [${r.slug}]`}
+                        </option>
+                      ))}
+                    </select>
+
+                    {/* Active Selected Role Card */}
+                    {(() => {
+                      const selectedRole = rolesList.find((r) => r.id === selectedRoleId);
+                      if (!selectedRole) return null;
+                      return (
+                        <div className="p-3 bg-[#09090B] border border-purple-500/30 rounded-xl space-y-1 text-[11px]">
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-purple-300 flex items-center gap-1.5">
+                              <Shield size={13} className="text-[#A855F7]" />
+                              {selectedRole.name}
+                            </span>
+                            <span className="text-[9px] px-2 py-0.5 rounded-full font-mono bg-purple-500/20 text-[#A855F7] border border-purple-500/30">
+                              {!selectedRole.isSystem ? "CUSTOM ROLE" : "SYSTEM ROLE"}
+                            </span>
+                          </div>
+                          {selectedRole.description && (
+                            <p className="text-[#A1A1AA] text-[10px] leading-relaxed">
+                              {selectedRole.description}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                  {/* Password & Generator */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] text-[#A1A1AA] font-semibold flex items-center gap-1">
+                        <Key size={12} className="text-amber-400" />
+                        <span>Initial Temporary Password *</span>
+                      </label>
+                      <button
+                        type="button"
+                        onClick={generateRandomPassword}
+                        className="text-[10px] font-bold text-amber-400 hover:text-amber-300 flex items-center gap-1 transition-colors"
+                      >
+                        <Sparkles size={11} />
+                        <span>Generate Strong</span>
+                      </button>
+                    </div>
+
+                    <div className="relative">
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        required
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="w-full bg-[#09090B] border border-[#27272A] rounded-xl pl-3 pr-10 py-2 text-[#FAFAFA] font-mono focus:outline-none focus:border-[#8B5CF6]"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-[#71717A] hover:text-[#FAFAFA]"
+                        title={showPassword ? "Hide password" : "Show password"}
+                      >
+                        {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                      </button>
+                    </div>
+
+                    <div className="flex items-center gap-2 pt-1">
+                      <label className="flex items-center gap-2 text-[11px] text-[#A1A1AA] cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={mustChangePassword}
+                          onChange={(e) => setMustChangePassword(e.target.checked)}
+                          className="rounded border-[#27272A] bg-[#09090B] text-[#8B5CF6] focus:ring-0 w-3.5 h-3.5"
+                        />
+                        <span>Require password change on first sign-in</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Status Selection */}
+                  <div className="space-y-1">
+                    <label className="text-[11px] text-[#A1A1AA] font-semibold">Account Status</label>
+                    <div className="flex gap-2">
+                      {(["ACTIVE", "INACTIVE"] as const).map((st) => (
+                        <button
+                          key={st}
+                          type="button"
+                          onClick={() => setAdminStatus(st)}
+                          className={`flex-1 py-2 rounded-xl font-bold transition-all text-xs border ${
+                            adminStatus === st
+                              ? "bg-[#8B5CF6]/20 border-purple-500/50 text-purple-300 shadow-sm"
+                              : "bg-[#09090B] text-[#71717A] border-[#27272A] hover:border-[#3F3F46]"
+                          }`}
+                        >
+                          {st === "ACTIVE" ? "Active Access" : "Disabled / Inactive"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Modal Action Buttons */}
+                  <div className="flex items-center justify-end gap-2 pt-3 border-t border-[#27272A]">
+                    <button
+                      type="button"
+                      onClick={() => setShowCreateModal(false)}
+                      className="px-4 py-2.5 bg-[#27272A] hover:bg-[#3F3F46] rounded-xl text-[#FAFAFA] font-bold text-xs transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isSubmitting}
+                      className="px-5 py-2.5 bg-[#8B5CF6] hover:bg-[#7C3AED] disabled:opacity-50 text-white rounded-xl font-bold text-xs shadow-md shadow-[#8B5CF6]/25 flex items-center gap-1.5 transition-all"
+                    >
+                      <Crown size={14} />
+                      <span>{isSubmitting ? "Provisioning..." : "Provision Staff Account"}</span>
+                    </button>
+                  </div>
+                </form>
+              </>
+            )}
           </div>
         </div>
       )}

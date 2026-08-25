@@ -306,6 +306,24 @@ export const rolesApi = {
 
   /** GET /roles/permissions — list all permissions grouped by module */
   listPermissions: () => fetchAdminApi<any[]>('/roles/permissions'),
+
+  /** POST /roles/permissions — create new custom permission */
+  createPermission: (payload: { name: string; slug?: string; module: string; description?: string }) =>
+    fetchAdminApi<any>('/roles/permissions', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  /** PATCH /roles/permissions/:id — update permission */
+  updatePermission: (id: string, payload: { name?: string; slug?: string; module?: string; description?: string }) =>
+    fetchAdminApi<any>(`/roles/permissions/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+
+  /** DELETE /roles/permissions/:id — delete custom permission */
+  deletePermission: (id: string) =>
+    fetchAdminApi<any>(`/roles/permissions/${id}`, { method: 'DELETE' }),
 };
 
 /* ─── Users & Profile API ────────────────────────────────────────────────────── */

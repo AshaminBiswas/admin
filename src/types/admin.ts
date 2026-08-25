@@ -200,7 +200,9 @@ export interface Permission {
   id: string;
   name: string;
   slug: string;
+  module?: string;
   description?: string;
+  createdAt?: string;
 }
 
 export interface PermissionGroup {
