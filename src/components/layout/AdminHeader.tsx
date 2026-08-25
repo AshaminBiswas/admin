@@ -85,27 +85,10 @@ export function AdminHeader({ isCollapsed, onToggleCollapse, onToggleMobile }: A
       case "admins": return "Executive Admin Users & Role Assignment";
       case "roles": return "Roles & Permissions (RBAC)";
       case "users": return "Customers & Users Management";
-      case "products": return "Hardware Products & SKU Inventory Catalog";
+      case "products": return "Hardware Products & SKU Catalog";
       case "orders": return "Customer Orders & B2B Fulfillment Control";
       case "quotes": return "B2B Bulk Price Quotations & Approvals";
-      case "inventory-dashboard":
-      case "inventory": return "Inventory Operations Dashboard";
-      case "inventory-stock": return "Warehouse Stock Levels & Adjustments";
-      case "inventory-products": return "Inventory Product & SKU Catalog";
-      case "inventory-warehouses": return "Warehouses & Fulfillment Centers";
-      case "inventory-allocation":
       case "allocation": return "Stock Allocation & Geographic Routing";
-      case "inventory-dispatches": return "Outbound Dispatches & Fulfillment";
-      case "inventory-transfers": return "Warehouse Stock Transfers";
-      case "inventory-purchases": return "Inbound Purchases & Vendor POs";
-      case "inventory-suppliers": return "Suppliers & Vendor Directory";
-      case "inventory-pos": return "Point of Sale (POS) & Retail Terminals";
-      case "inventory-reports": return "Inventory Reports & Valuation Statements";
-      case "inventory-analytics": return "Stock Velocity & Turnover Analytics";
-      case "inventory-audit": return "Immutable Stock Movement Ledger & Audit";
-      case "inventory-barcode": return "Barcode & QR Label Generator Studio";
-      case "inventory-search": return "Global Stock & SKU Quick-Finder";
-      case "inventory-ventures": return "Multi-Entity & Venture Configuration";
       case "appointments": return "Installation & Repair Service Appointments";
       case "enquiries": return "Customer Enquiries & Ticket Management";
       case "audit": return "System Security & Audit Activity Logs";

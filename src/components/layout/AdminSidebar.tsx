@@ -6,11 +6,9 @@ import {
   ShoppingCart,
   FileText,
   Calendar,
-  FileCheck,
   ShieldAlert,
   KeyRound,
   Users,
-  Boxes,
   PanelLeftClose,
   PanelLeftOpen,
   Layers,
@@ -34,8 +32,7 @@ import {
   Heart,
   Navigation,
   Coins,
-  FileSpreadsheet,
-  X, ChevronDown,
+  X,
 } from "lucide-react";
 import { useAdminAuth } from "../../context/AdminAuthContext";
 import { AdminView } from "../../types/admin";
@@ -46,7 +43,6 @@ interface NavItem {
   category: string;
   icon: React.ReactNode;
   badge?: string | number;
-  subItems?: { id: AdminView; label: string }[];
 }
 
 interface AdminSidebarProps {
@@ -64,7 +60,6 @@ export function AdminSidebar({
 }: AdminSidebarProps) {
   const { currentView, setCurrentView } = useAdminAuth();
   const [navSearch, setNavSearch] = useState("");
-  const [expandedMenus, setExpandedMenus] = useState<Record<string, boolean>>({ "inventory": true });
 
   const ALL_NAV_ITEMS: NavItem[] = [
     // Core & Intelligence
@@ -77,24 +72,6 @@ export function AdminSidebar({
     { id: "products", label: "Products Catalog", category: "Catalog & Stock", icon: <Package size={18} />, badge: "5" },
     { id: "categories", label: "Categories", category: "Catalog & Stock", icon: <FolderTree size={18} /> },
     { id: "variants", label: "Variants & SKUs", category: "Catalog & Stock", icon: <Sliders size={18} /> },
-    { id: "inventory", label: "Inventory Module", category: "Catalog & Stock", icon: <Boxes size={18} />, subItems: [
-      { id: "inventory-dashboard", label: "Dashboard" },
-      { id: "inventory-stock", label: "Stock" },
-      { id: "inventory-products", label: "Products" },
-      { id: "inventory-warehouses", label: "Warehouses" },
-      { id: "inventory-allocation", label: "Allocation" },
-      { id: "inventory-dispatches", label: "Dispatches" },
-      { id: "inventory-transfers", label: "Transfers" },
-      { id: "inventory-purchases", label: "Purchases" },
-      { id: "inventory-suppliers", label: "Suppliers" },
-      { id: "inventory-pos", label: "POS" },
-      { id: "inventory-reports", label: "Reports" },
-      { id: "inventory-analytics", label: "Analytics" },
-      { id: "inventory-audit", label: "Audit" },
-      { id: "inventory-barcode", label: "Barcode" },
-      { id: "inventory-search", label: "Search" },
-      { id: "inventory-ventures", label: "Ventures" }
-    ] },
     { id: "allocation", label: "Stock Allocation", category: "Catalog & Stock", icon: <Layers size={18} /> },
     { id: "upload", label: "Media Uploads", category: "Catalog & Stock", icon: <Upload size={18} /> },
 
@@ -103,8 +80,6 @@ export function AdminSidebar({
     { id: "checkouts", label: "Checkout Sessions", category: "Sales & Fulfillment", icon: <CreditCard size={18} /> },
     { id: "cart", label: "Shopping Carts", category: "Sales & Fulfillment", icon: <ShoppingBag size={18} /> },
     { id: "quotes", label: "B2B Quotes", category: "Sales & Fulfillment", icon: <FileText size={18} />, badge: "2" },
-
-
     { id: "appointments", label: "Appointments", category: "Sales & Fulfillment", icon: <Calendar size={18} /> },
     { id: "enquiries", label: "Enquiries", category: "Sales & Fulfillment", icon: <HelpCircle size={18} /> },
     { id: "invoice", label: "Invoices & GST", category: "Sales & Fulfillment", icon: <Receipt size={18} />, badge: "GST" },
@@ -199,7 +174,7 @@ export function AdminSidebar({
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-[#A1A1AA]" />
             <input
               type="text"
-              placeholder="Search 30 models..."
+              placeholder="Search models..."
               value={navSearch}
               onChange={(e) => setNavSearch(e.target.value)}
               className="w-full pl-9 pr-3 py-1.5 rounded-lg bg-slate-100 dark:bg-[#09090B] border border-slate-200 dark:border-[#27272A] text-xs text-slate-900 dark:text-[#FAFAFA] placeholder-slate-400 dark:placeholder-[#71717A] focus:outline-none focus:border-[#8B5CF6]"
@@ -226,79 +201,40 @@ export function AdminSidebar({
                   currentView === item.id ||
                   (item.id === "variants" && currentView === "varients") ||
                   (item.id === "varients" && currentView === "variants");
-                  
-                const isExpanded = expandedMenus[item.id];
-                const hasActiveSub = item.subItems?.some(s => s.id === currentView);
-                const isParentActive = isActive || hasActiveSub;
-                
+
                 return (
                   <div key={item.id} className="flex flex-col">
                     <button
                       type="button"
-                      onClick={() => {
-                        if (item.subItems && !isCollapsed) {
-                          setExpandedMenus(prev => ({ ...prev, [item.id]: !prev[item.id] }));
-                        } else {
-                          handleNavClick(item.id);
-                        }
-                      }}
+                      onClick={() => handleNavClick(item.id)}
                       title={isCollapsed ? `${item.label} (${item.category})` : undefined}
                       className={`w-full flex items-center py-2 rounded-tr-xl rounded-bl-xl text-xs font-semibold transition-all duration-150 group relative ${
                         isCollapsed ? "justify-center px-2" : "justify-between px-3"
                       } ${
-                        (isParentActive && !item.subItems)
+                        isActive
                           ? "bg-[#8B5CF6] text-white shadow-md shadow-[#8B5CF6]/25 font-bold"
-                          : isParentActive
-                          ? "text-[#8B5CF6] bg-[#8B5CF6]/10 dark:bg-[#8B5CF6]/10"
                           : "text-slate-600 dark:text-[#A1A1AA] hover:bg-slate-100 dark:hover:bg-[#27272A] hover:text-slate-900 dark:hover:text-[#FAFAFA]"
                       }`}
                     >
                       <div className="flex items-center gap-2.5">
-                        <span className={(isParentActive && !item.subItems) ? "text-white" : "text-[#8B5CF6] group-hover:scale-110 transition-transform"}>
+                        <span className={isActive ? "text-white" : "text-[#8B5CF6] group-hover:scale-110 transition-transform"}>
                           {item.icon}
                         </span>
                         {!isCollapsed && <span className="truncate">{item.label}</span>}
                       </div>
-                      
-                      {!isCollapsed && (
-                        <div className="flex items-center gap-1.5">
-                          {item.badge && (
-                            <span
-                              className={`text-[9px] font-bold px-1.5 py-0.2 rounded-full ${
-                                (isParentActive && !item.subItems)
-                                  ? "bg-slate-900 dark:bg-[#09090B] text-white"
-                                  : "bg-[#8B5CF6]/15 text-[#8B5CF6] dark:bg-[#8B5CF6]/20 dark:text-[#A855F7]"
-                              }`}
-                            >
-                              {item.badge}
-                            </span>
-                          )}
-                          {item.subItems && (
-                            <ChevronDown size={14} className={`transition-transform text-slate-400 ${isExpanded ? "rotate-180" : ""}`} />
-                          )}
-                        </div>
+
+                      {!isCollapsed && item.badge && (
+                        <span
+                          className={`text-[9px] font-bold px-1.5 py-0.2 rounded-full ${
+                            isActive
+                              ? "bg-slate-900 dark:bg-[#09090B] text-white"
+                              : "bg-[#8B5CF6]/15 text-[#8B5CF6] dark:bg-[#8B5CF6]/20 dark:text-[#A855F7]"
+                          }`}
+                        >
+                          {item.badge}
+                        </span>
                       )}
                     </button>
-                    
-                    {/* Sub-items Dropdown */}
-                    {item.subItems && isExpanded && !isCollapsed && (
-                      <div className="mt-1 ml-6 pl-2 border-l border-slate-200 dark:border-[#27272A] space-y-1">
-                        {item.subItems.map(subItem => (
-                          <button
-                            key={subItem.id}
-                            type="button"
-                            onClick={() => handleNavClick(subItem.id as any)}
-                            className={`w-full flex items-center px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-colors ${
-                              currentView === subItem.id
-                                ? "bg-[#8B5CF6] text-white shadow-sm shadow-[#8B5CF6]/25"
-                                : "text-slate-500 dark:text-[#A1A1AA] hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#27272A]"
-                            }`}
-                          >
-                            {subItem.label}
-                          </button>
-                        ))}
-                      </div>
-                    )}
                   </div>
                 );
               })}
@@ -329,4 +265,3 @@ export function AdminSidebar({
     </>
   );
 }
-

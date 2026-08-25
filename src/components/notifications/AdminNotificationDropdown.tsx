@@ -151,7 +151,6 @@ export function AdminNotificationDropdown({
       es.addEventListener("notification:broadcast", handleIncomingNotification);
       es.addEventListener("order:new", handleIncomingNotification);
       es.addEventListener("quote:new", handleIncomingNotification);
-      es.addEventListener("inventory:low_stock", handleIncomingNotification);
       es.addEventListener("system:alert", handleIncomingNotification);
 
       es.onerror = () => {
@@ -208,7 +207,7 @@ export function AdminNotificationDropdown({
       const t = notif.type.toUpperCase();
       if (t.includes("ORDER")) onNavigateToView("orders");
       else if (t.includes("QUOTE")) onNavigateToView("quotes");
-      else if (t.includes("STOCK") || t.includes("INVENTORY")) onNavigateToView("inventory");
+      else if (t.includes("STOCK") || t.includes("INVENTORY")) onNavigateToView("products");
       else if (t.includes("VARIANT")) onNavigateToView("variants");
     }
     onClose();

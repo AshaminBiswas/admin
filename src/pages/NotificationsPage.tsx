@@ -268,7 +268,6 @@ export function NotificationsPage() {
       es.addEventListener("notification:broadcast", handleRealtimeEvent);
       es.addEventListener("order:new", handleRealtimeEvent);
       es.addEventListener("quote:new", handleRealtimeEvent);
-      es.addEventListener("inventory:low_stock", handleRealtimeEvent);
       es.addEventListener("system:alert", handleRealtimeEvent);
 
       es.onerror = () => {

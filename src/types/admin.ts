@@ -1,9 +1,9 @@
-export interface AdminUser {
+﻿export interface AdminUser {
   id: string;
   email: string;
   firstName?: string;
   lastName?: string;
-  role: 'super_admin' | 'admin' | 'manager' | 'inventory_operator';
+  role: 'super_admin' | 'admin' | 'manager';
   roleId?: string;
   phone?: string;
   status?: 'ACTIVE' | 'INACTIVE';
@@ -93,7 +93,7 @@ export interface ProductItem {
   categoryId?: string;
   price: number;
   salesPrice?: number;
-  salePrice?: number; // legacy support
+  salePrice?: number;
   offerPrice?: number;
   originalPrice?: number;
   discount?: number;
@@ -221,22 +221,6 @@ export interface Role {
 }
 
 export type AdminView =
-  | 'inventory-analytics'
-  | 'inventory-audit'
-  | 'inventory-barcode'
-  | 'inventory-dashboard'
-  | 'inventory-dispatches'
-  | 'inventory-pos'
-  | 'inventory-products'
-  | 'inventory-purchases'
-  | 'inventory-reports'
-  | 'inventory-search'
-  | 'inventory-stock'
-  | 'inventory-suppliers'
-  | 'inventory-transfers'
-  | 'inventory-ventures'
-  | 'inventory-warehouses'
-  | 'inventory-allocation'
   | 'allocation'
   | 'appointments'
   | 'auth'
@@ -251,7 +235,6 @@ export type AdminView =
   | 'dashboard'
   | 'enquiries'
   | 'homepage'
-  | 'inventory'
   | 'invoice'
   | 'logistics'
   | 'notification'
@@ -262,7 +245,6 @@ export type AdminView =
   | 'products-create'
   | 'products-edit'
   | 'quotes'
-
   | 'reports'
   | 'reviews'
   | 'roles'
@@ -539,4 +521,3 @@ export const CANCEL_REASON_CODES: { code: string; label: string }[] = [
   { code: '3', label: 'Order Cancelled' },
   { code: '4', label: 'Others' },
 ];
-

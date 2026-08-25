@@ -48,17 +48,6 @@ export interface HomepageSection {
   status: "ACTIVE" | "DRAFT";
 }
 
-export interface InventoryItemData {
-  id: string;
-  productName: string;
-  sku: string;
-  warehouseLocation: string;
-  inStock: number;
-  reserved: number;
-  reorderPoint: number;
-  status: "IN_STOCK" | "LOW_STOCK" | "OUT_OF_STOCK";
-}
-
 export interface InvoiceItemData {
   id: string;
   invoiceNumber: string;
@@ -149,9 +138,6 @@ export const modelServices = {
   },
   async getHomepageSections() {
     return await fetchAdminApi<HomepageSection[]>("/homepage");
-  },
-  async getInventory() {
-    return await fetchAdminApi<InventoryItemData[]>("/inventory");
   },
   async getInvoices() {
     return await fetchAdminApi<InvoiceItemData[]>("/invoices");

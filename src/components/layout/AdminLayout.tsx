@@ -34,22 +34,6 @@ const ReviewsPage = lazy(() => import("../../pages/ReviewsPage").then((m) => ({ 
 const UsersPage = lazy(() => import("../../pages/UsersPage").then((m) => ({ default: m.UsersPage })));
 const ShippingsPage = lazy(() => import("../../pages/ShippingsPage").then((m) => ({ default: m.ShippingsPage })));
 const ModelManagementPage = lazy(() => import("../../pages/ModelManagementPage").then((m) => ({ default: m.ModelManagementPage })));
-const InventoryStockPage = lazy(() => import('../../pages/InventoryStockPage').then((m) => ({ default: m.InventoryStockPage })));
-const InventoryDashboardPage = lazy(() => import("../../pages/inventory/InventoryDashboardPage").then((m) => ({ default: m.InventoryDashboardPage })));
-const InventoryProductsPage = lazy(() => import("../../pages/inventory/InventoryProductsPage").then((m) => ({ default: m.InventoryProductsPage })));
-const InventoryWarehousesPage = lazy(() => import("../../pages/inventory/InventoryWarehousesPage").then((m) => ({ default: m.InventoryWarehousesPage })));
-const InventoryAllocationPage = lazy(() => import("../../pages/inventory/InventoryAllocationPage").then((m) => ({ default: m.InventoryAllocationPage })));
-const InventoryDispatchesPage = lazy(() => import("../../pages/inventory/InventoryDispatchesPage").then((m) => ({ default: m.InventoryDispatchesPage })));
-const InventoryTransfersPage = lazy(() => import("../../pages/inventory/InventoryTransfersPage").then((m) => ({ default: m.InventoryTransfersPage })));
-const InventoryPurchasesPage = lazy(() => import("../../pages/inventory/InventoryPurchasesPage").then((m) => ({ default: m.InventoryPurchasesPage })));
-const InventorySuppliersPage = lazy(() => import("../../pages/inventory/InventorySuppliersPage").then((m) => ({ default: m.InventorySuppliersPage })));
-const InventoryPOSPage = lazy(() => import("../../pages/inventory/InventoryPOSPage").then((m) => ({ default: m.InventoryPOSPage })));
-const InventoryReportsPage = lazy(() => import("../../pages/inventory/InventoryReportsPage").then((m) => ({ default: m.InventoryReportsPage })));
-const InventoryAnalyticsPage = lazy(() => import("../../pages/inventory/InventoryAnalyticsPage").then((m) => ({ default: m.InventoryAnalyticsPage })));
-const InventoryAuditPage = lazy(() => import("../../pages/inventory/InventoryAuditPage").then((m) => ({ default: m.InventoryAuditPage })));
-const InventoryBarcodePage = lazy(() => import("../../pages/inventory/InventoryBarcodePage").then((m) => ({ default: m.InventoryBarcodePage })));
-const InventorySearchPage = lazy(() => import("../../pages/inventory/InventorySearchPage").then((m) => ({ default: m.InventorySearchPage })));
-const InventoryVenturesPage = lazy(() => import("../../pages/inventory/InventoryVenturesPage").then((m) => ({ default: m.InventoryVenturesPage })));
 const B2BPricingPage = lazy(() => import("../../pages/B2BPricingPage").then((m) => ({ default: m.B2BPricingPage })));
 const VariantsPage = lazy(() => import("../../pages/VariantsPage").then((m) => ({ default: m.VariantsPage })));
 const NotificationsPage = lazy(() => import("../../pages/NotificationsPage").then((m) => ({ default: m.NotificationsPage })));
@@ -140,42 +124,15 @@ export function AdminLayout() {
       case "variants":
       case "varients":
         return <VariantsPage />;
-      
-      // ─── Modular Enterprise Inventory Suite ────────────────────────
-      case "inventory-dashboard":
-      case "inventory":
-        return <InventoryDashboardPage />;
-      case "inventory-stock":
-        return <InventoryStockPage />;
-      case "inventory-products":
-        return <InventoryProductsPage />;
-      case "inventory-warehouses":
-        return <InventoryWarehousesPage />;
-      case "inventory-allocation":
       case "allocation":
-        return <InventoryAllocationPage />;
-      case "inventory-dispatches":
-        return <InventoryDispatchesPage />;
-      case "inventory-transfers":
-        return <InventoryTransfersPage />;
-      case "inventory-purchases":
-        return <InventoryPurchasesPage />;
-      case "inventory-suppliers":
-        return <InventorySuppliersPage />;
-      case "inventory-pos":
-        return <InventoryPOSPage />;
-      case "inventory-reports":
-        return <InventoryReportsPage />;
-      case "inventory-analytics":
-        return <InventoryAnalyticsPage />;
-      case "inventory-audit":
-        return <InventoryAuditPage />;
-      case "inventory-barcode":
-        return <InventoryBarcodePage />;
-      case "inventory-search":
-        return <InventorySearchPage />;
-      case "inventory-ventures":
-        return <InventoryVenturesPage />;
+        return (
+          <ModelManagementPage
+            modelKey="allocation"
+            title="Stock Allocation & Routing"
+            subtitle="Warehouse Allocation"
+            description="Intelligent order routing and fulfillment center allocation based on proximity and shipping cost."
+          />
+        );
 
       // 3. Sales & Fulfillment
       case "orders":

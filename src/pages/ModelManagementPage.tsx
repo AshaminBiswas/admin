@@ -73,13 +73,6 @@ export function ModelManagementPage({
           { label: "Daily Impressions", value: "48,500 Views", change: "+22%", color: "text-blue-500 dark:text-blue-400" },
           { label: "A/B Testing Variants", value: "2 Running", change: "50/50 Split", color: "text-amber-500 dark:text-amber-400" },
         ];
-      case "inventory":
-        return [
-          { label: "Total SKUs Tracked", value: "1,240 SKUs", change: "+14", color: "text-[#8B5CF6]" },
-          { label: "Low Stock Alerts", value: "3 Items", change: "Requires Action", color: "text-rose-500 dark:text-rose-400" },
-          { label: "Inventory Valuation", value: "₹48.5 Lakhs", change: "+8.4%", color: "text-emerald-500 dark:text-emerald-400" },
-          { label: "Turnover Velocity", value: "18.2 Days", change: "Healthy", color: "text-blue-500 dark:text-blue-400" },
-        ];
       case "invoice":
         return [
           { label: "Total Invoices Issued", value: "892 Invoices", change: "This Month", color: "text-[#8B5CF6]" },
