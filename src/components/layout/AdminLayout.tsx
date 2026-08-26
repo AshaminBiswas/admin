@@ -39,6 +39,7 @@ const ModelManagementPage = lazy(() => import("../../pages/ModelManagementPage")
 const B2BPricingPage = lazy(() => import("../../pages/B2BPricingPage").then((m) => ({ default: m.B2BPricingPage })));
 const VariantsPage = lazy(() => import("../../pages/VariantsPage").then((m) => ({ default: m.VariantsPage })));
 const NotificationsPage = lazy(() => import("../../pages/NotificationsPage").then((m) => ({ default: m.NotificationsPage })));
+const InventoryPage = lazy(() => import("../../pages/InventoryPage").then((m) => ({ default: m.InventoryPage })));
 const GSTInvoiceHub = lazy(() => import("../../pages/GSTInvoiceHub"));
 
 function ViewLoadingSkeleton() {
@@ -138,6 +139,8 @@ export function AdminLayout() {
       case "variants":
       case "varients":
         return <VariantsPage />;
+      case "inventory":
+        return <InventoryPage />;
       case "allocation":
         return (
           <ModelManagementPage

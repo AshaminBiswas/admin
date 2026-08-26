@@ -238,6 +238,7 @@ export type AdminView =
   | 'enquiries'
   | 'homepage'
   | 'invoice'
+  | 'inventory'
   | 'logistics'
   | 'notification'
   | 'notifications'
@@ -593,3 +594,152 @@ export const CANCEL_REASON_CODES: { code: string; label: string }[] = [
   { code: '3', label: 'Order Cancelled' },
   { code: '4', label: 'Others' },
 ];
+
+/* ─── Multi-Branch Inventory Management Types ────────────────────────────────── */
+
+export type StockMovementType =
+  | 'PURCHASE_IN'
+  | 'TRANSFER_IN'
+  | 'TRANSFER_OUT'
+  | 'ADJUSTMENT_IN'
+  | 'ADJUSTMENT_OUT'
+  | 'SALE_OUT'
+  | 'DAMAGE'
+  | 'RETURN_IN';
+
+export type TransferStatus = 'PENDING' | 'IN_TRANSIT' | 'RECEIVED' | 'CANCELLED';
+
+export interface Branch {
+  id: string;
+  name: string;
+  code: string;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  _count?: { inventories?: number; purchases?: number };
+}
+
+export interface Supplier {
+  id: string;
+  name: string;
+  contactPerson?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  address?: string | null;
+  gstNumber?: string | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  _count?: { purchases?: number };
+  purchases?: Purchase[];
+}
+
+export interface InventoryItem {
+  id: string;
+  productId: string;
+  branchId: string;
+  quantity: number;
+  reservedQuantity: number;
+  reorderLevel: number;
+  updatedAt: string;
+  product: {
+    id: string;
+    name: string;
+    sku: string;
+    price: number;
+    salePrice?: number | null;
+    thumbnail?: string | null;
+    reorderLevel?: number | null;
+    status: string;
+    category?: { id: string; name: string } | null;
+  };
+  branch: {
+    id: string;
+    name: string;
+    code: string;
+    city?: string | null;
+  };
+}
+
+export interface PurchaseItem {
+  id: string;
+  purchaseId: string;
+  productId: string;
+  quantity: number;
+  unitPurchasePrice: number | string;
+  totalPrice: number | string;
+  product?: {
+    id: string;
+    name: string;
+    sku: string;
+    price: number;
+    thumbnail?: string | null;
+  };
+}
+
+export interface Purchase {
+  id: string;
+  branchId: string;
+  supplierId: string;
+  invoiceNumber?: string | null;
+  purchaseDate: string;
+  totalAmount: number | string;
+  notes?: string | null;
+  createdById: string;
+  createdAt: string;
+  branch?: { id: string; name: string; code: string };
+  supplier?: { id: string; name: string; contactPerson?: string | null; phone?: string | null };
+  items?: PurchaseItem[];
+}
+
+export interface StockTransferItem {
+  id: string;
+  transferId: string;
+  productId: string;
+  quantity: number;
+  product?: {
+    id: string;
+    name: string;
+    sku: string;
+    price: number;
+    thumbnail?: string | null;
+  };
+}
+
+export interface StockTransfer {
+  id: string;
+  fromBranchId: string;
+  toBranchId: string;
+  status: TransferStatus;
+  requestedById: string;
+  approvedById?: string | null;
+  receivedById?: string | null;
+  notes?: string | null;
+  createdAt: string;
+  dispatchedAt?: string | null;
+  receivedAt?: string | null;
+  fromBranch: { id: string; name: string; code: string; city?: string | null };
+  toBranch: { id: string; name: string; code: string; city?: string | null };
+  items: StockTransferItem[];
+}
+
+export interface StockMovement {
+  id: string;
+  productId: string;
+  branchId: string;
+  type: StockMovementType;
+  quantity: number;
+  previousQty: number;
+  newQty: number;
+  referenceType?: string | null;
+  referenceId?: string | null;
+  notes?: string | null;
+  performedById: string;
+  createdAt: string;
+  product?: { id: string; name: string; sku: string; thumbnail?: string | null };
+  branch?: { id: string; name: string; code: string; city?: string | null };
+}
+

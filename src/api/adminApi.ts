@@ -1,3 +1,5 @@
+import type { Branch, Supplier, InventoryItem, Purchase, StockTransfer, StockMovement } from '../types/admin';
+
 // Dynamic API Base URL — default to local backend or production fallback
 export const API_BASE_URL =
   (import.meta as any).env?.VITE_API_URL || "https://prc-backend-6sw7.onrender.com/api/v1";
@@ -655,6 +657,217 @@ export const auditApi = {
     if (params?.endDate) query.append('endDate', params.endDate);
     const qs = query.toString();
     return fetchAdminApi<any>(`/audit/logs${qs ? `?${qs}` : ''}`);
+  },
+};
+
+/* ─── Multi-Branch Inventory Management API ─────────────────────────────────── */
+export const inventoryApi = {
+  // 1. Branches
+  getBranches: (params?: { page?: number; limit?: number; search?: string; isActive?: boolean }) => {
+    const query = new URLSearchParams();
+    if (params?.page) query.append('page', String(params.page));
+    if (params?.limit) query.append('limit', String(params.limit));
+    if (params?.search) query.append('search', params.search);
+    if (params?.isActive !== undefined) query.append('isActive', String(params.isActive));
+    const qs = query.toString();
+    return fetchAdminApi<Branch[]>(`/branches${qs ? `?${qs}` : ''}`);
+  },
+  createBranch: (payload: { name: string; code: string; address?: string; city?: string; state?: string; isActive?: boolean }) =>
+    fetchAdminApi<Branch>(`/branches`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  updateBranch: (id: string, payload: Partial<{ name: string; code: string; address?: string; city?: string; state?: string; isActive?: boolean }>) =>
+    fetchAdminApi<Branch>(`/branches/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+
+  // 2. Suppliers
+  getSuppliers: (params?: { page?: number; limit?: number; search?: string; isActive?: boolean }) => {
+    const query = new URLSearchParams();
+    if (params?.page) query.append('page', String(params.page));
+    if (params?.limit) query.append('limit', String(params.limit));
+    if (params?.search) query.append('search', params.search);
+    if (params?.isActive !== undefined) query.append('isActive', String(params.isActive));
+    const qs = query.toString();
+    return fetchAdminApi<Supplier[]>(`/suppliers${qs ? `?${qs}` : ''}`);
+  },
+  getSupplierById: (id: string) => fetchAdminApi<Supplier>(`/suppliers/${id}`),
+  createSupplier: (payload: { name: string; contactPerson?: string; phone?: string; email?: string; address?: string; gstNumber?: string; isActive?: boolean }) =>
+    fetchAdminApi<Supplier>(`/suppliers`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  updateSupplier: (id: string, payload: Partial<{ name: string; contactPerson?: string; phone?: string; email?: string; address?: string; gstNumber?: string; isActive?: boolean }>) =>
+    fetchAdminApi<Supplier>(`/suppliers/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+  deleteSupplier: (id: string) =>
+    fetchAdminApi<{ success: boolean }>(`/suppliers/${id}`, {
+      method: 'DELETE',
+    }),
+
+  // 3. Inventory Stock
+  getInventory: (params?: { page?: number; limit?: number; branchId?: string; productId?: string; search?: string; lowStock?: boolean; sortBy?: string; sortOrder?: 'asc' | 'desc' }) => {
+    const query = new URLSearchParams();
+    if (params?.page) query.append('page', String(params.page));
+    if (params?.limit) query.append('limit', String(params.limit));
+    if (params?.branchId && params.branchId !== 'ALL') query.append('branchId', params.branchId);
+    if (params?.productId) query.append('productId', params.productId);
+    if (params?.search) query.append('search', params.search);
+    if (params?.lowStock) query.append('lowStock', 'true');
+    if (params?.sortBy) query.append('sortBy', params.sortBy);
+    if (params?.sortOrder) query.append('sortOrder', params.sortOrder);
+    const qs = query.toString();
+    return fetchAdminApi<InventoryItem[]>(`/inventory${qs ? `?${qs}` : ''}`);
+  },
+  getProductInventory: (productId: string) =>
+    fetchAdminApi<{ product: any; totalAvailable: number; totalReserved: number; branches: InventoryItem[] }>(`/inventory/product/${productId}`),
+
+  // 4. Purchases (Stock-In)
+  getPurchases: (params?: { page?: number; limit?: number; branchId?: string; supplierId?: string; search?: string; from?: string; to?: string; sortBy?: string; sortOrder?: 'asc' | 'desc' }) => {
+    const query = new URLSearchParams();
+    if (params?.page) query.append('page', String(params.page));
+    if (params?.limit) query.append('limit', String(params.limit));
+    if (params?.branchId && params.branchId !== 'ALL') query.append('branchId', params.branchId);
+    if (params?.supplierId) query.append('supplierId', params.supplierId);
+    if (params?.search) query.append('search', params.search);
+    if (params?.from) query.append('from', params.from);
+    if (params?.to) query.append('to', params.to);
+    if (params?.sortBy) query.append('sortBy', params.sortBy);
+    if (params?.sortOrder) query.append('sortOrder', params.sortOrder);
+    const qs = query.toString();
+    return fetchAdminApi<Purchase[]>(`/purchases${qs ? `?${qs}` : ''}`);
+  },
+  getPurchaseById: (id: string) => fetchAdminApi<Purchase>(`/purchases/${id}`),
+  createPurchase: (payload: { branchId: string; supplierId: string; invoiceNumber?: string; purchaseDate?: string; notes?: string; items: Array<{ productId: string; quantity: number; unitPurchasePrice: number }> }) =>
+    fetchAdminApi<Purchase>(`/purchases`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  // 5. Stock Transfers
+  getStockTransfers: (params?: { page?: number; limit?: number; branchId?: string; status?: string; from?: string; to?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.page) query.append('page', String(params.page));
+    if (params?.limit) query.append('limit', String(params.limit));
+    if (params?.branchId && params.branchId !== 'ALL') query.append('branchId', params.branchId);
+    if (params?.status && params.status !== 'ALL') query.append('status', params.status);
+    if (params?.from) query.append('from', params.from);
+    if (params?.to) query.append('to', params.to);
+    const qs = query.toString();
+    return fetchAdminApi<StockTransfer[]>(`/transfers${qs ? `?${qs}` : ''}`);
+  },
+  getStockTransferById: (id: string) => fetchAdminApi<StockTransfer>(`/transfers/${id}`),
+  createStockTransfer: (payload: { fromBranchId: string; toBranchId: string; notes?: string; items: Array<{ productId: string; quantity: number }> }) =>
+    fetchAdminApi<StockTransfer>(`/transfers`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  dispatchStockTransfer: (id: string, payload?: { notes?: string }) =>
+    fetchAdminApi<StockTransfer>(`/transfers/${id}/dispatch`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload || {}),
+    }),
+  receiveStockTransfer: (id: string, payload?: { notes?: string }) =>
+    fetchAdminApi<StockTransfer>(`/transfers/${id}/receive`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload || {}),
+    }),
+  cancelStockTransfer: (id: string, payload?: { notes?: string }) =>
+    fetchAdminApi<StockTransfer>(`/transfers/${id}/cancel`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload || {}),
+    }),
+
+  // 6. Stock Adjustments
+  adjustStock: (payload: { branchId: string; productId: string; type: 'ADJUSTMENT_IN' | 'ADJUSTMENT_OUT' | 'DAMAGE' | 'RETURN_IN'; quantity: number; reason: string }) =>
+    fetchAdminApi<StockMovement>(`/stock-adjustments`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  // 7. Stock Movements Ledger
+  getStockMovements: (params?: { page?: number; limit?: number; branchId?: string; productId?: string; type?: string; from?: string; to?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.page) query.append('page', String(params.page));
+    if (params?.limit) query.append('limit', String(params.limit));
+    if (params?.branchId && params.branchId !== 'ALL') query.append('branchId', params.branchId);
+    if (params?.productId) query.append('productId', params.productId);
+    if (params?.type && params.type !== 'ALL') query.append('type', params.type);
+    if (params?.from) query.append('from', params.from);
+    if (params?.to) query.append('to', params.to);
+    const qs = query.toString();
+    return fetchAdminApi<StockMovement[]>(`/stock-movements${qs ? `?${qs}` : ''}`);
+  },
+
+  // 8. Download Exports (Excel & PDF)
+  downloadStockReport: async (params?: { branchId?: string; lowStock?: boolean; format?: 'xlsx' | 'pdf' }) => {
+    const query = new URLSearchParams();
+    if (params?.branchId && params.branchId !== 'ALL') query.append('branchId', params.branchId);
+    if (params?.lowStock) query.append('lowStock', 'true');
+    if (params?.format) query.append('format', params.format);
+    const token = getAdminToken();
+    const res = await fetch(`${API_BASE_URL}/reports/stock?${query.toString()}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error('Failed to download stock report');
+    const blob = await res.blob();
+    const ext = params?.format === 'pdf' ? 'pdf' : 'xlsx';
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Stock-Report-${Date.now()}.${ext}`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  },
+
+  downloadPurchasesReport: async (params?: { branchId?: string; supplierId?: string; from?: string; to?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.branchId && params.branchId !== 'ALL') query.append('branchId', params.branchId);
+    if (params?.supplierId) query.append('supplierId', params.supplierId);
+    if (params?.from) query.append('from', params.from);
+    if (params?.to) query.append('to', params.to);
+    const token = getAdminToken();
+    const res = await fetch(`${API_BASE_URL}/reports/purchases?${query.toString()}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error('Failed to download purchases report');
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Purchases-Report-${Date.now()}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  },
+
+  downloadMovementsReport: async (params?: { branchId?: string; productId?: string; from?: string; to?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.branchId && params.branchId !== 'ALL') query.append('branchId', params.branchId);
+    if (params?.productId) query.append('productId', params.productId);
+    if (params?.from) query.append('from', params.from);
+    if (params?.to) query.append('to', params.to);
+    const token = getAdminToken();
+    const res = await fetch(`${API_BASE_URL}/reports/movements?${query.toString()}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error('Failed to download movements report');
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Stock-Movements-${Date.now()}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
   },
 };
 
