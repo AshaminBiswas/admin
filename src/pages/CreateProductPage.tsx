@@ -157,11 +157,59 @@ export function CreateProductPage() {
     searchTimeoutRef.current = setTimeout(async () => {
       try {
         setIsSearchingSuggestions(true);
-        const res = await fetchAdminApi<any>(`/products?search=${encodeURIComponent(value.trim())}&limit=8`);
-        if (res?.success !== false) {
-          const list = Array.isArray(res?.data) ? res.data : Array.isArray(res?.products) ? res.products : Array.isArray(res) ? res : [];
-          setProductSuggestions(list);
-        }
+        const [prodRes, invRes] = await Promise.allSettled([
+          fetchAdminApi<any>(`/products?search=${encodeURIComponent(value.trim())}&limit=8`),
+          inventoryApi.getInventory({ search: value.trim(), limit: 8 }),
+        ]);
+
+        const prodList = prodRes.status === 'fulfilled' && prodRes.value?.success !== false
+          ? (Array.isArray(prodRes.value?.data) ? prodRes.value.data : Array.isArray(prodRes.value?.products) ? prodRes.value.products : Array.isArray(prodRes.value) ? prodRes.value : [])
+          : [];
+
+        const invList = invRes.status === 'fulfilled' && invRes.value?.success !== false
+          ? (Array.isArray(invRes.value?.data) ? invRes.value.data : [])
+          : [];
+
+        // Build a map of live inventory quantities by SKU and productId
+        const liveStockBySku = new Map<string, number>();
+        const liveStockById = new Map<string, number>();
+
+        invList.forEach((item: any) => {
+          const skuKey = (item.product?.sku || '').toUpperCase();
+          const pid = item.productId || item.product?.id;
+          const qty = Number(item.quantity || 0);
+          if (skuKey) liveStockBySku.set(skuKey, (liveStockBySku.get(skuKey) || 0) + qty);
+          if (pid) liveStockById.set(pid, (liveStockById.get(pid) || 0) + qty);
+        });
+
+        const merged: any[] = prodList.map((p: any) => {
+          const skuKey = (p.sku || '').toUpperCase();
+          const liveStock = Math.max(
+            liveStockById.get(p.id) ?? 0,
+            liveStockBySku.get(skuKey) ?? 0,
+            Number(p.stock) || 0
+          );
+          return {
+            ...p,
+            stock: liveStock,
+          };
+        });
+
+        // Also merge any inventory items that weren't in prodList
+        invList.forEach((item: any) => {
+          if (item.product) {
+            const skuKey = (item.product.sku || '').toUpperCase();
+            const exists = merged.some((p: any) => p.id === item.product.id || (p.sku && p.sku.toUpperCase() === skuKey));
+            if (!exists) {
+              merged.push({
+                ...item.product,
+                stock: liveStockBySku.get(skuKey) || Number(item.quantity || 0),
+              });
+            }
+          }
+        });
+
+        setProductSuggestions(merged);
       } catch (e) {
         console.warn("Product suggestion error:", e);
       } finally {
@@ -181,26 +229,32 @@ export function CreateProductPage() {
     setOfferPrice(p.offerPrice !== undefined ? String(p.offerPrice) : "");
 
     // Fetch live inventory breakdown for exact stock and reorder level
+    let liveStockNum = Number(p.stock) || 0;
+    let liveReorderNum = Number(p.reorderLevel) || 10;
+    let branchesData: any[] = [];
+
     try {
       const invRes = await inventoryApi.getProductInventory(p.id);
       if (invRes.success && invRes.data) {
-        setStock(String(invRes.data.totalAvailable ?? invRes.data.product?.stock ?? p.stock ?? 0));
-        setReorderLevel(String(invRes.data.product?.reorderLevel ?? p.reorderLevel ?? 10));
-        setInventoryLinkedProduct({
-          ...p,
-          totalAvailable: invRes.data.totalAvailable,
-          branches: invRes.data.branches,
-        });
-      } else {
-        setStock(String(p.stock ?? 0));
-        setReorderLevel(String(p.reorderLevel ?? 10));
-        setInventoryLinkedProduct(p);
+        liveStockNum = Math.max(
+          Number(invRes.data.totalAvailable ?? 0),
+          Number(invRes.data.totalOnHand ?? 0),
+          Number(invRes.data.product?.stock ?? 0),
+          liveStockNum
+        );
+        liveReorderNum = Number(invRes.data.product?.reorderLevel ?? p.reorderLevel ?? 10);
+        branchesData = invRes.data.branches || [];
       }
-    } catch {
-      setStock(String(p.stock ?? 0));
-      setReorderLevel(String(p.reorderLevel ?? 10));
-      setInventoryLinkedProduct(p);
-    }
+    } catch {}
+
+    setStock(String(liveStockNum));
+    setReorderLevel(String(liveReorderNum));
+    setInventoryLinkedProduct({
+      ...p,
+      stock: liveStockNum,
+      totalAvailable: liveStockNum,
+      branches: branchesData,
+    });
 
     setThumbnail(p.thumbnail || (Array.isArray(p.images) ? p.images[0] : p.image) || "");
     setImages(Array.isArray(p.images) ? p.images.join(", ") : "");

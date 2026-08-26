@@ -38,6 +38,7 @@ import {
   ShieldCheck,
   HelpCircle,
   Home,
+  Tag,
   ChevronRight as BreadArrow,
 } from 'lucide-react';
 import { inventoryApi, fetchAdminApi } from '../api/adminApi';
@@ -87,6 +88,10 @@ export const InventoryPage: React.FC = () => {
   const [lowStockOnly, setLowStockOnly] = useState<boolean>(false);
   const [transferStatusFilter, setTransferStatusFilter] = useState<string>('ALL');
   const [movementTypeFilter, setMovementTypeFilter] = useState<string>('ALL');
+  const [skuFilter, setSkuFilter] = useState<string>('');
+  const [nameFilter, setNameFilter] = useState<string>('');
+  const [stockStatusFilter, setStockStatusFilter] = useState<string>('ALL');
+  const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
 
   // Modals & Drawers
   const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState<boolean>(false);
@@ -273,6 +278,69 @@ export const InventoryPage: React.FC = () => {
     });
     return map;
   }, [inventoryList]);
+
+  // Dedicated Multi-Field Filter Evaluation for Stock Matrix
+  const filteredInventoryList = useMemo(() => {
+    return inventoryList.filter((item) => {
+      // 1. Product Name filter
+      if (nameFilter.trim()) {
+        const pName = (item.product?.name || '').toLowerCase();
+        if (!pName.includes(nameFilter.trim().toLowerCase())) return false;
+      }
+      // 2. SKU filter
+      if (skuFilter.trim()) {
+        const pSku = (item.product?.sku || '').toLowerCase();
+        if (!pSku.includes(skuFilter.trim().toLowerCase())) return false;
+      }
+      // 3. Facility / Branch filter
+      if (selectedBranchId !== 'ALL') {
+        const bId = item.branchId || item.branch?.id;
+        const bCode = (item.branch?.code || '').toUpperCase();
+        if (selectedBranchId !== 'PRC_STOCK' && bId !== selectedBranchId && bCode !== selectedBranchId) {
+          return false;
+        }
+      }
+      // 4. Stock Status filter
+      if (stockStatusFilter !== 'ALL') {
+        const availableQty = Math.max(0, (item.quantity || 0) - (item.reservedQuantity || 0));
+        const reorder = item.reorderLevel || item.product?.reorderLevel || 10;
+        if (stockStatusFilter === 'OUT_OF_STOCK' && availableQty > 0) return false;
+        if (stockStatusFilter === 'LOW_STOCK' && (availableQty === 0 || availableQty > reorder)) return false;
+        if (stockStatusFilter === 'IN_STOCK' && availableQty <= reorder) return false;
+      }
+      // 5. Category filter
+      if (categoryFilter !== 'ALL') {
+        const catId = item.product?.category?.id || (item.product as any)?.categoryId;
+        if (catId !== categoryFilter) return false;
+      }
+      // 6. Low stock quick toggle
+      if (lowStockOnly) {
+        const availableQty = Math.max(0, (item.quantity || 0) - (item.reservedQuantity || 0));
+        const reorder = item.reorderLevel || item.product?.reorderLevel || 10;
+        if (availableQty > reorder) return false;
+      }
+      return true;
+    });
+  }, [inventoryList, nameFilter, skuFilter, selectedBranchId, stockStatusFilter, categoryFilter, lowStockOnly]);
+
+  const isAnyStockFilterActive = Boolean(
+    nameFilter.trim() ||
+    skuFilter.trim() ||
+    selectedBranchId !== 'ALL' ||
+    stockStatusFilter !== 'ALL' ||
+    categoryFilter !== 'ALL' ||
+    lowStockOnly
+  );
+
+  const clearAllStockFilters = () => {
+    setNameFilter('');
+    setSkuFilter('');
+    setSelectedBranchId('ALL');
+    setStockStatusFilter('ALL');
+    setCategoryFilter('ALL');
+    setLowStockOnly(false);
+    setSearchQuery('');
+  };
 
   // ─── Export Handlers ────────────────────────────────────────────────────────
 
@@ -696,9 +764,9 @@ export const InventoryPage: React.FC = () => {
       {/* ─── TAB 1: STOCK MATRIX ────────────────────────────────────────────── */}
       {activeTab === 'stock' && (
         <div className="bg-white dark:bg-[#18181B] rounded-2xl border border-slate-200 dark:border-[#27272A] shadow-sm overflow-hidden">
-          {/* Sub-toolbar */}
+          {/* Top Actions & Summary Bar */}
           <div className="p-3.5 bg-slate-50/60 dark:bg-[#09090B]/60 border-b border-slate-200 dark:border-[#27272A] flex flex-wrap items-center justify-between gap-3 text-xs">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2.5">
               <button
                 onClick={() => setIsQuickStockModalOpen(true)}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-[#8B5CF6] hover:bg-[#7C3AED] text-white rounded-xl text-xs font-bold shadow-md shadow-[#8B5CF6]/20 transition"
@@ -707,23 +775,133 @@ export const InventoryPage: React.FC = () => {
                 <span>+ Add New SKU & Stock</span>
               </button>
 
-              <label className="flex items-center gap-2 font-semibold text-slate-700 dark:text-[#A1A1AA] cursor-pointer select-none ml-1">
-                <input
-                  type="checkbox"
-                  checked={lowStockOnly}
-                  onChange={(e) => setLowStockOnly(e.target.checked)}
-                  className="rounded border-slate-300 dark:border-[#27272A] text-rose-600 focus:ring-rose-500 w-4 h-4"
-                />
-                <span className="flex items-center gap-1 text-rose-600 dark:text-rose-400 font-bold">
-                  <AlertTriangle className="w-3.5 h-3.5" />
-                  <span>Show Low Stock Only</span>
-                </span>
-              </label>
+              <button
+                onClick={() => handleExportStock('xlsx')}
+                disabled={exportLoading}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] hover:border-[#8B5CF6] text-slate-700 dark:text-[#FAFAFA] rounded-xl text-xs font-semibold transition"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-500" />
+                <span>Export Stock (Excel)</span>
+              </button>
             </div>
 
-            <div className="text-[11px] text-slate-500 dark:text-[#71717A] font-medium">
-              Showing <strong className="text-slate-800 dark:text-[#FAFAFA] font-bold">{inventoryList.length}</strong> items of{' '}
-              <strong className="text-slate-800 dark:text-[#FAFAFA] font-bold">{totalItems}</strong>
+            <div className="flex items-center gap-3 text-[11px] text-slate-500 dark:text-[#71717A] font-medium">
+              <span>
+                Showing <strong className="text-slate-800 dark:text-[#FAFAFA] font-bold">{filteredInventoryList.length}</strong> items of{' '}
+                <strong className="text-slate-800 dark:text-[#FAFAFA] font-bold">{inventoryList.length}</strong>
+              </span>
+              {isAnyStockFilterActive && (
+                <button
+                  onClick={clearAllStockFilters}
+                  className="px-2 py-0.5 rounded-lg bg-rose-500/10 text-rose-600 dark:text-rose-400 hover:bg-rose-500 hover:text-white text-[10px] font-bold transition flex items-center gap-1"
+                >
+                  <X className="w-3 h-3" />
+                  <span>Clear Filters</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Dedicated Multi-Field Filter Bar */}
+          <div className="p-3 bg-white dark:bg-[#18181B] border-b border-slate-100 dark:border-[#27272A] grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5 text-xs">
+            {/* Filter 1: Product Name */}
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Filter by Product Name..."
+                value={nameFilter}
+                onChange={(e) => setNameFilter(e.target.value)}
+                className="w-full pl-8 pr-6 py-1.5 bg-slate-50 dark:bg-[#09090B] border border-slate-200 dark:border-[#27272A] rounded-xl text-xs text-slate-900 dark:text-[#FAFAFA] placeholder-slate-400 focus:outline-none focus:border-[#8B5CF6] transition"
+              />
+              {nameFilter && (
+                <button
+                  onClick={() => setNameFilter('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-[#FAFAFA]"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+
+            {/* Filter 2: SKU */}
+            <div className="relative">
+              <Tag className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Filter by SKU..."
+                value={skuFilter}
+                onChange={(e) => setSkuFilter(e.target.value)}
+                className="w-full pl-8 pr-6 py-1.5 bg-slate-50 dark:bg-[#09090B] border border-slate-200 dark:border-[#27272A] rounded-xl text-xs font-mono uppercase text-slate-900 dark:text-[#FAFAFA] placeholder-slate-400 placeholder:normal-case focus:outline-none focus:border-[#8B5CF6] transition"
+              />
+              {skuFilter && (
+                <button
+                  onClick={() => setSkuFilter('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-[#FAFAFA]"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+
+            {/* Filter 3: Destination Facility / Warehouse */}
+            <div>
+              <select
+                value={selectedBranchId}
+                onChange={(e) => setSelectedBranchId(e.target.value)}
+                className="w-full px-2.5 py-1.5 bg-slate-50 dark:bg-[#09090B] border border-slate-200 dark:border-[#27272A] rounded-xl text-xs font-semibold text-slate-800 dark:text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6] transition"
+              >
+                <option value="ALL">🏢 All Facilities (PRC Stock)</option>
+                <option value="PRC_STOCK">🏢 PRC STOCK (Central Master)</option>
+                {branches.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    [{b.code}] {b.name} ({b.city || 'Depot'})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Filter 4: Stock Health Status */}
+            <div>
+              <select
+                value={stockStatusFilter}
+                onChange={(e) => setStockStatusFilter(e.target.value)}
+                className="w-full px-2.5 py-1.5 bg-slate-50 dark:bg-[#09090B] border border-slate-200 dark:border-[#27272A] rounded-xl text-xs font-semibold text-slate-800 dark:text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6] transition"
+              >
+                <option value="ALL">📊 All Stock Statuses</option>
+                <option value="IN_STOCK">🟢 In Stock (Healthy)</option>
+                <option value="LOW_STOCK">🟡 Low Stock (≤ Reorder Level)</option>
+                <option value="OUT_OF_STOCK">🔴 Out of Stock (0 Qty)</option>
+              </select>
+            </div>
+
+            {/* Filter 5: Category & Quick Low-Stock Toggle */}
+            <div className="flex items-center gap-2">
+              <select
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+                className="w-full px-2.5 py-1.5 bg-slate-50 dark:bg-[#09090B] border border-slate-200 dark:border-[#27272A] rounded-xl text-xs font-semibold text-slate-800 dark:text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6] transition"
+              >
+                <option value="ALL">📂 All Categories</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+
+              <button
+                type="button"
+                onClick={() => setLowStockOnly(!lowStockOnly)}
+                title="Toggle Low Stock Only"
+                className={`p-1.5 rounded-xl border flex items-center justify-center flex-shrink-0 transition-colors ${
+                  lowStockOnly
+                    ? 'bg-rose-500 text-white border-rose-500 shadow-sm'
+                    : 'bg-slate-50 dark:bg-[#09090B] text-slate-500 dark:text-[#71717A] border-slate-200 dark:border-[#27272A] hover:border-rose-500 hover:text-rose-500'
+                }`}
+              >
+                <AlertTriangle className="w-4 h-4" />
+              </button>
             </div>
           </div>
 
@@ -750,16 +928,35 @@ export const InventoryPage: React.FC = () => {
                       <span className="text-xs font-medium">Loading branch inventories...</span>
                     </td>
                   </tr>
-                ) : inventoryList.length === 0 ? (
+                ) : filteredInventoryList.length === 0 ? (
                   <tr>
                     <td colSpan={8} className="py-16 text-center text-slate-400 dark:text-[#71717A]">
                       <Boxes className="w-8 h-8 mx-auto mb-2 text-slate-300 dark:text-[#52525B]" />
-                      <p className="font-semibold text-slate-600 dark:text-[#A1A1AA] text-xs">No inventory records found</p>
-                      <p className="text-[11px] text-slate-400 mt-1">Try clearing filters or recording stock-in purchases.</p>
+                      <p className="font-semibold text-slate-600 dark:text-[#A1A1AA] text-xs">
+                        {isAnyStockFilterActive ? 'No items match the selected filter criteria' : 'No inventory records found'}
+                      </p>
+                      <p className="text-[11px] text-slate-400 mt-1">
+                        {isAnyStockFilterActive ? 'Try adjusting or clearing your search and filters.' : 'Register a new SKU or record a purchase to initialize warehouse stock.'}
+                      </p>
+                      {isAnyStockFilterActive ? (
+                        <button
+                          onClick={clearAllStockFilters}
+                          className="mt-3 px-3 py-1 bg-[#8B5CF6]/10 hover:bg-[#8B5CF6] text-[#8B5CF6] hover:text-white rounded-lg text-xs font-bold transition"
+                        >
+                          Clear Filters
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => setIsQuickStockModalOpen(true)}
+                          className="mt-3 px-3 py-1 bg-[#8B5CF6] text-white hover:bg-[#7C3AED] rounded-lg text-xs font-bold transition"
+                        >
+                          + Add New SKU & Stock
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ) : (
-                  inventoryList.map((item) => {
+                  filteredInventoryList.map((item) => {
                     const availableQty = Math.max(0, (item.quantity || 0) - (item.reservedQuantity || 0));
                     const stockInfo = getStockStatus(availableQty, item.reorderLevel || item.product?.reorderLevel);
                     const productTotalSum = productWiseStockMap.get(item.productId || item.product?.id)?.totalStock ?? (item.product as any)?.stock ?? item.quantity;
@@ -1572,9 +1769,41 @@ export const InventoryPage: React.FC = () => {
           branches={branches}
           categories={categories}
           onClose={() => setIsQuickStockModalOpen(false)}
-          onSuccess={() => {
+          onSuccess={(createdRes) => {
             setIsQuickStockModalOpen(false);
             showToast('New SKU registered and warehouse stock initialized', 'success');
+
+            const prod = createdRes?.product || createdRes?.data?.product || createdRes;
+            if (prod && (prod.id || prod.sku)) {
+              const b = branches.find((br) => br.id === createdRes?.inventory?.branchId) || { id: 'branch-del-01', name: 'Delhi Central Depot', code: 'DEL', city: 'New Delhi' };
+              const newItem: InventoryItem = {
+                id: createdRes?.inventory?.id || `inv-${prod.id || Date.now()}`,
+                productId: prod.id || `prod-${Date.now()}`,
+                branchId: b.id,
+                quantity: Number(prod.stock) || Number(createdRes?.inventory?.quantity) || 0,
+                reservedQuantity: 0,
+                reorderLevel: prod.reorderLevel || 10,
+                product: {
+                  id: prod.id,
+                  name: prod.name,
+                  sku: prod.sku,
+                  price: prod.price || 0,
+                  salePrice: prod.salePrice,
+                  thumbnail: prod.thumbnail,
+                  reorderLevel: prod.reorderLevel || 10,
+                  status: 'ACTIVE',
+                  category: categories.find((c) => c.id === prod.categoryId) || null,
+                },
+                branch: b as any,
+                stockStatus: (Number(prod.stock) || 0) <= 0 ? 'OUT_OF_STOCK' : 'IN_STOCK',
+                stockStatusLabel: (Number(prod.stock) || 0) <= 0 ? 'Out of Stock' : 'In Stock',
+                isLowStock: false,
+                isOutOfStock: (Number(prod.stock) || 0) <= 0,
+              } as any;
+
+              setInventoryList((prev) => [newItem, ...prev.filter((it) => (it.product?.sku || '').toUpperCase() !== (prod.sku || '').toUpperCase())]);
+            }
+
             loadReferenceData();
             fetchTabData();
           }}
@@ -2799,7 +3028,7 @@ interface QuickStockModalProps {
   branches: Branch[];
   categories: any[];
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess: (data?: any) => void;
 }
 
 const QuickStockModal: React.FC<QuickStockModalProps> = ({ branches, categories, onClose, onSuccess }) => {
@@ -2897,7 +3126,7 @@ const QuickStockModal: React.FC<QuickStockModalProps> = ({ branches, categories,
       });
 
       if (res.success) {
-        onSuccess();
+        onSuccess(res.data || res);
       }
     } catch (err: any) {
       setError(err?.message || 'Failed to add SKU and stock entry');
