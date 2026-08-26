@@ -762,7 +762,7 @@ export const InventoryPage: React.FC = () => {
                   inventoryList.map((item) => {
                     const availableQty = Math.max(0, (item.quantity || 0) - (item.reservedQuantity || 0));
                     const stockInfo = getStockStatus(availableQty, item.reorderLevel || item.product?.reorderLevel);
-                    const productTotalSum = productWiseStockMap.get(item.productId || item.product?.id)?.totalStock ?? item.product?.stock ?? item.quantity;
+                    const productTotalSum = productWiseStockMap.get(item.productId || item.product?.id)?.totalStock ?? (item.product as any)?.stock ?? item.quantity;
 
                     return (
                       <tr key={item.id} className="hover:bg-slate-50 dark:hover:bg-[#27272A]/40 transition-colors group">
