@@ -32,10 +32,12 @@ import {
   ArrowDownRight,
   Info,
   Boxes,
+  Pencil,
 } from 'lucide-react';
 import { inventoryApi } from '../../api/adminApi';
 import type { ProductDossier, Branch, Supplier } from '../../types/admin';
 import { getStockStatus } from '../../utils/stockStatus';
+import { SupplierModal } from './SupplierModal';
 
 interface ProductDossierModalProps {
   isOpen: boolean;
@@ -63,6 +65,7 @@ export const ProductDossierModal: React.FC<ProductDossierModalProps> = ({
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [exportLoading, setExportLoading] = useState<boolean>(false);
+  const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
 
   // Filters inside modal
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -71,6 +74,23 @@ export const ProductDossierModal: React.FC<ProductDossierModalProps> = ({
   const [filterVendor, setFilterVendor] = useState<string>('ALL');
   const [filterBranch, setFilterBranch] = useState<string>('ALL');
   const [filterTxType, setFilterTxType] = useState<string>('ALL');
+
+  const handleEditVendor = (vendorName?: string, vendorId?: string) => {
+    const matched = suppliers.find(
+      (s) =>
+        (vendorId && s.id === vendorId) ||
+        (vendorName && s.name.toLowerCase() === vendorName.toLowerCase())
+    );
+    if (matched) {
+      setEditingSupplier(matched);
+    } else if (vendorName) {
+      setEditingSupplier({
+        id: vendorId || 'temp-vendor',
+        name: vendorName,
+        isActive: true,
+      } as Supplier);
+    }
+  };
 
   // Load Dossier
   const fetchDossier = useCallback(async () => {
@@ -531,11 +551,23 @@ export const ProductDossierModal: React.FC<ProductDossierModalProps> = ({
                           <span className="text-slate-500">Catalog Visibility:</span>
                           <span className="font-bold text-emerald-600 dark:text-emerald-400">{prod.isVisible ? 'Publicly Visible' : 'Hidden / Unlisted'}</span>
                         </div>
-                        <div className="flex justify-between py-1.5">
+                        <div className="flex justify-between py-1.5 items-center">
                           <span className="text-slate-500">Primary Associated Vendor:</span>
-                          <span className="font-bold text-slate-900 dark:text-[#FAFAFA]">
-                            {dossier.purchases?.[0]?.vendorName || 'Primary Hardware Supplier'}
-                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-bold text-slate-900 dark:text-[#FAFAFA]">
+                              {dossier.purchases?.[0]?.vendorName || 'Primary Hardware Supplier'}
+                            </span>
+                            {dossier.purchases?.[0]?.vendorName && (
+                              <button
+                                type="button"
+                                onClick={() => handleEditVendor(dossier.purchases?.[0]?.vendorName, dossier.purchases?.[0]?.vendorId)}
+                                className="p-1 text-[#8B5CF6] hover:bg-[#8B5CF6]/10 rounded-lg transition"
+                                title="Edit Vendor Details"
+                              >
+                                <Pencil className="w-3 h-3" />
+                              </button>
+                            )}
+                          </div>
                         </div>
                         <div className="flex justify-between py-1.5">
                           <span className="text-slate-500">Reorder Level Threshold:</span>
@@ -679,12 +711,24 @@ export const ProductDossierModal: React.FC<ProductDossierModalProps> = ({
                                   <span className="font-mono font-bold text-[#8B5CF6]">{p.invoiceNumber}</span>
                                 </td>
                                 <td className="py-3 px-3.5">
-                                  <div className="font-bold text-slate-900 dark:text-[#FAFAFA]">{p.vendorName}</div>
-                                  {(p.vendorPhone || p.vendorEmail) && (
-                                    <div className="text-[10px] text-slate-400 font-mono">
-                                      {p.vendorPhone || p.vendorEmail}
+                                  <div className="flex items-center justify-between gap-1.5">
+                                    <div>
+                                      <div className="font-bold text-slate-900 dark:text-[#FAFAFA]">{p.vendorName}</div>
+                                      {(p.vendorPhone || p.vendorEmail) && (
+                                        <div className="text-[10px] text-slate-400 font-mono">
+                                          {p.vendorPhone || p.vendorEmail}
+                                        </div>
+                                      )}
                                     </div>
-                                  )}
+                                    <button
+                                      type="button"
+                                      onClick={() => handleEditVendor(p.vendorName, p.vendorId)}
+                                      className="p-1 text-slate-400 hover:text-[#8B5CF6] hover:bg-[#8B5CF6]/10 rounded-lg transition"
+                                      title="Edit Vendor Profile"
+                                    >
+                                      <Pencil className="w-3 h-3" />
+                                    </button>
+                                  </div>
                                 </td>
                                 <td className="py-3 px-3.5">
                                   <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-100 dark:bg-[#27272A] border mr-1">
@@ -1043,6 +1087,18 @@ export const ProductDossierModal: React.FC<ProductDossierModalProps> = ({
           </div>
         </div>
       </div>
+
+      {editingSupplier && (
+        <SupplierModal
+          key={editingSupplier.id || 'edit-vendor'}
+          supplier={editingSupplier}
+          onClose={() => setEditingSupplier(null)}
+          onSuccess={() => {
+            setEditingSupplier(null);
+            fetchDossier();
+          }}
+        />
+      )}
     </div>
   );
 };
