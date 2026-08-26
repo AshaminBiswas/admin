@@ -40,6 +40,7 @@ const B2BPricingPage = lazy(() => import("../../pages/B2BPricingPage").then((m) 
 const VariantsPage = lazy(() => import("../../pages/VariantsPage").then((m) => ({ default: m.VariantsPage })));
 const NotificationsPage = lazy(() => import("../../pages/NotificationsPage").then((m) => ({ default: m.NotificationsPage })));
 const InventoryPage = lazy(() => import("../../pages/InventoryPage").then((m) => ({ default: m.InventoryPage })));
+const ProductDossierPage = lazy(() => import("../../pages/ProductDossierPage").then((m) => ({ default: m.ProductDossierPage })));
 const GSTInvoiceHub = lazy(() => import("../../pages/GSTInvoiceHub"));
 
 function ViewLoadingSkeleton() {
@@ -95,6 +96,12 @@ export function AdminLayout() {
     }
     return undefined;
   });
+  const [selectedProductId, setSelectedProductId] = useState<string | undefined>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("prc_admin_selected_product_id") || undefined;
+    }
+    return undefined;
+  });
 
   const toggleSidebar = () => setIsCollapsed((prev) => !prev);
   const toggleMobileSidebar = () => setIsMobileOpen((prev) => !prev);
@@ -141,6 +148,16 @@ export function AdminLayout() {
         return <VariantsPage />;
       case "inventory":
         return <InventoryPage />;
+      case "product-dossier":
+      case "product-audit":
+      case "inventory-dossier":
+      case "audit-hub":
+        return (
+          <ProductDossierPage
+            productId={selectedProductId}
+            onBack={() => setCurrentView("inventory")}
+          />
+        );
       case "allocation":
         return (
           <ModelManagementPage

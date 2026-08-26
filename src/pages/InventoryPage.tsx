@@ -67,7 +67,7 @@ import { SupplierModal } from '../components/inventory/SupplierModal';
 type TabType = 'stock' | 'purchases' | 'transfers' | 'movements' | 'suppliers' | 'branches';
 
 export const InventoryPage: React.FC = () => {
-  const { adminUser } = useAdminAuth();
+  const { adminUser, setCurrentView } = useAdminAuth();
 
   // Active view state
   const [activeTab, setActiveTab] = useState<TabType>('stock');
@@ -1130,12 +1130,13 @@ export const InventoryPage: React.FC = () => {
                         <td
                           className="py-3.5 px-4 cursor-pointer"
                           onClick={() => {
-                            setSelectedDossierProductId(item.productId || item.product?.id || item.id);
-                            setSelectedDossierProductName(item.product?.name || 'Product');
-                            setSelectedDossierSku(item.product?.sku || 'SKU');
-                            setIsDossierModalOpen(true);
+                            const pid = item.productId || item.product?.id || item.id;
+                            if (typeof window !== 'undefined') {
+                              localStorage.setItem('prc_admin_selected_product_id', pid);
+                            }
+                            setCurrentView('product-dossier');
                           }}
-                          title="Click to open full Product Transaction, Purchase & Sales Dossier"
+                          title="Click to open full Product Transaction, Purchase & Sales Audit Hub"
                         >
                           <div className="flex items-center gap-3">
                             {item.product?.thumbnail ? (
@@ -1224,12 +1225,13 @@ export const InventoryPage: React.FC = () => {
                           <div className="flex items-center justify-end gap-1.5">
                             <button
                               onClick={() => {
-                                setSelectedDossierProductId(item.productId || item.product?.id || item.id);
-                                setSelectedDossierProductName(item.product?.name || 'Product');
-                                setSelectedDossierSku(item.product?.sku || 'SKU');
-                                setIsDossierModalOpen(true);
+                                const pid = item.productId || item.product?.id || item.id;
+                                if (typeof window !== 'undefined') {
+                                  localStorage.setItem('prc_admin_selected_product_id', pid);
+                                }
+                                setCurrentView('product-dossier');
                               }}
-                              title="View Complete Product Lifecycle & Audit Dossier"
+                              title="Open Complete Product Traceability & Audit Hub Page"
                               className="px-2 py-1 bg-sky-500/10 hover:bg-sky-500 text-sky-600 dark:text-sky-400 hover:text-white rounded-lg text-[11px] font-bold transition-all flex items-center gap-1"
                             >
                               <Search className="w-3 h-3" />

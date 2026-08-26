@@ -774,6 +774,16 @@ export function ProductsPage() {
                         </td>
                         <td className="py-3 px-4 text-right">
                           <div className="flex items-center justify-end gap-1 opacity-70 group-hover:opacity-100 transition-opacity">
+                            <button
+                              onClick={() => {
+                                localStorage.setItem("prc_admin_selected_product_id", String(p.id));
+                                setCurrentView("product-dossier");
+                              }}
+                              title="Open Product Audit Hub"
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-sky-500 hover:bg-sky-500/10 transition-colors"
+                            >
+                              <Search size={14} />
+                            </button>
                             <button onClick={() => setViewDrawer(p)} title="View Details" className="p-1.5 rounded-lg text-slate-400 hover:text-[#8B5CF6] hover:bg-[#8B5CF6]/10 transition-colors">
                               <Eye size={14} />
                             </button>

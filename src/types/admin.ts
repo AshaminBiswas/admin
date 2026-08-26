@@ -266,6 +266,10 @@ export type AdminView =
   | 'admins'
   | 'admin-detail'
   | 'b2b-pricing'
+  | 'product-dossier'
+  | 'product-audit'
+  | 'inventory-dossier'
+  | 'audit-hub'
   | 'invoice-create'
   | 'invoice-detail';
 
