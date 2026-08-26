@@ -598,6 +598,65 @@ export interface AdminNotificationItem {
   createdAt: string;
 }
 
+export const materialsApi = {
+  /** GET /materials — list materials */
+  list: (params?: { active?: boolean; search?: string; page?: number; limit?: number }) => {
+    const query = new URLSearchParams();
+    if (params?.active !== undefined) query.append('active', String(params.active));
+    if (params?.search) query.append('search', params.search);
+    if (params?.page) query.append('page', String(params.page));
+    if (params?.limit) query.append('limit', String(params.limit));
+    const qs = query.toString();
+    return fetchAdminApi<any>(`/materials${qs ? `?${qs}` : ''}`);
+  },
+
+  /** GET /materials/:idOrSlug — get single material */
+  getById: (idOrSlug: string) => fetchAdminApi<any>(`/materials/${idOrSlug}`),
+
+  /** POST /materials — create new material */
+  create: (payload: {
+    name: string;
+    slug?: string;
+    shortName?: string | null;
+    gradeBadge?: string | null;
+    description?: string | null;
+    tagline?: string | null;
+    specs?: string[];
+    isActive?: boolean;
+    position?: number;
+  }) =>
+    fetchAdminApi<any>('/materials', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  /** PATCH /materials/:id — update material */
+  update: (
+    id: string,
+    payload: {
+      name?: string;
+      slug?: string;
+      shortName?: string | null;
+      gradeBadge?: string | null;
+      description?: string | null;
+      tagline?: string | null;
+      specs?: string[];
+      isActive?: boolean;
+      position?: number;
+    }
+  ) =>
+    fetchAdminApi<any>(`/materials/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+
+  /** DELETE /materials/:id — soft delete material */
+  delete: (id: string) =>
+    fetchAdminApi<any>(`/materials/${id}`, {
+      method: 'DELETE',
+    }),
+};
+
 export const notificationsApi = {
   /** GET /notifications — get paginated notifications for current user */
   list: (params?: { page?: number; limit?: number; isRead?: boolean }) => {

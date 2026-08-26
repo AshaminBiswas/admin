@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useAdminAuth } from "../context/AdminAuthContext";
-import { fetchAdminApi, inventoryApi } from "../api/adminApi";
+import { fetchAdminApi, inventoryApi, materialsApi } from "../api/adminApi";
 import { MediaPickerModal } from "../components/MediaPickerModal";
 import { syncProductUpdate } from "../utils/productSync";
 import {
@@ -29,8 +29,13 @@ import {
   Flame,
   Percent,
   Globe,
+  ArrowUp,
+  ArrowDown,
+  Trash2,
+  Plus,
+  Link2,
 } from "lucide-react";
-import { Category, ProductItem } from "../types/admin";
+import { Category, ProductItem, MaterialItem } from "../types/admin";
 
 export function EditProductPage() {
   const { setCurrentView } = useAdminAuth();
@@ -65,6 +70,15 @@ export function EditProductPage() {
   const [description, setDescription] = useState("");
   const [shortDesc, setShortDesc] = useState("");
   const [categoryId, setCategoryId] = useState("");
+  const [materials, setMaterials] = useState<MaterialItem[]>([]);
+  const [materialId, setMaterialId] = useState("");
+
+  // Frequently Paired Hardware State
+  const [pairedIds, setPairedIds] = useState<string[]>([]);
+  const [pairedProducts, setPairedProducts] = useState<ProductItem[]>([]);
+  const [pairedSearchQuery, setPairedSearchQuery] = useState("");
+  const [pairedSearchResults, setPairedSearchResults] = useState<ProductItem[]>([]);
+  const [isSearchingPaired, setIsSearchingPaired] = useState(false);
   
   // Pricing
   const [price, setPrice] = useState("");
@@ -141,6 +155,30 @@ export function EditProductPage() {
         setStock(prod.stock !== undefined ? String(prod.stock) : "0");
         setReorderLevel(prod.reorderLevel !== undefined ? String(prod.reorderLevel) : "10");
         
+        setMaterialId(prod.materialId ? String(prod.materialId) : "");
+        const initPaired = Array.isArray(prod.frequentlyPairedIds)
+          ? prod.frequentlyPairedIds
+          : Array.isArray(prod.pairedProductIds)
+          ? prod.pairedProductIds
+          : [];
+        setPairedIds(initPaired);
+
+        // Resolve paired products if any exist
+        if (initPaired.length > 0) {
+          fetchAdminApi<any>("/products?limit=300").then((catRes) => {
+            if (catRes && catRes.data) {
+              const allList: ProductItem[] = Array.isArray(catRes.data.products)
+                ? catRes.data.products
+                : Array.isArray(catRes.data)
+                ? catRes.data
+                : [];
+              const map = new Map(allList.map((p) => [String(p.id), p]));
+              const resolved = initPaired.map((pid) => map.get(String(pid))).filter(Boolean) as ProductItem[];
+              setPairedProducts(resolved);
+            }
+          }).catch(() => {});
+        }
+        
         // Fetch true live multi-branch inventory breakdown
         if (prod.id) {
           inventoryApi.getProductInventory(String(prod.id)).then((invRes) => {
@@ -179,7 +217,7 @@ export function EditProductPage() {
           setDimUnit(prod.dimensions.unit || "mm");
         }
         
-        if (prod.attributes && Object.keys(prod.attributes).length > 0) {
+        if (prod.attributes && typeof prod.attributes === "object") {
           const attrs = Object.entries(prod.attributes).map(([k, v]) => {
             const vStr = String(v).toLowerCase();
             return {
@@ -223,7 +261,68 @@ export function EditProductPage() {
       }
     };
     fetchCats();
+
+    materialsApi.list().then((res) => {
+      if (res && res.success && Array.isArray(res.data)) {
+        setMaterials(res.data);
+      }
+    }).catch(() => {});
   }, [categories.length]);
+
+  const handleSearchPaired = async (q: string) => {
+    setPairedSearchQuery(q);
+    if (!q.trim() || q.trim().length < 2) {
+      setPairedSearchResults([]);
+      return;
+    }
+    setIsSearchingPaired(true);
+    try {
+      const res = await fetchAdminApi<any>(`/products?search=${encodeURIComponent(q.trim())}&limit=12`);
+      if (res && res.data) {
+        const list: ProductItem[] = Array.isArray(res.data.products)
+          ? res.data.products
+          : Array.isArray(res.data)
+          ? res.data
+          : [];
+        const currentProdId = initialProduct?.id ? String(initialProduct.id) : "";
+        const filtered = list.filter(
+          (p) => String(p.id) !== currentProdId && !pairedIds.includes(String(p.id))
+        );
+        setPairedSearchResults(filtered);
+      }
+    } catch {
+      setPairedSearchResults([]);
+    } finally {
+      setIsSearchingPaired(false);
+    }
+  };
+
+  const handleAddPairedProduct = (prodToAdd: ProductItem) => {
+    const pid = String(prodToAdd.id);
+    if (!pairedIds.includes(pid)) {
+      setPairedIds((prev) => [...prev, pid]);
+      setPairedProducts((prev) => [...prev, prodToAdd]);
+    }
+    setPairedSearchQuery("");
+    setPairedSearchResults([]);
+  };
+
+  const handleRemovePairedProduct = (pid: string) => {
+    setPairedIds((prev) => prev.filter((id) => id !== pid));
+    setPairedProducts((prev) => prev.filter((p) => String(p.id) !== pid));
+  };
+
+  const handleMovePaired = (index: number, direction: "up" | "down") => {
+    const targetIndex = direction === "up" ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= pairedProducts.length) return;
+
+    const newPairedProds = [...pairedProducts];
+    const [moved] = newPairedProds.splice(index, 1);
+    newPairedProds.splice(targetIndex, 0, moved);
+
+    setPairedProducts(newPairedProds);
+    setPairedIds(newPairedProds.map((p) => String(p.id)));
+  };
 
   const handleAttributeChange = (index: number, field: 'key' | 'value', val: string) => {
     const newAttrs = [...attributes];
@@ -317,6 +416,9 @@ export function EditProductPage() {
       description: description.trim() || undefined,
       shortDesc: shortDesc.trim() || undefined,
       categoryId: categoryId || undefined,
+      materialId: materialId || null,
+      frequentlyPairedIds: pairedIds,
+      pairedProductIds: pairedIds,
       price: Number(price) || 0,
       salePrice: salesPrice ? Number(salesPrice) : undefined,
       offerPrice: offerPrice ? Number(offerPrice) : undefined,
@@ -739,6 +841,138 @@ export function EditProductPage() {
             </div>
           </div>
 
+          {/* Frequently Paired Hardware Recommendations */}
+          <div className={sectionContainerClass}>
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-[#27272A]">
+              <div>
+                <h4 className={sectionTitleClass}>
+                  <Link2 size={16} className="text-amber-500" />
+                  Frequently Paired Hardware
+                </h4>
+                <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
+                  Complementary hardware recommended to customers on the product details page.
+                </p>
+              </div>
+              <span className="text-xs font-mono px-2 py-0.5 rounded bg-amber-500/10 text-amber-500 border border-amber-500/20 font-bold">
+                {pairedProducts.length} Paired
+              </span>
+            </div>
+
+            {/* Product Search for Pairing */}
+            <div className="space-y-2 pt-2">
+              <label className={labelClass}>Search & Add Complementary Products</label>
+              <div className="relative">
+                <SearchIcon size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-zinc-500" />
+                <input
+                  type="text"
+                  value={pairedSearchQuery}
+                  onChange={(e) => handleSearchPaired(e.target.value)}
+                  placeholder="Type product name or SKU to pair..."
+                  className={`${inputClass} pl-9`}
+                />
+                {isSearchingPaired && (
+                  <Loader2 size={16} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-amber-500 animate-spin" />
+                )}
+              </div>
+
+              {/* Search Results Dropdown */}
+              {pairedSearchResults.length > 0 && (
+                <div className="p-2 rounded-xl bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] shadow-xl max-h-56 overflow-y-auto space-y-1.5 z-10">
+                  {pairedSearchResults.map((prod) => (
+                    <div
+                      key={prod.id}
+                      className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-zinc-800/60 transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <img
+                          src={prod.thumbnail || prod.image || "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=100&fit=crop"}
+                          alt={prod.name}
+                          className="w-9 h-9 rounded-lg object-cover border border-slate-200 dark:border-zinc-700 bg-slate-100 dark:bg-zinc-800"
+                        />
+                        <div>
+                          <div className="text-xs font-bold text-slate-800 dark:text-zinc-100 line-clamp-1">{prod.name}</div>
+                          <div className="text-[10px] text-slate-400 dark:text-zinc-500 font-mono">SKU: {prod.sku} • ₹{Number(prod.price).toLocaleString("en-IN")}</div>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleAddPairedProduct(prod)}
+                        className="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-bold flex items-center gap-1 transition-all"
+                      >
+                        <Plus size={12} /> Add
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Selected Paired Products List with Reordering */}
+            <div className="space-y-2 pt-2">
+              <label className={labelClass}>Currently Paired Hardware List (Display Order)</label>
+              {pairedProducts.length === 0 ? (
+                <div className="p-6 text-center rounded-xl border border-dashed border-slate-200 dark:border-zinc-800 text-slate-400 dark:text-zinc-500 text-xs">
+                  No paired hardware selected. Search above to add complementary hinges, handles, screws, or accessories.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {pairedProducts.map((p, index) => (
+                    <div
+                      key={p.id}
+                      className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 dark:bg-[#121214] border border-slate-200 dark:border-[#27272A] group"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="w-5 text-center font-mono text-xs text-slate-400 dark:text-zinc-600 font-bold">
+                          #{index + 1}
+                        </span>
+                        <img
+                          src={p.thumbnail || p.image || "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=100&fit=crop"}
+                          alt={p.name}
+                          className="w-10 h-10 rounded-lg object-cover border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800"
+                        />
+                        <div>
+                          <div className="text-xs font-bold text-slate-800 dark:text-zinc-100 line-clamp-1">{p.name}</div>
+                          <div className="text-[10px] text-slate-400 dark:text-zinc-500 font-mono">
+                            SKU: {p.sku} • ₹{Number(p.price).toLocaleString("en-IN")}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          disabled={index === 0}
+                          onClick={() => handleMovePaired(index, "up")}
+                          className="p-1.5 rounded-lg text-slate-400 dark:text-zinc-500 hover:text-slate-700 dark:hover:text-zinc-200 disabled:opacity-30 disabled:hover:text-slate-400 hover:bg-slate-200 dark:hover:bg-zinc-800 transition-colors"
+                          title="Move Up"
+                        >
+                          <ArrowUp size={14} />
+                        </button>
+                        <button
+                          type="button"
+                          disabled={index === pairedProducts.length - 1}
+                          onClick={() => handleMovePaired(index, "down")}
+                          className="p-1.5 rounded-lg text-slate-400 dark:text-zinc-500 hover:text-slate-700 dark:hover:text-zinc-200 disabled:opacity-30 disabled:hover:text-slate-400 hover:bg-slate-200 dark:hover:bg-zinc-800 transition-colors"
+                          title="Move Down"
+                        >
+                          <ArrowDown size={14} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleRemovePairedProduct(String(p.id))}
+                          className="p-1.5 rounded-lg text-slate-400 dark:text-zinc-500 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-colors ml-1"
+                          title="Remove from paired"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* SEO Info */}
           <div className={sectionContainerClass}>
             <h4 className={sectionTitleClass}><SearchIcon size={16} className="text-teal-500" />Search Engine Optimization (SEO) & Metadata</h4>
@@ -770,6 +1004,20 @@ export function EditProductPage() {
                 <option value="">Select Category</option>
                 {categories.map((c) => (
                   <option key={c.id} value={String(c.id)}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className={labelClass}>
+                Material <span className="text-zinc-400 dark:text-zinc-500 text-[11px] font-normal">(Single source of truth)</span>
+              </label>
+              <select value={materialId} onChange={(e) => setMaterialId(e.target.value)} className={inputClass}>
+                <option value="">Select Material (Optional)</option>
+                {materials.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name} {m.gradeBadge ? `(${m.gradeBadge})` : ""}
+                  </option>
                 ))}
               </select>
             </div>

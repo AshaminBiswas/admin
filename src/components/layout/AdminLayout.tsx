@@ -23,6 +23,7 @@ const AdminSecuritySettings = lazy(() => import("../settings/AdminSecuritySettin
 
 // Specialized pages
 const CategoriesPage = lazy(() => import("../../pages/CategoriesPage").then((m) => ({ default: m.CategoriesPage })));
+const MaterialsPage = lazy(() => import("../../pages/MaterialsPage").then((m) => ({ default: m.MaterialsPage })));
 const CreateCategoryPage = lazy(() => import("../../pages/CreateCategoryPage").then((m) => ({ default: m.CreateCategoryPage })));
 const EditCategoryPage = lazy(() => import("../../pages/EditCategoryPage").then((m) => ({ default: m.EditCategoryPage })));
 const BannersPage = lazy(() => import("../../pages/BannersPage").then((m) => ({ default: m.BannersPage })));
@@ -137,6 +138,8 @@ export function AdminLayout() {
         return <EditProductPage />;
       case "categories":
         return <CategoriesPage />;
+      case "materials":
+        return <MaterialsPage />;
       case "categories-create":
         return <CreateCategoryPage />;
       case "categories-edit":

@@ -85,6 +85,22 @@ export interface DashboardStats {
   ordersGrowth: number;
 }
 
+export interface MaterialItem {
+  id: string;
+  name: string;
+  slug: string;
+  shortName?: string | null;
+  gradeBadge?: string | null;
+  description?: string | null;
+  tagline?: string | null;
+  specs?: string[];
+  isActive: boolean;
+  position: number;
+  productCount?: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface ProductItem {
   id: string | number;
   name: string;
@@ -92,6 +108,11 @@ export interface ProductItem {
   sku: string;
   category?: string;
   categoryId?: string;
+  materialId?: string | null;
+  materialObj?: { id: string; name: string; slug: string; shortName?: string; gradeBadge?: string };
+  frequentlyPairedIds?: string[];
+  pairedProductIds?: string[];
+  frequentlyPairedProducts?: ProductItem[];
   price: number;
   salesPrice?: number;
   salePrice?: number;
@@ -246,6 +267,7 @@ export type AdminView =
   | 'invoice'
   | 'inventory'
   | 'logistics'
+  | 'materials'
   | 'notification'
   | 'notifications'
   | 'orders'

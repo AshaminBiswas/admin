@@ -33,6 +33,7 @@ import {
   Heart,
   Navigation,
   Coins,
+  Sparkles,
   X,
 } from "lucide-react";
 import { useAdminAuth } from "../../context/AdminAuthContext";
@@ -73,6 +74,7 @@ export function AdminSidebar({
     { id: "inventory", label: "Multi-Branch Stock", category: "Catalog & Stock", icon: <Boxes size={18} />, badge: "DEL/KOL" },
     { id: "products", label: "Products Catalog", category: "Catalog & Stock", icon: <Package size={18} />, badge: "5" },
     { id: "categories", label: "Categories", category: "Catalog & Stock", icon: <FolderTree size={18} /> },
+    { id: "materials", label: "Materials Master", category: "Catalog & Stock", icon: <Sparkles size={18} /> },
     { id: "variants", label: "Variants & SKUs", category: "Catalog & Stock", icon: <Sliders size={18} /> },
     { id: "allocation", label: "Stock Allocation", category: "Catalog & Stock", icon: <Layers size={18} /> },
     { id: "upload", label: "Media Uploads", category: "Catalog & Stock", icon: <Upload size={18} /> },

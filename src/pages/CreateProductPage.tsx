@@ -29,7 +29,8 @@ import {
   Copy,
   Check,
 } from "lucide-react";
-import { Category } from "../types/admin";
+import { Category, MaterialItem } from "../types/admin";
+import { materialsApi } from "../api/adminApi";
 
 export function CreateProductPage() {
   const { setCurrentView } = useAdminAuth();
@@ -70,6 +71,8 @@ export function CreateProductPage() {
   const [description, setDescription] = useState("");
   const [shortDesc, setShortDesc] = useState("");
   const [categoryId, setCategoryId] = useState("");
+  const [materials, setMaterials] = useState<MaterialItem[]>([]);
+  const [materialId, setMaterialId] = useState("");
   
   // Pricing
   const [price, setPrice] = useState("");
@@ -140,6 +143,11 @@ export function CreateProductPage() {
       }
     };
     fetchCats();
+    materialsApi.list().then((res) => {
+      if (res && res.success && Array.isArray(res.data)) {
+        setMaterials(res.data);
+      }
+    }).catch(() => {});
   }, []);
 
   const handleAttributeChange = (index: number, field: 'key' | 'value', val: string) => {
@@ -400,6 +408,7 @@ export function CreateProductPage() {
       description: description.trim() || undefined,
       shortDesc: shortDesc.trim() || undefined,
       categoryId: categoryId || undefined,
+      materialId: materialId || undefined,
       price: Number(price) || 0,
       salePrice: salesPrice ? Number(salesPrice) : undefined,
       offerPrice: offerPrice ? Number(offerPrice) : undefined,
@@ -923,6 +932,20 @@ export function CreateProductPage() {
                 <option value="">Select Category</option>
                 {categories.map((c) => (
                   <option key={c.id} value={String(c.id)}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className={labelClass}>
+                Material <span className="text-zinc-400 dark:text-zinc-500 text-[11px] font-normal">(Single source of truth)</span>
+              </label>
+              <select value={materialId} onChange={(e) => setMaterialId(e.target.value)} className={inputClass}>
+                <option value="">Select Material (Optional)</option>
+                {materials.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name} {m.gradeBadge ? `(${m.gradeBadge})` : ""}
+                  </option>
                 ))}
               </select>
             </div>
