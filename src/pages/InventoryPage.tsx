@@ -88,6 +88,9 @@ export const InventoryPage: React.FC = () => {
   const [lowStockOnly, setLowStockOnly] = useState<boolean>(false);
   const [transferStatusFilter, setTransferStatusFilter] = useState<string>('ALL');
   const [movementTypeFilter, setMovementTypeFilter] = useState<string>('ALL');
+  const [purchaseSupplierFilter, setPurchaseSupplierFilter] = useState<string>('ALL');
+  const [purchaseSearch, setPurchaseSearch] = useState<string>('');
+  const [movementSearch, setMovementSearch] = useState<string>('');
   const [skuFilter, setSkuFilter] = useState<string>('');
   const [nameFilter, setNameFilter] = useState<string>('');
   const [stockStatusFilter, setStockStatusFilter] = useState<string>('ALL');
@@ -175,6 +178,7 @@ export const InventoryPage: React.FC = () => {
           page,
           limit: 20,
           branchId: branchParam,
+          supplierId: purchaseSupplierFilter !== 'ALL' ? purchaseSupplierFilter : undefined,
           search: debouncedSearch || undefined,
         });
         if (res.success) {
@@ -235,7 +239,7 @@ export const InventoryPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [activeTab, selectedBranchId, page, debouncedSearch, lowStockOnly, transferStatusFilter, movementTypeFilter]);
+  }, [activeTab, selectedBranchId, page, debouncedSearch, lowStockOnly, transferStatusFilter, movementTypeFilter, purchaseSupplierFilter]);
 
   useEffect(() => {
     fetchTabData();
@@ -340,6 +344,82 @@ export const InventoryPage: React.FC = () => {
     setCategoryFilter('ALL');
     setLowStockOnly(false);
     setSearchQuery('');
+  };
+
+  // Dedicated Multi-Field Filter Evaluation for Procurement (Purchases)
+  const filteredPurchasesList = useMemo(() => {
+    return purchasesList.filter((p) => {
+      // 1. Supplier filter
+      if (purchaseSupplierFilter !== 'ALL' && p.supplierId !== purchaseSupplierFilter) {
+        return false;
+      }
+      // 2. Facility filter
+      if (selectedBranchId !== 'ALL' && selectedBranchId !== 'PRC_STOCK') {
+        if (p.branchId !== selectedBranchId && p.branch?.id !== selectedBranchId && (p.branch?.code || '').toUpperCase() !== selectedBranchId) {
+          return false;
+        }
+      }
+      // 3. Purchase search query
+      if (purchaseSearch.trim()) {
+        const q = purchaseSearch.trim().toLowerCase();
+        const invMatch = (p.invoiceNumber || '').toLowerCase().includes(q);
+        const supMatch = (p.supplier?.name || '').toLowerCase().includes(q);
+        const notesMatch = (p.notes || '').toLowerCase().includes(q);
+        const itemMatch = p.items?.some((it: any) =>
+          (it.product?.name || '').toLowerCase().includes(q) || (it.product?.sku || '').toLowerCase().includes(q)
+        );
+        if (!invMatch && !supMatch && !notesMatch && !itemMatch) return false;
+      }
+      return true;
+    });
+  }, [purchasesList, purchaseSupplierFilter, selectedBranchId, purchaseSearch]);
+
+  const isAnyPurchaseFilterActive = Boolean(
+    purchaseSupplierFilter !== 'ALL' ||
+    (selectedBranchId !== 'ALL' && selectedBranchId !== 'PRC_STOCK') ||
+    purchaseSearch.trim()
+  );
+
+  const clearAllPurchaseFilters = () => {
+    setPurchaseSupplierFilter('ALL');
+    setPurchaseSearch('');
+  };
+
+  // Dedicated Multi-Field Filter Evaluation for Stock Movement Ledger
+  const filteredMovementsList = useMemo(() => {
+    return movementsList.filter((m) => {
+      // 1. Movement type filter
+      if (movementTypeFilter !== 'ALL' && m.type !== movementTypeFilter) {
+        return false;
+      }
+      // 2. Facility filter
+      if (selectedBranchId !== 'ALL' && selectedBranchId !== 'PRC_STOCK') {
+        if (m.branchId !== selectedBranchId && m.branch?.id !== selectedBranchId && (m.branch?.code || '').toUpperCase() !== selectedBranchId) {
+          return false;
+        }
+      }
+      // 3. Movement search query
+      if (movementSearch.trim()) {
+        const q = movementSearch.trim().toLowerCase();
+        const prodMatch = (m.product?.name || '').toLowerCase().includes(q);
+        const skuMatch = (m.product?.sku || '').toLowerCase().includes(q);
+        const notesMatch = (m.notes || '').toLowerCase().includes(q);
+        const refMatch = (m.referenceId || '').toLowerCase().includes(q);
+        if (!prodMatch && !skuMatch && !notesMatch && !refMatch) return false;
+      }
+      return true;
+    });
+  }, [movementsList, movementTypeFilter, selectedBranchId, movementSearch]);
+
+  const isAnyMovementFilterActive = Boolean(
+    movementTypeFilter !== 'ALL' ||
+    (selectedBranchId !== 'ALL' && selectedBranchId !== 'PRC_STOCK') ||
+    movementSearch.trim()
+  );
+
+  const clearAllMovementFilters = () => {
+    setMovementTypeFilter('ALL');
+    setMovementSearch('');
   };
 
   // ─── Export Handlers ────────────────────────────────────────────────────────
@@ -1097,123 +1177,204 @@ export const InventoryPage: React.FC = () => {
 
       {/* ─── TAB 2: PURCHASES (STOCK-IN) ────────────────────────────────────── */}
       {activeTab === 'purchases' && (
-        <div className="bg-white dark:bg-[#18181B] rounded-2xl border border-slate-200 dark:border-[#27272A] shadow-sm overflow-hidden">
-          <div className="p-3.5 bg-slate-50/60 dark:bg-[#09090B]/60 border-b border-slate-200 dark:border-[#27272A] flex flex-wrap items-center justify-between gap-3 text-xs">
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setIsPurchaseModalOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-[#8B5CF6] hover:bg-[#7C3AED] text-white rounded-xl text-xs font-bold shadow-md shadow-[#8B5CF6]/20 transition"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Record New Purchase</span>
-              </button>
-              <button
-                onClick={handleExportPurchases}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] hover:border-[#8B5CF6] text-slate-700 dark:text-[#FAFAFA] rounded-xl text-xs font-semibold transition"
-              >
-                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-500" />
-                <span>Export Purchases (Excel)</span>
-              </button>
+        <div className="space-y-3">
+          {/* Multi-Field Filter Bar for Purchases */}
+          <div className="bg-white dark:bg-[#18181B] rounded-2xl border border-slate-200 dark:border-[#27272A] p-3.5 shadow-sm space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-2 flex-1">
+                {/* Search input */}
+                <div className="relative min-w-[200px] max-w-xs flex-1">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    placeholder="Search by Invoice #, Supplier, Item..."
+                    value={purchaseSearch}
+                    onChange={(e) => setPurchaseSearch(e.target.value)}
+                    className="w-full pl-8 pr-3 py-1.5 bg-slate-50 dark:bg-[#09090B] border border-slate-200 dark:border-[#27272A] rounded-xl text-xs text-slate-800 dark:text-[#FAFAFA] placeholder-slate-400 focus:outline-none focus:border-[#8B5CF6]"
+                  />
+                  {purchaseSearch && (
+                    <button onClick={() => setPurchaseSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                      <X className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Facility / Branch Selector */}
+                <select
+                  value={selectedBranchId}
+                  onChange={(e) => setSelectedBranchId(e.target.value)}
+                  className="px-2.5 py-1.5 bg-slate-50 dark:bg-[#09090B] border border-slate-200 dark:border-[#27272A] rounded-xl text-xs font-semibold text-slate-700 dark:text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
+                >
+                  <option value="ALL">All Receiving Facilities</option>
+                  <option value="PRC_STOCK">🏢 PRC STOCK (Central)</option>
+                  {branches.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      [{b.code}] {b.name}
+                    </option>
+                  ))}
+                </select>
+
+                {/* Supplier Selector */}
+                <select
+                  value={purchaseSupplierFilter}
+                  onChange={(e) => setPurchaseSupplierFilter(e.target.value)}
+                  className="px-2.5 py-1.5 bg-slate-50 dark:bg-[#09090B] border border-slate-200 dark:border-[#27272A] rounded-xl text-xs font-semibold text-slate-700 dark:text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
+                >
+                  <option value="ALL">All Suppliers / Vendors</option>
+                  {suppliers.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+
+                {isAnyPurchaseFilterActive && (
+                  <button
+                    onClick={clearAllPurchaseFilters}
+                    className="flex items-center gap-1 px-2.5 py-1.5 bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-500/20 rounded-xl text-xs font-semibold transition"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                    <span>Clear Filters</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Action CTAs */}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setIsPurchaseModalOpen(true)}
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 bg-[#8B5CF6] hover:bg-[#7C3AED] text-white rounded-xl text-xs font-bold shadow-md shadow-[#8B5CF6]/20 transition active:scale-95"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>+ Record New Purchase</span>
+                </button>
+                <button
+                  onClick={handleExportPurchases}
+                  disabled={exportLoading}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] hover:border-[#8B5CF6] text-slate-700 dark:text-[#FAFAFA] rounded-xl text-xs font-semibold transition shadow-sm"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-500" />
+                  <span>Export (Excel)</span>
+                </button>
+              </div>
             </div>
-            <div className="text-[11px] text-slate-500 dark:text-[#71717A] font-medium">
-              Total Purchases: <strong className="text-slate-800 dark:text-[#FAFAFA] font-bold">{purchasesList.length}</strong>
+
+            <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-[#71717A] pt-1 border-t border-slate-100 dark:border-[#27272A]/60">
+              <div>
+                Showing <strong className="text-slate-800 dark:text-[#FAFAFA] font-bold">{filteredPurchasesList.length}</strong> of <strong className="text-slate-800 dark:text-[#FAFAFA] font-bold">{purchasesList.length}</strong> purchases
+              </div>
+              {isAnyPurchaseFilterActive && (
+                <span className="text-[#8B5CF6] font-semibold">Active filters applied</span>
+              )}
             </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs min-w-[750px]">
-              <thead className="bg-slate-50 dark:bg-[#09090B] text-slate-500 dark:text-[#71717A] border-b border-slate-200 dark:border-[#27272A] font-bold uppercase tracking-wider text-[10px]">
-                <tr>
-                  <th className="py-3.5 px-4">Purchase Date</th>
-                  <th className="py-3.5 px-4">Invoice / Ref #</th>
-                  <th className="py-3.5 px-4">Vendor / Supplier</th>
-                  <th className="py-3.5 px-4">Receiving Branch</th>
-                  <th className="py-3.5 px-4 text-center">Items Count</th>
-                  <th className="py-3.5 px-4 text-right">Total Amount (₹)</th>
-                  <th className="py-3.5 px-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-[#27272A] text-slate-800 dark:text-[#FAFAFA]">
-                {loading ? (
+          {/* Table */}
+          <div className="bg-white dark:bg-[#18181B] rounded-2xl border border-slate-200 dark:border-[#27272A] shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs min-w-[750px]">
+                <thead className="bg-slate-50 dark:bg-[#09090B] text-slate-500 dark:text-[#71717A] border-b border-slate-200 dark:border-[#27272A] font-bold uppercase tracking-wider text-[10px]">
                   <tr>
-                    <td colSpan={7} className="py-16 text-center text-slate-400">
-                      <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-[#8B5CF6]" />
-                      <span className="text-xs font-medium">Loading purchase history...</span>
-                    </td>
+                    <th className="py-3.5 px-4">Purchase Date</th>
+                    <th className="py-3.5 px-4">Invoice / Ref #</th>
+                    <th className="py-3.5 px-4">Vendor / Supplier</th>
+                    <th className="py-3.5 px-4">Receiving Branch</th>
+                    <th className="py-3.5 px-4 text-center">Items Count</th>
+                    <th className="py-3.5 px-4 text-right">Total Amount (₹)</th>
+                    <th className="py-3.5 px-4 text-right">Actions</th>
                   </tr>
-                ) : purchasesList.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="py-16 text-center text-slate-400 dark:text-[#71717A]">
-                      <ShoppingBag className="w-8 h-8 mx-auto mb-2 text-slate-300 dark:text-[#52525B]" />
-                      <p className="font-semibold text-slate-600 dark:text-[#A1A1AA] text-xs">No purchases recorded yet</p>
-                      <p className="text-[11px] text-slate-400 mt-1">Click "+ Record New Purchase" to track your first stock-in.</p>
-                    </td>
-                  </tr>
-                ) : (
-                  purchasesList.map((p) => (
-                    <tr key={p.id} className="hover:bg-slate-50 dark:hover:bg-[#27272A]/40 transition-colors">
-                      <td className="py-3.5 px-4 font-mono text-slate-600 dark:text-[#A1A1AA]">
-                        {new Date(p.purchaseDate || p.createdAt).toLocaleDateString('en-IN', {
-                          day: '2-digit',
-                          month: 'short',
-                          year: 'numeric',
-                        })}
-                      </td>
-                      <td className="py-3.5 px-4 font-mono font-bold text-slate-900 dark:text-[#FAFAFA]">
-                        {p.invoiceNumber || <span className="text-slate-400 italic">No Invoice #</span>}
-                      </td>
-                      <td className="py-3.5 px-4">
-                        <div className="font-bold text-slate-900 dark:text-[#FAFAFA]">{p.supplier?.name || 'Unknown Vendor'}</div>
-                        {p.supplier?.phone && (
-                          <div className="text-[10px] text-slate-500 dark:text-[#71717A] font-mono">{p.supplier.phone}</div>
-                        )}
-                      </td>
-                      <td className="py-3.5 px-4">
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold font-mono bg-slate-100 dark:bg-[#27272A] text-slate-700 dark:text-[#FAFAFA] border border-slate-200 dark:border-[#3F3F46]">
-                          {p.branch?.code || 'DEL'}
-                        </span>
-                        <span className="ml-2 font-semibold text-slate-700 dark:text-[#FAFAFA]">{p.branch?.name || 'Delhi HQ'}</span>
-                      </td>
-                      <td className="py-3.5 px-4 text-center font-mono font-bold text-slate-800 dark:text-[#FAFAFA]">
-                        {p.items?.length || 0}
-                      </td>
-                      <td className="py-3.5 px-4 text-right font-mono font-extrabold text-slate-900 dark:text-[#FAFAFA]">
-                        ₹{Number(p.totalAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="py-3.5 px-4 text-right">
-                        <button
-                          onClick={() => setSelectedPurchase(p)}
-                          className="px-2.5 py-1 bg-slate-100 dark:bg-[#27272A] hover:bg-[#8B5CF6] hover:text-white text-slate-700 dark:text-[#FAFAFA] rounded-lg text-[11px] font-semibold transition-all"
-                        >
-                          View Breakdown
-                        </button>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-[#27272A] text-slate-800 dark:text-[#FAFAFA]">
+                  {loading ? (
+                    <tr>
+                      <td colSpan={7} className="py-16 text-center text-slate-400">
+                        <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-[#8B5CF6]" />
+                        <span className="text-xs font-medium">Loading purchase history...</span>
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                  ) : filteredPurchasesList.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="py-16 text-center text-slate-400 dark:text-[#71717A]">
+                        <ShoppingBag className="w-8 h-8 mx-auto mb-2 text-slate-300 dark:text-[#52525B]" />
+                        <p className="font-semibold text-slate-600 dark:text-[#A1A1AA] text-xs">No purchase records found</p>
+                        {isAnyPurchaseFilterActive ? (
+                          <button
+                            onClick={clearAllPurchaseFilters}
+                            className="mt-2 text-xs text-[#8B5CF6] hover:underline font-semibold"
+                          >
+                            Clear applied filters to see all purchases
+                          </button>
+                        ) : (
+                          <p className="text-[11px] text-slate-400 mt-1">Click "+ Record New Purchase" to track your first stock-in.</p>
+                        )}
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredPurchasesList.map((p) => (
+                      <tr key={p.id} className="hover:bg-slate-50 dark:hover:bg-[#27272A]/40 transition-colors">
+                        <td className="py-3.5 px-4 font-mono text-slate-600 dark:text-[#A1A1AA]">
+                          {new Date(p.purchaseDate || p.createdAt).toLocaleDateString('en-IN', {
+                            day: '2-digit',
+                            month: 'short',
+                            year: 'numeric',
+                          })}
+                        </td>
+                        <td className="py-3.5 px-4 font-mono font-bold text-slate-900 dark:text-[#FAFAFA]">
+                          {p.invoiceNumber || <span className="text-slate-400 italic">No Invoice #</span>}
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <div className="font-bold text-slate-900 dark:text-[#FAFAFA]">{p.supplier?.name || 'Unknown Vendor'}</div>
+                          {p.supplier?.phone && (
+                            <div className="text-[10px] text-slate-500 dark:text-[#71717A] font-mono">{p.supplier.phone}</div>
+                          )}
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold font-mono bg-slate-100 dark:bg-[#27272A] text-slate-700 dark:text-[#FAFAFA] border border-slate-200 dark:border-[#3F3F46]">
+                            {p.branch?.code || 'DEL'}
+                          </span>
+                          <span className="ml-2 font-semibold text-slate-700 dark:text-[#FAFAFA]">{p.branch?.name || 'Delhi HQ'}</span>
+                        </td>
+                        <td className="py-3.5 px-4 text-center font-mono font-bold text-slate-800 dark:text-[#FAFAFA]">
+                          {p.items?.length || 0}
+                        </td>
+                        <td className="py-3.5 px-4 text-right font-mono font-extrabold text-slate-900 dark:text-[#FAFAFA]">
+                          ₹{Number(p.totalAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="py-3.5 px-4 text-right">
+                          <button
+                            onClick={() => setSelectedPurchase(p)}
+                            className="px-2.5 py-1 bg-slate-100 dark:bg-[#27272A] hover:bg-[#8B5CF6] hover:text-white text-slate-700 dark:text-[#FAFAFA] rounded-lg text-[11px] font-semibold transition-all"
+                          >
+                            View Breakdown
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
 
-          <div className="px-4 py-3 bg-slate-50 dark:bg-[#09090B] border-t border-slate-200 dark:border-[#27272A] flex items-center justify-between text-xs text-slate-500 dark:text-[#71717A]">
-            <span>
-              Page <strong className="text-slate-700 dark:text-[#FAFAFA] font-bold">{page}</strong> of <strong className="text-slate-700 dark:text-[#FAFAFA] font-bold">{totalPages}</strong>
-            </span>
-            <div className="flex items-center gap-2">
-              <button
-                disabled={page <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                className="px-3 py-1.5 bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] text-slate-700 dark:text-[#A1A1AA] hover:border-[#8B5CF6] hover:text-[#8B5CF6] rounded-lg font-semibold disabled:opacity-40 transition-colors"
-              >
-                Previous
-              </button>
-              <button
-                disabled={page >= totalPages}
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                className="px-3 py-1.5 bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] text-slate-700 dark:text-[#A1A1AA] hover:border-[#8B5CF6] hover:text-[#8B5CF6] rounded-lg font-semibold disabled:opacity-40 transition-colors"
-              >
-                Next
-              </button>
+            <div className="px-4 py-3 bg-slate-50 dark:bg-[#09090B] border-t border-slate-200 dark:border-[#27272A] flex items-center justify-between text-xs text-slate-500 dark:text-[#71717A]">
+              <span>
+                Page <strong className="text-slate-700 dark:text-[#FAFAFA] font-bold">{page}</strong> of <strong className="text-slate-700 dark:text-[#FAFAFA] font-bold">{totalPages}</strong>
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  disabled={page <= 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  className="px-3 py-1.5 bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] text-slate-700 dark:text-[#A1A1AA] hover:border-[#8B5CF6] hover:text-[#8B5CF6] rounded-lg font-semibold disabled:opacity-40 transition-colors"
+                >
+                  Previous
+                </button>
+                <button
+                  disabled={page >= totalPages}
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  className="px-3 py-1.5 bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] text-slate-700 dark:text-[#A1A1AA] hover:border-[#8B5CF6] hover:text-[#8B5CF6] rounded-lg font-semibold disabled:opacity-40 transition-colors"
+                >
+                  Next
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1392,130 +1553,209 @@ export const InventoryPage: React.FC = () => {
 
       {/* ─── TAB 4: MOVEMENT AUDIT LEDGER ────────────────────────────────────── */}
       {activeTab === 'movements' && (
-        <div className="bg-white dark:bg-[#18181B] rounded-2xl border border-slate-200 dark:border-[#27272A] shadow-sm overflow-hidden">
-          <div className="p-3.5 bg-slate-50/60 dark:bg-[#09090B]/60 border-b border-slate-200 dark:border-[#27272A] flex flex-wrap items-center justify-between gap-3 text-xs">
-            <div className="flex items-center gap-2">
-              <select
-                value={movementTypeFilter}
-                onChange={(e) => setMovementTypeFilter(e.target.value)}
-                className="px-2.5 py-1.5 bg-white dark:bg-[#09090B] border border-slate-200 dark:border-[#27272A] rounded-xl text-xs font-semibold text-slate-700 dark:text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
-              >
-                <option value="ALL">All Movement Types</option>
-                <option value="PURCHASE_IN">PURCHASE_IN (Stock-In)</option>
-                <option value="TRANSFER_IN">TRANSFER_IN (Transfer Credit)</option>
-                <option value="TRANSFER_OUT">TRANSFER_OUT (Transfer Debit)</option>
-                <option value="SALE_OUT">SALE_OUT (Order Purchase)</option>
-                <option value="ADJUSTMENT_IN">ADJUSTMENT_IN</option>
-                <option value="ADJUSTMENT_OUT">ADJUSTMENT_OUT</option>
-                <option value="DAMAGE">DAMAGE (Write-off)</option>
-                <option value="RETURN_IN">RETURN_IN</option>
-              </select>
+        <div className="space-y-3">
+          {/* Multi-Field Filter Bar for Ledger */}
+          <div className="bg-white dark:bg-[#18181B] rounded-2xl border border-slate-200 dark:border-[#27272A] p-3.5 shadow-sm space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-2 flex-1">
+                {/* Search input */}
+                <div className="relative min-w-[200px] max-w-xs flex-1">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    placeholder="Search ledger by SKU, Name, Notes..."
+                    value={movementSearch}
+                    onChange={(e) => setMovementSearch(e.target.value)}
+                    className="w-full pl-8 pr-3 py-1.5 bg-slate-50 dark:bg-[#09090B] border border-slate-200 dark:border-[#27272A] rounded-xl text-xs text-slate-800 dark:text-[#FAFAFA] placeholder-slate-400 focus:outline-none focus:border-[#8B5CF6]"
+                  />
+                  {movementSearch && (
+                    <button onClick={() => setMovementSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                      <X className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
 
-              <button
-                onClick={handleExportMovements}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] hover:border-[#8B5CF6] text-slate-700 dark:text-[#FAFAFA] rounded-xl text-xs font-semibold transition"
-              >
-                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-500" />
-                <span>Export Ledger (Excel)</span>
-              </button>
+                {/* Movement Type Filter */}
+                <select
+                  value={movementTypeFilter}
+                  onChange={(e) => setMovementTypeFilter(e.target.value)}
+                  className="px-2.5 py-1.5 bg-slate-50 dark:bg-[#09090B] border border-slate-200 dark:border-[#27272A] rounded-xl text-xs font-semibold text-slate-700 dark:text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
+                >
+                  <option value="ALL">All Movement Types</option>
+                  <option value="PURCHASE_IN">PURCHASE_IN (Stock-In)</option>
+                  <option value="TRANSFER_IN">TRANSFER_IN (Transfer Credit)</option>
+                  <option value="TRANSFER_OUT">TRANSFER_OUT (Transfer Debit)</option>
+                  <option value="SALE_OUT">SALE_OUT (Order Purchase)</option>
+                  <option value="ADJUSTMENT_IN">ADJUSTMENT_IN (+ Adjustment)</option>
+                  <option value="ADJUSTMENT_OUT">ADJUSTMENT_OUT (- Adjustment)</option>
+                  <option value="DAMAGE">DAMAGE (Write-off)</option>
+                  <option value="RETURN_IN">RETURN_IN (Customer Return)</option>
+                </select>
+
+                {/* Facility Selector */}
+                <select
+                  value={selectedBranchId}
+                  onChange={(e) => setSelectedBranchId(e.target.value)}
+                  className="px-2.5 py-1.5 bg-slate-50 dark:bg-[#09090B] border border-slate-200 dark:border-[#27272A] rounded-xl text-xs font-semibold text-slate-700 dark:text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
+                >
+                  <option value="ALL">All Facilities</option>
+                  <option value="PRC_STOCK">🏢 PRC STOCK (Central)</option>
+                  {branches.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      [{b.code}] {b.name}
+                    </option>
+                  ))}
+                </select>
+
+                {isAnyMovementFilterActive && (
+                  <button
+                    onClick={clearAllMovementFilters}
+                    className="flex items-center gap-1 px-2.5 py-1.5 bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-500/20 rounded-xl text-xs font-semibold transition"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                    <span>Clear Filters</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Action CTAs */}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    setQuickActionProduct(null);
+                    setIsAdjustmentModalOpen(true);
+                  }}
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 bg-[#8B5CF6] hover:bg-[#7C3AED] text-white rounded-xl text-xs font-bold shadow-md shadow-[#8B5CF6]/20 transition active:scale-95"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>+ Adjust Stock (Ledger)</span>
+                </button>
+                <button
+                  onClick={handleExportMovements}
+                  disabled={exportLoading}
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] hover:border-[#8B5CF6] text-slate-700 dark:text-[#FAFAFA] rounded-xl text-xs font-semibold transition shadow-sm"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-500" />
+                  <span>Export Ledger (Excel)</span>
+                </button>
+              </div>
             </div>
-            <div className="text-[11px] text-slate-500 dark:text-[#71717A] font-medium">
-              Transactions: <strong className="text-slate-800 dark:text-[#FAFAFA] font-bold">{movementsList.length}</strong>
+
+            <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-[#71717A] pt-1 border-t border-slate-100 dark:border-[#27272A]/60">
+              <div>
+                Showing <strong className="text-slate-800 dark:text-[#FAFAFA] font-bold">{filteredMovementsList.length}</strong> of <strong className="text-slate-800 dark:text-[#FAFAFA] font-bold">{movementsList.length}</strong> ledger transactions
+              </div>
+              {isAnyMovementFilterActive && (
+                <span className="text-[#8B5CF6] font-semibold">Active filters applied</span>
+              )}
             </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs min-w-[750px]">
-              <thead className="bg-slate-50 dark:bg-[#09090B] text-slate-500 dark:text-[#71717A] border-b border-slate-200 dark:border-[#27272A] font-bold uppercase tracking-wider text-[10px]">
-                <tr>
-                  <th className="py-3.5 px-4">Timestamp</th>
-                  <th className="py-3.5 px-4">Product Details</th>
-                  <th className="py-3.5 px-4">Facility</th>
-                  <th className="py-3.5 px-4">Transaction Type</th>
-                  <th className="py-3.5 px-4 text-right">Qty Changed</th>
-                  <th className="py-3.5 px-4 text-center">Stock Audit</th>
-                  <th className="py-3.5 px-4">Notes / Reference</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-[#27272A] text-slate-800 dark:text-[#FAFAFA]">
-                {loading ? (
+          {/* Table */}
+          <div className="bg-white dark:bg-[#18181B] rounded-2xl border border-slate-200 dark:border-[#27272A] shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs min-w-[750px]">
+                <thead className="bg-slate-50 dark:bg-[#09090B] text-slate-500 dark:text-[#71717A] border-b border-slate-200 dark:border-[#27272A] font-bold uppercase tracking-wider text-[10px]">
                   <tr>
-                    <td colSpan={7} className="py-16 text-center text-slate-400">
-                      <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-[#8B5CF6]" />
-                      <span className="text-xs font-medium">Loading immutable ledger entries...</span>
-                    </td>
+                    <th className="py-3.5 px-4">Timestamp</th>
+                    <th className="py-3.5 px-4">Product Details</th>
+                    <th className="py-3.5 px-4">Facility</th>
+                    <th className="py-3.5 px-4">Transaction Type</th>
+                    <th className="py-3.5 px-4 text-right">Qty Changed</th>
+                    <th className="py-3.5 px-4 text-center">Stock Audit</th>
+                    <th className="py-3.5 px-4">Notes / Reference</th>
                   </tr>
-                ) : movementsList.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="py-16 text-center text-slate-400 dark:text-[#71717A]">
-                      <History className="w-8 h-8 mx-auto mb-2 text-slate-300 dark:text-[#52525B]" />
-                      <p className="font-semibold text-slate-600 dark:text-[#A1A1AA] text-xs">No stock movements recorded yet</p>
-                    </td>
-                  </tr>
-                ) : (
-                  movementsList.map((m) => {
-                    const isPositive = ['PURCHASE_IN', 'TRANSFER_IN', 'ADJUSTMENT_IN', 'RETURN_IN'].includes(m.type);
-
-                    return (
-                      <tr key={m.id} className="hover:bg-slate-50 dark:hover:bg-[#27272A]/40 transition-colors">
-                        <td className="py-3.5 px-4 font-mono text-slate-600 dark:text-[#A1A1AA] whitespace-nowrap">
-                          {new Date(m.createdAt).toLocaleString('en-IN', {
-                            day: '2-digit',
-                            month: 'short',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
-                        </td>
-
-                        <td className="py-3.5 px-4">
-                          <div className="font-bold text-slate-900 dark:text-[#FAFAFA]">{m.product?.name || 'Product'}</div>
-                          <div className="text-[10px] text-slate-500 dark:text-[#71717A] font-mono">SKU: {m.product?.sku}</div>
-                        </td>
-
-                        <td className="py-3.5 px-4">
-                          <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-slate-100 dark:bg-[#27272A] text-slate-700 dark:text-[#FAFAFA] border border-slate-200 dark:border-[#3F3F46] mr-1.5">
-                            {m.branch?.code || 'DEL'}
-                          </span>
-                          <span className="font-semibold text-slate-700 dark:text-[#FAFAFA]">{m.branch?.name}</span>
-                        </td>
-
-                        <td className="py-3.5 px-4">
-                          <span
-                            className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold font-mono border ${
-                              m.type === 'PURCHASE_IN'
-                                ? 'bg-emerald-100 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20'
-                                : m.type.startsWith('TRANSFER')
-                                ? 'bg-sky-100 dark:bg-sky-500/10 text-sky-700 dark:text-sky-400 border border-sky-200 dark:border-sky-500/20'
-                                : m.type === 'SALE_OUT'
-                                ? 'bg-[#8B5CF6]/10 dark:bg-[#8B5CF6]/20 text-[#8B5CF6] dark:text-[#A855F7] border border-[#8B5CF6]/20'
-                                : m.type === 'DAMAGE'
-                                ? 'bg-rose-100 dark:bg-rose-500/10 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-500/20'
-                                : 'bg-slate-100 dark:bg-[#27272A] text-slate-700 dark:text-[#FAFAFA] border border-slate-200 dark:border-[#3F3F46]'
-                            }`}
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-[#27272A] text-slate-800 dark:text-[#FAFAFA]">
+                  {loading ? (
+                    <tr>
+                      <td colSpan={7} className="py-16 text-center text-slate-400">
+                        <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-[#8B5CF6]" />
+                        <span className="text-xs font-medium">Loading immutable ledger entries...</span>
+                      </td>
+                    </tr>
+                  ) : filteredMovementsList.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="py-16 text-center text-slate-400 dark:text-[#71717A]">
+                        <History className="w-8 h-8 mx-auto mb-2 text-slate-300 dark:text-[#52525B]" />
+                        <p className="font-semibold text-slate-600 dark:text-[#A1A1AA] text-xs">No stock movements recorded</p>
+                        {isAnyMovementFilterActive ? (
+                          <button
+                            onClick={clearAllMovementFilters}
+                            className="mt-2 text-xs text-[#8B5CF6] hover:underline font-semibold"
                           >
-                            {m.type}
-                          </span>
-                        </td>
+                            Clear applied filters to view complete audit trail
+                          </button>
+                        ) : (
+                          <p className="text-[11px] text-slate-400 mt-1">Stock adjustments and purchases will automatically appear here.</p>
+                        )}
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredMovementsList.map((m) => {
+                      const isPositive = ['PURCHASE_IN', 'TRANSFER_IN', 'ADJUSTMENT_IN', 'RETURN_IN'].includes(m.type);
 
-                        <td className="py-3.5 px-4 text-right font-mono font-extrabold">
-                          <span className={isPositive ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}>
-                            {isPositive ? `+${m.quantity}` : `-${m.quantity}`}
-                          </span>
-                        </td>
+                      return (
+                        <tr key={m.id} className="hover:bg-slate-50 dark:hover:bg-[#27272A]/40 transition-colors">
+                          <td className="py-3.5 px-4 font-mono text-slate-600 dark:text-[#A1A1AA] whitespace-nowrap">
+                            {new Date(m.createdAt).toLocaleString('en-IN', {
+                              day: '2-digit',
+                              month: 'short',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </td>
 
-                        <td className="py-3.5 px-4 text-center font-mono text-slate-600 dark:text-[#A1A1AA] font-medium">
-                          {m.previousQty} → <strong className="text-slate-900 dark:text-[#FAFAFA] font-bold">{m.newQty}</strong>
-                        </td>
+                          <td className="py-3.5 px-4">
+                            <div className="font-bold text-slate-900 dark:text-[#FAFAFA]">{m.product?.name || 'Product'}</div>
+                            <div className="text-[10px] text-slate-500 dark:text-[#71717A] font-mono">SKU: {m.product?.sku}</div>
+                          </td>
 
-                        <td className="py-3.5 px-4 text-slate-600 dark:text-[#A1A1AA] max-w-sm line-clamp-1">
-                          {m.notes || m.referenceType || '—'}
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
+                          <td className="py-3.5 px-4">
+                            <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-slate-100 dark:bg-[#27272A] text-slate-700 dark:text-[#FAFAFA] border border-slate-200 dark:border-[#3F3F46] mr-1.5">
+                              {m.branch?.code || 'DEL'}
+                            </span>
+                            <span className="font-semibold text-slate-700 dark:text-[#FAFAFA]">{m.branch?.name || 'Delhi Depot'}</span>
+                          </td>
+
+                          <td className="py-3.5 px-4">
+                            <span
+                              className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold font-mono border ${
+                                m.type === 'PURCHASE_IN'
+                                  ? 'bg-emerald-100 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20'
+                                  : m.type.startsWith('TRANSFER')
+                                  ? 'bg-sky-100 dark:bg-sky-500/10 text-sky-700 dark:text-sky-400 border border-sky-200 dark:border-sky-500/20'
+                                  : m.type === 'SALE_OUT'
+                                  ? 'bg-[#8B5CF6]/10 dark:bg-[#8B5CF6]/20 text-[#8B5CF6] dark:text-[#A855F7] border border-[#8B5CF6]/20'
+                                  : m.type === 'DAMAGE'
+                                  ? 'bg-rose-100 dark:bg-rose-500/10 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-500/20'
+                                  : 'bg-slate-100 dark:bg-[#27272A] text-slate-700 dark:text-[#FAFAFA] border border-slate-200 dark:border-[#3F3F46]'
+                              }`}
+                            >
+                              {m.type}
+                            </span>
+                          </td>
+
+                          <td className="py-3.5 px-4 text-right font-mono font-extrabold">
+                            <span className={isPositive ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}>
+                              {isPositive ? `+${m.quantity}` : `-${m.quantity}`}
+                            </span>
+                          </td>
+
+                          <td className="py-3.5 px-4 text-center font-mono text-slate-600 dark:text-[#A1A1AA] font-medium">
+                            {m.previousQty ?? 0} → <strong className="text-slate-900 dark:text-[#FAFAFA] font-bold">{m.newQty ?? m.quantity}</strong>
+                          </td>
+
+                          <td className="py-3.5 px-4 text-slate-600 dark:text-[#A1A1AA] max-w-sm line-clamp-1">
+                            {m.notes || m.referenceType || '—'}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
@@ -1909,8 +2149,9 @@ interface PurchaseItemRowState {
 }
 
 const PurchaseModal: React.FC<PurchaseModalProps> = ({ branches, suppliers, products, onClose, onSuccess }) => {
-  const [branchId, setBranchId] = useState<string>(branches[0]?.id || '');
-  const [supplierId, setSupplierId] = useState<string>(suppliers[0]?.id || '');
+  const [branchId, setBranchId] = useState<string>(branches[0]?.id || 'PRC_STOCK');
+  const [supplierId, setSupplierId] = useState<string>(suppliers[0]?.id || (suppliers.length > 0 ? suppliers[0].id : 'CUSTOM'));
+  const [customSupplierName, setCustomSupplierName] = useState<string>('');
   const [invoiceNumber, setInvoiceNumber] = useState<string>('');
   const [purchaseDate, setPurchaseDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [notes, setNotes] = useState<string>('');
@@ -1962,8 +2203,11 @@ const PurchaseModal: React.FC<PurchaseModalProps> = ({ branches, suppliers, prod
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!branchId || !supplierId) {
-      setError('Please select branch and supplier');
+    const effectiveBranchId = branchId || 'PRC_STOCK';
+    const effectiveSupplierId = supplierId === 'CUSTOM' || !supplierId ? (suppliers[0]?.id || 'sup-default') : supplierId;
+
+    if (!effectiveBranchId) {
+      setError('Please select receiving destination facility');
       return;
     }
     if (items.length === 0) {
@@ -1987,11 +2231,11 @@ const PurchaseModal: React.FC<PurchaseModalProps> = ({ branches, suppliers, prod
       setSubmitting(true);
       setError(null);
       const res = await inventoryApi.createPurchase({
-        branchId,
-        supplierId,
+        branchId: effectiveBranchId,
+        supplierId: effectiveSupplierId,
         invoiceNumber: invoiceNumber || undefined,
         purchaseDate,
-        notes: notes || undefined,
+        notes: (notes || '') + (supplierId === 'CUSTOM' && customSupplierName ? ` | Supplier: ${customSupplierName}` : ''),
         items: items.map((i) => ({
           ...(i.mode === 'catalog' && i.productId
             ? { productId: i.productId }
@@ -2045,9 +2289,10 @@ const PurchaseModal: React.FC<PurchaseModalProps> = ({ branches, suppliers, prod
                 required
                 className="w-full px-3 py-2 bg-slate-50 dark:bg-[#09090B] border border-slate-200 dark:border-[#27272A] rounded-xl text-xs font-semibold text-slate-800 dark:text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
               >
+                <option value="PRC_STOCK">🏢 PRC STOCK (Central Allocation)</option>
                 {branches.map((b) => (
                   <option key={b.id} value={b.id}>
-                    {b.name} ({b.code})
+                    [{b.code}] {b.name}
                   </option>
                 ))}
               </select>
@@ -2058,7 +2303,6 @@ const PurchaseModal: React.FC<PurchaseModalProps> = ({ branches, suppliers, prod
               <select
                 value={supplierId}
                 onChange={(e) => setSupplierId(e.target.value)}
-                required
                 className="w-full px-3 py-2 bg-slate-50 dark:bg-[#09090B] border border-slate-200 dark:border-[#27272A] rounded-xl text-xs font-semibold text-slate-800 dark:text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
               >
                 {suppliers.map((s) => (
@@ -2066,8 +2310,23 @@ const PurchaseModal: React.FC<PurchaseModalProps> = ({ branches, suppliers, prod
                     {s.name} {s.gstNumber ? `(GST: ${s.gstNumber})` : ''}
                   </option>
                 ))}
+                <option value="CUSTOM">+ New / Direct Vendor</option>
               </select>
             </div>
+
+            {supplierId === 'CUSTOM' && (
+              <div className="md:col-span-2">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-[#A1A1AA] mb-1">Vendor / Supplier Name *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Acme Industrial Wholesale Corp"
+                  value={customSupplierName}
+                  onChange={(e) => setCustomSupplierName(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-[#09090B] border border-slate-200 dark:border-[#27272A] rounded-xl text-xs font-medium text-slate-800 dark:text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
+                />
+              </div>
+            )}
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-[#A1A1AA] mb-1">Vendor Invoice / Reference #</label>
@@ -2592,9 +2851,10 @@ const AdjustmentModal: React.FC<AdjustmentModalProps> = ({ branches, products, t
               required
               className="w-full px-3 py-2 bg-slate-50 dark:bg-[#09090B] border border-slate-200 dark:border-[#27272A] rounded-xl text-xs font-semibold text-slate-800 dark:text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
             >
+              <option value="PRC_STOCK">🏢 PRC STOCK (Central Allocation)</option>
               {branches.map((b) => (
                 <option key={b.id} value={b.id}>
-                  {b.name} ({b.code})
+                  [{b.code}] {b.name}
                 </option>
               ))}
             </select>
