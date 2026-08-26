@@ -743,3 +743,169 @@ export interface StockMovement {
   branch?: { id: string; name: string; code: string; city?: string | null };
 }
 
+/* ─── Product Traceability Dossier Types ─────────────────────────────────── */
+
+export interface ProductDossierPurchase {
+  id: string;
+  purchaseId?: string;
+  invoiceNumber: string;
+  purchaseDate: string;
+  vendorId?: string;
+  vendorName: string;
+  vendorPhone: string;
+  vendorEmail: string;
+  vendorGst: string;
+  branchId?: string;
+  branchName: string;
+  branchCode: string;
+  quantity: number;
+  receivedQuantity: number;
+  pendingQuantity: number;
+  unitPurchasePrice: number;
+  totalPurchaseValue: number;
+  status: string;
+  createdByName: string;
+  receivedByName: string;
+  notes: string;
+}
+
+export interface ProductDossierSale {
+  id: string;
+  orderId?: string;
+  orderNumber: string;
+  orderDate: string;
+  customerId?: string;
+  customerName: string;
+  customerEmail: string;
+  customerPhone: string;
+  companyName: string;
+  customerGstin: string;
+  city: string;
+  state: string;
+  quantity: number;
+  salePricePerUnit: number;
+  totalSaleValue: number;
+  discountAmount: number;
+  taxAmount: number;
+  finalOrderValue: number;
+  orderStatus: string;
+  paymentStatus: string;
+  paymentMethod: string;
+  processedByName: string;
+  acceptedAt?: string;
+  fulfillmentStatus: string;
+  trackingNumber?: string;
+  carrier?: string;
+  shippedAt?: string;
+  deliveredAt?: string;
+}
+
+export interface ProductDossierMovement {
+  id: string;
+  type: StockMovementType;
+  quantity: number;
+  previousQty: number;
+  newQty: number;
+  referenceType: string;
+  referenceId: string;
+  notes: string;
+  branchId: string;
+  branchName: string;
+  branchCode: string;
+  performedByName: string;
+  createdAt: string;
+}
+
+export interface ProductDossierTimelineEvent {
+  id: string;
+  timestamp: string;
+  stage: 'PRODUCT_LISTED' | 'PURCHASE_RECEIVED' | 'STOCK_MOVEMENT' | 'CUSTOMER_ORDER' | 'ORDER_FULFILLED' | 'STOCK_TRANSFER';
+  title: string;
+  description: string;
+  actor: string;
+  reference: string;
+  quantityChange?: string;
+  priceValue?: number;
+  badgeColor: string;
+  metadata?: any;
+}
+
+export interface ProductDossierCustomer {
+  customerId?: string;
+  customerName: string;
+  email: string;
+  phone: string;
+  companyName: string;
+  gstin: string;
+  city: string;
+  state: string;
+  totalUnitsPurchased: number;
+  totalSpendOnSku: number;
+  ordersCount: number;
+  lastOrderDate: string;
+}
+
+export interface ProductDossierBranchInventory {
+  id: string;
+  branchId: string;
+  branchName: string;
+  branchCode: string;
+  city: string;
+  state: string;
+  quantity: number;
+  reservedQuantity: number;
+  availableQuantity: number;
+  reorderLevel: number;
+}
+
+export interface ProductDossierSummaryMetrics {
+  totalPurchasedQty: number;
+  totalPurchaseExpenditure: number;
+  avgPurchaseCost: number;
+  totalSoldQty: number;
+  totalSalesRevenue: number;
+  avgSellingPrice: number;
+  estimatedProfitMarginPercent: number;
+  currentStockTotal: number;
+  inventoryValueAtCost: number;
+  inventoryValueAtRetail: number;
+}
+
+export interface ProductDossier {
+  product: {
+    id: string;
+    name: string;
+    slug: string;
+    sku: string;
+    categoryName: string;
+    categorySlug?: string;
+    brand: string;
+    price: number;
+    salePrice?: number | null;
+    offerPrice?: number | null;
+    stock: number;
+    reorderLevel: number;
+    status: string;
+    isVisible: boolean;
+    warranty: string;
+    weight?: number | null;
+    dimensions?: any;
+    attributes?: any;
+    specification?: any;
+    thumbnail?: string | null;
+    images?: string[];
+    colours?: string[];
+    createdAt: string;
+    updatedAt: string;
+    listedByName: string;
+  };
+  branchInventories: ProductDossierBranchInventory[];
+  purchases: ProductDossierPurchase[];
+  sales: ProductDossierSale[];
+  stockMovements: ProductDossierMovement[];
+  timeline: ProductDossierTimelineEvent[];
+  customerDirectory: ProductDossierCustomer[];
+  summaryMetrics: ProductDossierSummaryMetrics;
+}
+
+

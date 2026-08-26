@@ -40,6 +40,9 @@ import {
   Home,
   Tag,
   ChevronRight as BreadArrow,
+  Pencil,
+  Trash2,
+  Edit,
 } from 'lucide-react';
 import { inventoryApi, fetchAdminApi } from '../api/adminApi';
 import type {
@@ -55,6 +58,9 @@ import { useAdminAuth } from '../context/AdminAuthContext';
 import { useDebounce } from '../hooks/useDebounce';
 import { ProductPicker, SelectedProductSummary } from '../components/common/ProductPicker';
 import { getStockStatus } from '../utils/stockStatus';
+import { ProductDossierModal } from '../components/inventory/ProductDossierModal';
+import { StockEditModal } from '../components/inventory/StockEditModal';
+import { MovementEditModal } from '../components/inventory/MovementEditModal';
 
 type TabType = 'stock' | 'purchases' | 'transfers' | 'movements' | 'suppliers' | 'branches';
 
@@ -104,9 +110,26 @@ export const InventoryPage: React.FC = () => {
   const [isBranchModalOpen, setIsBranchModalOpen] = useState<boolean>(false);
   const [isQuickStockModalOpen, setIsQuickStockModalOpen] = useState<boolean>(false);
   const [editingBranch, setEditingBranch] = useState<Branch | null>(null);
+  const [editingStockItem, setEditingStockItem] = useState<InventoryItem | null>(null);
+  const [editingPurchase, setEditingPurchase] = useState<Purchase | null>(null);
+  const [editingTransfer, setEditingTransfer] = useState<StockTransfer | null>(null);
+  const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
+  const [editingMovement, setEditingMovement] = useState<StockMovement | null>(null);
+  const [movementModalMode, setMovementModalMode] = useState<'edit_notes' | 'reverse'>('edit_notes');
+  const [deleteConfirmation, setDeleteConfirmation] = useState<{
+    type: 'inventory' | 'purchase' | 'transfer' | 'supplier' | 'branch';
+    id: string;
+    name: string;
+  } | null>(null);
   const [selectedPurchase, setSelectedPurchase] = useState<Purchase | null>(null);
   const [selectedTransfer, setSelectedTransfer] = useState<StockTransfer | null>(null);
   const [categories, setCategories] = useState<any[]>([]);
+
+  // Product Traceability Dossier Modal State
+  const [selectedDossierProductId, setSelectedDossierProductId] = useState<string | null>(null);
+  const [selectedDossierProductName, setSelectedDossierProductName] = useState<string>('');
+  const [selectedDossierSku, setSelectedDossierSku] = useState<string>('');
+  const [isDossierModalOpen, setIsDossierModalOpen] = useState<boolean>(false);
 
   // Quick Action Target Item
   const [quickActionProduct, setQuickActionProduct] = useState<{ id: string; name: string; sku: string; branchId: string; currentQty: number } | null>(null);
@@ -117,6 +140,35 @@ export const InventoryPage: React.FC = () => {
   const showToast = (text: string, type: 'success' | 'error' | 'info' = 'success') => {
     setToastMessage({ text, type });
     setTimeout(() => setToastMessage(null), 4500);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteConfirmation) return;
+    const { type, id, name } = deleteConfirmation;
+    try {
+      if (type === 'inventory') {
+        await inventoryApi.deleteInventoryItem(id);
+        showToast(`SKU '${name}' de-allocated from facility`, 'success');
+      } else if (type === 'purchase') {
+        await inventoryApi.deletePurchase(id, true);
+        showToast(`Purchase order '${name}' voided and inventory rolled back`, 'success');
+      } else if (type === 'transfer') {
+        await inventoryApi.deleteStockTransfer(id);
+        showToast(`Transfer '${name}' deleted successfully`, 'success');
+      } else if (type === 'supplier') {
+        await inventoryApi.deleteSupplier(id);
+        showToast(`Supplier '${name}' deactivated successfully`, 'success');
+        loadReferenceData();
+      } else if (type === 'branch') {
+        await inventoryApi.deleteBranch(id);
+        showToast(`Facility '${name}' deactivated successfully`, 'success');
+        loadReferenceData();
+      }
+      setDeleteConfirmation(null);
+      fetchTabData();
+    } catch (err: any) {
+      showToast(err?.message || `Failed to delete ${type}`, 'error');
+    }
   };
 
   // ─── Initial Reference Data Loading ──────────────────────────────────────────
@@ -1043,23 +1095,35 @@ export const InventoryPage: React.FC = () => {
 
                     return (
                       <tr key={item.id} className="hover:bg-slate-50 dark:hover:bg-[#27272A]/40 transition-colors group">
-                        <td className="py-3.5 px-4">
+                        <td
+                          className="py-3.5 px-4 cursor-pointer"
+                          onClick={() => {
+                            setSelectedDossierProductId(item.productId || item.product?.id || item.id);
+                            setSelectedDossierProductName(item.product?.name || 'Product');
+                            setSelectedDossierSku(item.product?.sku || 'SKU');
+                            setIsDossierModalOpen(true);
+                          }}
+                          title="Click to open full Product Transaction, Purchase & Sales Dossier"
+                        >
                           <div className="flex items-center gap-3">
                             {item.product?.thumbnail ? (
                               <img
                                 src={item.product.thumbnail}
                                 alt={item.product.name}
-                                className="w-9 h-9 rounded-lg object-cover border border-slate-200 dark:border-[#27272A] flex-shrink-0"
+                                className="w-9 h-9 rounded-lg object-cover border border-slate-200 dark:border-[#27272A] flex-shrink-0 group-hover:border-[#8B5CF6] transition-colors"
                               />
                             ) : (
-                              <div className="w-9 h-9 rounded-lg bg-[#8B5CF6]/10 text-[#8B5CF6] border border-[#8B5CF6]/20 flex items-center justify-center flex-shrink-0">
+                              <div className="w-9 h-9 rounded-lg bg-[#8B5CF6]/10 text-[#8B5CF6] border border-[#8B5CF6]/20 flex items-center justify-center flex-shrink-0 group-hover:bg-[#8B5CF6] group-hover:text-white transition-colors">
                                 <Package className="w-4 h-4" />
                               </div>
                             )}
                             <div>
-                              <span className="font-bold text-slate-900 dark:text-[#FAFAFA] line-clamp-1 block hover:text-[#8B5CF6]">
-                                {item.product?.name || 'Unnamed Product'}
-                              </span>
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-bold text-slate-900 dark:text-[#FAFAFA] line-clamp-1 block group-hover:text-[#8B5CF6] transition-colors">
+                                  {item.product?.name || 'Unnamed Product'}
+                                </span>
+                                <ArrowUpRight className="w-3 h-3 text-slate-400 opacity-0 group-hover:opacity-100 group-hover:text-[#8B5CF6] transition-opacity" />
+                              </div>
                               <div className="flex items-center gap-2 mt-0.5 text-[10px] text-slate-500 dark:text-[#71717A] font-mono">
                                 <span>SKU: {item.product?.sku || 'N/A'}</span>
                                 {item.product?.category && (
@@ -1125,22 +1189,63 @@ export const InventoryPage: React.FC = () => {
                         </td>
 
                         <td className="py-3.5 px-4 text-right">
-                          <button
-                            onClick={() => {
-                              setQuickActionProduct({
-                                id: item.productId,
-                                name: item.product?.name || 'Product',
-                                sku: item.product?.sku || 'SKU',
-                                branchId: item.branchId,
-                                currentQty: item.quantity,
-                              });
-                              setIsAdjustmentModalOpen(true);
-                            }}
-                            title="Quick Adjust Stock"
-                            className="px-2.5 py-1 bg-[#8B5CF6]/10 hover:bg-[#8B5CF6] text-[#8B5CF6] hover:text-white rounded-lg text-[11px] font-bold transition-all"
-                          >
-                            ⚡ Adjust
-                          </button>
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              onClick={() => {
+                                setSelectedDossierProductId(item.productId || item.product?.id || item.id);
+                                setSelectedDossierProductName(item.product?.name || 'Product');
+                                setSelectedDossierSku(item.product?.sku || 'SKU');
+                                setIsDossierModalOpen(true);
+                              }}
+                              title="View Complete Product Lifecycle & Audit Dossier"
+                              className="px-2 py-1 bg-sky-500/10 hover:bg-sky-500 text-sky-600 dark:text-sky-400 hover:text-white rounded-lg text-[11px] font-bold transition-all flex items-center gap-1"
+                            >
+                              <Search className="w-3 h-3" />
+                              <span>Audit Hub</span>
+                            </button>
+
+                            <button
+                              onClick={() => {
+                                setEditingStockItem(item);
+                              }}
+                              title="Edit Stock Matrix Record & Safety Thresholds"
+                              className="px-2 py-1 bg-amber-500/10 hover:bg-amber-500 text-amber-600 dark:text-amber-400 hover:text-white rounded-lg text-[11px] font-bold transition-all flex items-center gap-1"
+                            >
+                              <Pencil className="w-3 h-3" />
+                              <span>Edit</span>
+                            </button>
+
+                            <button
+                              onClick={() => {
+                                setQuickActionProduct({
+                                  id: item.productId,
+                                  name: item.product?.name || 'Product',
+                                  sku: item.product?.sku || 'SKU',
+                                  branchId: item.branchId,
+                                  currentQty: item.quantity,
+                                });
+                                setIsAdjustmentModalOpen(true);
+                              }}
+                              title="Quick Adjust Stock"
+                              className="px-2 py-1 bg-[#8B5CF6]/10 hover:bg-[#8B5CF6] text-[#8B5CF6] hover:text-white rounded-lg text-[11px] font-bold transition-all"
+                            >
+                              ⚡ Adjust
+                            </button>
+
+                            <button
+                              onClick={() => {
+                                setDeleteConfirmation({
+                                  type: 'inventory',
+                                  id: item.id,
+                                  name: item.product?.name || item.product?.sku || 'SKU Allocation',
+                                });
+                              }}
+                              title="De-allocate item from facility"
+                              className="p-1 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -1341,12 +1446,42 @@ export const InventoryPage: React.FC = () => {
                           ₹{Number(p.totalAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                         </td>
                         <td className="py-3.5 px-4 text-right">
-                          <button
-                            onClick={() => setSelectedPurchase(p)}
-                            className="px-2.5 py-1 bg-slate-100 dark:bg-[#27272A] hover:bg-[#8B5CF6] hover:text-white text-slate-700 dark:text-[#FAFAFA] rounded-lg text-[11px] font-semibold transition-all"
-                          >
-                            View Breakdown
-                          </button>
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              onClick={() => setSelectedPurchase(p)}
+                              title="View Invoice & Line Items Breakdown"
+                              className="px-2 py-1 bg-slate-100 dark:bg-[#27272A] hover:bg-[#8B5CF6] hover:text-white text-slate-700 dark:text-[#FAFAFA] rounded-lg text-[11px] font-semibold transition-all flex items-center gap-1"
+                            >
+                              <Eye className="w-3 h-3" />
+                              <span>View</span>
+                            </button>
+
+                            <button
+                              onClick={() => {
+                                setEditingPurchase(p);
+                                setIsPurchaseModalOpen(true);
+                              }}
+                              title="Edit Purchase Order Metadata"
+                              className="px-2 py-1 bg-amber-500/10 hover:bg-amber-500 text-amber-600 dark:text-amber-400 hover:text-white rounded-lg text-[11px] font-bold transition-all flex items-center gap-1"
+                            >
+                              <Pencil className="w-3 h-3" />
+                              <span>Edit</span>
+                            </button>
+
+                            <button
+                              onClick={() => {
+                                setDeleteConfirmation({
+                                  type: 'purchase',
+                                  id: p.id,
+                                  name: p.invoiceNumber || `PO #${p.id.slice(0, 6)}`,
+                                });
+                              }}
+                              title="Void / Delete Purchase Order (Rolls back received inventory)"
+                              className="p-1 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))
@@ -1513,6 +1648,16 @@ export const InventoryPage: React.FC = () => {
                                   🚀 Dispatch
                                 </button>
                                 <button
+                                  onClick={() => {
+                                    setEditingTransfer(t);
+                                    setIsTransferModalOpen(true);
+                                  }}
+                                  className="px-2 py-1 bg-amber-500/10 hover:bg-amber-500 text-amber-600 dark:text-amber-400 hover:text-white rounded-lg text-[11px] font-bold transition flex items-center gap-1"
+                                >
+                                  <Pencil className="w-3 h-3" />
+                                  <span>Edit</span>
+                                </button>
+                                <button
                                   onClick={() => handleCancelTransfer(t.id)}
                                   disabled={actionLoading}
                                   className="px-2 py-1 bg-rose-50 dark:bg-rose-500/10 hover:bg-rose-500 hover:text-white text-rose-600 dark:text-rose-400 rounded-lg text-[11px] font-semibold transition"
@@ -1539,6 +1684,22 @@ export const InventoryPage: React.FC = () => {
                             >
                               Details
                             </button>
+
+                            {(t.status === 'PENDING' || t.status === 'CANCELLED') && (
+                              <button
+                                onClick={() => {
+                                  setDeleteConfirmation({
+                                    type: 'transfer',
+                                    id: t.id,
+                                    name: `Transfer #${t.id.slice(0, 6)} (${t.fromBranch?.code} → ${t.toBranch?.code})`,
+                                  });
+                                }}
+                                title="Delete Transfer"
+                                className="p-1 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -1664,19 +1825,20 @@ export const InventoryPage: React.FC = () => {
                     <th className="py-3.5 px-4 text-right">Qty Changed</th>
                     <th className="py-3.5 px-4 text-center">Stock Audit</th>
                     <th className="py-3.5 px-4">Notes / Reference</th>
+                    <th className="py-3.5 px-4 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-[#27272A] text-slate-800 dark:text-[#FAFAFA]">
                   {loading ? (
                     <tr>
-                      <td colSpan={7} className="py-16 text-center text-slate-400">
+                      <td colSpan={8} className="py-16 text-center text-slate-400">
                         <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-[#8B5CF6]" />
                         <span className="text-xs font-medium">Loading immutable ledger entries...</span>
                       </td>
                     </tr>
                   ) : filteredMovementsList.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="py-16 text-center text-slate-400 dark:text-[#71717A]">
+                      <td colSpan={8} className="py-16 text-center text-slate-400 dark:text-[#71717A]">
                         <History className="w-8 h-8 mx-auto mb-2 text-slate-300 dark:text-[#52525B]" />
                         <p className="font-semibold text-slate-600 dark:text-[#A1A1AA] text-xs">No stock movements recorded</p>
                         {isAnyMovementFilterActive ? (
@@ -1749,6 +1911,34 @@ export const InventoryPage: React.FC = () => {
                           <td className="py-3.5 px-4 text-slate-600 dark:text-[#A1A1AA] max-w-sm line-clamp-1">
                             {m.notes || m.referenceType || '—'}
                           </td>
+
+                          <td className="py-3.5 px-4 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                onClick={() => {
+                                  setEditingMovement(m);
+                                  setMovementModalMode('edit_notes');
+                                }}
+                                title="Edit Audit Reference Notes"
+                                className="px-2 py-1 bg-violet-500/10 hover:bg-violet-500 text-[#8B5CF6] hover:text-white rounded-lg text-[11px] font-bold transition-all flex items-center gap-1"
+                              >
+                                <Pencil className="w-3 h-3" />
+                                <span>Note</span>
+                              </button>
+
+                              <button
+                                onClick={() => {
+                                  setEditingMovement(m);
+                                  setMovementModalMode('reverse');
+                                }}
+                                title="Reverse / Offset this movement"
+                                className="px-2 py-1 bg-amber-500/10 hover:bg-amber-500 text-amber-600 dark:text-amber-400 hover:text-white rounded-lg text-[11px] font-bold transition-all flex items-center gap-1"
+                              >
+                                <RotateCcw className="w-3 h-3" />
+                                <span>Reverse</span>
+                              </button>
+                            </div>
+                          </td>
                         </tr>
                       );
                     })
@@ -1815,14 +2005,39 @@ export const InventoryPage: React.FC = () => {
                 </div>
 
                 <div className="mt-4 pt-3 border-t border-slate-100 dark:border-[#27272A] flex items-center justify-between text-xs text-slate-500 dark:text-[#71717A]">
-                  <span>Purchases: {s._count?.purchases || 0}</span>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => {
+                        setEditingSupplier(s);
+                        setIsSupplierModalOpen(true);
+                      }}
+                      title="Edit Vendor Details"
+                      className="px-2 py-1 bg-amber-500/10 hover:bg-amber-500 text-amber-600 dark:text-amber-400 hover:text-white rounded-lg text-[11px] font-bold transition flex items-center gap-1"
+                    >
+                      <Pencil className="w-3 h-3" />
+                      <span>Edit</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        setDeleteConfirmation({
+                          type: 'supplier',
+                          id: s.id,
+                          name: s.name,
+                        });
+                      }}
+                      title="Deactivate / Delete Vendor"
+                      className="p-1 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                   <button
                     onClick={() => {
                       setIsPurchaseModalOpen(true);
                     }}
-                    className="text-[#8B5CF6] hover:text-[#7C3AED] font-bold"
+                    className="text-[#8B5CF6] hover:text-[#7C3AED] font-bold text-[11px]"
                   >
-                    + Record Purchase
+                    + Stock-In
                   </button>
                 </div>
               </div>
@@ -1907,15 +2122,31 @@ export const InventoryPage: React.FC = () => {
                     <ArrowUpRight className="w-3.5 h-3.5" />
                   </button>
 
-                  <button
-                    onClick={() => {
-                      setEditingBranch(b);
-                      setIsBranchModalOpen(true);
-                    }}
-                    className="px-2.5 py-1 rounded-lg border border-slate-200 dark:border-[#27272A] text-slate-700 dark:text-[#A1A1AA] hover:border-[#8B5CF6] hover:text-[#8B5CF6] font-semibold text-[11px] transition"
-                  >
-                    Edit Facility
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => {
+                        setEditingBranch(b);
+                        setIsBranchModalOpen(true);
+                      }}
+                      className="px-2.5 py-1 rounded-lg border border-slate-200 dark:border-[#27272A] text-slate-700 dark:text-[#A1A1AA] hover:border-[#8B5CF6] hover:text-[#8B5CF6] font-semibold text-[11px] transition flex items-center gap-1"
+                    >
+                      <Pencil className="w-3 h-3" />
+                      <span>Edit</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        setDeleteConfirmation({
+                          type: 'branch',
+                          id: b.id,
+                          name: `${b.name} (${b.code})`,
+                        });
+                      }}
+                      title="Deactivate / Delete Branch Facility"
+                      className="p-1 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
@@ -1923,31 +2154,41 @@ export const InventoryPage: React.FC = () => {
         </div>
       )}
 
-      {/* ─── MODAL 1: RECORD PURCHASE (STOCK-IN) ─────────────────────────────── */}
-      {isPurchaseModalOpen && (
+      {/* ─── MODAL 1: RECORD / EDIT PURCHASE (STOCK-IN) ────────────────────── */}
+      {(isPurchaseModalOpen || editingPurchase) && (
         <PurchaseModal
+          purchase={editingPurchase}
           branches={branches}
           suppliers={suppliers}
           products={productsCatalog}
-          onClose={() => setIsPurchaseModalOpen(false)}
+          onClose={() => {
+            setIsPurchaseModalOpen(false);
+            setEditingPurchase(null);
+          }}
           onSuccess={() => {
             setIsPurchaseModalOpen(false);
-            showToast('Stock-In purchase recorded successfully', 'success');
+            setEditingPurchase(null);
+            showToast(editingPurchase ? 'Purchase order updated successfully' : 'Stock-In purchase recorded successfully', 'success');
             fetchTabData();
             loadReferenceData();
           }}
         />
       )}
 
-      {/* ─── MODAL 2: INTER-BRANCH TRANSFER ─────────────────────────────────── */}
-      {isTransferModalOpen && (
+      {/* ─── MODAL 2: INTER-BRANCH TRANSFER / EDIT ──────────────────────────── */}
+      {(isTransferModalOpen || editingTransfer) && (
         <TransferModal
+          transfer={editingTransfer}
           branches={branches}
           products={productsCatalog}
-          onClose={() => setIsTransferModalOpen(false)}
+          onClose={() => {
+            setIsTransferModalOpen(false);
+            setEditingTransfer(null);
+          }}
           onSuccess={() => {
             setIsTransferModalOpen(false);
-            showToast('Transfer request initiated in PENDING status', 'success');
+            setEditingTransfer(null);
+            showToast(editingTransfer ? 'Transfer parameters updated successfully' : 'Transfer request initiated in PENDING status', 'success');
             fetchTabData();
           }}
         />
@@ -1972,13 +2213,18 @@ export const InventoryPage: React.FC = () => {
         />
       )}
 
-      {/* ─── MODAL 4: ADD VENDOR / SUPPLIER ──────────────────────────────────── */}
-      {isSupplierModalOpen && (
+      {/* ─── MODAL 4: ADD / EDIT VENDOR / SUPPLIER ───────────────────────────── */}
+      {(isSupplierModalOpen || editingSupplier) && (
         <SupplierModal
-          onClose={() => setIsSupplierModalOpen(false)}
+          supplier={editingSupplier}
+          onClose={() => {
+            setIsSupplierModalOpen(false);
+            setEditingSupplier(null);
+          }}
           onSuccess={() => {
             setIsSupplierModalOpen(false);
-            showToast('Supplier registered successfully', 'success');
+            setEditingSupplier(null);
+            showToast(editingSupplier ? 'Supplier updated successfully' : 'Supplier registered successfully', 'success');
             loadReferenceData();
             fetchTabData();
           }}
@@ -2047,6 +2293,93 @@ export const InventoryPage: React.FC = () => {
             loadReferenceData();
             fetchTabData();
           }}
+        />
+      )}
+
+      {/* ─── MODAL 7: EDIT STOCK MATRIX ITEM ─────────────────────────────────── */}
+      {editingStockItem && (
+        <StockEditModal
+          item={editingStockItem}
+          branches={branches}
+          onClose={() => setEditingStockItem(null)}
+          onSuccess={() => {
+            setEditingStockItem(null);
+            showToast('Stock matrix record updated successfully', 'success');
+            fetchTabData();
+          }}
+        />
+      )}
+
+      {/* ─── MODAL 8: EDIT / REVERSE STOCK MOVEMENT ─────────────────────────── */}
+      {editingMovement && (
+        <MovementEditModal
+          movement={editingMovement}
+          mode={movementModalMode}
+          onClose={() => setEditingMovement(null)}
+          onSuccess={(msg) => {
+            setEditingMovement(null);
+            showToast(msg, 'success');
+            fetchTabData();
+          }}
+        />
+      )}
+
+      {/* ─── MODAL 9: DELETE / VOID CONFIRMATION DIALOG ─────────────────────── */}
+      {deleteConfirmation && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-[#18181B] rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border border-slate-200 dark:border-[#27272A] p-6 animate-in fade-in zoom-in-95">
+            <div className="flex items-center gap-3 text-rose-600 dark:text-rose-400 mb-3">
+              <div className="w-10 h-10 rounded-xl bg-rose-500/10 flex items-center justify-center flex-shrink-0">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-bold text-base text-slate-900 dark:text-[#FAFAFA]">
+                  Confirm Delete / Deactivation
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-[#71717A]">
+                  This action requires administrative confirmation
+                </p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-600 dark:text-[#A1A1AA] leading-relaxed">
+              Are you sure you want to remove / deactivate <strong className="text-slate-900 dark:text-[#FAFAFA] font-bold">"{deleteConfirmation.name}"</strong>?
+              {deleteConfirmation.type === 'purchase' && ' Voiding this purchase will automatically roll back received inventory units and log audit adjustments.'}
+              {deleteConfirmation.type === 'inventory' && ' De-allocating will remove this product from the branch facility and write off on-hand units in the ledger.'}
+            </p>
+
+            <div className="mt-6 flex items-center justify-end gap-2.5">
+              <button
+                onClick={() => setDeleteConfirmation(null)}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-[#A1A1AA] hover:bg-slate-100 dark:hover:bg-[#27272A] rounded-xl border border-slate-200 dark:border-[#27272A] bg-white dark:bg-[#18181B]"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                className="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl shadow-md shadow-rose-500/25 transition-all flex items-center gap-1.5"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Confirm & Delete</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── MODAL 10: PRODUCT-WISE COMPLETE TRANSACTION & INVENTORY DOSSIER ─── */}
+      {isDossierModalOpen && selectedDossierProductId && (
+        <ProductDossierModal
+          isOpen={isDossierModalOpen}
+          onClose={() => {
+            setIsDossierModalOpen(false);
+            setSelectedDossierProductId(null);
+          }}
+          productId={selectedDossierProductId}
+          productName={selectedDossierProductName}
+          sku={selectedDossierSku}
+          branches={branches}
+          suppliers={suppliers}
         />
       )}
 
@@ -2125,6 +2458,22 @@ export const InventoryPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* ─── MODAL 7: PRODUCT-WISE COMPLETE TRANSACTION & INVENTORY DOSSIER ──── */}
+      {isDossierModalOpen && selectedDossierProductId && (
+        <ProductDossierModal
+          isOpen={isDossierModalOpen}
+          onClose={() => {
+            setIsDossierModalOpen(false);
+            setSelectedDossierProductId(null);
+          }}
+          productId={selectedDossierProductId}
+          productName={selectedDossierProductName}
+          sku={selectedDossierSku}
+          branches={branches}
+          suppliers={suppliers}
+        />
+      )}
     </div>
   );
 };
@@ -2132,6 +2481,7 @@ export const InventoryPage: React.FC = () => {
 // ─── MODAL COMPONENT 1: PURCHASE (STOCK-IN) ──────────────────────────────────
 
 interface PurchaseModalProps {
+  purchase?: Purchase | null;
   branches: Branch[];
   suppliers: Supplier[];
   products: ProductItem[];
@@ -2148,13 +2498,20 @@ interface PurchaseItemRowState {
   unitPurchasePrice: number;
 }
 
-const PurchaseModal: React.FC<PurchaseModalProps> = ({ branches, suppliers, products, onClose, onSuccess }) => {
-  const [branchId, setBranchId] = useState<string>(branches[0]?.id || 'PRC_STOCK');
-  const [supplierId, setSupplierId] = useState<string>(suppliers[0]?.id || (suppliers.length > 0 ? suppliers[0].id : 'CUSTOM'));
+const PurchaseModal: React.FC<PurchaseModalProps> = ({ purchase, branches, suppliers, products, onClose, onSuccess }) => {
+  const isEditing = !!purchase;
+  const [branchId, setBranchId] = useState<string>(purchase?.branchId || branches[0]?.id || 'PRC_STOCK');
+  const [supplierId, setSupplierId] = useState<string>(purchase?.supplierId || (suppliers[0]?.id || 'CUSTOM'));
   const [customSupplierName, setCustomSupplierName] = useState<string>('');
-  const [invoiceNumber, setInvoiceNumber] = useState<string>('');
-  const [purchaseDate, setPurchaseDate] = useState<string>(new Date().toISOString().split('T')[0]);
-  const [notes, setNotes] = useState<string>('');
+  const [invoiceNumber, setInvoiceNumber] = useState<string>(purchase?.invoiceNumber || '');
+  const [purchaseDate, setPurchaseDate] = useState<string>(
+    purchase?.purchaseDate
+      ? new Date(purchase.purchaseDate).toISOString().split('T')[0]
+      : purchase?.createdAt
+      ? new Date(purchase.createdAt).toISOString().split('T')[0]
+      : new Date().toISOString().split('T')[0]
+  );
+  const [notes, setNotes] = useState<string>(purchase?.notes || '');
 
   const [items, setItems] = useState<PurchaseItemRowState[]>([
     {
@@ -2210,6 +2567,28 @@ const PurchaseModal: React.FC<PurchaseModalProps> = ({ branches, suppliers, prod
       setError('Please select receiving destination facility');
       return;
     }
+
+    if (isEditing && purchase) {
+      try {
+        setSubmitting(true);
+        setError(null);
+        const res = await inventoryApi.updatePurchase(purchase.id, {
+          supplierId: effectiveSupplierId,
+          invoiceNumber: invoiceNumber || undefined,
+          purchaseDate,
+          notes: (notes || '') + (supplierId === 'CUSTOM' && customSupplierName ? ` | Supplier: ${customSupplierName}` : ''),
+        });
+        if (res && (res as any).success !== false) {
+          onSuccess();
+        }
+      } catch (err: any) {
+        setError(err?.message || 'Failed to update purchase record');
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
+
     if (items.length === 0) {
       setError('At least one item is required');
       return;
@@ -2264,7 +2643,7 @@ const PurchaseModal: React.FC<PurchaseModalProps> = ({ branches, suppliers, prod
               <ShoppingBag className="w-4 h-4" />
             </div>
             <h3 className="font-bold text-sm sm:text-base text-slate-900 dark:text-[#FAFAFA]">
-              Record Purchase & Stock-In ("Kahan Se Kharida")
+              {isEditing ? 'Edit Purchase Order Metadata' : 'Record Purchase & Stock-In ("Kahan Se Kharida")'}
             </h3>
           </div>
           <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-[#FAFAFA] rounded-lg">
@@ -2529,6 +2908,7 @@ const PurchaseModal: React.FC<PurchaseModalProps> = ({ branches, suppliers, prod
 // ─── MODAL COMPONENT 2: INTER-BRANCH TRANSFER ─────────────────────────────────
 
 interface TransferModalProps {
+  transfer?: StockTransfer | null;
   branches: Branch[];
   products: ProductItem[];
   onClose: () => void;
@@ -2543,10 +2923,11 @@ interface TransferItemState {
   sku?: string;
 }
 
-const TransferModal: React.FC<TransferModalProps> = ({ branches, products, onClose, onSuccess }) => {
-  const [fromBranchId, setFromBranchId] = useState<string>(branches[0]?.id || '');
-  const [toBranchId, setToBranchId] = useState<string>(branches[1]?.id || branches[0]?.id || '');
-  const [notes, setNotes] = useState<string>('');
+const TransferModal: React.FC<TransferModalProps> = ({ transfer, branches, products, onClose, onSuccess }) => {
+  const isEditing = !!transfer;
+  const [fromBranchId, setFromBranchId] = useState<string>(transfer?.fromBranchId || branches[0]?.id || '');
+  const [toBranchId, setToBranchId] = useState<string>(transfer?.toBranchId || branches[1]?.id || branches[0]?.id || '');
+  const [notes, setNotes] = useState<string>(transfer?.notes || '');
   const [items, setItems] = useState<TransferItemState[]>([
     { productId: String(products[0]?.id || ''), quantity: 5 },
   ]);
@@ -2565,6 +2946,25 @@ const TransferModal: React.FC<TransferModalProps> = ({ branches, products, onClo
     e.preventDefault();
     if (fromBranchId === toBranchId) {
       setError('Origin and Destination facility cannot be the same branch');
+      return;
+    }
+
+    if (isEditing && transfer) {
+      try {
+        setSubmitting(true);
+        setError(null);
+        const res = await inventoryApi.updateStockTransfer(transfer.id, {
+          toBranchId,
+          notes: notes || undefined,
+        });
+        if (res && (res as any).success !== false) {
+          onSuccess();
+        }
+      } catch (err: any) {
+        setError(err?.message || 'Failed to update transfer');
+      } finally {
+        setSubmitting(false);
+      }
       return;
     }
 
@@ -2937,17 +3337,19 @@ const AdjustmentModal: React.FC<AdjustmentModalProps> = ({ branches, products, t
 // ─── MODAL COMPONENT 4: SUPPLIER ─────────────────────────────────────────────
 
 interface SupplierModalProps {
+  supplier?: Supplier | null;
   onClose: () => void;
   onSuccess: () => void;
 }
 
-const SupplierModal: React.FC<SupplierModalProps> = ({ onClose, onSuccess }) => {
-  const [name, setName] = useState<string>('');
-  const [contactPerson, setContactPerson] = useState<string>('');
-  const [phone, setPhone] = useState<string>('');
-  const [email, setEmail] = useState<string>('');
-  const [address, setAddress] = useState<string>('');
-  const [gstNumber, setGstNumber] = useState<string>('');
+const SupplierModal: React.FC<SupplierModalProps> = ({ supplier, onClose, onSuccess }) => {
+  const isEditing = !!supplier;
+  const [name, setName] = useState<string>(supplier?.name || '');
+  const [contactPerson, setContactPerson] = useState<string>(supplier?.contactPerson || '');
+  const [phone, setPhone] = useState<string>(supplier?.phone || '');
+  const [email, setEmail] = useState<string>(supplier?.email || '');
+  const [address, setAddress] = useState<string>(supplier?.address || '');
+  const [gstNumber, setGstNumber] = useState<string>(supplier?.gstNumber || '');
 
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -2962,20 +3364,34 @@ const SupplierModal: React.FC<SupplierModalProps> = ({ onClose, onSuccess }) => 
     try {
       setSubmitting(true);
       setError(null);
-      const res = await inventoryApi.createSupplier({
-        name,
-        contactPerson: contactPerson || undefined,
-        phone: phone || undefined,
-        email: email || undefined,
-        address: address || undefined,
-        gstNumber: gstNumber || undefined,
-      });
+      if (isEditing && supplier) {
+        const res = await inventoryApi.updateSupplier(supplier.id, {
+          name: name.trim(),
+          contactPerson: contactPerson.trim() || undefined,
+          phone: phone.trim() || undefined,
+          email: email.trim() || undefined,
+          address: address.trim() || undefined,
+          gstNumber: gstNumber.trim() || undefined,
+        });
+        if (res.success) {
+          onSuccess();
+        }
+      } else {
+        const res = await inventoryApi.createSupplier({
+          name: name.trim(),
+          contactPerson: contactPerson.trim() || undefined,
+          phone: phone.trim() || undefined,
+          email: email.trim() || undefined,
+          address: address.trim() || undefined,
+          gstNumber: gstNumber.trim() || undefined,
+        });
 
-      if (res.success) {
-        onSuccess();
+        if (res.success) {
+          onSuccess();
+        }
       }
     } catch (err: any) {
-      setError(err?.message || 'Failed to create supplier');
+      setError(err?.message || 'Failed to save supplier');
     } finally {
       setSubmitting(false);
     }
@@ -2990,7 +3406,7 @@ const SupplierModal: React.FC<SupplierModalProps> = ({ onClose, onSuccess }) => 
               <Building2 className="w-4 h-4" />
             </div>
             <h3 className="font-bold text-sm sm:text-base text-slate-900 dark:text-[#FAFAFA]">
-              Register New Supplier / Vendor
+              {isEditing ? 'Edit Supplier / Vendor' : 'Register New Supplier / Vendor'}
             </h3>
           </div>
           <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-[#FAFAFA] rounded-lg">
@@ -3088,7 +3504,7 @@ const SupplierModal: React.FC<SupplierModalProps> = ({ onClose, onSuccess }) => 
               disabled={submitting}
               className="px-5 py-2 bg-[#8B5CF6] hover:bg-[#7C3AED] text-white text-xs font-bold rounded-xl shadow-md shadow-[#8B5CF6]/25 disabled:opacity-50 transition-all"
             >
-              {submitting ? 'Registering...' : 'Register Vendor'}
+              {submitting ? 'Saving...' : isEditing ? 'Save Changes' : 'Register Vendor'}
             </button>
           </div>
         </form>

@@ -1,4 +1,4 @@
-import type { Branch, Supplier, InventoryItem, Purchase, StockTransfer, StockMovement } from '../types/admin';
+import type { Branch, Supplier, InventoryItem, Purchase, StockTransfer, StockMovement, ProductDossier } from '../types/admin';
 
 // Dynamic API Base URL — default to local backend or production fallback
 export const API_BASE_URL =
@@ -719,6 +719,10 @@ export const inventoryApi = {
       method: 'PATCH',
       body: JSON.stringify(payload),
     }),
+  deleteBranch: (id: string) =>
+    fetchAdminApi<{ success: boolean }>(`/branches/${id}`, {
+      method: 'DELETE',
+    }),
 
   // 2. Suppliers
   getSuppliers: async (params?: { page?: number; limit?: number; search?: string; isActive?: boolean }) => {
@@ -875,6 +879,15 @@ export const inventoryApi = {
 
     return { success: false, data: null };
   },
+  updateInventoryItem: (id: string, payload: { reorderLevel?: number; quantity?: number; reservedQuantity?: number }) =>
+    fetchAdminApi<InventoryItem>(`/inventory/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+  deleteInventoryItem: (id: string) =>
+    fetchAdminApi<{ success: boolean }>(`/inventory/${id}`, {
+      method: 'DELETE',
+    }),
   quickStock: async (payload: {
     sku: string;
     name: string;
@@ -1068,6 +1081,15 @@ export const inventoryApi = {
       return { success: false, message: err?.message || 'Failed to record purchase' };
     }
   },
+  updatePurchase: (id: string, payload: Partial<{ supplierId: string; invoiceNumber: string; purchaseDate: string; notes: string }>) =>
+    fetchAdminApi<Purchase>(`/purchases/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+  deletePurchase: (id: string, rollbackStock: boolean = true) =>
+    fetchAdminApi<{ success: boolean }>(`/purchases/${id}?rollbackStock=${rollbackStock}`, {
+      method: 'DELETE',
+    }),
 
   // 5. Stock Transfers
   getStockTransfers: (params?: { page?: number; limit?: number; branchId?: string; status?: string; from?: string; to?: string }) => {
@@ -1087,6 +1109,11 @@ export const inventoryApi = {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
+  updateStockTransfer: (id: string, payload: { notes?: string; toBranchId?: string }) =>
+    fetchAdminApi<StockTransfer>(`/transfers/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
   dispatchStockTransfer: (id: string, payload?: { notes?: string }) =>
     fetchAdminApi<StockTransfer>(`/transfers/${id}/dispatch`, {
       method: 'PATCH',
@@ -1101,6 +1128,10 @@ export const inventoryApi = {
     fetchAdminApi<StockTransfer>(`/transfers/${id}/cancel`, {
       method: 'PATCH',
       body: JSON.stringify(payload || {}),
+    }),
+  deleteStockTransfer: (id: string) =>
+    fetchAdminApi<{ success: boolean }>(`/transfers/${id}`, {
+      method: 'DELETE',
     }),
 
   // 6. Stock Adjustments
@@ -1130,6 +1161,18 @@ export const inventoryApi = {
       } as any,
     };
   },
+
+  updateStockMovement: (id: string, payload: { notes: string }) =>
+    fetchAdminApi<StockMovement>(`/stock-movements/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+
+  reverseStockMovement: (id: string, payload?: { reason?: string }) =>
+    fetchAdminApi<StockMovement>(`/stock-movements/${id}/reverse`, {
+      method: 'POST',
+      body: JSON.stringify(payload || {}),
+    }),
 
   // 7. Stock Movements Ledger
   getStockMovements: async (params?: { page?: number; limit?: number; branchId?: string; productId?: string; type?: string; from?: string; to?: string }) => {
@@ -1306,6 +1349,45 @@ export const inventoryApi = {
     } catch (e: any) {
       throw new Error('Failed to download movements report');
     }
+  },
+
+  // 9. Product-Wise Complete Traceability & Inventory Dossier
+  getProductDossier: async (productId: string) => {
+    return fetchAdminApi<ProductDossier>(`/inventory/product/${encodeURIComponent(productId)}/dossier`);
+  },
+
+  downloadProductDossierExcel: async (productId: string, filename?: string) => {
+    const token = getAdminToken();
+    const res = await fetch(`${API_BASE_URL}/inventory/product/${encodeURIComponent(productId)}/dossier/export/excel`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error('Failed to download product traceability Excel export');
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename || `Product-Traceability-Dossier-${Date.now()}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  },
+
+  downloadProductDossierPdf: async (productId: string, filename?: string) => {
+    const token = getAdminToken();
+    const res = await fetch(`${API_BASE_URL}/inventory/product/${encodeURIComponent(productId)}/dossier/export/pdf`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error('Failed to download product traceability PDF export');
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename || `Product-Traceability-Dossier-${Date.now()}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
   },
 };
 
