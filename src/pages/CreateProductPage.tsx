@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useAdminAuth } from "../context/AdminAuthContext";
-import { fetchAdminApi } from "../api/adminApi";
+import { fetchAdminApi, inventoryApi } from "../api/adminApi";
 import { MediaPickerModal } from "../components/MediaPickerModal";
 import { syncProductUpdate } from "../utils/productSync";
 import {
@@ -20,7 +20,9 @@ import {
   Box,
   Settings,
   Search as SearchIcon,
-  X
+  X,
+  Sparkles,
+  CheckCircle2,
 } from "lucide-react";
 import { Category } from "../types/admin";
 
@@ -38,6 +40,13 @@ export function CreateProductPage() {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Search & Inventory Auto-Fill State
+  const [productSuggestions, setProductSuggestions] = useState<any[]>([]);
+  const [isSearchingSuggestions, setIsSearchingSuggestions] = useState(false);
+  const [activeSuggestionField, setActiveSuggestionField] = useState<"name" | "sku" | null>(null);
+  const [inventoryLinkedProduct, setInventoryLinkedProduct] = useState<any | null>(null);
+  const searchTimeoutRef = useRef<any>(null);
 
   // Form State
   const [name, setName] = useState("");
@@ -128,6 +137,101 @@ export function CreateProductPage() {
     setAttributes(newAttrs);
   };
 
+  const handleSearchChange = (field: "name" | "sku", value: string) => {
+    if (field === "name") {
+      setName(value);
+    } else {
+      setSku(value);
+    }
+    setActiveSuggestionField(field);
+
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    if (!value || value.trim().length < 2) {
+      setProductSuggestions([]);
+      return;
+    }
+
+    searchTimeoutRef.current = setTimeout(async () => {
+      try {
+        setIsSearchingSuggestions(true);
+        const res = await fetchAdminApi<any>(`/products?search=${encodeURIComponent(value.trim())}&limit=8`);
+        if (res?.success !== false) {
+          const list = Array.isArray(res?.data) ? res.data : Array.isArray(res?.products) ? res.products : Array.isArray(res) ? res : [];
+          setProductSuggestions(list);
+        }
+      } catch (e) {
+        console.warn("Product suggestion error:", e);
+      } finally {
+        setIsSearchingSuggestions(false);
+      }
+    }, 280);
+  };
+
+  const handleSelectProduct = async (p: any) => {
+    setName(p.name || "");
+    setSku(p.sku || "");
+    setDescription(p.description || "");
+    setShortDesc(p.shortDesc || "");
+    if (p.categoryId) setCategoryId(String(p.categoryId));
+    setPrice(p.price !== undefined ? String(p.price) : "");
+    setSalesPrice(p.salesPrice !== undefined ? String(p.salesPrice) : p.salePrice !== undefined ? String(p.salePrice) : "");
+    setOfferPrice(p.offerPrice !== undefined ? String(p.offerPrice) : "");
+
+    // Fetch live inventory breakdown for exact stock and reorder level
+    try {
+      const invRes = await inventoryApi.getProductInventory(p.id);
+      if (invRes.success && invRes.data) {
+        setStock(String(invRes.data.totalAvailable ?? invRes.data.product?.stock ?? p.stock ?? 0));
+        setReorderLevel(String(invRes.data.product?.reorderLevel ?? p.reorderLevel ?? 10));
+        setInventoryLinkedProduct({
+          ...p,
+          totalAvailable: invRes.data.totalAvailable,
+          branches: invRes.data.branches,
+        });
+      } else {
+        setStock(String(p.stock ?? 0));
+        setReorderLevel(String(p.reorderLevel ?? 10));
+        setInventoryLinkedProduct(p);
+      }
+    } catch {
+      setStock(String(p.stock ?? 0));
+      setReorderLevel(String(p.reorderLevel ?? 10));
+      setInventoryLinkedProduct(p);
+    }
+
+    setThumbnail(p.thumbnail || (Array.isArray(p.images) ? p.images[0] : p.image) || "");
+    setImages(Array.isArray(p.images) ? p.images.join(", ") : "");
+    if (p.status) setStatus(p.status);
+    if (p.isVisible !== undefined) setIsVisible(p.isVisible);
+    if (p.isFeatured !== undefined) setIsFeatured(p.isFeatured);
+    if (p.isInOffer !== undefined) setIsInOffer(p.isInOffer);
+    if (p.mfgGenericName) setMfgGenericName(p.mfgGenericName);
+    if (p.mfgCountry) setMfgCountry(p.mfgCountry);
+    if (p.mfgName) setMfgName(p.mfgName);
+    if (p.mfgAddress) setMfgAddress(p.mfgAddress);
+    if (p.compatibleFor) setCompatibleFor(Array.isArray(p.compatibleFor) ? p.compatibleFor.join(", ") : p.compatibleFor);
+    if (p.warranty) setWarranty(p.warranty);
+    if (p.weight) setWeight(p.weight);
+    if (p.dimLength) setDimLength(String(p.dimLength));
+    if (p.dimWidth) setDimWidth(String(p.dimWidth));
+    if (p.dimHeight) setDimHeight(String(p.dimHeight));
+    if (p.dimUnit) setDimUnit(p.dimUnit);
+    if (p.colours) setColours(Array.isArray(p.colours) ? p.colours.join(", ") : p.colours);
+    if (p.tags) setTags(Array.isArray(p.tags) ? p.tags.join(", ") : p.tags);
+    if (p.seo?.metaTitle) setMetaTitle(p.seo.metaTitle);
+    if (p.seo?.metaDescription) setMetaDescription(p.seo.metaDescription);
+
+    setActiveSuggestionField(null);
+    setProductSuggestions([]);
+  };
+
+  const handleClearLink = () => {
+    setInventoryLinkedProduct(null);
+  };
+
   const handleReset = () => {
     setName(""); setSku(""); setDescription(""); setShortDesc("");
     if (categories.length > 0) setCategoryId(String(categories[0].id));
@@ -141,6 +245,9 @@ export function CreateProductPage() {
     setAttributes([{key: "", value: "false"}]);
     setColours(""); setTags("");
     setMetaTitle(""); setMetaDescription("");
+    setInventoryLinkedProduct(null);
+    setActiveSuggestionField(null);
+    setProductSuggestions([]);
     setError(null);
   };
 
@@ -327,18 +434,163 @@ export function CreateProductPage() {
             </div>
           )}
 
+          {/* Live Inventory Link Status Banner */}
+          {inventoryLinkedProduct && (
+            <div className="p-3.5 sm:p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-300 flex items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-2.5">
+                <CheckCircle2 className="w-5 h-5 text-emerald-500 flex-shrink-0" />
+                <div>
+                  <div className="font-bold flex items-center gap-2">
+                    <span>Live Stock Linked:</span>
+                    <span className="font-mono bg-emerald-500/20 px-1.5 py-0.5 rounded text-[11px] font-bold">{inventoryLinkedProduct.sku}</span>
+                  </div>
+                  <div className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-0.5">
+                    Live Total Available Stock: <strong className="font-mono font-bold">{stock} units</strong> • Reorder Threshold: <strong className="font-mono font-bold">{reorderLevel} units</strong>
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleClearLink}
+                className="px-2.5 py-1 rounded-lg border border-emerald-500/30 hover:bg-emerald-500/15 text-[11px] font-semibold transition"
+              >
+                Clear Link
+              </button>
+            </div>
+          )}
+
           {/* Basic Info */}
           <div className={sectionContainerClass}>
-            <h4 className={sectionTitleClass}><Package size={16} className="text-[#8B5CF6]" />Basic Information</h4>
+            <div className="flex items-center justify-between mb-3">
+              <h4 className={sectionTitleClass}><Package size={16} className="text-[#8B5CF6]" />Basic Information</h4>
+              <span className="text-[10px] text-slate-500 dark:text-[#71717A] flex items-center gap-1 font-medium">
+                <Sparkles size={12} className="text-amber-500" />
+                <span>Search Name or SKU to auto-fetch inventory</span>
+              </span>
+            </div>
+
             <div className="space-y-4">
-              <div>
-                <label className={labelClass}>Product Name <span className="text-rose-500">*</span></label>
-                <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Luxury Solid Brass Handle" className={inputClass} required />
+              {/* Product Name with Autocomplete */}
+              <div className="relative">
+                <label className={labelClass}>
+                  Product Name <span className="text-rose-500">*</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => handleSearchChange("name", e.target.value)}
+                    onFocus={() => {
+                      if (name.trim().length >= 2) setActiveSuggestionField("name");
+                    }}
+                    placeholder="e.g. Luxury Solid Brass Handle (search catalog to load stock)"
+                    className={inputClass}
+                    required
+                  />
+                  {isSearchingSuggestions && activeSuggestionField === "name" && (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-[#8B5CF6]" />
+                    </div>
+                  )}
+                </div>
+
+                {activeSuggestionField === "name" && productSuggestions.length > 0 && (
+                  <div className="absolute left-0 right-0 top-full mt-1.5 bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] rounded-2xl shadow-xl z-50 max-h-60 overflow-y-auto divide-y divide-slate-100 dark:divide-[#27272A] p-1.5">
+                    <div className="px-2 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
+                      <span>Matching Catalog / Stock Items</span>
+                      <button type="button" onClick={() => setActiveSuggestionField(null)} className="text-slate-400 hover:text-slate-600">
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                    {productSuggestions.map((p) => (
+                      <div
+                        key={p.id}
+                        onMouseDown={() => handleSelectProduct(p)}
+                        className="p-2.5 hover:bg-slate-50 dark:hover:bg-[#27272A]/70 rounded-xl cursor-pointer transition flex items-center justify-between gap-3 text-xs"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          {p.thumbnail || p.image ? (
+                            <img src={p.thumbnail || p.image} alt={p.name} className="w-8 h-8 rounded-lg object-cover border border-slate-200 dark:border-[#27272A] flex-shrink-0" />
+                          ) : (
+                            <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-[#27272A] flex items-center justify-center text-slate-400 flex-shrink-0 font-bold text-[10px]">
+                              SKU
+                            </div>
+                          )}
+                          <div className="truncate">
+                            <div className="font-bold text-slate-900 dark:text-[#FAFAFA] truncate">{p.name}</div>
+                            <div className="flex items-center gap-2 text-[10px] text-slate-500 dark:text-[#71717A] mt-0.5">
+                              <span className="font-mono text-[#8B5CF6] font-bold">{p.sku}</span>
+                              {p.price !== undefined && <span>• ₹{Number(p.price).toFixed(2)}</span>}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="text-right flex-shrink-0">
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 font-mono">
+                            Stock: {p.stock ?? 0}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
-              <div>
-                <label className={labelClass}>SKU <span className="text-rose-500">*</span></label>
-                <input type="text" value={sku} onChange={(e) => setSku(e.target.value)} placeholder="e.g. PRC-HDL-BRS" className={`${inputClass} font-mono`} required />
+              {/* SKU with Autocomplete */}
+              <div className="relative">
+                <label className={labelClass}>
+                  SKU <span className="text-rose-500">*</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={sku}
+                    onChange={(e) => handleSearchChange("sku", e.target.value.toUpperCase())}
+                    onFocus={() => {
+                      if (sku.trim().length >= 2) setActiveSuggestionField("sku");
+                    }}
+                    placeholder="e.g. PRC-HDL-BRS (search SKU to load stock)"
+                    className={`${inputClass} font-mono uppercase font-bold`}
+                    required
+                  />
+                  {isSearchingSuggestions && activeSuggestionField === "sku" && (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-[#8B5CF6]" />
+                    </div>
+                  )}
+                </div>
+
+                {activeSuggestionField === "sku" && productSuggestions.length > 0 && (
+                  <div className="absolute left-0 right-0 top-full mt-1.5 bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] rounded-2xl shadow-xl z-50 max-h-60 overflow-y-auto divide-y divide-slate-100 dark:divide-[#27272A] p-1.5">
+                    <div className="px-2 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
+                      <span>Matching SKU Items</span>
+                      <button type="button" onClick={() => setActiveSuggestionField(null)} className="text-slate-400 hover:text-slate-600">
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                    {productSuggestions.map((p) => (
+                      <div
+                        key={p.id}
+                        onMouseDown={() => handleSelectProduct(p)}
+                        className="p-2.5 hover:bg-slate-50 dark:hover:bg-[#27272A]/70 rounded-xl cursor-pointer transition flex items-center justify-between gap-3 text-xs"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="w-8 h-8 rounded-lg bg-[#8B5CF6]/10 text-[#8B5CF6] border border-[#8B5CF6]/20 flex items-center justify-center font-mono font-bold text-[10px] flex-shrink-0">
+                            {p.sku?.slice(0, 4)}
+                          </div>
+                          <div className="truncate">
+                            <div className="font-mono font-bold text-[#8B5CF6]">{p.sku}</div>
+                            <div className="text-[10px] text-slate-600 dark:text-[#A1A1AA] truncate mt-0.5">{p.name}</div>
+                          </div>
+                        </div>
+                        <div className="text-right flex-shrink-0">
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 font-mono">
+                            Stock: {p.stock ?? 0}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div>

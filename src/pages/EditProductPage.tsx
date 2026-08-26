@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useAdminAuth } from "../context/AdminAuthContext";
-import { fetchAdminApi } from "../api/adminApi";
+import { fetchAdminApi, inventoryApi } from "../api/adminApi";
 import { MediaPickerModal } from "../components/MediaPickerModal";
 import { syncProductUpdate } from "../utils/productSync";
 import {
@@ -20,7 +20,11 @@ import {
   Box,
   Settings,
   Search as SearchIcon,
-  X
+  X,
+  Lock,
+  Warehouse,
+  Boxes,
+  ArrowUpRight,
 } from "lucide-react";
 import { Category, ProductItem } from "../types/admin";
 
@@ -114,8 +118,18 @@ export function EditProductPage() {
         setSalesPrice(prod.salesPrice !== undefined ? String(prod.salesPrice) : prod.salePrice !== undefined ? String(prod.salePrice) : "");
         setOfferPrice(prod.offerPrice !== undefined ? String(prod.offerPrice) : "");
         
-        setStock(prod.stock !== undefined ? String(prod.stock) : "");
-        setReorderLevel(prod.reorderLevel !== undefined ? String(prod.reorderLevel) : "");
+        setStock(prod.stock !== undefined ? String(prod.stock) : "0");
+        setReorderLevel(prod.reorderLevel !== undefined ? String(prod.reorderLevel) : "10");
+        
+        // Fetch true live multi-branch inventory breakdown
+        if (prod.id) {
+          inventoryApi.getProductInventory(String(prod.id)).then((invRes) => {
+            if (invRes.success && invRes.data) {
+              setStock(String(invRes.data.totalAvailable ?? invRes.data.product?.stock ?? prod.stock ?? 0));
+              setReorderLevel(String(invRes.data.product?.reorderLevel ?? prod.reorderLevel ?? 10));
+            }
+          }).catch(() => {});
+        }
         
         setThumbnail(prod.thumbnail || prod.image || "");
         if (Array.isArray(prod.images)) setImages(prod.images.join(", "));
@@ -280,7 +294,6 @@ export function EditProductPage() {
       price: Number(price) || 0,
       salePrice: salesPrice ? Number(salesPrice) : undefined,
       offerPrice: offerPrice ? Number(offerPrice) : undefined,
-      stock: Number(stock) || 0,
       reorderLevel: reorderLevel ? Number(reorderLevel) : undefined,
       thumbnail: thumbnail.trim() || undefined,
       image: thumbnail.trim() || (images.split(",").map(i => i.trim()).filter(Boolean)[0]) || undefined,
@@ -452,16 +465,62 @@ export function EditProductPage() {
             </div>
 
             <div className={sectionContainerClass}>
-              <h4 className={sectionTitleClass}><Hash size={16} className="text-amber-500" />Inventory</h4>
-              <div className="space-y-4">
+              <div className="flex items-center justify-between mb-3">
+                <h4 className={sectionTitleClass}><Hash size={16} className="text-amber-500" />Inventory Control</h4>
+                <span className="flex items-center gap-1 text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full">
+                  <Lock size={10} />
+                  <span>Ledger-Locked</span>
+                </span>
+              </div>
+
+              <div className="space-y-3.5">
                 <div>
-                  <label className={labelClass}>Stock Quantity <span className="text-rose-500">*</span></label>
-                  <input type="number" value={stock} onChange={(e) => setStock(e.target.value)} placeholder="0" min="0" className={inputClass} required />
+                  <div className="flex items-center justify-between mb-1">
+                    <label className={labelClass}>Live Stock Across Warehouses</label>
+                    <span className="text-[10px] text-slate-400 font-mono">Read-Only</span>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      value={stock}
+                      readOnly
+                      disabled
+                      className="w-full bg-slate-100 dark:bg-[#141417] text-slate-600 dark:text-[#A1A1AA] px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-[#27272A] cursor-not-allowed font-mono font-bold select-none"
+                    />
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 text-[11px] font-bold text-[#8B5CF6]">
+                      <Boxes size={13} />
+                      <span>{Number(stock) > 0 ? `${stock} Units` : '0 Units'}</span>
+                    </div>
+                  </div>
+                  <p className="text-[10.5px] text-slate-500 dark:text-[#71717A] mt-1.5 leading-tight">
+                    Stock can only be adjusted through the <strong className="text-slate-700 dark:text-[#FAFAFA]">Inventory Stock Page</strong> (Procurement Stock-In, Transfers, or Adjustments).
+                  </p>
                 </div>
-                <div>
-                  <label className={labelClass}>Reorder Level</label>
-                  <input type="number" value={reorderLevel} onChange={(e) => setReorderLevel(e.target.value)} placeholder="20" min="0" className={inputClass} />
+
+                <div className="pt-2 border-t border-slate-100 dark:border-[#27272A] flex items-center justify-between">
+                  <div>
+                    <label className={labelClass}>Reorder Alert Threshold</label>
+                    <span className="text-[10px] text-slate-400">Trigger low-stock alert</span>
+                  </div>
+                  <input
+                    type="number"
+                    value={reorderLevel}
+                    onChange={(e) => setReorderLevel(e.target.value)}
+                    placeholder="10"
+                    min="0"
+                    className="w-20 px-2.5 py-1.5 bg-slate-50 dark:bg-[#09090B] border border-slate-200 dark:border-[#27272A] rounded-xl text-xs font-mono text-right font-bold text-slate-800 dark:text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
+                  />
                 </div>
+
+                <button
+                  type="button"
+                  onClick={() => setCurrentView("inventory")}
+                  className="w-full py-2 px-3 bg-[#8B5CF6]/10 hover:bg-[#8B5CF6]/20 border border-[#8B5CF6]/25 text-[#8B5CF6] dark:text-[#A855F7] rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 mt-1"
+                >
+                  <Warehouse size={13} />
+                  <span>Manage Stock in Inventory Hub</span>
+                  <ArrowUpRight size={13} />
+                </button>
               </div>
             </div>
           </div>
