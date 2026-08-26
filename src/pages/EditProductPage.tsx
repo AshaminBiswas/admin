@@ -25,6 +25,10 @@ import {
   Warehouse,
   Boxes,
   ArrowUpRight,
+  Sparkles,
+  Flame,
+  Percent,
+  Globe,
 } from "lucide-react";
 import { Category, ProductItem } from "../types/admin";
 
@@ -44,8 +48,19 @@ export function EditProductPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Helper for auto slug generation
+  const generateSlug = (text: string) => {
+    return text
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+  };
+
   // Form State
   const [name, setName] = useState("");
+  const [slug, setSlug] = useState("");
+  const [isCustomSlug, setIsCustomSlug] = useState(false);
   const [sku, setSku] = useState("");
   const [description, setDescription] = useState("");
   const [shortDesc, setShortDesc] = useState("");
@@ -68,7 +83,9 @@ export function EditProductPage() {
   const [status, setStatus] = useState<"ACTIVE" | "INACTIVE" | "OUT_OF_STOCK">("ACTIVE");
   const [isVisible, setIsVisible] = useState(true);
   const [isFeatured, setIsFeatured] = useState(false);
+  const [isBestseller, setIsBestseller] = useState(false);
   const [isInOffer, setIsInOffer] = useState(false);
+  const [isNewArrival, setIsNewArrival] = useState(false);
   
   // Manufacturer Info
   const [mfgGenericName, setMfgGenericName] = useState("");
@@ -94,9 +111,10 @@ export function EditProductPage() {
   const [colours, setColours] = useState("");
   const [tags, setTags] = useState("");
 
-  // SEO
+  // SEO & Keywords
   const [metaTitle, setMetaTitle] = useState("");
   const [metaDescription, setMetaDescription] = useState("");
+  const [metaKeywords, setMetaKeywords] = useState("");
 
   const [isMediaPickerOpen, setIsMediaPickerOpen] = useState(false);
   const [activeMediaField, setActiveMediaField] = useState<"thumbnail" | "images" | null>(null);
@@ -109,6 +127,8 @@ export function EditProductPage() {
         setInitialProduct(prod);
         
         setName(prod.name || "");
+        setSlug(prod.slug || generateSlug(prod.name || ""));
+        setIsCustomSlug(Boolean(prod.slug));
         setSku(prod.sku || "");
         setDescription(prod.description || "");
         setShortDesc(prod.shortDesc || "");
@@ -137,7 +157,9 @@ export function EditProductPage() {
         setStatus((prod.status?.toUpperCase() as any) || "ACTIVE");
         setIsVisible(prod.isVisible !== false);
         setIsFeatured(!!prod.isFeatured);
+        setIsBestseller(!!prod.isBestseller || !!prod.isBestsaller);
         setIsInOffer(!!prod.isInOffer);
+        setIsNewArrival(!!prod.isNewArrival);
         
         if (prod.manufacturerInfo) {
           setMfgGenericName(prod.manufacturerInfo["Generic Name"] || "");
@@ -173,6 +195,9 @@ export function EditProductPage() {
         if (Array.isArray(prod.colours)) setColours(prod.colours.join(", "));
         if (Array.isArray(prod.tags)) setTags(prod.tags.join(", "));
         
+        if (prod.metaKeywords || prod.seo?.metaKeywords) {
+          setMetaKeywords(prod.metaKeywords || prod.seo?.metaKeywords || "");
+        }
         if (prod.seo) {
           setMetaTitle(prod.seo.metaTitle || "");
           setMetaDescription(prod.seo.metaDescription || "");
@@ -287,6 +312,7 @@ export function EditProductPage() {
 
     const cleanPayload: Record<string, any> = {
       name: name.trim(),
+      slug: slug.trim() || undefined,
       sku: sku.trim() || undefined,
       description: description.trim() || undefined,
       shortDesc: shortDesc.trim() || undefined,
@@ -298,10 +324,12 @@ export function EditProductPage() {
       thumbnail: thumbnail.trim() || undefined,
       image: thumbnail.trim() || (images.split(",").map(i => i.trim()).filter(Boolean)[0]) || undefined,
       images: images.split(",").map(i => i.trim()).filter(Boolean),
-      status,
-      isVisible,
-      isFeatured,
-      isInOffer,
+      status: status || "ACTIVE",
+      isVisible: isVisible ?? true,
+      isFeatured: Boolean(isFeatured),
+      isBestseller: Boolean(isBestseller),
+      isInOffer: Boolean(isInOffer),
+      isNewArrival: Boolean(isNewArrival),
       manufacturerInfo: (mfgGenericName || mfgName || mfgAddress) ? {
         "Generic Name": mfgGenericName.trim(),
         "Country of Origin": mfgCountry.trim() || "India",
@@ -320,9 +348,13 @@ export function EditProductPage() {
       attributes: Object.keys(attrsObj).length > 0 ? attrsObj : undefined,
       colours: colours.split(",").map(c => c.trim()).filter(Boolean),
       tags: tags.split(",").map(t => t.trim()).filter(Boolean),
-      seo: (metaTitle || metaDescription) ? {
-        metaTitle: metaTitle.trim(),
-        metaDescription: metaDescription.trim()
+      metaKeywords: metaKeywords.trim() || undefined,
+      metaTitle: metaTitle.trim() || undefined,
+      metaDescription: metaDescription.trim() || undefined,
+      seo: (metaTitle || metaDescription || metaKeywords) ? {
+        metaTitle: metaTitle.trim() || undefined,
+        metaDescription: metaDescription.trim() || undefined,
+        metaKeywords: metaKeywords.trim() || undefined,
       } : undefined
     };
 
@@ -424,7 +456,54 @@ export function EditProductPage() {
             <div className="space-y-4">
               <div>
                 <label className={labelClass}>Product Name <span className="text-rose-500">*</span></label>
-                <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Luxury Solid Brass Handle" className={inputClass} required />
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => {
+                    setName(e.target.value);
+                    if (!isCustomSlug) setSlug(generateSlug(e.target.value));
+                  }}
+                  placeholder="e.g. Luxury Solid Brass Handle"
+                  className={inputClass}
+                  required
+                />
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className={labelClass}>
+                    Product URL Slug (Frontend Route) <span className="text-rose-500">*</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsCustomSlug(false);
+                      setSlug(generateSlug(name));
+                    }}
+                    className="text-[10px] font-bold text-[#8B5CF6] hover:underline"
+                  >
+                    Auto-generate from Name
+                  </button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="px-3 py-2 bg-slate-100 dark:bg-[#27272A] border border-slate-200 dark:border-[#27272A] rounded-xl text-xs font-mono text-slate-500 dark:text-[#A1A1AA] flex-shrink-0 select-none">
+                    /product/
+                  </span>
+                  <input
+                    type="text"
+                    value={slug}
+                    onChange={(e) => {
+                      setIsCustomSlug(true);
+                      setSlug(e.target.value.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''));
+                    }}
+                    placeholder="e.g. luxury-solid-brass-handle"
+                    className={`${inputClass} font-mono text-xs`}
+                    required
+                  />
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1">
+                  Storefront URLs use this slug (e.g. <code>/product/{slug || "your-product-slug"}</code>) instead of the product ID.
+                </p>
               </div>
 
               <div>
@@ -662,15 +741,20 @@ export function EditProductPage() {
 
           {/* SEO Info */}
           <div className={sectionContainerClass}>
-            <h4 className={sectionTitleClass}><SearchIcon size={16} className="text-teal-500" />Search Engine Optimization (SEO)</h4>
+            <h4 className={sectionTitleClass}><SearchIcon size={16} className="text-teal-500" />Search Engine Optimization (SEO) & Metadata</h4>
             <div className="space-y-4">
               <div>
                 <label className={labelClass}>Meta Title</label>
-                <input type="text" value={metaTitle} onChange={(e) => setMetaTitle(e.target.value)} placeholder="Page Title..." className={inputClass} />
+                <input type="text" value={metaTitle} onChange={(e) => setMetaTitle(e.target.value)} placeholder="e.g. Luxury Brass Door Handles | PRC Hardware" className={inputClass} />
               </div>
               <div>
                 <label className={labelClass}>Meta Description</label>
-                <textarea value={metaDescription} onChange={(e) => setMetaDescription(e.target.value)} placeholder="SEO description..." rows={2} className={`${inputClass} resize-none`} />
+                <textarea value={metaDescription} onChange={(e) => setMetaDescription(e.target.value)} placeholder="SEO description displayed on search results..." rows={2} className={`${inputClass} resize-none`} />
+              </div>
+              <div>
+                <label className={labelClass}>SEO Keywords / Search Terms</label>
+                <input type="text" value={metaKeywords} onChange={(e) => setMetaKeywords(e.target.value)} placeholder="e.g. brass handles, mortise lock, architectural hardware, door pulls" className={inputClass} />
+                <p className="text-[10px] text-slate-400 mt-1">Comma-separated keywords for search engine discovery and internal search indexing.</p>
               </div>
             </div>
           </div>
@@ -699,18 +783,43 @@ export function EditProductPage() {
               </select>
             </div>
 
+            {/* Feature & Promotion Toggles */}
             <div className="pt-2 border-t border-slate-100 dark:border-[#27272A] space-y-3">
-              <button type="button" onClick={() => setIsVisible(!isVisible)} className="w-full flex items-center justify-between group">
-                <span className="text-sm font-semibold text-slate-700 dark:text-[#A1A1AA]">Visible to public</span>
+              <button type="button" onClick={() => setIsVisible(!isVisible)} className="w-full flex items-center justify-between group p-1 hover:bg-slate-50 dark:hover:bg-[#27272A]/50 rounded-xl transition">
+                <span className="text-xs font-bold text-slate-700 dark:text-[#FAFAFA]">Visible to Public</span>
                 {isVisible ? <ToggleRight size={28} className="text-[#8B5CF6]" /> : <ToggleLeft size={28} className="text-slate-300 dark:text-[#52525B]" />}
               </button>
-              <button type="button" onClick={() => setIsFeatured(!isFeatured)} className="w-full flex items-center justify-between group">
-                <span className="text-sm font-semibold text-slate-700 dark:text-[#A1A1AA]">Featured Product</span>
+
+              <button type="button" onClick={() => setIsFeatured(!isFeatured)} className="w-full flex items-center justify-between group p-1 hover:bg-slate-50 dark:hover:bg-[#27272A]/50 rounded-xl transition">
+                <div className="flex items-center gap-2">
+                  <Sparkles size={14} className="text-fuchsia-500" />
+                  <span className="text-xs font-bold text-slate-700 dark:text-[#FAFAFA]">Featured</span>
+                </div>
                 {isFeatured ? <ToggleRight size={28} className="text-fuchsia-500" /> : <ToggleLeft size={28} className="text-slate-300 dark:text-[#52525B]" />}
               </button>
-              <button type="button" onClick={() => setIsInOffer(!isInOffer)} className="w-full flex items-center justify-between group">
-                <span className="text-sm font-semibold text-slate-700 dark:text-[#A1A1AA]">In Offer</span>
+
+              <button type="button" onClick={() => setIsBestseller(!isBestseller)} className="w-full flex items-center justify-between group p-1 hover:bg-slate-50 dark:hover:bg-[#27272A]/50 rounded-xl transition">
+                <div className="flex items-center gap-2">
+                  <Flame size={14} className="text-amber-500" />
+                  <span className="text-xs font-bold text-slate-700 dark:text-[#FAFAFA]">Bestsellers</span>
+                </div>
+                {isBestseller ? <ToggleRight size={28} className="text-amber-500" /> : <ToggleLeft size={28} className="text-slate-300 dark:text-[#52525B]" />}
+              </button>
+
+              <button type="button" onClick={() => setIsInOffer(!isInOffer)} className="w-full flex items-center justify-between group p-1 hover:bg-slate-50 dark:hover:bg-[#27272A]/50 rounded-xl transition">
+                <div className="flex items-center gap-2">
+                  <Percent size={14} className="text-rose-500" />
+                  <span className="text-xs font-bold text-slate-700 dark:text-[#FAFAFA]">On Offer</span>
+                </div>
                 {isInOffer ? <ToggleRight size={28} className="text-rose-500" /> : <ToggleLeft size={28} className="text-slate-300 dark:text-[#52525B]" />}
+              </button>
+
+              <button type="button" onClick={() => setIsNewArrival(!isNewArrival)} className="w-full flex items-center justify-between group p-1 hover:bg-slate-50 dark:hover:bg-[#27272A]/50 rounded-xl transition">
+                <div className="flex items-center gap-2">
+                  <Tag size={14} className="text-sky-500" />
+                  <span className="text-xs font-bold text-slate-700 dark:text-[#FAFAFA]">New Arrivals</span>
+                </div>
+                {isNewArrival ? <ToggleRight size={28} className="text-sky-500" /> : <ToggleLeft size={28} className="text-slate-300 dark:text-[#52525B]" />}
               </button>
             </div>
           </div>

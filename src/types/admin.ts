@@ -88,6 +88,7 @@ export interface DashboardStats {
 export interface ProductItem {
   id: string | number;
   name: string;
+  slug?: string;
   sku: string;
   category?: string;
   categoryId?: string;
@@ -112,6 +113,7 @@ export interface ProductItem {
   isInOffer?: boolean;
   isBestsaller?: boolean;
   isBestseller?: boolean;
+  isNewArrival?: boolean;
   manufacturerInfo?: {
     "Generic Name"?: string;
     "Country of Origin"?: string;
@@ -130,9 +132,13 @@ export interface ProductItem {
   attributes?: Record<string, string>;
   colours?: string[];
   tags?: string[];
+  metaTitle?: string;
+  metaDescription?: string;
+  metaKeywords?: string;
   seo?: {
     metaTitle?: string;
     metaDescription?: string;
+    metaKeywords?: string;
   };
   createdAt?: string;
   updatedAt?: string;

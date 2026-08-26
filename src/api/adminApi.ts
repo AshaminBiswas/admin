@@ -1222,24 +1222,91 @@ export const inventoryApi = {
   // 8. Download Exports (Excel & PDF)
   downloadStockReport: async (params?: { branchId?: string; lowStock?: boolean; format?: 'xlsx' | 'pdf' }) => {
     const query = new URLSearchParams();
-    if (params?.branchId && params.branchId !== 'ALL') query.append('branchId', params.branchId);
+    if (params?.branchId && params.branchId !== 'ALL' && params.branchId !== 'PRC_STOCK') query.append('branchId', params.branchId);
     if (params?.lowStock) query.append('lowStock', 'true');
     if (params?.format) query.append('format', params.format);
     const token = getAdminToken();
-    const res = await fetch(`${API_BASE_URL}/reports/stock?${query.toString()}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!res.ok) throw new Error('Failed to download stock report');
-    const blob = await res.blob();
-    const ext = params?.format === 'pdf' ? 'pdf' : 'xlsx';
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `Stock-Report-${Date.now()}.${ext}`;
-    document.body.appendChild(a);
-    a.click();
-    window.URL.revokeObjectURL(url);
-    document.body.removeChild(a);
+
+    // 1. Try backend inventory export route
+    try {
+      const exportPath = params?.format === 'pdf' ? '/inventory/export/pdf' : '/inventory/export/excel';
+      const res = await fetch(`${API_BASE_URL}${exportPath}?${query.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const blob = await res.blob();
+        if (blob.size > 0) {
+          const ext = params?.format === 'pdf' ? 'pdf' : 'xlsx';
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `Stock-Report-${Date.now()}.${ext}`;
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+          return;
+        }
+      }
+    } catch {}
+
+    // 2. Try reports/stock route
+    try {
+      const res = await fetch(`${API_BASE_URL}/reports/stock?${query.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const blob = await res.blob();
+        if (blob.size > 0) {
+          const ext = params?.format === 'pdf' ? 'pdf' : 'xlsx';
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `Stock-Report-${Date.now()}.${ext}`;
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+          return;
+        }
+      }
+    } catch {}
+
+    // 3. Resilient client-side CSV export fallback with complete data formatting
+    try {
+      const invRes = await inventoryApi.getInventory({
+        branchId: params?.branchId,
+        lowStock: params?.lowStock,
+        limit: 1000,
+      });
+      const list = Array.isArray(invRes?.data) ? invRes.data : [];
+      let csv = 'SKU,Product Name,Category,Branch / Facility,On-Hand Stock,Available Qty,Reserved Qty,Reorder Level,Unit Price (INR),Stock Valuation (INR),Stock Status\n';
+      list.forEach((i: any) => {
+        const sku = i.product?.sku || i.sku || 'N/A';
+        const name = (i.product?.name || i.productName || 'N/A').replace(/"/g, '""');
+        const cat = (i.product?.category?.name || 'General').replace(/"/g, '""');
+        const br = (i.branch?.name || 'Delhi Central Depot').replace(/"/g, '""');
+        const onHand = Number(i.quantity ?? i.stock ?? 0);
+        const reserved = Number(i.reservedQuantity ?? 0);
+        const avail = Math.max(0, onHand - reserved);
+        const reorder = Number(i.reorderLevel || i.product?.reorderLevel || 10);
+        const price = Number(i.product?.price || 0);
+        const val = onHand * price;
+        const status = avail <= 0 ? 'OUT_OF_STOCK' : avail <= reorder ? 'LOW_STOCK' : 'IN_STOCK';
+        csv += `"${sku}","${name}","${cat}","${br}",${onHand},${avail},${reserved},${reorder},${price},${val},"${status}"\n`;
+      });
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Stock-Report-${Date.now()}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (e: any) {
+      throw new Error('Failed to download stock report');
+    }
   },
 
   downloadPurchasesReport: async (params?: { branchId?: string; supplierId?: string; from?: string; to?: string }) => {
@@ -1249,25 +1316,50 @@ export const inventoryApi = {
     if (params?.from) query.append('from', params.from);
     if (params?.to) query.append('to', params.to);
     const token = getAdminToken();
+
+    // 1. Try purchases/export/excel route
+    try {
+      const res = await fetch(`${API_BASE_URL}/purchases/export/excel?${query.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const blob = await res.blob();
+        if (blob.size > 0) {
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `Purchases-Report-${Date.now()}.xlsx`;
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+          return;
+        }
+      }
+    } catch {}
+
+    // 2. Try reports/purchases route
     try {
       const res = await fetch(`${API_BASE_URL}/reports/purchases?${query.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
         const blob = await res.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `Purchases-Report-${Date.now()}.xlsx`;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
-        return;
+        if (blob.size > 0) {
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `Purchases-Report-${Date.now()}.xlsx`;
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+          return;
+        }
       }
     } catch {}
 
-    // Resilient fallback: download client-side CSV
+    // 3. Resilient fallback: download client-side CSV
     try {
       const purchasesRes = await inventoryApi.getPurchases(params);
       const list = Array.isArray(purchasesRes?.data) ? purchasesRes.data : [];
@@ -1302,25 +1394,50 @@ export const inventoryApi = {
     if (params?.from) query.append('from', params.from);
     if (params?.to) query.append('to', params.to);
     const token = getAdminToken();
+
+    // 1. Try stock-movements/export/excel route
+    try {
+      const res = await fetch(`${API_BASE_URL}/stock-movements/export/excel?${query.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const blob = await res.blob();
+        if (blob.size > 0) {
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `Stock-Movements-${Date.now()}.xlsx`;
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+          return;
+        }
+      }
+    } catch {}
+
+    // 2. Try reports/movements route
     try {
       const res = await fetch(`${API_BASE_URL}/reports/movements?${query.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
         const blob = await res.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `Stock-Movements-${Date.now()}.xlsx`;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
-        return;
+        if (blob.size > 0) {
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `Stock-Movements-${Date.now()}.xlsx`;
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+          return;
+        }
       }
     } catch {}
 
-    // Resilient fallback: download client-side CSV
+    // 3. Resilient fallback: download client-side CSV
     try {
       const movRes = await inventoryApi.getStockMovements(params);
       const list = Array.isArray(movRes?.data) ? movRes.data : [];
