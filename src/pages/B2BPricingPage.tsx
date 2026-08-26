@@ -182,31 +182,48 @@ export const B2BPricingPage: React.FC<B2BPricingPageProps> = ({
   const loadCustomers = useCallback(async () => {
     setLoadingCustomers(true);
     try {
-      // Fetch with type=b2b filter to only load enterprise/wholesale buyers
-      const res = await usersApi.list({ limit: 200, type: "b2b" as any });
+      // 1. Fetch with type=b2b filter
+      let res = await usersApi.list({ limit: 100, type: "b2b" as any });
+      let userList: any[] = [];
+
       if (res && res.success !== false) {
-        const userList = Array.isArray(res.data) ? res.data : res.data?.items || res.data?.users || [];
-        // Fallback: if backend doesn't support type=b2b, filter client-side by companyName/gstin
-        const b2bList = userList.filter((u: any) => u.companyName || u.gstin);
-        const opts: CustomerOption[] = b2bList.map((u: any) => ({
-          id: u.id,
-          name: `${u.firstName || ""} ${u.lastName || ""}`.trim() || u.email,
-          email: u.email,
-          companyName: u.companyName,
-          gstin: u.gstin,
-          b2bAdvancePercentage: u.b2bAdvancePercentage ?? 70,
-          role: u.role,
-        }));
-        setCustomers(opts);
-        if (opts.length > 0) {
-          setSelectedCustomerId((prev) => {
-            const id = prev || (opts[0]?.id ?? "");
-            // Sync advance percent for the resolved customer
-            const found = opts.find((o) => o.id === id);
-            setAdvancePercent(found?.b2bAdvancePercentage ?? 70);
-            return id;
-          });
+        userList = Array.isArray(res.data) ? res.data : res.data?.items || res.data?.users || [];
+      }
+
+      // 2. If no users returned with type=b2b, fetch all customers to ensure admin can select any customer
+      if (userList.length === 0) {
+        const allRes = await usersApi.list({ limit: 100, type: "customer" as any });
+        if (allRes && allRes.success !== false) {
+          userList = Array.isArray(allRes.data) ? allRes.data : allRes.data?.items || allRes.data?.users || [];
         }
+      }
+
+      // 3. Filter out admin/staff and prioritize B2B accounts
+      const isStaffUser = (u: any) => {
+        const roleSlug = (u.role?.slug || u.userRoles?.[0]?.role?.slug || "").toLowerCase();
+        return ["super_admin", "super-admin", "admin", "staff", "manager", "accounts"].includes(roleSlug);
+      };
+
+      const eligibleUsers = userList.filter((u) => !isStaffUser(u));
+
+      const opts: CustomerOption[] = eligibleUsers.map((u: any) => ({
+        id: u.id,
+        name: `${u.firstName || ""} ${u.lastName || ""}`.trim() || u.email,
+        email: u.email,
+        companyName: u.companyName,
+        gstin: u.gstin,
+        b2bAdvancePercentage: u.b2bAdvancePercentage ?? 70,
+        role: u.role || (u.userRoles && u.userRoles[0]?.role) || null,
+      }));
+
+      setCustomers(opts);
+      if (opts.length > 0) {
+        setSelectedCustomerId((prev) => {
+          const id = prev && opts.some((o) => o.id === prev) ? prev : (opts[0]?.id ?? "");
+          const found = opts.find((o) => o.id === id);
+          setAdvancePercent(found?.b2bAdvancePercentage ?? 70);
+          return id;
+        });
       }
     } catch (err: any) {
       console.error("[B2B Customers Load Error]:", err);
