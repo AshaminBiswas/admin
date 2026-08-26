@@ -724,7 +724,7 @@ export const inventoryApi = {
     return fetchAdminApi<InventoryItem[]>(`/inventory${qs ? `?${qs}` : ''}`);
   },
   getProductInventory: (productId: string) =>
-    fetchAdminApi<{ product: any; totalAvailable: number; totalReserved: number; branches: InventoryItem[] }>(`/inventory/product/${productId}`),
+    fetchAdminApi<{ product: any; totalAvailable: number; totalOnHand?: number; totalReserved: number; branches: InventoryItem[] }>(`/inventory/product/${productId}`),
 
   // 4. Purchases (Stock-In)
   getPurchases: (params?: { page?: number; limit?: number; branchId?: string; supplierId?: string; search?: string; from?: string; to?: string; sortBy?: string; sortOrder?: 'asc' | 'desc' }) => {

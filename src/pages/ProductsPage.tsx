@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Plus,
   Search,
@@ -25,7 +25,10 @@ import {
   Link,
   ExternalLink,
   IndianRupee,
-  Factory
+  Factory,
+  Sparkles,
+  Flame,
+  Percent,
 } from "lucide-react";
 import { fetchAdminApi } from "../api/adminApi";
 import { useAdminAuth } from "../context/AdminAuthContext";
@@ -33,6 +36,7 @@ import { ProductItem, Category } from "../types/admin";
 import { syncProductUpdate } from "../utils/productSync";
 import { useDebounce } from "../hooks/useDebounce";
 import { getCachedCategories } from "../utils/referenceDataCache";
+import { getStockStatus } from "../utils/stockStatus";
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                             */
@@ -322,24 +326,28 @@ export function ProductsPage() {
   const debouncedSearch = useDebounce(search, 300);
   const [statusFilter, setStatusFilter] = useState<"ALL" | "ACTIVE" | "INACTIVE" | "OUT_OF_STOCK">("ALL");
   const [categoryFilter, setCategoryFilter] = useState<string>("ALL");
+  const [quickFilter, setQuickFilter] = useState<"ALL" | "IN_STOCK" | "OUT_OF_STOCK" | "FEATURED" | "BESTSELLER" | "OFFER" | "NEW">("ALL");
   const [sortField, setSortField] = useState<"name" | "price" | "stock" | "id">("id");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [showFilters, setShowFilters] = useState(false);
 
-  // Pagination
+  // Server-Side Pagination
   const [page, setPage] = useState(1);
+  const [totalProducts, setTotalProducts] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const PAGE_SIZE = 10;
 
   // Reset page on filter changes
   useEffect(() => {
     setPage(1);
-  }, [debouncedSearch, statusFilter, categoryFilter]);
+  }, [debouncedSearch, statusFilter, categoryFilter, quickFilter]);
 
   // Modals
   const [deleteModal, setDeleteModal] = useState<ProductItem | null>(null);
   const [viewDrawer, setViewDrawer] = useState<ProductItem | null>(null);
 
   const fetchData = useCallback(async () => {
-    if (products.length === 0) setLoading(true);
+    setLoading(true);
     setIsSyncing(true);
     setError(null);
     try {
@@ -349,88 +357,54 @@ export function ProductsPage() {
         setCategories(cList);
       }
 
-      // 2. Fetch Products
-      const res = await fetchAdminApi<any>(`/products?limit=100`);
+      // 2. Build Server Query Params
+      const params = new URLSearchParams();
+      params.set("page", String(page));
+      params.set("limit", String(PAGE_SIZE));
+
+      if (debouncedSearch.trim()) params.set("search", debouncedSearch.trim());
+      if (statusFilter !== "ALL") params.set("status", statusFilter);
+      if (categoryFilter !== "ALL") params.set("categoryId", categoryFilter);
+      if (quickFilter === "IN_STOCK") params.set("inStock", "true");
+      if (quickFilter === "OUT_OF_STOCK") params.set("inStock", "false");
+      if (quickFilter === "FEATURED") params.set("isFeatured", "true");
+      if (quickFilter === "BESTSELLER") params.set("isBestseller", "true");
+      if (quickFilter === "OFFER") params.set("isInOffer", "true");
+      if (quickFilter === "NEW") params.set("isNewArrival", "true");
+      if (sortField) params.set("sortBy", sortField);
+      if (sortDir) params.set("sortOrder", sortDir);
+
+      // 3. Fetch Products from Backend API
+      const res = await fetchAdminApi<any>(`/products?${params.toString()}`);
 
       if (res?.success !== false) {
         const raw = res?.data || res?.products || res;
         let list: ProductItem[] = Array.isArray(raw) ? raw : Array.isArray(raw?.data) ? raw.data : Array.isArray(raw?.products) ? raw.products : [];
-        
-        // Merge and preserve all edited and created products from cache
-        try {
-          const cachedRaw = localStorage.getItem("prc_admin_products_list") || localStorage.getItem("prc_shared_products_list");
-          if (cachedRaw) {
-            const cachedList: ProductItem[] = JSON.parse(cachedRaw);
-            for (const cachedItem of cachedList) {
-              if (cachedItem && (cachedItem.id || (cachedItem as any).apiId || cachedItem.sku)) {
-                const idx = list.findIndex((p) => 
-                  String(p.id) === String(cachedItem.id) || 
-                  (p.sku && cachedItem.sku && String(p.sku).toLowerCase() === String(cachedItem.sku).toLowerCase()) ||
-                  (p.id && (cachedItem as any).apiId && String(p.id) === String((cachedItem as any).apiId))
-                );
-                if (idx !== -1) {
-                  list[idx] = { ...list[idx], ...cachedItem };
-                } else {
-                  list.unshift(cachedItem);
-                }
-              }
-            }
-          }
-        } catch {}
 
-        if (list.length > 0) {
-          setProducts(list);
-          try {
-            localStorage.setItem("prc_admin_products_list", JSON.stringify(list));
-            localStorage.setItem("prc_shared_products_list", JSON.stringify(list));
-          } catch {}
-        }
-      } else if (products.length === 0) {
+        setProducts(list);
+        const total = res?.pagination?.total ?? res?.meta?.total ?? res?.total ?? list.length;
+        const totalPgs = res?.pagination?.totalPages ?? res?.meta?.totalPages ?? Math.max(1, Math.ceil(total / PAGE_SIZE));
+        setTotalProducts(total);
+        setTotalPages(totalPgs);
+      } else {
         setProducts([]);
+        setTotalProducts(0);
+        setTotalPages(1);
       }
     } catch (err: any) {
-      if (products.length === 0) {
-        setProducts([]);
-      }
+      setError(err?.message || "Failed to fetch products");
+      setProducts([]);
     } finally {
       setLoading(false);
       setIsSyncing(false);
     }
-  }, [products.length]);
+  }, [page, debouncedSearch, statusFilter, categoryFilter, quickFilter, sortField, sortDir]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-  const filtered = React.useMemo(() => {
-    return products
-      .filter((p) => {
-        const q = debouncedSearch.toLowerCase().trim();
-        const matchSearch =
-          !q ||
-          p.name?.toLowerCase().includes(q) ||
-          p.sku?.toLowerCase().includes(q) ||
-          String(p.id).toLowerCase().includes(q);
-        const matchStatus = statusFilter === "ALL" || normalizeStatus(p.status) === statusFilter;
-        const matchCategory = categoryFilter === "ALL" || String(p.categoryId) === categoryFilter;
-        return matchSearch && matchStatus && matchCategory;
-      })
-      .sort((a, b) => {
-        let av: any, bv: any;
-        if (sortField === "name") { av = a.name?.toLowerCase(); bv = b.name?.toLowerCase(); }
-        else if (sortField === "price") { av = a.price ?? 0; bv = b.price ?? 0; }
-        else if (sortField === "stock") { av = a.stock ?? 0; bv = b.stock ?? 0; }
-        else { av = String(a.id); bv = String(b.id); }
-        if (av < bv) return sortDir === "asc" ? -1 : 1;
-        if (av > bv) return sortDir === "asc" ? 1 : -1;
-        return 0;
-      });
-  }, [products, debouncedSearch, statusFilter, categoryFilter, sortField, sortDir]);
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const paginated = React.useMemo(() => {
-    return filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-  }, [filtered, page]);
+  const paginated = products;
 
   const handleSort = (field: typeof sortField) => {
     if (sortField === field) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -477,7 +451,7 @@ export function ProductsPage() {
               All Products
             </span>
             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#8B5CF6]/10 dark:bg-[#8B5CF6]/20 text-[#8B5CF6] dark:text-[#A855F7] border border-[#8B5CF6]/20">
-              {filtered.length}
+              {totalProducts}
             </span>
           </div>
 
@@ -514,6 +488,40 @@ export function ProductsPage() {
               <RefreshCw size={13} className={isSyncing ? "animate-spin" : ""} />
             </button>
           </div>
+        </div>
+
+        {/* Quick Filter Bar (All, In Stock, Out of Stock, Featured, Bestsellers, Offers, New) */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none text-xs">
+          {[
+            { id: "ALL", label: "All Products", icon: Package },
+            { id: "IN_STOCK", label: "In Stock", icon: CheckCircle2 },
+            { id: "OUT_OF_STOCK", label: "Out of Stock", icon: AlertTriangle },
+            { id: "FEATURED", label: "Featured", icon: Sparkles },
+            { id: "BESTSELLER", label: "Bestsellers", icon: Flame },
+            { id: "OFFER", label: "On Offer", icon: Percent },
+            { id: "NEW", label: "New Arrivals", icon: Tag },
+          ].map((tab) => {
+            const Icon = tab.icon;
+            const isActive = quickFilter === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => {
+                  setQuickFilter(tab.id as any);
+                  setPage(1);
+                }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-semibold whitespace-nowrap transition-all ${
+                  isActive
+                    ? "bg-[#8B5CF6] text-white shadow-sm shadow-[#8B5CF6]/20"
+                    : "bg-white dark:bg-[#18181B] text-slate-600 dark:text-[#A1A1AA] border border-slate-200 dark:border-[#27272A] hover:border-[#8B5CF6] hover:text-[#8B5CF6]"
+                }`}
+              >
+                <Icon size={12} />
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
         </div>
 
         {showFilters && (
@@ -574,6 +582,8 @@ export function ProductsPage() {
               paginated.map((p) => {
                 const st = normalizeStatus(p.status);
                 const catName = categories.find((c) => String(c.id) === String(p.categoryId))?.name || "Uncategorized";
+                const stockInfo = getStockStatus(p.stock, p.reorderLevel);
+
                 return (
                   <div
                     key={p.id}
@@ -596,17 +606,8 @@ export function ProductsPage() {
                           <span className="text-[10px] font-mono text-[#8B5CF6] dark:text-[#A855F7] truncate">
                             {p.sku || `#${p.id}`}
                           </span>
-                          <span
-                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold flex-shrink-0 ${
-                              st === "ACTIVE"
-                                ? "bg-emerald-100 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20"
-                                : st === "OUT_OF_STOCK"
-                                ? "bg-amber-100 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-500/20"
-                                : "bg-rose-100 dark:bg-rose-500/10 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-500/20"
-                            }`}
-                          >
-                            {st === "ACTIVE" ? <CheckCircle2 size={10} /> : <AlertTriangle size={10} />}
-                            {st.replace(/_/g, " ")}
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold border ${stockInfo.badgeClass}`}>
+                            {stockInfo.label}
                           </span>
                         </div>
                         <h4 className="text-xs font-bold text-slate-900 dark:text-[#FAFAFA] line-clamp-1 mt-0.5">
@@ -624,12 +625,12 @@ export function ProductsPage() {
                         </span>
                       </div>
                       <div className="text-right">
-                        <span className="text-[10px] text-slate-400 dark:text-[#71717A] block">Stock Level</span>
+                        <span className="text-[10px] text-slate-400 dark:text-[#71717A] block">Live Stock</span>
                         <div className="flex items-center gap-1 justify-end">
                           <span className="font-bold text-slate-800 dark:text-[#FAFAFA]">{p.stock} units</span>
-                          {p.reorderLevel !== undefined && p.stock <= p.reorderLevel && (
-                            <span className="bg-amber-500/10 text-amber-500 text-[9px] font-bold px-1 rounded">Low</span>
-                          )}
+                          <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold border ${stockInfo.badgeClass}`}>
+                            {stockInfo.label}
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -679,7 +680,7 @@ export function ProductsPage() {
                     Price <SortIcon field="price" />
                   </th>
                   <th className="py-3.5 px-4 cursor-pointer select-none hover:text-[#8B5CF6]" onClick={() => handleSort("stock")}>
-                    Stock <SortIcon field="stock" />
+                    Live Stock <SortIcon field="stock" />
                   </th>
                   <th className="py-3.5 px-4 whitespace-nowrap">Status</th>
                   <th className="py-3.5 px-4 text-right whitespace-nowrap">Actions</th>
@@ -719,7 +720,7 @@ export function ProductsPage() {
                           <Package size={18} className="text-slate-400 dark:text-[#52525B]" />
                         </div>
                         <p className="text-slate-500 dark:text-[#71717A] text-xs font-medium">
-                          {search ? "No products match your search." : "No products found. Create one to get started."}
+                          {search ? "No products match your search." : "No products found."}
                         </p>
                       </div>
                     </td>
@@ -728,6 +729,8 @@ export function ProductsPage() {
                   paginated.map((p) => {
                     const st = normalizeStatus(p.status);
                     const catName = categories.find(c => String(c.id) === String(p.categoryId))?.name || "Uncategorized";
+                    const stockInfo = getStockStatus(p.stock, p.reorderLevel);
+
                     return (
                       <tr key={p.id} className="hover:bg-slate-50 dark:hover:bg-[#27272A]/40 transition-colors group">
                         <td className="py-3 px-4">
@@ -750,11 +753,9 @@ export function ProductsPage() {
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-2">
                             <span className="font-bold">{p.stock} units</span>
-                            {p.reorderLevel !== undefined && p.stock <= p.reorderLevel && (
-                              <span className="bg-amber-100 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 text-[10px] font-bold px-1.5 py-0.5 rounded-full border border-amber-200 dark:border-amber-500/20 flex items-center gap-1">
-                                <AlertTriangle size={10} /> Low
-                              </span>
-                            )}
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${stockInfo.badgeClass}`}>
+                              {stockInfo.label}
+                            </span>
                           </div>
                         </td>
                         <td className="py-3 px-4">
@@ -796,16 +797,16 @@ export function ProductsPage() {
             </table>
           </div>
 
-          {!loading && !error && filtered.length > 0 && (
+          {!loading && !error && totalProducts > 0 && (
             <div className="px-4 py-3 bg-slate-50 dark:bg-[#09090B] border-t border-slate-200 dark:border-[#27272A] flex flex-col sm:flex-row items-center justify-between gap-3">
               <p className="text-[11px] text-slate-500 dark:text-[#71717A] font-medium">
-                Showing <span className="font-bold text-slate-700 dark:text-[#A1A1AA]">{(page - 1) * PAGE_SIZE + 1}</span> to <span className="font-bold text-slate-700 dark:text-[#A1A1AA]">{Math.min(page * PAGE_SIZE, filtered.length)}</span> out of <span className="font-bold text-slate-700 dark:text-[#A1A1AA]">{filtered.length}</span> results
+                Showing <span className="font-bold text-slate-700 dark:text-[#A1A1AA]">{(page - 1) * PAGE_SIZE + 1}</span> to <span className="font-bold text-slate-700 dark:text-[#A1A1AA]">{Math.min(page * PAGE_SIZE, totalProducts)}</span> out of <span className="font-bold text-slate-700 dark:text-[#A1A1AA]">{totalProducts}</span> products
               </p>
               <div className="flex items-center gap-1.5">
                 <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1} className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-[11px] font-semibold border bg-white dark:bg-[#18181B] border-slate-200 dark:border-[#27272A] text-slate-600 dark:text-[#A1A1AA] hover:border-[#8B5CF6] hover:text-[#8B5CF6] disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
                   <ChevronLeft size={13} /> Prev
                 </button>
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map((pg) => (
+                {Array.from({ length: totalPages }, (_, i) => i + 1).slice(Math.max(0, page - 3), page + 2).map((pg) => (
                   <button key={pg} onClick={() => setPage(pg)} className={`w-8 h-8 rounded-lg text-[11px] font-bold border transition-colors ${pg === page ? "bg-[#8B5CF6] text-white border-[#8B5CF6] shadow-md shadow-[#8B5CF6]/25" : "bg-white dark:bg-[#18181B] border-slate-200 dark:border-[#27272A] text-slate-600 dark:text-[#A1A1AA] hover:border-[#8B5CF6] hover:text-[#8B5CF6]"}`}>
                     {pg}
                   </button>
