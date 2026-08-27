@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { ShieldCheck, Lock, Mail, ArrowRight, AlertCircle, KeyRound, ArrowLeft, ShieldAlert, CheckCircle2 } from "lucide-react";
+import { ShieldCheck, Lock, Mail, ArrowRight, AlertCircle, KeyRound, ArrowLeft, ShieldAlert, CheckCircle2, Wifi } from "lucide-react";
 import { useAdminAuth } from "../context/AdminAuthContext";
 
 export function AdminLoginPage() {
@@ -7,6 +7,7 @@ export function AdminLoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isWakingUp, setIsWakingUp] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
 
@@ -15,6 +16,7 @@ export function AdminLoginPage() {
   const [useBackupCode, setUseBackupCode] = useState(false);
   const [backupCode, setBackupCode] = useState("");
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const wakeUpTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (pending2FA && !useBackupCode && inputRefs.current[0]) {
@@ -22,10 +24,18 @@ export function AdminLoginPage() {
     }
   }, [pending2FA, useBackupCode]);
 
+  // Cleanup wake-up timer on unmount
+  useEffect(() => {
+    return () => {
+      if (wakeUpTimerRef.current) clearTimeout(wakeUpTimerRef.current);
+    };
+  }, []);
+
   const handleStep1Submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg("");
     setSuccessMsg("");
+    setIsWakingUp(false);
     clearSessionNotice();
 
     if (!email.trim() || !password.trim()) {
@@ -34,7 +44,16 @@ export function AdminLoginPage() {
     }
 
     setIsSubmitting(true);
+
+    // After 5s of waiting, show the "server waking up" indicator
+    wakeUpTimerRef.current = setTimeout(() => {
+      setIsWakingUp(true);
+    }, 5000);
+
     const res = await login(email.trim(), password);
+
+    if (wakeUpTimerRef.current) clearTimeout(wakeUpTimerRef.current);
+    setIsWakingUp(false);
     setIsSubmitting(false);
 
     if (res.success) {
@@ -192,7 +211,7 @@ export function AdminLoginPage() {
               className="w-full bg-[#8B5CF6] text-[#FAFAFA] font-bold py-3 px-4 rounded-tr-2xl rounded-bl-2xl hover:bg-[#A855F7] transition-all duration-300 shadow-lg shadow-[#8B5CF6]/25 text-sm flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50 mt-2"
             >
               {isSubmitting ? (
-                <span>Authenticating Executive...</span>
+                <span>{isWakingUp ? "Server Starting Up..." : "Authenticating Executive..."}</span>
               ) : (
                 <>
                   <span>Sign In to Executive Console</span>
@@ -200,6 +219,23 @@ export function AdminLoginPage() {
                 </>
               )}
             </button>
+
+            {/* Server cold-start wake-up indicator — shown after 5s of waiting */}
+            {isWakingUp && (
+              <div className="p-3 rounded-tr-xl rounded-bl-xl bg-violet-950/60 border border-violet-500/30 text-violet-300 text-xs space-y-2">
+                <div className="flex items-center gap-2">
+                  <Wifi size={14} className="text-violet-400 flex-shrink-0 animate-pulse" />
+                  <span className="font-semibold">Server waking up from sleep...</span>
+                </div>
+                <p className="text-violet-400/80 leading-relaxed">
+                  The server was resting. It's starting now — this usually takes 20–40 seconds on first sign-in. Please wait, do not close this page.
+                </p>
+                {/* Animated progress bar */}
+                <div className="w-full bg-violet-900/40 rounded-full h-1 overflow-hidden">
+                  <div className="h-1 bg-violet-400 rounded-full animate-[progress_30s_linear_forwards]" style={{ animation: "wakeup-progress 55s linear forwards" }} />
+                </div>
+              </div>
+            )}
           </form>
         ) : (
           /* STEP 2: 2FA Security Code Verification Form */

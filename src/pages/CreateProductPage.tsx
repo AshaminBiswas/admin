@@ -969,7 +969,7 @@ export function CreateProductPage() {
               <button type="button" onClick={() => setIsFeatured(!isFeatured)} className="w-full flex items-center justify-between group p-1 hover:bg-slate-50 dark:hover:bg-[#27272A]/50 rounded-xl transition">
                 <div className="flex items-center gap-2">
                   <Sparkles size={14} className="text-fuchsia-500" />
-                  <span className="text-xs font-bold text-slate-700 dark:text-[#FAFAFA]">Featured</span>
+                  <span className="text-xs font-bold text-slate-700 dark:text-[#FAFAFA]">Value for Money</span>
                 </div>
                 {isFeatured ? <ToggleRight size={28} className="text-fuchsia-500" /> : <ToggleLeft size={28} className="text-slate-300 dark:text-[#52525B]" />}
               </button>

@@ -143,3 +143,9 @@ html:not(.dark) .recharts-cartesian-axis-tick-value {
     scrollbar-width: none;
   }
 }
+
+/* Server wake-up progress bar animation (55s to cover Render cold-start window) */
+@keyframes wakeup-progress {
+  from { width: 0%; }
+  to   { width: 100%; }
+}

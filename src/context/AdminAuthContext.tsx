@@ -13,6 +13,7 @@ import {
   MAX_SESSION_MS,
   getSessionAgeMs,
   isSessionExpired,
+  keepAliveServerPing,
 } from "../api/adminApi";
 
 const VIEW_STORAGE_KEY = "prc_admin_current_view";
@@ -89,6 +90,7 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const maxSessionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const keepAliveIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const setCurrentView = (view: AdminView) => {
     let normalized = view === "varients" ? "variants" : view;
@@ -154,6 +156,10 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
     if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
     if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
     if (maxSessionTimerRef.current) clearTimeout(maxSessionTimerRef.current);
+    if (keepAliveIntervalRef.current) {
+      clearInterval(keepAliveIntervalRef.current);
+      keepAliveIntervalRef.current = null;
+    }
 
     await adminAuthService.logout();
     clearAdminTokens();
@@ -182,6 +188,10 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
     if (!adminUser) {
       if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
       if (maxSessionTimerRef.current) clearTimeout(maxSessionTimerRef.current);
+      if (keepAliveIntervalRef.current) {
+        clearInterval(keepAliveIntervalRef.current);
+        keepAliveIntervalRef.current = null;
+      }
       return;
     }
 
@@ -209,9 +219,20 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
     resetIdleTimer();
     activityEvents.forEach((evt) => window.addEventListener(evt, handleUserActivity, { passive: true }));
 
+    // 4. Keep-alive ping every 4 minutes to prevent Render from sleeping
+    if (keepAliveIntervalRef.current) clearInterval(keepAliveIntervalRef.current);
+    keepAliveServerPing(); // immediate ping on login
+    keepAliveIntervalRef.current = setInterval(() => {
+      keepAliveServerPing();
+    }, 4 * 60 * 1000); // every 4 minutes
+
     return () => {
       if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
       if (maxSessionTimerRef.current) clearTimeout(maxSessionTimerRef.current);
+      if (keepAliveIntervalRef.current) {
+        clearInterval(keepAliveIntervalRef.current);
+        keepAliveIntervalRef.current = null;
+      }
       activityEvents.forEach((evt) => window.removeEventListener(evt, handleUserActivity));
     };
   }, [adminUser, resetIdleTimer, logout]);

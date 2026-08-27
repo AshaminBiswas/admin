@@ -149,6 +149,19 @@ export async function proactiveTokenRefresh(): Promise<boolean> {
   }
 }
 
+// ─── Keep-Alive Server Ping ────────────────────────────────────────────────────
+/**
+ * Silently pings the backend /health endpoint to prevent Render from sleeping.
+ * Call this on an interval (e.g. every 4 minutes) while the admin is logged in.
+ */
+export async function keepAliveServerPing(): Promise<void> {
+  try {
+    await fetch(`${API_BASE_URL}/health`, { method: "GET", signal: AbortSignal.timeout(10000) });
+  } catch {
+    // Silent — ping failures are non-fatal
+  }
+}
+
 // ─── Main API Fetch with Reactive Refresh ─────────────────────────────────────
 export async function fetchAdminApi<T = any>(
   endpoint: string,
@@ -175,8 +188,8 @@ export async function fetchAdminApi<T = any>(
     cleanEndpoint.includes("/auth/2fa/login") ||
     cleanEndpoint.includes("/auth/2fa/authenticate");
 
-  // Configure timeout controller (25s for auth/login cold starts, 15s for general requests)
-  const timeoutMs = isAuthEndpoint ? 25000 : 15000;
+  // Configure timeout controller (60s for auth/login cold starts to handle Render sleep wake-ups, 20s for general requests)
+  const timeoutMs = isAuthEndpoint ? 60000 : 20000;
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
