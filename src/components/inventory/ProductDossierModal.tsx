@@ -524,7 +524,9 @@ export const ProductDossierModal: React.FC<ProductDossierModalProps> = ({
                         </div>
                         <div className="flex justify-between py-1.5">
                           <span className="text-slate-500">Product Weight:</span>
-                          <span className="font-semibold text-slate-800 dark:text-[#FAFAFA]">{prod.weight ? `${prod.weight} kg` : 'N/A'}</span>
+                          <span className="font-semibold text-slate-800 dark:text-[#FAFAFA]">
+                            {prod.weight ? (Number(prod.weight) < 10 ? `${Math.round(Number(prod.weight) * 1000)} g` : `${prod.weight} g`) : 'N/A'}
+                          </span>
                         </div>
                       </div>
                     </div>

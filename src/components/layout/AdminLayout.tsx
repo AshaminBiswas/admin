@@ -1,48 +1,50 @@
-import React, { useState, Suspense, lazy } from "react";
+import React, { useState, Suspense } from "react";
 import { AdminSidebar } from "./AdminSidebar";
 import { AdminHeader } from "./AdminHeader";
 import { useAdminAuth } from "../../context/AdminAuthContext";
 import { RefreshCw, LayoutDashboard, ShoppingCart, Package, FileText, Menu } from "lucide-react";
+import { lazyWithRetry } from "../../utils/lazyWithRetry";
+import { ViewErrorBoundary } from "../common/ViewErrorBoundary";
 
-// ─── Code-Split Admin Views with Dynamic lazy() Imports ──────────────────────
+// ─── Code-Split Admin Views with Dynamic lazyWithRetry() Imports ─────────────
 
-const DashboardPage = lazy(() => import("../../pages/DashboardPage").then((m) => ({ default: m.DashboardPage })));
-const AnalyticsPage = lazy(() => import("../../pages/AnalyticsPage").then((m) => ({ default: m.AnalyticsPage })));
-const ReportsPage = lazy(() => import("../../pages/ReportsPage").then((m) => ({ default: m.ReportsPage })));
-const ProductsPage = lazy(() => import("../../pages/ProductsPage").then((m) => ({ default: m.ProductsPage })));
-const CreateProductPage = lazy(() => import("../../pages/CreateProductPage").then((m) => ({ default: m.CreateProductPage })));
-const EditProductPage = lazy(() => import("../../pages/EditProductPage").then((m) => ({ default: m.EditProductPage })));
-const OrdersPage = lazy(() => import("../../pages/OrdersPage").then((m) => ({ default: m.OrdersPage })));
-const QuotesPage = lazy(() => import("../../pages/QuotesPage").then((m) => ({ default: m.QuotesPage })));
+const DashboardPage = lazyWithRetry(() => import("../../pages/DashboardPage").then((m) => ({ default: m.DashboardPage })));
+const AnalyticsPage = lazyWithRetry(() => import("../../pages/AnalyticsPage").then((m) => ({ default: m.AnalyticsPage })));
+const ReportsPage = lazyWithRetry(() => import("../../pages/ReportsPage").then((m) => ({ default: m.ReportsPage })));
+const ProductsPage = lazyWithRetry(() => import("../../pages/ProductsPage").then((m) => ({ default: m.ProductsPage })));
+const CreateProductPage = lazyWithRetry(() => import("../../pages/CreateProductPage").then((m) => ({ default: m.CreateProductPage })));
+const EditProductPage = lazyWithRetry(() => import("../../pages/EditProductPage").then((m) => ({ default: m.EditProductPage })));
+const OrdersPage = lazyWithRetry(() => import("../../pages/OrdersPage").then((m) => ({ default: m.OrdersPage })));
+const QuotesPage = lazyWithRetry(() => import("../../pages/QuotesPage").then((m) => ({ default: m.QuotesPage })));
 
-const AppointmentsPage = lazy(() => import("../../pages/AppointmentsPage").then((m) => ({ default: m.AppointmentsPage })));
-const AuditPage = lazy(() => import("../../pages/AuditPage").then((m) => ({ default: m.AuditPage })));
-const AdminManagementPage = lazy(() => import("../../pages/AdminManagementPage").then((m) => ({ default: m.AdminManagementPage })));
-const RolesPage = lazy(() => import("../../pages/RolesPage").then((m) => ({ default: m.RolesPage })));
-const AdminSecuritySettings = lazy(() => import("../settings/AdminSecuritySettings").then((m) => ({ default: m.AdminSecuritySettings })));
+const AppointmentsPage = lazyWithRetry(() => import("../../pages/AppointmentsPage").then((m) => ({ default: m.AppointmentsPage })));
+const AuditPage = lazyWithRetry(() => import("../../pages/AuditPage").then((m) => ({ default: m.AuditPage })));
+const AdminManagementPage = lazyWithRetry(() => import("../../pages/AdminManagementPage").then((m) => ({ default: m.AdminManagementPage })));
+const RolesPage = lazyWithRetry(() => import("../../pages/RolesPage").then((m) => ({ default: m.RolesPage })));
+const AdminSecuritySettings = lazyWithRetry(() => import("../settings/AdminSecuritySettings").then((m) => ({ default: m.AdminSecuritySettings })));
 
 // Specialized pages
-const CategoriesPage = lazy(() => import("../../pages/CategoriesPage").then((m) => ({ default: m.CategoriesPage })));
-const MaterialsPage = lazy(() => import("../../pages/MaterialsPage").then((m) => ({ default: m.MaterialsPage })));
-const CreateCategoryPage = lazy(() => import("../../pages/CreateCategoryPage").then((m) => ({ default: m.CreateCategoryPage })));
-const EditCategoryPage = lazy(() => import("../../pages/EditCategoryPage").then((m) => ({ default: m.EditCategoryPage })));
-const BannersPage = lazy(() => import("../../pages/BannersPage").then((m) => ({ default: m.BannersPage })));
-const CMSPage = lazy(() => import("../../pages/CMSPage").then((m) => ({ default: m.CMSPage })));
-const CouponsPage = lazy(() => import("../../pages/CouponsPage").then((m) => ({ default: m.CouponsPage })));
-const MediaUploadManager = lazy(() => import("../../pages/MediaUploadManager").then((m) => ({ default: m.MediaUploadManager })));
-const EnquiriesPage = lazy(() => import("../../pages/EnquiriesPage").then((m) => ({ default: m.EnquiriesPage })));
-const ReviewsPage = lazy(() => import("../../pages/ReviewsPage").then((m) => ({ default: m.ReviewsPage })));
-const UsersPage = lazy(() => import("../../pages/UsersPage").then((m) => ({ default: m.UsersPage })));
-const CustomerDossierPage = lazy(() => import("../../pages/CustomerDossierPage").then((m) => ({ default: m.CustomerDossierPage })));
-const AdminDossierPage = lazy(() => import("../../pages/AdminDossierPage").then((m) => ({ default: m.AdminDossierPage })));
-const ShippingsPage = lazy(() => import("../../pages/ShippingsPage").then((m) => ({ default: m.ShippingsPage })));
-const ModelManagementPage = lazy(() => import("../../pages/ModelManagementPage").then((m) => ({ default: m.ModelManagementPage })));
-const B2BPricingPage = lazy(() => import("../../pages/B2BPricingPage").then((m) => ({ default: m.B2BPricingPage })));
-const VariantsPage = lazy(() => import("../../pages/VariantsPage").then((m) => ({ default: m.VariantsPage })));
-const NotificationsPage = lazy(() => import("../../pages/NotificationsPage").then((m) => ({ default: m.NotificationsPage })));
-const InventoryPage = lazy(() => import("../../pages/InventoryPage").then((m) => ({ default: m.InventoryPage })));
-const ProductDossierPage = lazy(() => import("../../pages/ProductDossierPage").then((m) => ({ default: m.ProductDossierPage })));
-const GSTInvoiceHub = lazy(() => import("../../pages/GSTInvoiceHub"));
+const CategoriesPage = lazyWithRetry(() => import("../../pages/CategoriesPage").then((m) => ({ default: m.CategoriesPage })));
+const MaterialsPage = lazyWithRetry(() => import("../../pages/MaterialsPage").then((m) => ({ default: m.MaterialsPage })));
+const CreateCategoryPage = lazyWithRetry(() => import("../../pages/CreateCategoryPage").then((m) => ({ default: m.CreateCategoryPage })));
+const EditCategoryPage = lazyWithRetry(() => import("../../pages/EditCategoryPage").then((m) => ({ default: m.EditCategoryPage })));
+const BannersPage = lazyWithRetry(() => import("../../pages/BannersPage").then((m) => ({ default: m.BannersPage })));
+const CMSPage = lazyWithRetry(() => import("../../pages/CMSPage").then((m) => ({ default: m.CMSPage })));
+const CouponsPage = lazyWithRetry(() => import("../../pages/CouponsPage").then((m) => ({ default: m.CouponsPage })));
+const MediaUploadManager = lazyWithRetry(() => import("../../pages/MediaUploadManager").then((m) => ({ default: m.MediaUploadManager })));
+const EnquiriesPage = lazyWithRetry(() => import("../../pages/EnquiriesPage").then((m) => ({ default: m.EnquiriesPage })));
+const ReviewsPage = lazyWithRetry(() => import("../../pages/ReviewsPage").then((m) => ({ default: m.ReviewsPage })));
+const UsersPage = lazyWithRetry(() => import("../../pages/UsersPage").then((m) => ({ default: m.UsersPage })));
+const CustomerDossierPage = lazyWithRetry(() => import("../../pages/CustomerDossierPage").then((m) => ({ default: m.CustomerDossierPage })));
+const AdminDossierPage = lazyWithRetry(() => import("../../pages/AdminDossierPage").then((m) => ({ default: m.AdminDossierPage })));
+const ShippingsPage = lazyWithRetry(() => import("../../pages/ShippingsPage").then((m) => ({ default: m.ShippingsPage })));
+const ModelManagementPage = lazyWithRetry(() => import("../../pages/ModelManagementPage").then((m) => ({ default: m.ModelManagementPage })));
+const B2BPricingPage = lazyWithRetry(() => import("../../pages/B2BPricingPage").then((m) => ({ default: m.B2BPricingPage })));
+const VariantsPage = lazyWithRetry(() => import("../../pages/VariantsPage").then((m) => ({ default: m.VariantsPage })));
+const NotificationsPage = lazyWithRetry(() => import("../../pages/NotificationsPage").then((m) => ({ default: m.NotificationsPage })));
+const InventoryPage = lazyWithRetry(() => import("../../pages/InventoryPage").then((m) => ({ default: m.InventoryPage })));
+const ProductDossierPage = lazyWithRetry(() => import("../../pages/ProductDossierPage").then((m) => ({ default: m.ProductDossierPage })));
+const GSTInvoiceHub = lazyWithRetry(() => import("../../pages/GSTInvoiceHub"));
 
 function ViewLoadingSkeleton() {
   return (
@@ -340,9 +342,11 @@ export function AdminLayout() {
         />
         <main className="flex-1 p-2 sm:p-4 md:p-6 pb-20 md:pb-6 overflow-y-auto overflow-x-hidden min-h-0 w-full">
           <div className="max-w-7xl mx-auto space-y-3 sm:space-y-5 md:space-y-6 w-full min-w-0">
-            <Suspense fallback={<ViewLoadingSkeleton />}>
-              {renderCurrentView()}
-            </Suspense>
+            <ViewErrorBoundary onResetView={() => setCurrentView("dashboard")}>
+              <Suspense fallback={<ViewLoadingSkeleton />}>
+                {renderCurrentView()}
+              </Suspense>
+            </ViewErrorBoundary>
           </div>
         </main>
       </div>

@@ -798,8 +798,8 @@ export function CreateProductPage() {
             <div className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className={labelClass}>Weight (kg)</label>
-                  <input type="number" step="0.01" value={weight} onChange={(e) => setWeight(e.target.value)} placeholder="0.35" className={inputClass} />
+                  <label className={labelClass}>Weight (Gram)</label>
+                  <input type="number" step="1" value={weight} onChange={(e) => setWeight(e.target.value)} placeholder="350" className={inputClass} />
                 </div>
                 <div>
                   <label className={labelClass}>Warranty</label>
