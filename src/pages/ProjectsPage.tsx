@@ -79,6 +79,7 @@ export function ProjectsPage() {
     "Residential & Clubhouses",
     "Hotels & Hospitality",
     "Gym & Fitness",
+    "Industrial & Logistics",
   ];
 
   const loadProjects = useCallback(async () => {
