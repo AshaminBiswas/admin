@@ -45,6 +45,7 @@ const NotificationsPage = lazyWithRetry(() => import("../../pages/NotificationsP
 const InventoryPage = lazyWithRetry(() => import("../../pages/InventoryPage").then((m) => ({ default: m.InventoryPage })));
 const ProductDossierPage = lazyWithRetry(() => import("../../pages/ProductDossierPage").then((m) => ({ default: m.ProductDossierPage })));
 const GSTInvoiceHub = lazyWithRetry(() => import("../../pages/GSTInvoiceHub"));
+const ProjectsPage = lazyWithRetry(() => import("../../pages/ProjectsPage").then((m) => ({ default: m.ProjectsPage })));
 
 function ViewLoadingSkeleton() {
   return (
@@ -278,6 +279,8 @@ export function AdminLayout() {
         );
 
       // 5. Storefront & CMS
+      case "projects":
+        return <ProjectsPage />;
       case "cms":
         return <CMSPage />;
       case "homepage":

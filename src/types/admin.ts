@@ -299,7 +299,8 @@ export type AdminView =
   | 'inventory-dossier'
   | 'audit-hub'
   | 'invoice-create'
-  | 'invoice-detail';
+  | 'invoice-detail'
+  | 'projects';
 
 /* ─── Admin 360° Profile & Audit Dossier Types ────────────────────────────── */
 
@@ -938,6 +939,59 @@ export interface ProductDossier {
   timeline: ProductDossierTimelineEvent[];
   customerDirectory: ProductDossierCustomer[];
   summaryMetrics: ProductDossierSummaryMetrics;
+}
+
+/* ─── Projects & Landmark Installations Types ────────────────────────────── */
+
+export interface ProjectItem {
+  id: string;
+  name: string;
+  clientName: string;
+  location?: string | null;
+  city: string;
+  state: string;
+  region?: string | null;
+  isPanIndia: boolean;
+  category: string;
+  description?: string | null;
+  completionYear?: string | null;
+  productsUsed: string[];
+  images: string[];
+  videoUrl?: string | null;
+  isFeatured: boolean;
+  status: 'ACTIVE' | 'INACTIVE';
+  orderIndex: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProjectLocationCluster {
+  city: string;
+  state: string;
+  count: number;
+  lat: number;
+  lng: number;
+  sampleProjects: {
+    id: string;
+    name: string;
+    clientName: string;
+    category: string;
+    coverImage: string;
+  }[];
+}
+
+export interface ProjectLocationsSummaryResponse {
+  totalProjects: number;
+  totalCities: number;
+  panIndiaCount: number;
+  clusters: ProjectLocationCluster[];
+  panIndiaProjects: {
+    id: string;
+    name: string;
+    clientName: string;
+    category: string;
+    coverImage: string;
+  }[];
 }
 
 

@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import {
   LayoutDashboard,
+  Building2,
   BarChart3,
   Package,
   Boxes,
@@ -98,6 +99,7 @@ export function AdminSidebar({
     { id: "wishlist", label: "Saved Wishlists", category: "Customers & Access", icon: <Heart size={18} /> },
 
     // Storefront & CMS
+    { id: "projects", label: "Clients & Projects", category: "Storefront & CMS", icon: <Building2 size={18} />, badge: "130+" },
     { id: "cms", label: "CMS Pages", category: "Storefront & CMS", icon: <FileCode size={18} /> },
     { id: "homepage", label: "Homepage Builder", category: "Storefront & CMS", icon: <Home size={18} /> },
     { id: "banner", label: "Banners & Hero", category: "Storefront & CMS", icon: <ImageIcon size={18} /> },
