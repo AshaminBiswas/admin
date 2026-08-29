@@ -54,6 +54,40 @@ function getAttachmentUrl(storageUrl?: string): string {
   return `${baseServer}/api/v1${cleanPath.startsWith('/') ? '' : '/'}${cleanPath}${tokenParam}`;
 }
 
+function formatReplySubjectWithPo(po: PoSubmissionDetail): string {
+  const customerPo = po.customerPoNumber?.trim();
+  const systemPo = po.poSubmissionId?.trim();
+  const metadataPo =
+    po.metadata?.poNumber?.toString().trim() ||
+    po.metadata?.customerPoNumber?.toString().trim() ||
+    (po as any).extractedData?.poNumber?.toString().trim();
+
+  const primaryPo = customerPo || systemPo || metadataPo;
+  let baseSubject = (po.subject || 'Purchase Order').trim();
+
+  // Strip leading prefixes like Re:, RE:, Fwd:, FW:
+  baseSubject = baseSubject.replace(/^((re|fwd|fw):\s*)+/i, '').trim();
+
+  if (!primaryPo) {
+    return `Re: ${baseSubject}`;
+  }
+
+  const lowerSubject = baseSubject.toLowerCase();
+  const lowerPrimary = primaryPo.toLowerCase();
+
+  // If subject already has the PO reference, return as-is with Re:
+  if (lowerSubject.includes(lowerPrimary)) {
+    return `Re: ${baseSubject}`;
+  }
+
+  // If customer has a specific PO# and there is also a system PO ID
+  if (customerPo && systemPo && customerPo !== systemPo && !lowerSubject.includes(systemPo.toLowerCase())) {
+    return `Re: [${customerPo} / ${systemPo}] ${baseSubject}`;
+  }
+
+  return `Re: [${primaryPo}] ${baseSubject}`;
+}
+
 interface PODossierModalProps {
   poId: string;
   onClose: () => void;
@@ -100,7 +134,7 @@ export function PODossierModal({ poId, onClose, onUpdated }: PODossierModalProps
   useEffect(() => {
     if (po) {
       setReplyTo(po.customerEmail || '');
-      setReplySubject(po.subject?.startsWith('Re:') ? po.subject : `Re: ${po.subject || ''}`);
+      setReplySubject(formatReplySubjectWithPo(po));
     }
   }, [po]);
 
@@ -708,7 +742,39 @@ export function PODossierModal({ poId, onClose, onUpdated }: PODossierModalProps
                   {/* Subject & Status */}
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
                     <div className="sm:col-span-2">
-                      <label className="block text-[10px] font-bold text-slate-500 mb-1">Subject</label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[10px] font-bold text-slate-500">Subject</label>
+                        <div className="flex items-center gap-1.5 text-[9px]">
+                          {po.poSubmissionId && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!replySubject.includes(po.poSubmissionId!)) {
+                                  setReplySubject(`Re: [${po.poSubmissionId}] ${replySubject.replace(/^((re|fwd|fw):\s*)+/i, '').trim()}`);
+                                }
+                              }}
+                              className="px-1.5 py-0.5 rounded-md bg-[#8B5CF6]/15 text-[#8B5CF6] hover:bg-[#8B5CF6] hover:text-white font-mono transition-colors"
+                              title="Insert PO Submission ID"
+                            >
+                              + {po.poSubmissionId}
+                            </button>
+                          )}
+                          {po.customerPoNumber && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!replySubject.includes(po.customerPoNumber!)) {
+                                  setReplySubject(`Re: [${po.customerPoNumber}] ${replySubject.replace(/^((re|fwd|fw):\s*)+/i, '').trim()}`);
+                                }
+                              }}
+                              className="px-1.5 py-0.5 rounded-md bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500 hover:text-white font-mono transition-colors"
+                              title="Insert Customer PO #"
+                            >
+                              + {po.customerPoNumber}
+                            </button>
+                          )}
+                        </div>
+                      </div>
                       <input
                         type="text"
                         required
