@@ -39,7 +39,17 @@ import {
   updateCustomerPoNumber,
   addInternalNote,
 } from '../../api/poManagementService';
-import { fetchAdminApi } from '../../api/adminApi';
+import { fetchAdminApi, API_BASE_URL } from '../../api/adminApi';
+
+function getAttachmentUrl(storageUrl?: string): string {
+  if (!storageUrl) return '#';
+  if (storageUrl.startsWith('http://') || storageUrl.startsWith('https://') || storageUrl.startsWith('data:')) {
+    return storageUrl;
+  }
+  const cleanPath = storageUrl.replace(/^\/api\/v1/, '');
+  const baseServer = API_BASE_URL.replace(/\/api\/v1\/?$/, '');
+  return `${baseServer}/api/v1${cleanPath.startsWith('/') ? '' : '/'}${cleanPath}`;
+}
 
 interface PODossierModalProps {
   poId: string;
@@ -590,7 +600,7 @@ export function PODossierModal({ poId, onClose, onUpdated }: PODossierModalProps
                       <div className="flex items-center gap-1.5 flex-shrink-0">
                         {att.storageUrl && (
                           <a
-                            href={att.storageUrl}
+                            href={getAttachmentUrl(att.storageUrl)}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="p-2 rounded-lg bg-slate-200 dark:bg-[#27272A] text-slate-700 dark:text-[#E4E4E7] hover:text-[#8B5CF6] transition-colors"
@@ -600,8 +610,10 @@ export function PODossierModal({ poId, onClose, onUpdated }: PODossierModalProps
                           </a>
                         )}
                         <a
-                          href={att.storageUrl}
+                          href={getAttachmentUrl(att.storageUrl)}
                           download={att.fileName}
+                          target="_blank"
+                          rel="noopener noreferrer"
                           className="p-2 rounded-lg bg-[#8B5CF6] text-white hover:bg-[#7C3AED] transition-colors"
                           title="Download File"
                         >
