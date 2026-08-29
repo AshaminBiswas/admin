@@ -145,18 +145,18 @@ const REPORT_TYPES: ReportOption[] = [
 
 export function AICopilot({ currentPoId, currentView }: AICopilotProps) {
   const { adminUser } = useAdminAuth();
+  const adminName = adminUser?.firstName
+    ? adminUser.firstName
+    : adminUser?.email
+    ? adminUser.email.split("@")[0]
+    : "Admin";
+
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "welcome",
       role: "assistant",
-      content: `Hello${adminUser?.firstName ? ` ${adminUser.firstName}` : ""}! 👋 I am your **PRC PILOT**, powered by NVIDIA llama-3.2-90b-vision. I can help you:
-
-• **Draft professional email replies** for customer POs & quotations
-• **Analyze business data** and generate live executive reports
-• **Detect low stock**, payment issues, and dispatch delays
-• **Answer questions** about orders, inventory, and B2B pricing
-
+      content: `Hello ${adminName},
 What would you like help with today?`,
       timestamp: new Date(),
     },
@@ -405,7 +405,8 @@ ${draft.body}
       {
         id: "welcome-reset",
         role: "assistant",
-        content: "Chat cleared! How can I help you?",
+        content: `Hello ${adminName},
+What would you like help with today?`,
         timestamp: new Date(),
       },
     ]);
@@ -418,7 +419,7 @@ ${draft.body}
     }
   };
 
-  // â”€â”€ Render Markdown-like formatting â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Render Markdown-like formatting ──
   const renderContent = (content: string) => {
     if (!content) return null;
     const lines = content.split("\n");
@@ -430,12 +431,12 @@ ${draft.body}
       // HR
       if (line === "---") return <hr key={i} className="my-2 border-[#27272A]" />;
       // Heading
-      if (line.startsWith("# ")) return <p key={i} className="font-bold text-base mt-2" dangerouslySetInnerHTML={{ __html: withCode.slice(2) }} />;
-      if (line.startsWith("## ")) return <p key={i} className="font-semibold mt-2" dangerouslySetInnerHTML={{ __html: withCode.slice(3) }} />;
-      if (line.startsWith("### ")) return <p key={i} className="font-medium mt-1" dangerouslySetInnerHTML={{ __html: withCode.slice(4) }} />;
+      if (line.startsWith("# ")) return <p key={i} className="font-bold text-base mt-2 text-white" dangerouslySetInnerHTML={{ __html: withCode.slice(2) }} />;
+      if (line.startsWith("## ")) return <p key={i} className="font-semibold mt-2 text-violet-200" dangerouslySetInnerHTML={{ __html: withCode.slice(3) }} />;
+      if (line.startsWith("### ")) return <p key={i} className="font-medium mt-1 text-slate-200" dangerouslySetInnerHTML={{ __html: withCode.slice(4) }} />;
       // List items
-      if (line.startsWith("â€¢ ") || line.startsWith("- ")) return (
-        <p key={i} className="flex gap-1.5" dangerouslySetInnerHTML={{ __html: "â€¢ " + withCode.slice(2) }} />
+      if (line.startsWith("• ") || line.startsWith("- ")) return (
+        <p key={i} className="flex gap-1.5 ml-1" dangerouslySetInnerHTML={{ __html: "• " + withCode.slice(2) }} />
       );
       return <p key={i} dangerouslySetInnerHTML={{ __html: withCode || "&nbsp;" }} />;
     });
