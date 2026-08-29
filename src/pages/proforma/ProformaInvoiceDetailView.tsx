@@ -247,17 +247,20 @@ export function ProformaInvoiceDetailView({ invoice, onBack }: Props) {
         {/* Document Top Header */}
         <div className="flex flex-wrap items-start justify-between gap-6 border-b-2 border-[#0f172a] pb-6">
           <div className="space-y-1 max-w-md">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-[#0f172a] flex items-center justify-center text-amber-400 font-black text-sm">
-                PRC
+            <div className="flex items-center gap-3">
+              <img src="/logo.png" alt="PRC Logo" className="w-12 h-12 object-contain shrink-0" />
+              <div>
+                <span className="text-[9px] font-extrabold uppercase tracking-widest text-[#d97706] bg-[#fef3c7] border border-[#fde68a] px-2 py-0.5 rounded inline-block mb-0.5">
+                  COMMERCIAL PROFORMA DOCUMENT
+                </span>
+                <h2 className="text-2xl font-black text-[#0f172a] tracking-tight leading-none">
+                  PRC HARDWARE
+                </h2>
+                <p className="text-[10.5px] font-bold uppercase text-[#d97706] tracking-wider mt-0.5">
+                  Commercial Architectural Hardware Solutions
+                </p>
               </div>
-              <h2 className="text-2xl font-black text-[#0f172a] tracking-tight">
-                PRC HARDWARE
-              </h2>
             </div>
-            <p className="text-[11px] font-bold uppercase text-[#d97706] tracking-wider">
-              Commercial Architectural Hardware Solutions
-            </p>
             <div className="pt-2">
               <span className="inline-block bg-[#0f172a] text-[#f59e0b] text-[10px] font-black px-2 py-0.5 rounded uppercase">
                 {facility.name} • DISPATCH WORKS
@@ -372,9 +375,22 @@ export function ProformaInvoiceDetailView({ invoice, onBack }: Props) {
           {/* Totals Summary */}
           <div className="p-4 bg-[#f8fafc] border border-[#cbd5e1] rounded-2xl space-y-2 text-xs">
             <div className="flex justify-between text-slate-700">
-              <span>Taxable Subtotal:</span>
+              <span>Products Basic Subtotal:</span>
               <span className="font-mono font-bold">₹{invoice.subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
             </div>
+
+            {invoice.shippingCharges && invoice.shippingCharges > 0 ? (
+              <>
+                <div className="flex justify-between text-slate-700">
+                  <span>Transportation & Freight Charges:</span>
+                  <span className="font-mono font-bold">₹{invoice.shippingCharges.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                </div>
+                <div className="flex justify-between text-slate-900 border-t border-dashed border-slate-300 pt-1 font-bold">
+                  <span>Total Taxable Value:</span>
+                  <span className="font-mono">₹{(invoice.taxableAmount || (invoice.subtotal + invoice.shippingCharges)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                </div>
+              </>
+            ) : null}
 
             {isInterState ? (
               <div className="flex justify-between text-slate-700">

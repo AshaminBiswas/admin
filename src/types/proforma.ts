@@ -129,6 +129,9 @@ export interface ProformaInvoice {
   // Commercial / Financials
   subtotal: number;
   discountTotal: number;
+  shippingCharges?: number;
+  shippingGstRate?: number;
+  shippingGstAmount?: number;
   taxableAmount: number;
   cgstTotal: number;
   sgstTotal: number;
@@ -170,6 +173,8 @@ export interface CreateProformaInvoicePayload {
   deliveryTimeline?: string;
   paymentTerms?: string;
   advancePercentage: number;
+  shippingCharges?: number;
+  shippingGstRate?: number;
   notes?: string;
   items: Array<{
     productId?: string;

@@ -181,7 +181,9 @@ export function ProformaInvoiceCreateView({ onBack, onSaved }: Props) {
   );
   const [poReference, setPoReference] = useState('');
   const [quoteReference, setQuoteReference] = useState('');
-  const [advancePercentage, setAdvancePercentage] = useState(30);
+  const [advancePercentage, setAdvancePercentage] = useState<number>(30);
+  const [shippingCharges, setShippingCharges] = useState<number>(0);
+  const [shippingGstRate, setShippingGstRate] = useState<number>(18);
   const [deliveryTimeline, setDeliveryTimeline] = useState('Immediate dispatch within 5-7 working days');
   const [notes, setNotes] = useState('');
 
@@ -473,13 +475,38 @@ export function ProformaInvoiceCreateView({ onBack, onSaved }: Props) {
       }
     });
 
+    const shipping = Math.max(0, Number(shippingCharges) || 0);
+    const shippingRate = Number(shippingGstRate !== undefined ? shippingGstRate : 18);
+    let shippingCgst = 0;
+    let shippingSgst = 0;
+    let shippingIgst = 0;
+
+    if (shipping > 0 && shippingRate > 0) {
+      if (isInterState) {
+        shippingIgst = Math.round((shipping * shippingRate) / 100);
+      } else {
+        shippingCgst = Math.round((shipping * (shippingRate / 2)) / 100);
+        shippingSgst = Math.round((shipping * (shippingRate / 2)) / 100);
+      }
+    }
+
+    cgst += shippingCgst;
+    sgst += shippingSgst;
+    igst += shippingIgst;
+
+    const taxableAmount = subtotal + shipping;
     const taxTotal = cgst + sgst + igst;
-    const grandTotal = subtotal + taxTotal;
-    const advanceAmount = Math.round((grandTotal * advancePercentage) / 100);
-    const balanceAmount = grandTotal - advanceAmount;
+    const grandTotal = taxableAmount + taxTotal;
+    const advPct = Math.min(100, Math.max(0, Number(advancePercentage) || 0));
+    const advanceAmount = Math.round((grandTotal * advPct) / 100);
+    const balanceAmount = Math.max(0, grandTotal - advanceAmount);
 
     return {
       subtotal,
+      shippingCharges: shipping,
+      shippingGstRate: shippingRate,
+      shippingGstAmount: shippingCgst + shippingSgst + shippingIgst,
+      taxableAmount,
       cgst,
       sgst,
       igst,
@@ -488,7 +515,7 @@ export function ProformaInvoiceCreateView({ onBack, onSaved }: Props) {
       advanceAmount,
       balanceAmount,
     };
-  }, [items, isInterState, advancePercentage]);
+  }, [items, isInterState, shippingCharges, shippingGstRate, advancePercentage]);
 
   // Submit Handler
   const handleGeneratePI = async () => {
@@ -508,6 +535,7 @@ export function ProformaInvoiceCreateView({ onBack, onSaved }: Props) {
 
     setIsSubmitting(true);
     try {
+      const advPct = Math.min(100, Math.max(0, Number(advancePercentage) || 0));
       const payload: CreateProformaInvoicePayload = {
         facilityCode: facility.code,
         facility,
@@ -526,8 +554,10 @@ export function ProformaInvoiceCreateView({ onBack, onSaved }: Props) {
         poReference: poReference.trim() || undefined,
         quoteReference: quoteReference.trim() || undefined,
         deliveryTimeline,
-        paymentTerms: `${advancePercentage}% Advance against Proforma Invoice, balance before dispatch`,
-        advancePercentage,
+        paymentTerms: `${advPct}% Advance against Proforma Invoice, balance before dispatch`,
+        advancePercentage: advPct,
+        shippingCharges: totals.shippingCharges,
+        shippingGstRate: totals.shippingGstRate,
         notes: notes.trim() || undefined,
         items,
       };
@@ -1537,23 +1567,51 @@ export function ProformaInvoiceCreateView({ onBack, onSaved }: Props) {
               />
             </div>
 
-            <div className="space-y-1 sm:col-span-2">
-              <label className="text-zinc-400 font-bold">Required Advance Deposit %</label>
-              <div className="flex gap-2">
-                {[30, 50, 100].map((pct) => (
-                  <button
-                    key={pct}
-                    type="button"
-                    onClick={() => setAdvancePercentage(pct)}
-                    className={`flex-1 py-1.5 rounded-xl text-xs font-bold border transition-all ${
-                      advancePercentage === pct
-                        ? 'bg-[#8B5CF6] text-white border-[#8B5CF6]'
-                        : 'bg-[#27272A]/40 text-zinc-300 border-[#27272A] hover:bg-[#27272A]'
-                    }`}
-                  >
-                    {pct}% Advance
-                  </button>
-                ))}
+            <div className="space-y-1.5 sm:col-span-2">
+              <div className="flex items-center justify-between">
+                <label className="text-zinc-300 font-bold flex items-center gap-1.5">
+                  <CreditCard size={13} className="text-[#8B5CF6]" />
+                  <span>Advance Payment Terms Percentage (%) *</span>
+                </label>
+                <span className="text-[11px] font-mono text-purple-300 font-bold">
+                  {advancePercentage}% Advance Deposit
+                </span>
+              </div>
+              
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="relative w-36">
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={1}
+                    value={advancePercentage}
+                    onChange={(e) => {
+                      const v = parseFloat(e.target.value);
+                      setAdvancePercentage(isNaN(v) ? 0 : Math.min(100, Math.max(0, v)));
+                    }}
+                    placeholder="Custom %"
+                    className="w-full px-3 py-1.5 bg-[#27272A]/60 border border-[#27272A] focus:border-[#8B5CF6] rounded-xl text-white font-mono font-bold text-xs focus:outline-none"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 font-mono text-xs font-bold">%</span>
+                </div>
+                
+                <div className="flex flex-wrap gap-1">
+                  {[10, 25, 30, 50, 70, 100].map((pct) => (
+                    <button
+                      key={pct}
+                      type="button"
+                      onClick={() => setAdvancePercentage(pct)}
+                      className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold border transition-all ${
+                        advancePercentage === pct
+                          ? 'bg-[#8B5CF6] text-white border-[#8B5CF6] shadow-xs'
+                          : 'bg-[#27272A]/40 text-zinc-400 border-[#27272A] hover:bg-[#27272A] hover:text-zinc-200'
+                      }`}
+                    >
+                      {pct}%
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
@@ -1582,7 +1640,7 @@ export function ProformaInvoiceCreateView({ onBack, onSaved }: Props) {
 
         {/* Financial Summary & Taxes Card */}
         <div className="lg:col-span-5 bg-[#18181B] border border-[#27272A] rounded-2xl p-5 space-y-4 flex flex-col justify-between">
-          <div>
+          <div className="space-y-3">
             <h2 className="text-sm font-bold text-white flex items-center justify-between border-b border-[#27272A] pb-3">
               <span>Financials & Tax Summary</span>
               <span className={`text-[10px] font-black font-mono px-2 py-0.5 rounded-full ${
@@ -1592,10 +1650,62 @@ export function ProformaInvoiceCreateView({ onBack, onSaved }: Props) {
               </span>
             </h2>
 
-            <div className="space-y-2.5 pt-3 text-xs">
+            {/* Customizable Transportation & Shipping Charges */}
+            <div className="p-3 bg-[#121214] border border-[#27272A] rounded-xl space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-bold text-zinc-300 flex items-center gap-1.5">
+                  <Truck size={13} className="text-[#8B5CF6]" /> Transportation & Shipping Charges
+                </span>
+                <span className="text-[10.5px] font-mono text-purple-300">
+                  {shippingCharges > 0 ? `+ ₹${Number(shippingCharges).toLocaleString('en-IN')}` : 'Optional'}
+                </span>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-2">
+                <div className="relative">
+                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500 text-xs font-mono">₹</span>
+                  <input
+                    type="number"
+                    min={0}
+                    step={50}
+                    value={shippingCharges || ''}
+                    onChange={(e) => setShippingCharges(Math.max(0, parseFloat(e.target.value) || 0))}
+                    placeholder="Freight Amount (₹)"
+                    className="w-full pl-6 pr-2.5 py-1.5 bg-[#27272A]/50 border border-[#27272A] focus:border-[#8B5CF6] rounded-lg text-white font-mono text-xs focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <select
+                    value={shippingGstRate}
+                    onChange={(e) => setShippingGstRate(Number(e.target.value))}
+                    className="w-full px-2.5 py-1.5 bg-[#27272A]/50 border border-[#27272A] focus:border-[#8B5CF6] rounded-lg text-white font-mono text-xs focus:outline-none"
+                  >
+                    <option value={18}>Freight GST: 18%</option>
+                    <option value={12}>Freight GST: 12%</option>
+                    <option value={5}>Freight GST: 5%</option>
+                    <option value={0}>Freight GST: 0% (Exempt)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Calculation Breakdown */}
+            <div className="space-y-2 pt-1 text-xs">
               <div className="flex justify-between text-zinc-300">
-                <span>Basic Subtotal:</span>
+                <span>Products Basic Subtotal:</span>
                 <span className="font-mono font-bold text-white">₹{totals.subtotal.toLocaleString('en-IN')}</span>
+              </div>
+
+              {totals.shippingCharges > 0 && (
+                <div className="flex justify-between text-zinc-300">
+                  <span>Transportation & Freight Charges:</span>
+                  <span className="font-mono font-bold text-white">₹{totals.shippingCharges.toLocaleString('en-IN')}</span>
+                </div>
+              )}
+
+              <div className="flex justify-between text-zinc-300 border-t border-zinc-800/80 pt-1.5">
+                <span>Total Taxable Value:</span>
+                <span className="font-mono font-bold text-white">₹{totals.taxableAmount.toLocaleString('en-IN')}</span>
               </div>
 
               {isInterState ? (
@@ -1617,13 +1727,13 @@ export function ProformaInvoiceCreateView({ onBack, onSaved }: Props) {
               )}
 
               <div className="border-t border-[#27272A] pt-2.5 flex justify-between text-sm font-extrabold text-white">
-                <span>Grand Total:</span>
+                <span>Grand Total (Incl. GST):</span>
                 <span className="font-mono text-base text-purple-400">₹{totals.grandTotal.toLocaleString('en-IN')}</span>
               </div>
 
               <div className="p-3 bg-purple-950/20 border border-purple-800/30 rounded-xl space-y-1.5 mt-2">
                 <div className="flex justify-between text-xs font-bold text-purple-200">
-                  <span>Advance Payable ({advancePercentage}%):</span>
+                  <span>Commercial Advance Payable ({advancePercentage}%):</span>
                   <span className="font-mono font-extrabold text-sm text-purple-300">
                     ₹{totals.advanceAmount.toLocaleString('en-IN')}
                   </span>

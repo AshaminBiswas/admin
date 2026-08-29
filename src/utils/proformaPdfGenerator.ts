@@ -1,4 +1,5 @@
 import { ProformaInvoice } from '../types/proforma';
+import { PRC_LOGO_DATA_URL } from '../assets/logo.base64';
 
 // Helper to convert number to words in Indian Numbering System
 function numberToIndianRupees(amount: number): string {
@@ -331,21 +332,21 @@ export function generateProformaInvoiceHtml(pi: ProformaInvoice): string {
     <table class="header-table">
       <tr>
         <td style="width: 55%; vertical-align: top;">
-          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-              <polyline points="9 12 11 14 15 10"/>
-            </svg>
+          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 6px;">
+            <img src="${PRC_LOGO_DATA_URL || '/logo.png'}" alt="PRC Hardware Logo" style="width: 58px; height: 58px; object-fit: contain;" />
             <div>
-              <h1 class="brand-title">PRC HARDWARE</h1>
-              <div class="brand-subtitle">Commercial Architectural Hardware Solutions</div>
+              <span style="font-size: 8px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px; color: #d97706; background: #fef3c7; border: 1px solid #fde68a; padding: 1px 5px; border-radius: 3px; display: inline-block; margin-bottom: 2px;">
+                Commercial Proforma Document
+              </span>
+              <h1 class="brand-title" style="margin: 0; font-size: 22px; line-height: 1.1;">PRC HARDWARE</h1>
+              <div class="brand-subtitle" style="margin: 2px 0 0 0;">Commercial Architectural Hardware Solutions</div>
             </div>
           </div>
           <span class="facility-badge">${facility.name} • DISPATCH WORKS</span>
           <div class="facility-text">
             <strong>${facility.addressLine1 || facility.address}</strong>${facility.addressLine2 ? ', ' + facility.addressLine2 : ''}<br />
             ${facility.city}, ${facility.state} - ${facility.postalCode || facility.pincode}, India<br />
-            <strong>GSTIN:</strong> ${facility.gstin} &nbsp;|&nbsp; <strong>State Code:</strong> ${facility.stateCode}<br />
+            <strong>GSTIN:</strong> <span style="font-family: monospace; font-weight: bold;">${facility.gstin}</span> &nbsp;|&nbsp; <strong>State Code:</strong> ${facility.stateCode}<br />
             <strong>Support:</strong> ${facility.email} &nbsp;|&nbsp; <strong>Phone:</strong> ${facility.phone}
           </div>
         </td>
@@ -465,9 +466,24 @@ export function generateProformaInvoiceHtml(pi: ProformaInvoice): string {
 
         <td class="totals-box" style="width: 48%;">
           <div class="totals-row">
-            <span>Taxable Basic Subtotal:</span>
+            <span>Products Basic Subtotal:</span>
             <span class="font-mono">₹${pi.subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
           </div>
+
+          ${
+            pi.shippingCharges && pi.shippingCharges > 0
+              ? `
+            <div class="totals-row">
+              <span>Transportation & Freight Charges:</span>
+              <span class="font-mono">₹${pi.shippingCharges.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+            </div>
+            <div class="totals-row" style="font-weight: 700; color: #0f172a; border-top: 1px dashed #cbd5e1; padding-top: 2px;">
+              <span>Total Taxable Value:</span>
+              <span class="font-mono">₹${(pi.taxableAmount || pi.subtotal + pi.shippingCharges).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+            </div>
+          `
+              : ''
+          }
 
           ${
             isInterState

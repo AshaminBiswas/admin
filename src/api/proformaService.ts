@@ -168,9 +168,30 @@ export const proformaService = {
       };
     });
 
+    const shippingCharges = Number(payload.shippingCharges || 0);
+    const shippingGstRate = Number(payload.shippingGstRate !== undefined ? payload.shippingGstRate : 18);
+    let shippingCgst = 0;
+    let shippingSgst = 0;
+    let shippingIgst = 0;
+
+    if (shippingCharges > 0 && shippingGstRate > 0) {
+      if (isInterState) {
+        shippingIgst = Math.round((shippingCharges * shippingGstRate) / 100);
+      } else {
+        shippingCgst = Math.round((shippingCharges * (shippingGstRate / 2)) / 100);
+        shippingSgst = Math.round((shippingCharges * (shippingGstRate / 2)) / 100);
+      }
+    }
+    const shippingGstAmount = shippingIgst + shippingCgst + shippingSgst;
+
+    cgstTotal += shippingCgst;
+    sgstTotal += shippingSgst;
+    igstTotal += shippingIgst;
+
+    const totalTaxable = subtotal + shippingCharges;
     const taxTotal = cgstTotal + sgstTotal + igstTotal;
-    const grandTotal = subtotal + taxTotal;
-    const advancePercent = Number(payload.advancePercentage || 30);
+    const grandTotal = totalTaxable + taxTotal;
+    const advancePercent = Number(payload.advancePercentage !== undefined ? payload.advancePercentage : 30);
     const advancePayable = Math.round((grandTotal * advancePercent) / 100);
     const balancePayable = grandTotal - advancePayable;
 
@@ -204,7 +225,10 @@ export const proformaService = {
       paymentTerms: payload.paymentTerms || `${advancePercent}% Advance against PI, Balance before dispatch`,
       subtotal,
       discountTotal: 0,
-      taxableAmount: subtotal,
+      shippingCharges,
+      shippingGstRate,
+      shippingGstAmount,
+      taxableAmount: totalTaxable,
       cgstTotal,
       sgstTotal,
       igstTotal,
