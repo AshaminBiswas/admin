@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
+  Bell,
   Inbox,
   FileCheck,
   HelpCircle,
@@ -55,12 +56,42 @@ export function POManagementPage({ onViewPo }: POManagementPageProps = {}) {
   const [syncing, setSyncing] = useState(false);
   const [selectedPoId, setSelectedPoId] = useState<string | null>(null);
 
+  // ─── Silent Background Queue ───────────────────────────────────────────────
+  // New items from background sync silently accumulate here without triggering
+  // any loading spinner or table re-render.
+  const [pendingQueue, setPendingQueue] = useState<PoSubmissionItem[]>([]);
+  const seenIdsRef = React.useRef<Set<string>>(new Set());
+
   const handleOpenPo = (id: string) => {
     if (onViewPo) {
       onViewPo(id);
     } else {
       setSelectedPoId(id);
     }
+  };
+
+  // Flush the pending queue into the visible table (user-triggered or auto at page=1)
+  const flushQueue = () => {
+    if (pendingQueue.length === 0) return;
+    if (page === 1 && !search && statusFilter === 'ALL' && priorityFilter === 'ALL') {
+      setItems((prev) => {
+        const existingIds = new Set(prev.map((i) => i.id));
+        const fresh = pendingQueue.filter((i) => !existingIds.has(i.id));
+        return [...fresh, ...prev];
+      });
+      setMetrics((prev) => ({
+        ...prev,
+        totalReceived: prev.totalReceived + pendingQueue.length,
+        newCount: prev.newCount + pendingQueue.filter((i) => i.status === 'NEW').length,
+        poDetectedCount:
+          prev.poDetectedCount + pendingQueue.filter((i) => i.classification === 'PO_DETECTED').length,
+        possiblePoCount:
+          prev.possiblePoCount + pendingQueue.filter((i) => i.classification === 'POSSIBLE_PO').length,
+        generalEmailCount:
+          prev.generalEmailCount + pendingQueue.filter((i) => i.classification === 'GENERAL_EMAIL').length,
+      }));
+    }
+    setPendingQueue([]);
   };
 
   // Filters
@@ -77,34 +108,40 @@ export function POManagementPage({ onViewPo }: POManagementPageProps = {}) {
     loadSubmissions();
   }, [activeTab, statusFilter, priorityFilter, fromDate, toDate, page]);
 
-  // Real-time SSE listener and 20s auto-refresh
+  // ─── SSE Background Listener ───────────────────────────────────────────────
+  // Receives po.created events fired by the server's background IMAP sync queue.
+  // New items are silently pushed into pendingQueue — NOT into the visible table.
+  // No loading spinners, no re-renders of the main list.
   useEffect(() => {
     const token = getAdminToken();
+    if (!token) return;
+
+    const sseUrl = `${API_BASE_URL}/events/stream?token=${encodeURIComponent(token)}`;
     let es: EventSource | null = null;
 
-    if (token) {
-      const sseUrl = `${API_BASE_URL}/events/stream?token=${encodeURIComponent(token)}`;
-      try {
-        es = new EventSource(sseUrl);
-        const handlePoEvent = () => {
-          loadSubmissions();
-        };
-        es.addEventListener('po.created', handlePoEvent);
-        es.addEventListener('po.updated', handlePoEvent);
-      } catch {
-        // Fallback to polling
-      }
+    try {
+      es = new EventSource(sseUrl);
+
+      es.addEventListener('po.created', (e: MessageEvent) => {
+        try {
+          const newItem = JSON.parse(e.data) as PoSubmissionItem;
+          if (!newItem?.id || seenIdsRef.current.has(newItem.id)) return;
+          seenIdsRef.current.add(newItem.id);
+
+          // Silently push to queue — no table re-render, no loading state
+          setPendingQueue((prev) => [newItem, ...prev]);
+        } catch {
+          // malformed SSE payload — ignore
+        }
+      });
+    } catch {
+      // SSE not supported — background sync still works on server
     }
 
-    const pollInterval = setInterval(() => {
-      loadSubmissions();
-    }, 20000);
-
     return () => {
-      if (es) es.close();
-      clearInterval(pollInterval);
+      es?.close();
     };
-  }, [activeTab, statusFilter, priorityFilter, fromDate, toDate, page]);
+  }, []); // Mount once, never re-subscribe
 
   // Debounced search
   useEffect(() => {
@@ -118,6 +155,7 @@ export function POManagementPage({ onViewPo }: POManagementPageProps = {}) {
   const loadSubmissions = async () => {
     try {
       setLoading(true);
+      setPendingQueue([]); // Clear queue on explicit load
       const res = await getPoSubmissions({
         tab: activeTab,
         status: statusFilter !== 'ALL' ? (statusFilter as PoStatus) : undefined,
@@ -130,6 +168,7 @@ export function POManagementPage({ onViewPo }: POManagementPageProps = {}) {
       });
 
       setItems(res.items);
+      res.items.forEach((i) => seenIdsRef.current.add(i.id)); // Mark loaded items as seen
       setTotalPages(res.pagination.totalPages);
       setTotalItems(res.pagination.totalItems);
       if (res.metrics) setMetrics(res.metrics);
@@ -143,8 +182,8 @@ export function POManagementPage({ onViewPo }: POManagementPageProps = {}) {
   const handleSyncEmails = async () => {
     try {
       setSyncing(true);
-      const res = await syncInboundEmails();
-      alert(res.message || 'Sync completed successfully');
+      await syncInboundEmails();
+      // After manual sync, clear queue and do a clean reload
       await loadSubmissions();
     } catch (err: any) {
       alert(err.message || 'Failed to sync inbound emails');
@@ -191,6 +230,37 @@ export function POManagementPage({ onViewPo }: POManagementPageProps = {}) {
           </button>
         </div>
       </div>
+
+
+      {/* ─── Background Queue Banner ─────────────────────────────────────────── */}
+      {/* Appears only when the server's background IMAP sync has fetched new emails.
+          The table does NOT auto-refresh. The user can choose when to view them.   */}
+      {pendingQueue.length > 0 && (
+        <div className="flex items-center justify-between gap-3 px-4 py-2.5 rounded-xl bg-violet-50 dark:bg-violet-950/40 border border-violet-200 dark:border-violet-800 text-violet-800 dark:text-violet-300 text-sm font-medium shadow-xs">
+          <div className="flex items-center gap-2">
+            <Bell size={15} className="text-violet-500 animate-pulse" />
+            <span>
+              <strong>{pendingQueue.length}</strong> new email{pendingQueue.length > 1 ? 's' : ''} received in
+              background
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={flushQueue}
+              className="px-3 py-1 rounded-lg bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold transition-colors"
+            >
+              Show Now
+            </button>
+            <button
+              onClick={() => setPendingQueue([])}
+              className="p-1 rounded-md hover:bg-violet-200 dark:hover:bg-violet-800 transition-colors"
+              title="Dismiss"
+            >
+              <X size={13} />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* KPI Metric Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
