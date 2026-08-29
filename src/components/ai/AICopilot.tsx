@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from "react";
+﻿import React, { useState, useRef, useEffect, useCallback } from "react";
 import {
   Sparkles,
   X,
@@ -24,7 +24,7 @@ import {
 } from "../../api/aiAgentService";
 import { useAdminAuth } from "../../context/AdminAuthContext";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 interface Message {
   id: string;
@@ -47,16 +47,16 @@ const QUICK_PROMPTS = [
 ];
 
 const REPORT_TYPES: { id: ReportType; label: string }[] = [
-  { id: "executive_summary", label: "📊 Executive Summary" },
-  { id: "po_analysis", label: "📦 PO Analysis" },
-  { id: "inventory_health", label: "🏭 Inventory Health" },
-  { id: "quotation_pipeline", label: "📋 Quotation Pipeline" },
-  { id: "payment_reconciliation", label: "💳 Payment Reconciliation" },
-  { id: "low_stock_alerts", label: "⚠️ Low Stock Alerts" },
-  { id: "revenue_trends", label: "📈 Revenue Trends" },
+  { id: "executive_summary", label: "ðŸ“Š Executive Summary" },
+  { id: "po_analysis", label: "ðŸ“¦ PO Analysis" },
+  { id: "inventory_health", label: "ðŸ­ Inventory Health" },
+  { id: "quotation_pipeline", label: "ðŸ“‹ Quotation Pipeline" },
+  { id: "payment_reconciliation", label: "ðŸ’³ Payment Reconciliation" },
+  { id: "low_stock_alerts", label: "âš ï¸ Low Stock Alerts" },
+  { id: "revenue_trends", label: "ðŸ“ˆ Revenue Trends" },
 ];
 
-// ─── Component ────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export function AICopilot({ currentPoId, currentView }: AICopilotProps) {
   const { adminUser } = useAdminAuth();
@@ -65,7 +65,7 @@ export function AICopilot({ currentPoId, currentView }: AICopilotProps) {
     {
       id: "welcome",
       role: "assistant",
-      content: `Hello${adminUser?.firstName ? ` ${adminUser.firstName}` : ""}! 👋 I am your **PRC Hardware AI Copilot**, powered by NVIDIA llama-3.2-90b-vision. I can help you:\n\n• **Draft professional email replies** for customer POs\n• **Analyze business data** and generate executive reports\n• **Detect low stock**, payment issues, and dispatch delays\n• **Answer questions** about orders, quotations, and inventory\n\nWhat would you like help with today?`,
+      content: `Hello${adminUser?.firstName ? ` ${adminUser.firstName}` : ""}! ðŸ‘‹ I am your **PRC PILOT**, powered by NVIDIA llama-3.2-90b-vision. I can help you:\n\nâ€¢ **Draft professional email replies** for customer POs\nâ€¢ **Analyze business data** and generate executive reports\nâ€¢ **Detect low stock**, payment issues, and dispatch delays\nâ€¢ **Answer questions** about orders, quotations, and inventory\n\nWhat would you like help with today?`,
       timestamp: new Date(),
     },
   ]);
@@ -150,7 +150,7 @@ export function AICopilot({ currentPoId, currentView }: AICopilotProps) {
           m.id === loadingId
             ? {
                 ...m,
-                content: `⚠️ **Error**: ${err.message || "Failed to get AI response. Please check your NVIDIA API key in environment variables."}`,
+                content: `âš ï¸ **Error**: ${err.message || "Failed to get AI response. Please check your NVIDIA API key in environment variables."}`,
                 isLoading: false,
               }
             : m
@@ -165,7 +165,7 @@ export function AICopilot({ currentPoId, currentView }: AICopilotProps) {
     if (!currentPoId) {
       addMessage({
         role: "assistant",
-        content: "⚠️ Please open a specific PO detail page first, then click **Draft Reply** to generate a contextual email reply for that customer.",
+        content: "âš ï¸ Please open a specific PO detail page first, then click **Draft Reply** to generate a contextual email reply for that customer.",
       });
       return;
     }
@@ -189,16 +189,16 @@ export function AICopilot({ currentPoId, currentView }: AICopilotProps) {
         includeStockCheck: true,
       });
 
-      const content = `✅ **AI Email Draft Generated**
+      const content = `âœ… **AI Email Draft Generated**
 
 **Detected Context:** ${draft.detectedContext}
 **Suggested Status:** \`${draft.suggestedStatus}\`
 
 ---
 
-**📧 Subject:** ${draft.subject}
+**ðŸ“§ Subject:** ${draft.subject}
 
-**📝 Body:**
+**ðŸ“ Body:**
 
 ${draft.body}
 
@@ -216,7 +216,7 @@ ${draft.body}
           m.id === loadingId
             ? {
                 ...m,
-                content: `⚠️ **Draft failed**: ${err.message}`,
+                content: `âš ï¸ **Draft failed**: ${err.message}`,
                 isLoading: false,
               }
             : m
@@ -247,7 +247,7 @@ ${draft.body}
       setMessages((prev) =>
         prev.map((m) =>
           m.id === loadingId
-            ? { ...m, content: `📊 **${reportType.replace(/_/g, " ").toUpperCase()} REPORT**\n\n${report.report}`, isLoading: false }
+            ? { ...m, content: `ðŸ“Š **${reportType.replace(/_/g, " ").toUpperCase()} REPORT**\n\n${report.report}`, isLoading: false }
             : m
         )
       );
@@ -255,7 +255,7 @@ ${draft.body}
       setMessages((prev) =>
         prev.map((m) =>
           m.id === loadingId
-            ? { ...m, content: `⚠️ **Report failed**: ${err.message}`, isLoading: false }
+            ? { ...m, content: `âš ï¸ **Report failed**: ${err.message}`, isLoading: false }
             : m
         )
       );
@@ -290,7 +290,7 @@ ${draft.body}
     }
   };
 
-  // ── Render Markdown-like formatting ──────────────────────────────────────────
+  // â”€â”€ Render Markdown-like formatting â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const renderContent = (content: string) => {
     if (!content) return null;
     const lines = content.split("\n");
@@ -306,8 +306,8 @@ ${draft.body}
       if (line.startsWith("## ")) return <p key={i} className="font-semibold mt-2" dangerouslySetInnerHTML={{ __html: withCode.slice(3) }} />;
       if (line.startsWith("### ")) return <p key={i} className="font-medium mt-1" dangerouslySetInnerHTML={{ __html: withCode.slice(4) }} />;
       // List items
-      if (line.startsWith("• ") || line.startsWith("- ")) return (
-        <p key={i} className="flex gap-1.5" dangerouslySetInnerHTML={{ __html: "• " + withCode.slice(2) }} />
+      if (line.startsWith("â€¢ ") || line.startsWith("- ")) return (
+        <p key={i} className="flex gap-1.5" dangerouslySetInnerHTML={{ __html: "â€¢ " + withCode.slice(2) }} />
       );
       return <p key={i} dangerouslySetInnerHTML={{ __html: withCode || "&nbsp;" }} />;
     });
@@ -315,19 +315,19 @@ ${draft.body}
 
   return (
     <>
-      {/* ── Floating Button ───────────────────────────────────────────────── */}
+      {/* â”€â”€ Floating Button â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {!isOpen && (
         <button
           onClick={() => setIsOpen(true)}
           className="fixed bottom-24 right-4 md:bottom-6 md:right-6 z-50 flex items-center gap-2 bg-gradient-to-br from-violet-600 to-violet-800 hover:from-violet-500 hover:to-violet-700 text-white rounded-2xl px-4 py-3 shadow-2xl shadow-violet-900/40 transition-all duration-200 active:scale-95 group"
-          title="Open AI Copilot"
+          title="Open PRC PILOT"
         >
           <Sparkles size={18} className="group-hover:rotate-12 transition-transform" />
-          <span className="text-sm font-semibold hidden sm:inline">AI Copilot</span>
+          <span className="text-sm font-semibold hidden sm:inline">PRC PILOT</span>
         </button>
       )}
 
-      {/* ── Sidebar Panel ─────────────────────────────────────────────────── */}
+      {/* â”€â”€ Sidebar Panel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {isOpen && (
         <div className="fixed inset-0 z-50 flex items-stretch justify-end pointer-events-none">
           {/* Backdrop */}
@@ -345,8 +345,8 @@ ${draft.body}
                   <Sparkles size={15} className="text-white" />
                 </div>
                 <div>
-                  <p className="text-sm font-bold text-white">PRC AI Copilot</p>
-                  <p className="text-[10px] text-violet-400">llama-3.2-90b-vision · NVIDIA NIM</p>
+                  <p className="text-sm font-bold text-white">PRC PILOT</p>
+                  <p className="text-[10px] text-violet-400">llama-3.2-90b-vision Â· NVIDIA NIM</p>
                 </div>
               </div>
               <div className="flex items-center gap-1">
@@ -370,7 +370,7 @@ ${draft.body}
             {currentPoId && (
               <div className="px-3 py-2 bg-violet-950/30 border-b border-violet-900/30 shrink-0">
                 <p className="text-[11px] text-violet-300">
-                  📌 PO context active — <span className="font-semibold">AI can draft replies for this PO</span>
+                  ðŸ“Œ PO context active â€” <span className="font-semibold">AI can draft replies for this PO</span>
                 </p>
               </div>
             )}
@@ -525,7 +525,7 @@ ${draft.body}
                 </button>
               </div>
               <p className="text-[9px] text-[#3F3F46] mt-1.5 text-center">
-                Press Enter to send · Shift+Enter for new line
+                Press Enter to send Â· Shift+Enter for new line
               </p>
             </div>
           </div>
@@ -534,3 +534,5 @@ ${draft.body}
     </>
   );
 }
+
+
