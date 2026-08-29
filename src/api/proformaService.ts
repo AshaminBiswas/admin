@@ -18,6 +18,19 @@ export interface ListProformaParams {
   endDate?: string;
 }
 
+export interface CustomerSavedAddressSummary {
+  id: string;
+  type?: string;
+  label?: string;
+  addressLine1: string;
+  addressLine2?: string;
+  city: string;
+  state: string;
+  postalCode: string;
+  fullAddress: string;
+  isDefault?: boolean;
+}
+
 export interface B2BCustomerSearchResult {
   id: string;
   name: string;
@@ -33,6 +46,7 @@ export interface B2BCustomerSearchResult {
   state?: string;
   pincode?: string;
   stateCode?: string;
+  addresses?: CustomerSavedAddressSummary[];
 }
 
 export interface ProductSearchResult {
@@ -319,23 +333,42 @@ export const proformaService = {
             (u.addresses && u.addresses.find((a: any) => a.gstin)?.gstin) ||
             '';
 
-          // Extract addresses
+          // Extract all address records (Address & SavedAddress)
+          const allUserAddresses = [
+            ...(Array.isArray(u.addresses) ? u.addresses : []),
+            ...(Array.isArray(u.SavedAddress) ? u.SavedAddress : []),
+            ...(Array.isArray(u.savedAddresses) ? u.savedAddresses : []),
+          ];
+
+          const formattedAddressList: CustomerSavedAddressSummary[] = allUserAddresses.map((a: any) => ({
+            id: a.id || Math.random().toString(),
+            type: a.type || (a.isDefaultBilling ? 'BILLING' : 'SHIPPING'),
+            label: a.label || (a.isDefaultBilling ? 'Billing Address' : 'Site / Delivery Address'),
+            addressLine1: a.addressLine1 || a.address || '',
+            addressLine2: a.addressLine2 || '',
+            city: a.city || '',
+            state: a.state || '',
+            postalCode: a.postalCode || a.pincode || '',
+            fullAddress: formatAddr(a),
+            isDefault: Boolean(a.isDefault || a.isDefaultBilling || a.isDefaultDelivery),
+          }));
+
           const billObj =
-            u.addresses?.find(
-              (a: any) => (a.type || '').toUpperCase() === 'BILLING' || a.isDefault
-            ) || u.addresses?.[0];
+            formattedAddressList.find(
+              (a) => (a.type || '').toUpperCase() === 'BILLING' || a.isDefault
+            ) || formattedAddressList[0];
           const shipObj =
-            u.addresses?.find((a: any) => (a.type || '').toUpperCase() === 'SHIPPING') ||
+            formattedAddressList.find((a) => (a.type || '').toUpperCase() === 'SHIPPING') ||
             billObj;
 
           const billingAddress =
-            formatAddr(billObj) ||
+            billObj?.fullAddress ||
             u.billingAddress ||
             u.address ||
             '';
 
           const shippingAddress =
-            formatAddr(shipObj) ||
+            shipObj?.fullAddress ||
             u.shippingAddress ||
             billingAddress ||
             '';
@@ -379,6 +412,7 @@ export const proformaService = {
             city,
             state,
             stateCode,
+            addresses: formattedAddressList,
           };
 
           const key = (u.email || u.gstin || u.phone || u.id).toLowerCase();
@@ -433,6 +467,18 @@ export const proformaService = {
             qt.address ||
             (qt.shippingAddress ? qt.shippingAddress : `${city}, ${state} (${stateCode})`);
 
+          const quoteAddressItem: CustomerSavedAddressSummary = {
+            id: qt.id,
+            type: 'BILLING',
+            label: 'Quotation Registered Address',
+            addressLine1: billAddr,
+            city,
+            state,
+            postalCode: qt.pincode || qt.postalCode || '',
+            fullAddress: billAddr,
+            isDefault: true,
+          };
+
           const resItem: B2BCustomerSearchResult = {
             id: qt.userId || qt.id,
             name: `${qt.firstName || ''} ${qt.lastName || ''}`.trim() || comp,
@@ -447,6 +493,7 @@ export const proformaService = {
             city,
             state,
             stateCode,
+            addresses: [quoteAddressItem],
           };
 
           const key = (qt.email || qt.gstNo || qt.phone || qt.id).toLowerCase();
@@ -476,6 +523,108 @@ export const proformaService = {
     }
 
     return allResults;
+  },
+
+  /**
+   * Retrieve Full Customer Profile with All Saved Addresses
+   */
+  async getCustomerFullDetails(userId: string): Promise<B2BCustomerSearchResult | null> {
+    try {
+      const res = await fetchAdminApi<any>(`/users/${userId}/customer-360`);
+      const data = res?.data || res;
+      const u = data?.user || data;
+      const addrs = data?.addresses || u?.addresses || [];
+
+      const formatAddr = (a: any): string => {
+        if (!a) return '';
+        if (typeof a === 'string') return a.trim();
+        const parts = [
+          a.addressLine1 || a.line1 || a.street || a.address,
+          a.addressLine2 || a.line2,
+          a.landmark,
+          a.city,
+          a.state,
+          a.postalCode || a.pincode ? `- ${a.postalCode || a.pincode}` : '',
+        ].filter(Boolean);
+        return parts.join(', ');
+      };
+
+      const parsedAddresses: CustomerSavedAddressSummary[] = addrs.map((a: any) => ({
+        id: a.id || Math.random().toString(),
+        type: a.type || 'SHIPPING',
+        label: a.label || (a.isDefaultBilling ? 'Billing Address' : 'Site / Delivery Address'),
+        addressLine1: a.addressLine1 || a.address || '',
+        addressLine2: a.addressLine2 || '',
+        city: a.city || '',
+        state: a.state || '',
+        postalCode: a.postalCode || a.pincode || '',
+        fullAddress: formatAddr(a),
+        isDefault: Boolean(a.isDefault || a.isDefaultBilling || a.isDefaultDelivery),
+      }));
+
+      const billObj =
+        parsedAddresses.find(
+          (a) => (a.type || '').toUpperCase() === 'BILLING' || a.isDefault
+        ) || parsedAddresses[0];
+      const shipObj =
+        parsedAddresses.find((a) => (a.type || '').toUpperCase() === 'SHIPPING') ||
+        billObj;
+
+      const gstin = u.gstin || u.gstNumber || '';
+      let state = billObj?.state || u.state || '';
+      let stateCode = '';
+      let city = billObj?.city || u.city || '';
+
+      if (gstin && gstin.length >= 2 && /^\d{2}/.test(gstin)) {
+        const parsed = getStateFromGstin(gstin);
+        stateCode = parsed.stateCode;
+        if (!state || state.toLowerCase() === 'delhi') {
+          state = parsed.state;
+        }
+      } else if (state) {
+        const match = Object.entries(GST_STATE_MAPPING).find(
+          ([, sName]) => sName.toLowerCase() === state.toLowerCase()
+        );
+        stateCode = match ? match[0] : '07';
+      } else {
+        state = 'Delhi';
+        stateCode = '07';
+      }
+
+      if (!city) city = state === 'Delhi' ? 'Delhi' : state;
+
+      return {
+        id: u.id,
+        name: `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.companyName || 'B2B Client',
+        firstName: u.firstName,
+        lastName: u.lastName,
+        companyName:
+          u.companyName ||
+          u.businessName ||
+          `${u.firstName || ''} ${u.lastName || ''}`.trim() ||
+          'Enterprise Client',
+        email: u.email || '',
+        phone: u.phone || '',
+        gstin,
+        billingAddress:
+          billObj?.fullAddress ||
+          u.billingAddress ||
+          u.address ||
+          `${city}, ${state} (${stateCode})`,
+        shippingAddress:
+          shipObj?.fullAddress ||
+          billObj?.fullAddress ||
+          u.shippingAddress ||
+          `${city}, ${state} (${stateCode})`,
+        city,
+        state,
+        stateCode,
+        addresses: parsedAddresses,
+      };
+    } catch (err) {
+      console.warn('[proformaService] getCustomerFullDetails fallback:', err);
+      return null;
+    }
   },
 
   /**
