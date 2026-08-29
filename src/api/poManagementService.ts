@@ -187,3 +187,14 @@ export async function deletePoSubmission(id: string): Promise<{ success: boolean
   }
   return res.data || { success: true, id };
 }
+
+export async function bulkDeletePoSubmissions(ids: string[]): Promise<{ success: boolean; deletedCount: number; ids: string[] }> {
+  const res = await fetchAdminApi<{ success: boolean; deletedCount: number; ids: string[] }>('/po-management/bulk-delete', {
+    method: 'POST',
+    body: JSON.stringify({ ids }),
+  });
+  if (!res.success || !res.data) {
+    throw new Error(res.error?.message || 'Failed to delete selected PO submissions');
+  }
+  return res.data;
+}
