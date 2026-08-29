@@ -419,6 +419,20 @@ export function PODetailPage({ poId, onBack }: PODetailPageProps) {
                   : '📧 Inbound Email'}
               </span>
             )}
+
+            {/* Linked Quote Badge */}
+            {(po.metadata?.quoteNumber || po.metadata?.quoteId) && (
+              <a
+                href={`/quotations?search=${encodeURIComponent(po.metadata.quoteNumber || '')}`}
+                target="_blank"
+                rel="noreferrer"
+                className="px-2.5 py-1 rounded-full text-xs font-extrabold bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/30 hover:bg-blue-500/25 transition-colors inline-flex items-center gap-1"
+                title="View linked quotation in admin"
+              >
+                <span>🔗 Linked Quote: {po.metadata.quoteNumber || po.metadata.quoteId}</span>
+                <ExternalLink size={11} />
+              </a>
+            )}
           </div>
         </div>
 
@@ -523,6 +537,21 @@ export function PODetailPage({ poId, onBack }: PODetailPageProps) {
               >
                 <Edit2 size={12} /> Edit
               </button>
+            </div>
+          )}
+
+          {(po.metadata?.quoteNumber || po.metadata?.quoteId) && (
+            <div className="pt-2 border-t border-slate-100 dark:border-[#27272A]">
+              <label className="text-[11px] text-slate-400 block mb-1">Linked Quotation:</label>
+              <a
+                href={`/quotations?search=${encodeURIComponent(po.metadata.quoteNumber || '')}`}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center justify-between w-full px-2.5 py-1.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-xs font-mono font-bold text-blue-600 dark:text-blue-400 hover:bg-blue-500/20 transition-colors"
+              >
+                <span>{po.metadata.quoteNumber || po.metadata.quoteId}</span>
+                <ExternalLink size={12} />
+              </a>
             </div>
           )}
 
