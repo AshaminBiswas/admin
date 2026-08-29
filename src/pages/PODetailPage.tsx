@@ -406,6 +406,19 @@ export function PODetailPage({ poId, onBack }: PODetailPageProps) {
             >
               {po.priority} PRIORITY
             </span>
+
+            {/* Source Pill */}
+            {po.source && (
+              <span className="px-2.5 py-1 rounded-full text-xs font-extrabold uppercase bg-purple-500/15 text-purple-600 dark:text-purple-400 border border-purple-500/30">
+                {po.source === 'QUOTATION'
+                  ? '📋 Quotation Linked PO'
+                  : po.source === 'PO_FORM'
+                  ? '📝 Custom Form PO'
+                  : po.source === 'CUSTOM_PDF_UPLOAD'
+                  ? '📤 Direct Upload PO'
+                  : '📧 Inbound Email'}
+              </span>
+            )}
           </div>
         </div>
 

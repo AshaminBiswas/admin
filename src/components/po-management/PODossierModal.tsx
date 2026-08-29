@@ -367,6 +367,19 @@ export function PODossierModal({ poId, onClose, onUpdated }: PODossierModalProps
               >
                 {po.priority} PRIORITY
               </span>
+
+              {/* Source Pill */}
+              {po.source && (
+                <span className="px-2 py-0.5 rounded-full text-[11px] font-extrabold uppercase bg-purple-500/15 text-purple-600 dark:text-purple-400 border border-purple-500/30">
+                  {po.source === 'QUOTATION'
+                    ? '📋 Quotation Linked PO'
+                    : po.source === 'PO_FORM'
+                    ? '📝 Custom Form PO'
+                    : po.source === 'CUSTOM_PDF_UPLOAD'
+                    ? '📤 Direct Upload PO'
+                    : '📧 Inbound Email'}
+                </span>
+              )}
             </div>
 
             <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-[#A1A1AA]">
