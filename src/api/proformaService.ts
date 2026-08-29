@@ -4,6 +4,8 @@ import {
   CreateProformaInvoicePayload,
   PROFORMA_FACILITIES,
   ProformaFacility,
+  GST_STATE_MAPPING,
+  getStateFromGstin,
 } from '../types/proforma';
 
 export interface ListProformaParams {
@@ -262,14 +264,44 @@ export const proformaService = {
 
     const resultsMap = new Map<string, B2BCustomerSearchResult>();
 
+    const formatAddr = (a: any): string => {
+      if (!a) return '';
+      if (typeof a === 'string') return a.trim();
+      const parts = [
+        a.addressLine1 || a.line1 || a.street || a.address,
+        a.addressLine2 || a.line2,
+        a.landmark,
+        a.city,
+        a.state,
+        a.postalCode || a.pincode ? `- ${a.postalCode || a.pincode}` : '',
+      ].filter(Boolean);
+      return parts.join(', ');
+    };
+
     // 1. Query Users / B2B Accounts
     try {
-      const users = await fetchAdminApi<any[]>(`/users?limit=50&search=${encodeURIComponent(q)}`);
+      const usersRes = await fetchAdminApi<any>(`/users?limit=50&search=${encodeURIComponent(q)}`);
+      const users = Array.isArray(usersRes)
+        ? usersRes
+        : (usersRes?.data?.items || usersRes?.data || usersRes?.users || []);
+
       if (Array.isArray(users) && users.length > 0) {
-        users.forEach((u) => {
+        users.forEach((u: any) => {
           // Strictly exclude internal staff, vendors, or suppliers
-          const roleSlug = ((u.role && u.role.slug) || (typeof u.role === 'string' ? u.role : '') || '').toUpperCase();
-          if (roleSlug.includes('VENDOR') || roleSlug.includes('SUPPLIER')) {
+          const roleSlug = (
+            (u.role && u.role.slug) ||
+            (u.userRoles && u.userRoles[0]?.role?.slug) ||
+            (typeof u.role === 'string' ? u.role : '') ||
+            ''
+          ).toUpperCase();
+
+          if (
+            roleSlug.includes('VENDOR') ||
+            roleSlug.includes('SUPPLIER') ||
+            roleSlug.includes('ADMIN') ||
+            roleSlug.includes('STAFF') ||
+            roleSlug.includes('MANAGER')
+          ) {
             return;
           }
 
@@ -279,15 +311,58 @@ export const proformaService = {
             (u.company && u.company.name) ||
             `${u.firstName || ''} ${u.lastName || ''}`.trim() ||
             'Enterprise B2B Client';
-          const gstin = u.gstin || u.gstNumber || (u.addresses && u.addresses[0]?.gstin) || '';
-          const address =
-            u.addresses && u.addresses[0]
-              ? `${u.addresses[0].addressLine1 || ''}${u.addresses[0].addressLine2 ? ', ' + u.addresses[0].addressLine2 : ''}, ${u.addresses[0].city || ''}, ${u.addresses[0].state || ''} - ${u.addresses[0].postalCode || ''}`
-              : u.address || 'Standard Registered Office';
 
-          let stateCode = '07';
+          const gstin =
+            u.gstin ||
+            u.gstNumber ||
+            u.gstNo ||
+            (u.addresses && u.addresses.find((a: any) => a.gstin)?.gstin) ||
+            '';
+
+          // Extract addresses
+          const billObj =
+            u.addresses?.find(
+              (a: any) => (a.type || '').toUpperCase() === 'BILLING' || a.isDefault
+            ) || u.addresses?.[0];
+          const shipObj =
+            u.addresses?.find((a: any) => (a.type || '').toUpperCase() === 'SHIPPING') ||
+            billObj;
+
+          const billingAddress =
+            formatAddr(billObj) ||
+            u.billingAddress ||
+            u.address ||
+            '';
+
+          const shippingAddress =
+            formatAddr(shipObj) ||
+            u.shippingAddress ||
+            billingAddress ||
+            '';
+
+          // State and Place of Supply Resolution
+          let state = billObj?.state || u.state || '';
+          let stateCode = '';
+          let city = billObj?.city || u.city || '';
+
           if (gstin && gstin.length >= 2 && /^\d{2}/.test(gstin)) {
-            stateCode = gstin.substring(0, 2);
+            const parsed = getStateFromGstin(gstin);
+            stateCode = parsed.stateCode;
+            if (!state || state.toLowerCase() === 'delhi') {
+              state = parsed.state;
+            }
+          } else if (state) {
+            const match = Object.entries(GST_STATE_MAPPING).find(
+              ([, sName]) => sName.toLowerCase() === state.toLowerCase()
+            );
+            stateCode = match ? match[0] : '07';
+          } else {
+            state = 'Delhi';
+            stateCode = '07';
+          }
+
+          if (!city) {
+            city = state === 'Delhi' ? 'Delhi' : state;
           }
 
           const resItem: B2BCustomerSearchResult = {
@@ -299,14 +374,14 @@ export const proformaService = {
             email: u.email || '',
             phone: u.phone || '',
             gstin,
-            billingAddress: address,
-            shippingAddress: address,
-            city: (u.addresses && u.addresses[0]?.city) || u.city || 'Delhi',
-            state: (u.addresses && u.addresses[0]?.state) || u.state || 'Delhi',
+            billingAddress: billingAddress || `${city}, ${state} (${stateCode})`,
+            shippingAddress: shippingAddress || billingAddress || `${city}, ${state} (${stateCode})`,
+            city,
+            state,
             stateCode,
           };
 
-          const key = (u.email || u.gstin || u.id).toLowerCase();
+          const key = (u.email || u.gstin || u.phone || u.id).toLowerCase();
           resultsMap.set(key, resItem);
         });
       }
@@ -317,15 +392,46 @@ export const proformaService = {
     // 2. Query Quotes to find active enterprise B2B quotation customers
     try {
       const quotesRes = await fetchAdminApi<any>(`/quotes?limit=50&search=${encodeURIComponent(q)}`);
-      const quotes = Array.isArray(quotesRes) ? quotesRes : quotesRes?.data || [];
+      const quotes = Array.isArray(quotesRes)
+        ? quotesRes
+        : (quotesRes?.data?.items || quotesRes?.data || quotesRes?.quotes || []);
+
       if (Array.isArray(quotes) && quotes.length > 0) {
         quotes.forEach((qt: any) => {
-          const comp = qt.companyName || `${qt.firstName || ''} ${qt.lastName || ''}`.trim() || 'B2B Client';
+          const comp =
+            qt.companyName ||
+            `${qt.firstName || ''} ${qt.lastName || ''}`.trim() ||
+            'B2B Client';
           const gstin = qt.gstNo || qt.gstin || '';
-          let stateCode = '07';
+
+          let state = qt.state || '';
+          let stateCode = '';
+          let city = qt.city || '';
+
           if (gstin && gstin.length >= 2 && /^\d{2}/.test(gstin)) {
-            stateCode = gstin.substring(0, 2);
+            const parsed = getStateFromGstin(gstin);
+            stateCode = parsed.stateCode;
+            if (!state || state.toLowerCase() === 'delhi') {
+              state = parsed.state;
+            }
+          } else if (state) {
+            const match = Object.entries(GST_STATE_MAPPING).find(
+              ([, sName]) => sName.toLowerCase() === state.toLowerCase()
+            );
+            stateCode = match ? match[0] : '07';
+          } else {
+            state = 'Delhi';
+            stateCode = '07';
           }
+
+          if (!city) {
+            city = state === 'Delhi' ? 'Delhi' : state;
+          }
+
+          const billAddr =
+            qt.billingAddress ||
+            qt.address ||
+            (qt.shippingAddress ? qt.shippingAddress : `${city}, ${state} (${stateCode})`);
 
           const resItem: B2BCustomerSearchResult = {
             id: qt.userId || qt.id,
@@ -336,14 +442,14 @@ export const proformaService = {
             email: qt.email || '',
             phone: qt.phone || '',
             gstin,
-            billingAddress: qt.billingAddress || qt.address || 'Registered B2B Site Address',
-            shippingAddress: qt.shippingAddress || qt.billingAddress || qt.address || 'Registered B2B Site Address',
-            city: qt.city || 'Delhi',
-            state: qt.state || 'Delhi',
+            billingAddress: billAddr,
+            shippingAddress: qt.shippingAddress || billAddr,
+            city,
+            state,
             stateCode,
           };
 
-          const key = (qt.email || qt.gstNo || qt.id).toLowerCase();
+          const key = (qt.email || qt.gstNo || qt.phone || qt.id).toLowerCase();
           if (!resultsMap.has(key)) {
             resultsMap.set(key, resItem);
           }
@@ -379,7 +485,9 @@ export const proformaService = {
     const q = queryText.toLowerCase().trim();
     try {
       const res = await fetchAdminApi<any>(`/products?limit=50&search=${encodeURIComponent(q)}`);
-      const list = Array.isArray(res) ? res : res.data || [];
+      const list = Array.isArray(res)
+        ? res
+        : (res?.data?.items || res?.data || res?.products || []);
       if (Array.isArray(list) && list.length > 0) {
         return list.map((p) => ({
           id: p.id,
