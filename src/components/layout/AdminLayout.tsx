@@ -46,6 +46,8 @@ const InventoryPage = lazyWithRetry(() => import("../../pages/InventoryPage").th
 const ProductDossierPage = lazyWithRetry(() => import("../../pages/ProductDossierPage").then((m) => ({ default: m.ProductDossierPage })));
 const GSTInvoiceHub = lazyWithRetry(() => import("../../pages/GSTInvoiceHub"));
 const ProjectsPage = lazyWithRetry(() => import("../../pages/ProjectsPage").then((m) => ({ default: m.ProjectsPage })));
+const POManagementPage = lazyWithRetry(() => import("../../pages/POManagementPage").then((m) => ({ default: m.POManagementPage })));
+const PODetailPage = lazyWithRetry(() => import("../../pages/PODetailPage").then((m) => ({ default: m.PODetailPage })));
 
 function ViewLoadingSkeleton() {
   return (
@@ -105,6 +107,12 @@ export function AdminLayout() {
       return localStorage.getItem("prc_admin_selected_product_id") || undefined;
     }
     return undefined;
+  });
+  const [selectedPoId, setSelectedPoId] = useState<string | null>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("prc_admin_selected_po_id");
+    }
+    return null;
   });
 
   const toggleSidebar = () => setIsCollapsed((prev) => !prev);
@@ -177,6 +185,25 @@ export function AdminLayout() {
       // 3. Sales & Fulfillment
       case "orders":
         return <OrdersPage />;
+      case "po-management":
+        return (
+          <POManagementPage
+            onViewPo={(poId) => {
+              setSelectedPoId(poId);
+              if (typeof window !== "undefined") {
+                localStorage.setItem("prc_admin_selected_po_id", poId);
+              }
+              setCurrentView("po-detail");
+            }}
+          />
+        );
+      case "po-detail":
+        return (
+          <PODetailPage
+            poId={selectedPoId}
+            onBack={() => setCurrentView("po-management")}
+          />
+        );
       case "checkouts":
         return (
           <ModelManagementPage

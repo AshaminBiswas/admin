@@ -300,7 +300,11 @@ export type AdminView =
   | 'audit-hub'
   | 'invoice-create'
   | 'invoice-detail'
-  | 'projects';
+  | 'projects'
+  | 'po-management'
+  | 'po-detail';
+
+export * from './poManagement';
 
 /* ─── Admin 360° Profile & Audit Dossier Types ────────────────────────────── */
 

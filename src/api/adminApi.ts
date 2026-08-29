@@ -188,8 +188,13 @@ export async function fetchAdminApi<T = any>(
     cleanEndpoint.includes("/auth/2fa/login") ||
     cleanEndpoint.includes("/auth/2fa/authenticate");
 
-  // Configure timeout controller (60s for auth/login cold starts to handle Render sleep wake-ups, 20s for general requests)
-  const timeoutMs = isAuthEndpoint ? 60000 : 20000;
+  const isColdStartOrLongOp =
+    isAuthEndpoint ||
+    cleanEndpoint.includes("/po-management/sync") ||
+    cleanEndpoint.includes("/reports");
+
+  // Configure timeout controller (90s for cold starts & sync operations, 50s for general requests on Render)
+  const timeoutMs = isColdStartOrLongOp ? 90000 : 50000;
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 

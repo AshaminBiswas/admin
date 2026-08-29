@@ -35,6 +35,7 @@ import {
   Navigation,
   Coins,
   Sparkles,
+  Inbox,
   X,
 } from "lucide-react";
 import { useAdminAuth } from "../../context/AdminAuthContext";
@@ -82,6 +83,7 @@ export function AdminSidebar({
 
     // Sales & Fulfillment
     { id: "orders", label: "Orders", category: "Sales & Fulfillment", icon: <ShoppingCart size={18} />, badge: "4" },
+    { id: "po-management", label: "PO Management", category: "Sales & Fulfillment", icon: <Inbox size={18} />, badge: "PO" },
     { id: "checkouts", label: "Checkout Sessions", category: "Sales & Fulfillment", icon: <CreditCard size={18} /> },
     { id: "cart", label: "Shopping Carts", category: "Sales & Fulfillment", icon: <ShoppingBag size={18} /> },
     { id: "quotes", label: "B2B Quotes", category: "Sales & Fulfillment", icon: <FileText size={18} />, badge: "2" },

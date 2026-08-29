@@ -79,6 +79,11 @@ export function AdminNotificationDropdown({
     };
   };
 
+  const onUnreadCountChangeRef = useRef(onUnreadCountChange);
+  useEffect(() => {
+    onUnreadCountChangeRef.current = onUnreadCountChange;
+  }, [onUnreadCountChange]);
+
   // Load Notifications from Backend
   const loadNotifications = useCallback(async () => {
     setIsLoading(true);
@@ -90,14 +95,14 @@ export function AdminNotificationDropdown({
 
         setNotifications(items);
         setUnreadCount(count);
-        if (onUnreadCountChange) onUnreadCountChange(count);
+        onUnreadCountChangeRef.current?.(count);
       }
     } catch (err: any) {
       console.error("[Notifications Load Error]:", err);
     } finally {
       setIsLoading(false);
     }
-  }, [onUnreadCountChange]);
+  }, []);
 
   // Initial load
   useEffect(() => {
