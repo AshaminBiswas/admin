@@ -160,11 +160,13 @@ export async function addInternalNote(
 
 export async function syncInboundEmails(): Promise<{
   syncedCount: number;
+  deletedCount?: number;
   duplicateCount: number;
   message: string;
 }> {
   const res = await fetchAdminApi<{
     syncedCount: number;
+    deletedCount?: number;
     duplicateCount: number;
     message: string;
   }>('/po-management/sync', {
@@ -174,4 +176,14 @@ export async function syncInboundEmails(): Promise<{
     throw new Error(res.error?.message || 'Failed to sync inbound emails');
   }
   return res.data;
+}
+
+export async function deletePoSubmission(id: string): Promise<{ success: boolean; id: string }> {
+  const res = await fetchAdminApi<{ success: boolean; id: string }>(`/po-management/${id}`, {
+    method: 'DELETE',
+  });
+  if (!res.success) {
+    throw new Error(res.error?.message || 'Failed to delete PO submission');
+  }
+  return res.data || { success: true, id };
 }

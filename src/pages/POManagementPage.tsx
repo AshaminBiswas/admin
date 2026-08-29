@@ -21,6 +21,7 @@ import {
   SlidersHorizontal,
   X,
   Plus,
+  Trash2,
 } from 'lucide-react';
 import {
   PoClassification,
@@ -29,7 +30,12 @@ import {
   PoStatus,
   PoSubmissionItem,
 } from '../types/poManagement';
-import { getPoSubmissions, getPoMetrics, syncInboundEmails } from '../api/poManagementService';
+import {
+  getPoSubmissions,
+  getPoMetrics,
+  syncInboundEmails,
+  deletePoSubmission,
+} from '../api/poManagementService';
 import { PODossierModal } from '../components/po-management/PODossierModal';
 import { API_BASE_URL, getAdminToken } from '../api/adminApi';
 
@@ -54,6 +60,7 @@ export function POManagementPage({ onViewPo }: POManagementPageProps = {}) {
 
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [selectedPoId, setSelectedPoId] = useState<string | null>(null);
 
   // ─── Silent Background Queue ───────────────────────────────────────────────
@@ -67,6 +74,29 @@ export function POManagementPage({ onViewPo }: POManagementPageProps = {}) {
       onViewPo(id);
     } else {
       setSelectedPoId(id);
+    }
+  };
+
+  const handleDeletePo = async (e: React.MouseEvent, id: string, name: string) => {
+    e.stopPropagation();
+    if (!window.confirm(`Are you sure you want to delete "${name}"? This will permanently delete the email record and its attachments.`)) {
+      return;
+    }
+    try {
+      setDeletingId(id);
+      await deletePoSubmission(id);
+      seenIdsRef.current.delete(id);
+      setItems((prev) => prev.filter((i) => i.id !== id));
+      setPendingQueue((prev) => prev.filter((i) => i.id !== id));
+      setTotalItems((prev) => Math.max(0, prev - 1));
+      setMetrics((prev) => ({
+        ...prev,
+        totalReceived: Math.max(0, prev.totalReceived - 1),
+      }));
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete PO submission');
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -109,9 +139,9 @@ export function POManagementPage({ onViewPo }: POManagementPageProps = {}) {
   }, [activeTab, statusFilter, priorityFilter, fromDate, toDate, page]);
 
   // ─── SSE Background Listener ───────────────────────────────────────────────
-  // Receives po.created events fired by the server's background IMAP sync queue.
+  // Receives po.created, po.updated, and po.deleted events fired by the server.
   // New items are silently pushed into pendingQueue — NOT into the visible table.
-  // No loading spinners, no re-renders of the main list.
+  // Deleted items are instantly removed from state in real-time.
   useEffect(() => {
     const token = getAdminToken();
     if (!token) return;
@@ -132,6 +162,23 @@ export function POManagementPage({ onViewPo }: POManagementPageProps = {}) {
           setPendingQueue((prev) => [newItem, ...prev]);
         } catch {
           // malformed SSE payload — ignore
+        }
+      });
+
+      es.addEventListener('po.deleted', (e: MessageEvent) => {
+        try {
+          const payload = JSON.parse(e.data);
+          if (!payload?.id) return;
+          seenIdsRef.current.delete(payload.id);
+          setItems((prev) => prev.filter((i) => i.id !== payload.id));
+          setPendingQueue((prev) => prev.filter((i) => i.id !== payload.id));
+          setTotalItems((prev) => Math.max(0, prev - 1));
+          setMetrics((prev) => ({
+            ...prev,
+            totalReceived: Math.max(0, prev.totalReceived - 1),
+          }));
+        } catch {
+          // ignore
         }
       });
     } catch {
@@ -566,16 +613,27 @@ export function POManagementPage({ onViewPo }: POManagementPageProps = {}) {
 
                       {/* Actions */}
                       <td className="py-3.5 px-4 text-right">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleOpenPo(item.id);
-                          }}
-                          className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-[#27272A] text-slate-700 dark:text-[#FAFAFA] font-bold text-[11px] hover:bg-[#8B5CF6] hover:text-white transition-colors"
-                        >
-                          View Email
-                        </button>
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenPo(item.id);
+                            }}
+                            className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-[#27272A] text-slate-700 dark:text-[#FAFAFA] font-bold text-[11px] hover:bg-[#8B5CF6] hover:text-white transition-colors"
+                          >
+                            View Email
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => handleDeletePo(e, item.id, item.poSubmissionId || item.subject)}
+                            disabled={deletingId === item.id}
+                            title="Delete PO / Email"
+                            className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors disabled:opacity-30"
+                          >
+                            <Trash2 size={14} className={deletingId === item.id ? 'animate-spin' : ''} />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -595,17 +653,28 @@ export function POManagementPage({ onViewPo }: POManagementPageProps = {}) {
                     <span className="font-mono font-bold text-xs text-[#8B5CF6]">
                       {item.poSubmissionId || 'GENERAL'}
                     </span>
-                    <span
-                      className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase ${
-                        item.status === 'NEW'
-                          ? 'bg-blue-500/15 text-blue-600'
-                          : item.status === 'COMPLETED'
-                          ? 'bg-emerald-500/15 text-emerald-600'
-                          : 'bg-slate-500/15 text-slate-600'
-                      }`}
-                    >
-                      {item.status}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase ${
+                          item.status === 'NEW'
+                            ? 'bg-blue-500/15 text-blue-600'
+                            : item.status === 'COMPLETED'
+                            ? 'bg-emerald-500/15 text-emerald-600'
+                            : 'bg-slate-500/15 text-slate-600'
+                        }`}
+                      >
+                        {item.status}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={(e) => handleDeletePo(e, item.id, item.poSubmissionId || item.subject)}
+                        disabled={deletingId === item.id}
+                        title="Delete PO / Email"
+                        className="p-1 rounded text-slate-400 hover:text-rose-600 transition-colors"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
                   </div>
 
                   <div>

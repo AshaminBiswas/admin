@@ -26,6 +26,7 @@ import {
   X,
   Inbox,
   Share2,
+  Trash2,
 } from 'lucide-react';
 import {
   PoSubmissionDetail,
@@ -41,6 +42,7 @@ import {
   reclassifyPo,
   updateCustomerPoNumber,
   addInternalNote,
+  deletePoSubmission,
 } from '../api/poManagementService';
 import { fetchAdminApi } from '../api/adminApi';
 
@@ -70,6 +72,7 @@ export function PODetailPage({ poId, onBack }: PODetailPageProps) {
   const [savingNote, setSavingNote] = useState(false);
 
   const [staffList, setStaffList] = useState<Array<{ id: string; name: string; email: string }>>([]);
+  const [deleting, setDeleting] = useState(false);
 
   const currentPoId = poId || (typeof window !== 'undefined' ? localStorage.getItem('prc_admin_selected_po_id') : null);
 
@@ -81,6 +84,21 @@ export function PODetailPage({ poId, onBack }: PODetailPageProps) {
       setLoading(false);
     }
   }, [currentPoId]);
+
+  const handleDeletePo = async () => {
+    if (!po) return;
+    const confirmMsg = `Are you sure you want to delete "${po.poSubmissionId || po.subject}"? This will permanently remove the record and all attached documents.`;
+    if (!window.confirm(confirmMsg)) return;
+
+    try {
+      setDeleting(true);
+      await deletePoSubmission(po.id);
+      onBack();
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete PO submission');
+      setDeleting(false);
+    }
+  };
 
   const loadData = async (id: string) => {
     try {
@@ -263,8 +281,8 @@ export function PODetailPage({ poId, onBack }: PODetailPageProps) {
           </div>
         </div>
 
-        {/* Quick Action Status Selector */}
-        <div className="flex items-center gap-3">
+        {/* Quick Action Status Selector & Delete Button */}
+        <div className="flex items-center gap-2.5">
           <span className="text-xs font-bold text-slate-500 dark:text-[#A1A1AA] hidden sm:inline">Status:</span>
           <select
             value={po.status}
@@ -279,6 +297,17 @@ export function PODetailPage({ poId, onBack }: PODetailPageProps) {
             <option value="ON_HOLD">⏸️ ON HOLD</option>
             <option value="CANCELLED">❌ CANCELLED</option>
           </select>
+
+          <button
+            type="button"
+            onClick={handleDeletePo}
+            disabled={deleting}
+            title="Delete this PO submission"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-rose-200 dark:border-rose-900/50 bg-rose-50 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 text-xs font-bold hover:bg-rose-100 dark:hover:bg-rose-900/50 transition-colors disabled:opacity-40"
+          >
+            <Trash2 size={14} className={deleting ? 'animate-spin' : ''} />
+            <span className="hidden sm:inline">Delete PO</span>
+          </button>
         </div>
       </div>
 
