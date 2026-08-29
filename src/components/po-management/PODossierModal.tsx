@@ -48,7 +48,9 @@ function getAttachmentUrl(storageUrl?: string): string {
   }
   const cleanPath = storageUrl.replace(/^\/api\/v1/, '');
   const baseServer = API_BASE_URL.replace(/\/api\/v1\/?$/, '');
-  return `${baseServer}/api/v1${cleanPath.startsWith('/') ? '' : '/'}${cleanPath}`;
+  const token = localStorage.getItem('token') || localStorage.getItem('accessToken');
+  const tokenParam = token ? `?token=${encodeURIComponent(token)}` : '';
+  return `${baseServer}/api/v1${cleanPath.startsWith('/') ? '' : '/'}${cleanPath}${tokenParam}`;
 }
 
 interface PODossierModalProps {
