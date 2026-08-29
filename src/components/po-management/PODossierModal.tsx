@@ -23,6 +23,8 @@ import {
   RefreshCw,
   Edit2,
   Check,
+  Sparkles,
+  Loader2,
 } from 'lucide-react';
 import {
   PoSubmissionDetail,
@@ -41,6 +43,7 @@ import {
   replyToPoSubmission,
 } from '../../api/poManagementService';
 import { fetchAdminApi, API_BASE_URL } from '../../api/adminApi';
+import { draftPoReply } from '../../api/aiAgentService';
 
 function getAttachmentUrl(storageUrl?: string): string {
   if (!storageUrl) return '#';
@@ -126,6 +129,12 @@ export function PODossierModal({ poId, onClose, onUpdated }: PODossierModalProps
   const [replySuccessMsg, setReplySuccessMsg] = useState('');
   const [replyErrorMsg, setReplyErrorMsg] = useState('');
 
+  // AI Reply Drafter State
+  const [isAiDrafting, setIsAiDrafting] = useState(false);
+  const [aiDraftTone, setAiDraftTone] = useState<'professional' | 'friendly' | 'urgent' | 'apologetic'>('professional');
+  const [aiDraftInfo, setAiDraftInfo] = useState<{ detectedContext: string; suggestedStatus: string } | null>(null);
+  const [aiDraftError, setAiDraftError] = useState<string | null>(null);
+
   useEffect(() => {
     loadData();
     loadStaff();
@@ -137,6 +146,32 @@ export function PODossierModal({ poId, onClose, onUpdated }: PODossierModalProps
       setReplySubject(formatReplySubjectWithPo(po));
     }
   }, [po]);
+
+  const handleAiDraftReply = async () => {
+    if (!po?.id) return;
+    setIsAiDrafting(true);
+    setAiDraftError(null);
+    setReplyErrorMsg('');
+    try {
+      const res = await draftPoReply(po.id, { tone: aiDraftTone, includeStockCheck: true });
+      if (res.subject) setReplySubject(res.subject);
+      if (res.body) setReplyMessage(res.body);
+      if (
+        res.suggestedStatus &&
+        ['WAITING_FOR_CUSTOMER', 'PROCESSING', 'UNDER_REVIEW', 'COMPLETED', 'APPROVED'].includes(res.suggestedStatus)
+      ) {
+        setReplyStatus(res.suggestedStatus as PoStatus);
+      }
+      setAiDraftInfo({
+        detectedContext: res.detectedContext || 'Context analyzed from email thread and live inventory',
+        suggestedStatus: res.suggestedStatus,
+      });
+    } catch (err: any) {
+      setAiDraftError(err.message || 'Failed to generate draft with PRC PILOT');
+    } finally {
+      setIsAiDrafting(false);
+    }
+  };
 
   const loadData = async () => {
     try {
@@ -703,15 +738,73 @@ export function PODossierModal({ poId, onClose, onUpdated }: PODossierModalProps
 
               {/* REPLY COMPOSER HUB */}
               <div className="pt-5 border-t border-slate-200 dark:border-[#27272A] space-y-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-lg bg-[#8B5CF6]/15 text-[#8B5CF6] flex items-center justify-center">
-                    <Send size={14} />
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-[#8B5CF6]/15 text-[#8B5CF6] flex items-center justify-center">
+                      <Send size={14} />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-extrabold text-slate-900 dark:text-[#FAFAFA]">Reply to Customer</h4>
+                      <p className="text-[10px] text-slate-500">Send an official email response with PDF and document attachments</p>
+                    </div>
                   </div>
-                  <div>
-                    <h4 className="text-xs font-extrabold text-slate-900 dark:text-[#FAFAFA]">Reply to Customer</h4>
-                    <p className="text-[10px] text-slate-500">Send an official email response with PDF and document attachments</p>
+
+                  {/* PRC PILOT — AI Draft Reply Agent Button */}
+                  <div className="flex items-center gap-1.5 p-1 rounded-xl bg-violet-50 dark:bg-violet-950/40 border border-violet-200 dark:border-violet-800/60 shadow-xs">
+                    <button
+                      type="button"
+                      onClick={handleAiDraftReply}
+                      disabled={isAiDrafting}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-gradient-to-r from-violet-600 to-violet-700 hover:from-violet-500 hover:to-violet-600 text-white text-[11px] font-bold shadow-xs transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Auto-draft email response using PRC PILOT AI"
+                    >
+                      {isAiDrafting ? (
+                        <Loader2 size={12} className="animate-spin text-amber-300" />
+                      ) : (
+                        <Sparkles size={12} className="text-amber-300" />
+                      )}
+                      <span>{isAiDrafting ? 'Drafting...' : '✨ Draft with AI'}</span>
+                    </button>
+                    <select
+                      value={aiDraftTone}
+                      onChange={(e) => setAiDraftTone(e.target.value as any)}
+                      className="text-[10px] bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] text-slate-700 dark:text-[#E4E4E7] rounded-lg px-1.5 py-1 focus:outline-none focus:border-[#8B5CF6] font-medium cursor-pointer"
+                    >
+                      <option value="professional">Professional</option>
+                      <option value="friendly">Friendly</option>
+                      <option value="urgent">Urgent</option>
+                      <option value="apologetic">Apologetic</option>
+                    </select>
                   </div>
                 </div>
+
+                {/* AI Draft Context Banner */}
+                {aiDraftInfo && (
+                  <div className="flex items-center justify-between p-2.5 rounded-xl bg-gradient-to-r from-violet-50 via-purple-50 to-indigo-50 dark:from-violet-950/40 dark:via-[#18181B] dark:to-[#18181B] border border-violet-200 dark:border-violet-800/60 text-xs shadow-xs">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Sparkles size={13} className="text-violet-600 dark:text-violet-400 shrink-0" />
+                      <div className="text-slate-700 dark:text-violet-200 truncate text-[11px]">
+                        <span className="font-bold text-violet-700 dark:text-violet-300">PRC PILOT Analysis:</span>{' '}
+                        <span>{aiDraftInfo.detectedContext}</span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setAiDraftInfo(null)}
+                      className="text-slate-400 hover:text-slate-600 dark:hover:text-white p-0.5 ml-2"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                )}
+
+                {/* AI Draft Error Banner */}
+                {aiDraftError && (
+                  <div className="flex items-center gap-2 p-2.5 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 text-[11px] text-red-700 dark:text-red-300">
+                    <AlertCircle size={13} className="shrink-0 text-red-500" />
+                    <span>{aiDraftError}</span>
+                  </div>
+                )}
 
                 <form onSubmit={handleSendReply} className="p-4 rounded-xl bg-slate-50 dark:bg-[#09090B] border border-slate-200 dark:border-[#27272A] space-y-3">
                   {/* To & CC */}
