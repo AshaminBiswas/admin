@@ -132,7 +132,6 @@ export function PODossierModal({ poId, onClose, onUpdated }: PODossierModalProps
   // AI Reply Drafter State
   const [isAiDrafting, setIsAiDrafting] = useState(false);
   const [aiDraftTone, setAiDraftTone] = useState<'professional' | 'friendly' | 'urgent' | 'apologetic'>('professional');
-  const [aiDraftInfo, setAiDraftInfo] = useState<{ detectedContext: string; suggestedStatus: string } | null>(null);
   const [aiDraftError, setAiDraftError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -162,10 +161,6 @@ export function PODossierModal({ poId, onClose, onUpdated }: PODossierModalProps
       ) {
         setReplyStatus(res.suggestedStatus as PoStatus);
       }
-      setAiDraftInfo({
-        detectedContext: res.detectedContext || 'Context analyzed from email thread and live inventory',
-        suggestedStatus: res.suggestedStatus,
-      });
     } catch (err: any) {
       setAiDraftError(err.message || 'Failed to generate draft with PRC PILOT');
     } finally {
@@ -777,26 +772,6 @@ export function PODossierModal({ poId, onClose, onUpdated }: PODossierModalProps
                     </select>
                   </div>
                 </div>
-
-                {/* AI Draft Context Banner */}
-                {aiDraftInfo && (
-                  <div className="flex items-center justify-between p-2.5 rounded-xl bg-gradient-to-r from-violet-50 via-purple-50 to-indigo-50 dark:from-violet-950/40 dark:via-[#18181B] dark:to-[#18181B] border border-violet-200 dark:border-violet-800/60 text-xs shadow-xs">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <Sparkles size={13} className="text-violet-600 dark:text-violet-400 shrink-0" />
-                      <div className="text-slate-700 dark:text-violet-200 truncate text-[11px]">
-                        <span className="font-bold text-violet-700 dark:text-violet-300">PRC PILOT Analysis:</span>{' '}
-                        <span>{aiDraftInfo.detectedContext}</span>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setAiDraftInfo(null)}
-                      className="text-slate-400 hover:text-slate-600 dark:hover:text-white p-0.5 ml-2"
-                    >
-                      <X size={12} />
-                    </button>
-                  </div>
-                )}
 
                 {/* AI Draft Error Banner */}
                 {aiDraftError && (

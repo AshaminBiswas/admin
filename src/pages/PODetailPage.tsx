@@ -138,7 +138,6 @@ export function PODetailPage({ poId, onBack }: PODetailPageProps) {
   // AI Reply Drafter State
   const [isAiDrafting, setIsAiDrafting] = useState(false);
   const [aiDraftTone, setAiDraftTone] = useState<'professional' | 'friendly' | 'urgent' | 'apologetic'>('professional');
-  const [aiDraftInfo, setAiDraftInfo] = useState<{ detectedContext: string; suggestedStatus: string } | null>(null);
   const [aiDraftError, setAiDraftError] = useState<string | null>(null);
 
   const currentPoId = poId || (typeof window !== 'undefined' ? localStorage.getItem('prc_admin_selected_po_id') : null);
@@ -174,10 +173,6 @@ export function PODetailPage({ poId, onBack }: PODetailPageProps) {
       ) {
         setReplyStatus(res.suggestedStatus as PoStatus);
       }
-      setAiDraftInfo({
-        detectedContext: res.detectedContext || 'Context analyzed from email thread and live inventory',
-        suggestedStatus: res.suggestedStatus,
-      });
     } catch (err: any) {
       setAiDraftError(err.message || 'Failed to generate draft with PRC PILOT');
     } finally {
@@ -794,27 +789,6 @@ export function PODetailPage({ poId, onBack }: PODetailPageProps) {
                     </select>
                   </div>
                 </div>
-
-                {/* AI Draft Context Banner */}
-                {aiDraftInfo && (
-                  <div className="flex items-center justify-between p-3 rounded-xl bg-gradient-to-r from-violet-50 via-purple-50 to-indigo-50 dark:from-violet-950/40 dark:via-[#18181B] dark:to-[#18181B] border border-violet-200 dark:border-violet-800/60 text-xs shadow-xs animate-in fade-in duration-200">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <Sparkles size={15} className="text-violet-600 dark:text-violet-400 shrink-0" />
-                      <div className="text-slate-700 dark:text-violet-200 truncate">
-                        <span className="font-bold text-violet-700 dark:text-violet-300">PRC PILOT Analysis:</span>{' '}
-                        <span>{aiDraftInfo.detectedContext}</span>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setAiDraftInfo(null)}
-                      className="text-slate-400 hover:text-slate-600 dark:hover:text-white p-1 rounded-md hover:bg-black/5 dark:hover:bg-white/5 transition-colors ml-2"
-                      title="Dismiss notice"
-                    >
-                      <X size={13} />
-                    </button>
-                  </div>
-                )}
 
                 {/* AI Draft Error Banner */}
                 {aiDraftError && (
