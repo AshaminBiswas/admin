@@ -267,6 +267,69 @@ export const proformaService = {
   },
 
   /**
+   * Dispatch Proforma Invoice directly to client via official backend email sender
+   */
+  async sendProformaInvoiceEmail(
+    pi: ProformaInvoice,
+    recipientEmail?: string,
+    notes?: string
+  ): Promise<{ success: boolean; emailedTo: string; message: string }> {
+    const targetEmail = (recipientEmail || pi.customerEmail || '').trim();
+    if (!targetEmail) {
+      throw new Error('Recipient email is required to send Proforma Invoice.');
+    }
+
+    const payload = {
+      piNumber: pi.piNumber,
+      customerName: pi.customerName,
+      companyName: pi.companyName,
+      customerEmail: targetEmail,
+      customerPhone: pi.customerPhone,
+      customerGstin: pi.customerGstin,
+      issueDate: pi.issueDate,
+      validUntil: pi.validUntil,
+      facilityCode: pi.facilityCode,
+      facilityName: pi.facility.name,
+      billingAddress: pi.billingAddress,
+      shippingAddress: pi.shippingAddress,
+      grandTotal: pi.grandTotal,
+      subtotal: pi.subtotal,
+      cgstTotal: pi.cgstTotal,
+      sgstTotal: pi.sgstTotal,
+      igstTotal: pi.igstTotal,
+      advancePercentage: pi.advancePercentage,
+      advancePayable: pi.advancePayable,
+      balancePayable: pi.balancePayable,
+      poReference: pi.poReference,
+      quoteReference: pi.quoteReference,
+      notes: notes || pi.notes,
+      items: pi.items.map((it) => ({
+        sku: it.sku,
+        productName: it.productName,
+        description: it.description,
+        hsnCode: it.hsnCode,
+        unit: it.unit,
+        quantity: it.quantity,
+        unitPrice: it.unitPrice,
+        gstRate: it.gstRate,
+        total: it.totalAmount ?? it.total ?? 0,
+      })),
+    };
+
+    // Call dedicated backend dispatch endpoint
+    const res = await fetchAdminApi<any>('/invoices/proforma/send-email', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+
+    return {
+      success: true,
+      emailedTo: targetEmail,
+      message: res?.message || `Proforma Invoice ${pi.piNumber} successfully sent to ${targetEmail}`,
+    };
+  },
+
+  /**
    * Search B2B Customers by GSTIN, Email, Phone, or Company Name (Excludes Vendors/Suppliers)
    */
   async searchB2BCustomers(

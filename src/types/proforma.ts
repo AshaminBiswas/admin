@@ -4,11 +4,15 @@ export interface ProformaFacility {
   name: string;
   tagline: string;
   address: string;
+  addressLine1?: string;
+  addressLine2?: string;
   city: string;
   state: string;
   stateCode: string;
   pincode: string;
+  postalCode?: string;
   gstin: string;
+  pan?: string;
   email: string;
   phone: string;
   bankName: string;
@@ -17,6 +21,15 @@ export interface ProformaFacility {
   ifscCode: string;
   branch: string;
   upiId?: string;
+  bankDetails?: {
+    bankName: string;
+    accountName: string;
+    accountNumber: string;
+    ifsc: string;
+    branch: string;
+    accountType?: string;
+    upiId?: string;
+  };
 }
 
 export const PROFORMA_FACILITIES: Record<string, ProformaFacility> = {
@@ -79,6 +92,7 @@ export interface ProformaLineItem {
   sgstAmount: number;
   igstAmount: number;
   totalAmount: number;
+  total?: number;
 }
 
 export type ProformaStatus = 'DRAFT' | 'SENT' | 'CONVERTED' | 'EXPIRED' | 'CANCELLED';
