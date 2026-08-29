@@ -331,7 +331,7 @@ export const proformaService = {
   },
 
   /**
-   * Search B2B Customers by GSTIN, Email, Phone, or Company Name (Excludes Vendors/Suppliers)
+   * Search B2B Customers by GSTIN, Email, Phone, or Company Name (Strictly B2B Only; Excludes Retail Customers, Vendors, and Internal Staff)
    */
   async searchB2BCustomers(
     queryText: string,
@@ -356,16 +356,18 @@ export const proformaService = {
       return parts.join(', ');
     };
 
-    // 1. Query Users / B2B Accounts
+    // 1. Query Dedicated B2B Customers Endpoint (/users?type=b2b&isB2B=true)
     try {
-      const usersRes = await fetchAdminApi<any>(`/users?limit=50&search=${encodeURIComponent(q)}`);
+      const usersRes = await fetchAdminApi<any>(
+        `/users?type=b2b&isB2B=true&limit=100&search=${encodeURIComponent(q)}`
+      );
       const users = Array.isArray(usersRes)
         ? usersRes
         : (usersRes?.data?.items || usersRes?.data || usersRes?.users || []);
 
       if (Array.isArray(users) && users.length > 0) {
         users.forEach((u: any) => {
-          // Strictly exclude internal staff, vendors, or suppliers
+          // Strictly exclude internal staff, admins, managers, vendors, or suppliers
           const roleSlug = (
             (u.role && u.role.slug) ||
             (u.userRoles && u.userRoles[0]?.role?.slug) ||
@@ -378,24 +380,39 @@ export const proformaService = {
             roleSlug.includes('SUPPLIER') ||
             roleSlug.includes('ADMIN') ||
             roleSlug.includes('STAFF') ||
-            roleSlug.includes('MANAGER')
+            roleSlug.includes('MANAGER') ||
+            roleSlug.includes('INVENTORY')
           ) {
             return;
           }
 
-          const comp =
+          const compName = (
             u.companyName ||
             u.businessName ||
             (u.company && u.company.name) ||
-            `${u.firstName || ''} ${u.lastName || ''}`.trim() ||
-            'Enterprise B2B Client';
+            ''
+          ).trim();
 
-          const gstin =
+          const gstin = (
             u.gstin ||
             u.gstNumber ||
             u.gstNo ||
             (u.addresses && u.addresses.find((a: any) => a.gstin)?.gstin) ||
-            '';
+            ''
+          ).trim();
+
+          const isB2BRole =
+            roleSlug.includes('B2B') ||
+            roleSlug.includes('WHOLESALE') ||
+            roleSlug.includes('ENTERPRISE') ||
+            u.isB2B === true;
+
+          // Strictly require B2B credentials: Must have company name, GSTIN, or B2B role
+          if (!compName && !gstin && !isB2BRole) {
+            return;
+          }
+
+          const resolvedCompanyName = compName || `${u.firstName || ''} ${u.lastName || ''}`.trim() || 'B2B Enterprise Client';
 
           // Extract all address records (Address & SavedAddress)
           const allUserAddresses = [
@@ -464,10 +481,10 @@ export const proformaService = {
 
           const resItem: B2BCustomerSearchResult = {
             id: u.id,
-            name: `${u.firstName || ''} ${u.lastName || ''}`.trim() || comp,
+            name: `${u.firstName || ''} ${u.lastName || ''}`.trim() || resolvedCompanyName,
             firstName: u.firstName,
             lastName: u.lastName,
-            companyName: comp,
+            companyName: resolvedCompanyName,
             email: u.email || '',
             phone: u.phone || '',
             gstin,
@@ -487,20 +504,22 @@ export const proformaService = {
       console.warn('[proformaService] B2B Users search fallback:', err);
     }
 
-    // 2. Query Quotes to find active enterprise B2B quotation customers
+    // 2. Query Verified B2B Quotations
     try {
-      const quotesRes = await fetchAdminApi<any>(`/quotes?limit=50&search=${encodeURIComponent(q)}`);
+      const quotesRes = await fetchAdminApi<any>(
+        `/quotes?limit=50&search=${encodeURIComponent(q)}`
+      );
       const quotes = Array.isArray(quotesRes)
         ? quotesRes
         : (quotesRes?.data?.items || quotesRes?.data || quotesRes?.quotes || []);
 
       if (Array.isArray(quotes) && quotes.length > 0) {
         quotes.forEach((qt: any) => {
-          const comp =
-            qt.companyName ||
-            `${qt.firstName || ''} ${qt.lastName || ''}`.trim() ||
-            'B2B Client';
-          const gstin = qt.gstNo || qt.gstin || '';
+          const comp = (qt.companyName || '').trim();
+          const gstin = (qt.gstNo || qt.gstin || '').trim();
+
+          // Only accept quotes that belong to verified B2B companies
+          if (!comp && !gstin) return;
 
           let state = qt.state || '';
           let stateCode = '';
@@ -548,7 +567,7 @@ export const proformaService = {
             name: `${qt.firstName || ''} ${qt.lastName || ''}`.trim() || comp,
             firstName: qt.firstName,
             lastName: qt.lastName,
-            companyName: comp,
+            companyName: comp || 'B2B Client',
             email: qt.email || '',
             phone: qt.phone || '',
             gstin,

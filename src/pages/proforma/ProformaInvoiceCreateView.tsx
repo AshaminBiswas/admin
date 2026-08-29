@@ -856,51 +856,82 @@ export function ProformaInvoiceCreateView({ onBack, onSaved }: Props) {
               </div>
 
               {/* Customer Dropdown Results */}
-              {isCustomerDropdownOpen && customerResults.length > 0 && (
+              {isCustomerDropdownOpen && customerSearch.trim().length > 0 && (
                 <div className="absolute z-30 left-0 right-0 mt-1.5 bg-[#18181B] border border-[#27272A] rounded-xl shadow-2xl overflow-hidden max-h-64 overflow-y-auto divide-y divide-zinc-800 animate-in fade-in zoom-in-98 duration-150">
-                  <div className="px-3 py-1.5 bg-[#121214] text-[10px] font-bold text-zinc-400 uppercase tracking-wider flex justify-between">
-                    <span>Matching B2B Clients ({customerResults.length})</span>
-                    <span className="text-[#A78BFA]">Click to Select Account</span>
+                  <div className="px-3 py-1.5 bg-[#121214] text-[10px] font-bold text-zinc-400 uppercase tracking-wider flex justify-between border-b border-zinc-800">
+                    <span>
+                      {customerResults.length > 0
+                        ? `Matching B2B Clients (${customerResults.length})`
+                        : 'B2B Client Search'}
+                    </span>
+                    <span className="text-[#A78BFA] font-bold">
+                      {customerResults.length > 0 ? 'Click to Select Account' : 'Strictly B2B Only'}
+                    </span>
                   </div>
-                  {customerResults.map((c) => (
-                    <div
-                      key={c.id}
-                      onClick={() => handleSelectCustomer(c)}
-                      className="p-3 hover:bg-[#8B5CF6]/15 cursor-pointer transition-colors flex items-center justify-between text-xs"
-                    >
-                      <div className="space-y-0.5">
-                        <div className="flex items-center gap-2">
-                          <strong className="text-white font-bold">{c.companyName || c.name}</strong>
-                          {c.gstin ? (
-                            <span className="font-mono text-[10px] bg-purple-950/60 text-purple-300 px-1.5 py-0.2 rounded border border-purple-800/60">
-                              GSTIN: {c.gstin}
-                            </span>
-                          ) : (
-                            <span className="text-[9.5px] text-zinc-500 bg-zinc-800 px-1.5 py-0.2 rounded">
-                              Unregistered B2B
-                            </span>
-                          )}
-                          {c.addresses && c.addresses.length > 0 && (
-                            <span className="text-[9.5px] bg-indigo-950 text-indigo-300 border border-indigo-800 px-1.5 py-0.2 rounded">
-                              {c.addresses.length} Saved Address{c.addresses.length > 1 ? 'es' : ''}
-                            </span>
-                          )}
-                        </div>
-                        <div className="text-[11px] text-zinc-400 flex flex-wrap items-center gap-2 pt-0.5">
-                          <span>👤 {c.name}</span>
-                          <span>•</span>
-                          <span>✉️ {c.email}</span>
-                          <span>•</span>
-                          <span>📞 {c.phone}</span>
-                          <span>•</span>
-                          <span>📍 {c.city}, {c.state} ({c.stateCode || '07'})</span>
-                        </div>
-                      </div>
-                      <span className="text-[10px] font-bold text-[#A78BFA] bg-[#8B5CF6]/20 border border-[#8B5CF6]/30 px-2.5 py-1 rounded-lg shrink-0">
-                        Select Account →
-                      </span>
+
+                  {searchingCustomer ? (
+                    <div className="p-4 text-center text-xs text-zinc-400 flex items-center justify-center gap-2">
+                      <RefreshCw size={14} className="animate-spin text-[#8B5CF6]" />
+                      <span>Searching B2B customer accounts...</span>
                     </div>
-                  ))}
+                  ) : customerResults.length === 0 ? (
+                    <div className="p-4 text-center text-xs text-zinc-400 space-y-1">
+                      <p className="font-bold text-zinc-300">No B2B customer accounts found</p>
+                      <p className="text-[11px] text-zinc-500">
+                        Query "{customerSearch}" did not match any registered B2B clients, GSTINs, or enterprise accounts.
+                      </p>
+                    </div>
+                  ) : (
+                    customerResults.map((c) => (
+                      <div
+                        key={c.id}
+                        onClick={() => handleSelectCustomer(c)}
+                        className="p-3 hover:bg-[#8B5CF6]/15 cursor-pointer transition-colors flex items-center justify-between text-xs group"
+                      >
+                        <div className="space-y-0.5 min-w-0 pr-2">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <strong className="text-white font-bold group-hover:text-[#A78BFA] transition-colors truncate">
+                              {c.companyName || c.name}
+                            </strong>
+                            {c.gstin ? (
+                              <span className="font-mono text-[10px] bg-purple-950/80 text-purple-300 px-1.5 py-0.2 rounded border border-purple-800/60 font-bold">
+                                GSTIN: {c.gstin}
+                              </span>
+                            ) : (
+                              <span className="text-[9.5px] text-purple-300 bg-purple-950/50 border border-purple-800/40 px-1.5 py-0.2 rounded font-bold">
+                                B2B ACCOUNT
+                              </span>
+                            )}
+                            {c.addresses && c.addresses.length > 0 && (
+                              <span className="text-[9.5px] bg-indigo-950 text-indigo-300 border border-indigo-800 px-1.5 py-0.2 rounded">
+                                {c.addresses.length} Saved Address{c.addresses.length > 1 ? 'es' : ''}
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[11px] text-zinc-400 flex flex-wrap items-center gap-x-2 gap-y-0.5 pt-0.5">
+                            <span>👤 {c.name}</span>
+                            {c.email && (
+                              <>
+                                <span>•</span>
+                                <span>✉️ {c.email}</span>
+                              </>
+                            )}
+                            {c.phone && (
+                              <>
+                                <span>•</span>
+                                <span>📞 {c.phone}</span>
+                              </>
+                            )}
+                            <span>•</span>
+                            <span>📍 {c.city}, {c.state} ({c.stateCode || '07'})</span>
+                          </div>
+                        </div>
+                        <span className="text-[10px] font-bold text-[#A78BFA] bg-[#8B5CF6]/20 group-hover:bg-[#8B5CF6] group-hover:text-white border border-[#8B5CF6]/30 px-2.5 py-1 rounded-lg shrink-0 transition-all">
+                          Select Account →
+                        </span>
+                      </div>
+                    ))
+                  )}
                 </div>
               )}
             </div>
