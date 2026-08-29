@@ -48,6 +48,7 @@ const GSTInvoiceHub = lazyWithRetry(() => import("../../pages/GSTInvoiceHub"));
 const ProjectsPage = lazyWithRetry(() => import("../../pages/ProjectsPage").then((m) => ({ default: m.ProjectsPage })));
 const POManagementPage = lazyWithRetry(() => import("../../pages/POManagementPage").then((m) => ({ default: m.POManagementPage })));
 const PODetailPage = lazyWithRetry(() => import("../../pages/PODetailPage").then((m) => ({ default: m.PODetailPage })));
+const ProformaInvoicesPage = lazyWithRetry(() => import("../../pages/ProformaInvoicesPage").then((m) => ({ default: m.ProformaInvoicesPage })));
 import { AICopilot } from "../ai/AICopilot";
 
 function ViewLoadingSkeleton() {
@@ -205,6 +206,10 @@ export function AdminLayout() {
             onBack={() => setCurrentView("po-management")}
           />
         );
+      case "proforma-invoices":
+      case "proforma-create":
+      case "proforma-detail":
+        return <ProformaInvoicesPage />;
       case "checkouts":
         return (
           <ModelManagementPage

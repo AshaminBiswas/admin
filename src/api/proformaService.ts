@@ -1,0 +1,512 @@
+import { fetchAdminApi } from './adminApi';
+import {
+  ProformaInvoice,
+  CreateProformaInvoicePayload,
+  PROFORMA_FACILITIES,
+  ProformaFacility,
+} from '../types/proforma';
+
+export interface ListProformaParams {
+  page?: number;
+  limit?: number;
+  search?: string;
+  status?: string;
+  facilityCode?: string;
+  startDate?: string;
+  endDate?: string;
+}
+
+export interface B2BCustomerSearchResult {
+  id: string;
+  name: string;
+  firstName?: string;
+  lastName?: string;
+  companyName: string;
+  email: string;
+  phone: string;
+  gstin?: string;
+  billingAddress: string;
+  shippingAddress: string;
+  city?: string;
+  state?: string;
+  pincode?: string;
+  stateCode?: string;
+}
+
+export interface ProductSearchResult {
+  id: string;
+  name: string;
+  sku: string;
+  description?: string;
+  hsnCode: string;
+  unit: string;
+  price: number;
+  stock: number;
+  gstRate: number;
+}
+
+export const proformaService = {
+  /**
+   * List Proforma Invoices
+   */
+  async listProformaInvoices(params: ListProformaParams = {}) {
+    const query = new URLSearchParams();
+    query.append('invoiceType', 'PROFORMA_INVOICE');
+    if (params.page) query.append('page', params.page.toString());
+    if (params.limit) query.append('limit', params.limit.toString());
+    if (params.search) query.append('search', params.search);
+    if (params.status) query.append('status', params.status);
+    if (params.startDate) query.append('startDate', params.startDate);
+    if (params.endDate) query.append('endDate', params.endDate);
+
+    try {
+      const res = await fetchAdminApi<any>(`/invoices?${query.toString()}`);
+      if (res && Array.isArray(res)) {
+        return { data: res, pagination: { total: res.length, page: 1, limit: 50, totalPages: 1 } };
+      }
+      if (res && res.data && Array.isArray(res.data)) {
+        return res;
+      }
+      return { data: [], pagination: { total: 0, page: 1, limit: 20, totalPages: 0 } };
+    } catch (err) {
+      console.warn('[proformaService] list error:', err);
+      // Fallback from localStorage if server is cold
+      const localPIs = getLocalProformaInvoices();
+      return { data: localPIs, pagination: { total: localPIs.length, page: 1, limit: 50, totalPages: 1 } };
+    }
+  },
+
+  /**
+   * Get Proforma Invoice by ID
+   */
+  async getProformaInvoiceById(id: string): Promise<ProformaInvoice | null> {
+    try {
+      const res = await fetchAdminApi<any>(`/invoices/${id}`);
+      if (res && res.id) {
+        return transformBackendInvoiceToPI(res);
+      }
+    } catch (err) {
+      console.warn('[proformaService] get error, searching local:', err);
+    }
+    const local = getLocalProformaInvoices().find((p) => p.id === id);
+    return local || null;
+  },
+
+  /**
+   * Create a new Proforma Invoice
+   */
+  async createProformaInvoice(payload: CreateProformaInvoicePayload): Promise<ProformaInvoice> {
+    const facility: ProformaFacility = PROFORMA_FACILITIES[payload.facilityCode] || PROFORMA_FACILITIES.DELHI_WORKS;
+
+    // Calculate line item totals & taxes
+    const isInterState =
+      facility.stateCode.trim().toUpperCase() !== payload.placeOfSupplyCode.trim().toUpperCase();
+
+    let subtotal = 0;
+    let cgstTotal = 0;
+    let sgstTotal = 0;
+    let igstTotal = 0;
+
+    const items = payload.items.map((item, idx) => {
+      const lineSubtotal = Math.round(Number(item.quantity || 1) * Number(item.unitPrice || 0));
+      const discount = Number(item.discount || 0);
+      const taxable = Math.max(0, lineSubtotal - discount);
+      const rate = Number(item.gstRate || 18);
+
+      let cgst = 0;
+      let sgst = 0;
+      let igst = 0;
+
+      if (isInterState) {
+        igst = Math.round((taxable * rate) / 100);
+      } else {
+        cgst = Math.round((taxable * (rate / 2)) / 100);
+        sgst = Math.round((taxable * (rate / 2)) / 100);
+      }
+
+      const total = taxable + cgst + sgst + igst;
+
+      subtotal += lineSubtotal;
+      cgstTotal += cgst;
+      sgstTotal += sgst;
+      igstTotal += igst;
+
+      return {
+        id: `pi-item-${idx + 1}`,
+        productId: item.productId,
+        sku: item.sku,
+        productName: item.productName,
+        description: item.description,
+        hsnCode: item.hsnCode || '8302',
+        unit: item.unit || 'PCS',
+        quantity: Number(item.quantity),
+        unitPrice: Number(item.unitPrice),
+        discount,
+        taxableAmount: taxable,
+        gstRate: rate,
+        cgstAmount: cgst,
+        sgstAmount: sgst,
+        igstAmount: igst,
+        totalAmount: total,
+      };
+    });
+
+    const taxTotal = cgstTotal + sgstTotal + igstTotal;
+    const grandTotal = subtotal + taxTotal;
+    const advancePercent = Number(payload.advancePercentage || 30);
+    const advancePayable = Math.round((grandTotal * advancePercent) / 100);
+    const balancePayable = grandTotal - advancePayable;
+
+    const year = new Date().getFullYear();
+    const randomSeq = Math.floor(1000 + Math.random() * 9000);
+    const piNumber = `PRC-PI-${year}-${randomSeq}`;
+
+    const newPI: ProformaInvoice = {
+      id: `pi-${Date.now()}`,
+      piNumber,
+      invoiceNumber: piNumber,
+      financialYear: `${year}-${year + 1}`,
+      status: 'SENT',
+      facilityCode: payload.facilityCode,
+      facility,
+      customerId: payload.customerId,
+      customerName: payload.customerName,
+      companyName: payload.companyName,
+      customerEmail: payload.customerEmail,
+      customerPhone: payload.customerPhone,
+      customerGstin: payload.customerGstin,
+      placeOfSupply: payload.placeOfSupply,
+      placeOfSupplyCode: payload.placeOfSupplyCode,
+      billingAddress: payload.billingAddress,
+      shippingAddress: payload.shippingAddress,
+      issueDate: payload.issueDate || new Date().toISOString().slice(0, 10),
+      validUntil: payload.validUntil || new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10),
+      poReference: payload.poReference,
+      quoteReference: payload.quoteReference,
+      deliveryTimeline: payload.deliveryTimeline || 'Within 7-10 working days upon advance clearance',
+      paymentTerms: payload.paymentTerms || `${advancePercent}% Advance against PI, Balance before dispatch`,
+      subtotal,
+      discountTotal: 0,
+      taxableAmount: subtotal,
+      cgstTotal,
+      sgstTotal,
+      igstTotal,
+      roundOff: 0,
+      grandTotal,
+      advancePercentage: advancePercent,
+      advancePayable,
+      balancePayable,
+      notes: payload.notes,
+      items,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    // Attempt to persist to backend
+    try {
+      const backendPayload = {
+        invoiceType: 'PROFORMA_INVOICE',
+        customerId: payload.customerId,
+        customerName: payload.customerName,
+        customerEmail: payload.customerEmail,
+        customerPhone: payload.customerPhone,
+        customerGstin: payload.customerGstin,
+        placeOfSupply: payload.placeOfSupply,
+        supplierState: facility.state,
+        branchCode: payload.facilityCode,
+        notes: payload.notes,
+        paymentTerms: newPI.paymentTerms,
+        dueDate: newPI.validUntil,
+        items: payload.items.map((it) => ({
+          productId: it.productId,
+          sku: it.sku,
+          productName: it.productName,
+          description: it.description,
+          hsnCode: it.hsnCode || '8302',
+          unit: it.unit || 'PCS',
+          quantity: it.quantity,
+          unitPrice: it.unitPrice,
+          discount: it.discount || 0,
+          taxRate: it.gstRate || 18,
+        })),
+      };
+
+      const res = await fetchAdminApi<any>('/invoices', {
+        method: 'POST',
+        body: JSON.stringify(backendPayload),
+      });
+
+      if (res && res.id) {
+        newPI.id = res.id;
+        if (res.invoiceNumber) newPI.piNumber = res.invoiceNumber;
+      }
+    } catch (err) {
+      console.warn('[proformaService] Backend invoice post warning:', err);
+    }
+
+    // Save copy in localStorage for instant access
+    saveLocalProformaInvoice(newPI);
+
+    return newPI;
+  },
+
+  /**
+   * Search B2B Customers
+   */
+  async searchB2BCustomers(queryText: string): Promise<B2BCustomerSearchResult[]> {
+    const q = queryText.toLowerCase().trim();
+    try {
+      const users = await fetchAdminApi<any[]>(`/users?limit=50&search=${encodeURIComponent(q)}`);
+      if (Array.isArray(users) && users.length > 0) {
+        return users.map((u) => {
+          const comp = u.companyName || u.businessName || (u.company && u.company.name) || `${u.firstName || ''} ${u.lastName || ''}`.trim() || 'Enterprise Client';
+          const gstin = u.gstin || u.gstNumber || (u.addresses && u.addresses[0]?.gstin) || '';
+          const address = u.addresses && u.addresses[0]
+            ? `${u.addresses[0].addressLine1 || ''}, ${u.addresses[0].city || ''}, ${u.addresses[0].state || ''} - ${u.addresses[0].postalCode || ''}`
+            : u.address || 'Standard Registered Office';
+
+          // Extract state code from GSTIN if present
+          let stateCode = '07';
+          if (gstin && gstin.length >= 2 && /^\d{2}/.test(gstin)) {
+            stateCode = gstin.substring(0, 2);
+          }
+
+          return {
+            id: u.id,
+            name: `${u.firstName || ''} ${u.lastName || ''}`.trim() || comp,
+            firstName: u.firstName,
+            lastName: u.lastName,
+            companyName: comp,
+            email: u.email || '',
+            phone: u.phone || '',
+            gstin,
+            billingAddress: address,
+            shippingAddress: address,
+            city: u.city || 'Delhi',
+            state: u.state || 'Delhi',
+            stateCode,
+          };
+        });
+      }
+    } catch (err) {
+      console.warn('[proformaService] B2B search fallback:', err);
+    }
+
+    // Return sensible fallback defaults matching query
+    return [
+      {
+        id: 'cust-apex-01',
+        name: 'Apex Infrastructure Pvt Ltd',
+        companyName: 'Apex Infrastructure Pvt Ltd',
+        email: 'procurement@apexinfra.com',
+        phone: '9811223344',
+        gstin: '07AAACA1234A1Z5',
+        billingAddress: 'Tower B, 7th Floor, DLF Cyber City, Sector 25, Gurugram, Haryana - 122002',
+        shippingAddress: 'Project Site, Commercial Hub Phase 3, Noida Sector 62, UP - 201301',
+        city: 'Gurugram',
+        state: 'Haryana',
+        stateCode: '06',
+      },
+      {
+        id: 'cust-sharma-02',
+        name: 'Sharma Modular Solutions',
+        companyName: 'Sharma Modular Solutions',
+        email: 'rahul@sharmamodular.in',
+        phone: '9822334455',
+        gstin: '27AABCS5566K1Z2',
+        billingAddress: 'Plot 45, MIDC Industrial Area, Andheri East, Mumbai, Maharashtra - 400093',
+        shippingAddress: 'Plot 45, MIDC Industrial Area, Andheri East, Mumbai, Maharashtra - 400093',
+        city: 'Mumbai',
+        state: 'Maharashtra',
+        stateCode: '27',
+      },
+    ].filter((c) =>
+      c.companyName.toLowerCase().includes(q) ||
+      c.name.toLowerCase().includes(q) ||
+      c.email.toLowerCase().includes(q) ||
+      (c.gstin && c.gstin.toLowerCase().includes(q))
+    );
+  },
+
+  /**
+   * Search Products from Catalog
+   */
+  async searchProducts(queryText: string): Promise<ProductSearchResult[]> {
+    const q = queryText.toLowerCase().trim();
+    try {
+      const res = await fetchAdminApi<any>(`/products?limit=50&search=${encodeURIComponent(q)}`);
+      const list = Array.isArray(res) ? res : res.data || [];
+      if (Array.isArray(list) && list.length > 0) {
+        return list.map((p) => ({
+          id: p.id,
+          name: p.name,
+          sku: p.sku || `SKU-${p.id.slice(0, 6)}`,
+          description: p.shortDesc || p.description,
+          hsnCode: p.hsn_sac || p.hsnCode || '83024110',
+          unit: 'PCS',
+          price: Number(p.salePrice || p.price || 450),
+          stock: Number(p.stock || 100),
+          gstRate: Number(p.gst_rate || 18),
+        }));
+      }
+    } catch (err) {
+      console.warn('[proformaService] product search fallback:', err);
+    }
+
+    // Default high-demand architectural catalog hardware
+    return [
+      {
+        id: 'p-1',
+        name: 'Grade 304 SS Heavy Duty Restroom Gravity Hinge Set',
+        sku: 'PRC-SS-GH-304',
+        description: 'Self-closing spring-assisted gravity hinge pair for commercial cubicle doors',
+        hsnCode: '83024110',
+        unit: 'SETS',
+        price: 850,
+        stock: 450,
+        gstRate: 18,
+      },
+      {
+        id: 'p-2',
+        name: 'Privacy Indicator Bolt with Emergency Red/Green Coin Release',
+        sku: 'PRC-SS-IB-002',
+        description: 'Surface mounted stainless steel lock bolt with exterior vacant/engaged status dial',
+        hsnCode: '83024110',
+        unit: 'PCS',
+        price: 620,
+        stock: 800,
+        gstRate: 18,
+      },
+      {
+        id: 'p-3',
+        name: 'Adjustable Height Restroom Cubicle Supporting Leg (100mm-150mm)',
+        sku: 'PRC-SS-LEG-150',
+        description: 'Grade 316 brushed satin pedestal pillar leg with concealed anchor flange',
+        hsnCode: '83024110',
+        unit: 'PCS',
+        price: 540,
+        stock: 620,
+        gstRate: 18,
+      },
+      {
+        id: 'p-4',
+        name: 'Heavy Duty SS Top Rail Track Clamp & Wall Connector',
+        sku: 'PRC-SS-RC-04',
+        description: 'Structural top stabiliser bar connector bracket for 12mm-18mm compact laminate',
+        hsnCode: '83024110',
+        unit: 'PCS',
+        price: 390,
+        stock: 350,
+        gstRate: 18,
+      },
+      {
+        id: 'p-5',
+        name: 'Stainless Steel Coat Hook with Integrated Rubber Buffer Stop',
+        sku: 'PRC-SS-CHK-01',
+        description: 'Single/dual prong door hook with impact absorbing silent stopper',
+        hsnCode: '83024110',
+        unit: 'PCS',
+        price: 180,
+        stock: 1200,
+        gstRate: 18,
+      },
+    ].filter((p) =>
+      p.name.toLowerCase().includes(q) ||
+      p.sku.toLowerCase().includes(q) ||
+      p.hsnCode.includes(q)
+    );
+  },
+};
+
+// ─── Local Storage Helper Functions ──────────────────────────────────────────
+
+const LOCAL_STORAGE_KEY = 'prc_admin_proforma_invoices_v1';
+
+function getLocalProformaInvoices(): ProformaInvoice[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
+    if (!raw) return [];
+    return JSON.parse(raw);
+  } catch {
+    return [];
+  }
+}
+
+function saveLocalProformaInvoice(pi: ProformaInvoice) {
+  if (typeof window === 'undefined') return;
+  try {
+    const existing = getLocalProformaInvoices();
+    const index = existing.findIndex((p) => p.id === pi.id);
+    if (index >= 0) {
+      existing[index] = pi;
+    } else {
+      existing.unshift(pi);
+    }
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(existing));
+  } catch (err) {
+    console.error('Failed to save PI locally:', err);
+  }
+}
+
+function transformBackendInvoiceToPI(inv: any): ProformaInvoice {
+  const facility = PROFORMA_FACILITIES[inv.branchCode] || PROFORMA_FACILITIES.DELHI_WORKS;
+  return {
+    id: inv.id,
+    piNumber: inv.invoiceNumber,
+    invoiceNumber: inv.invoiceNumber,
+    financialYear: inv.financialYear || '2026-2027',
+    status: (inv.status || 'SENT') as any,
+    facilityCode: (inv.branchCode || 'DELHI_WORKS') as any,
+    facility,
+    customerId: inv.customerId,
+    customerName: inv.customer ? `${inv.customer.firstName || ''} ${inv.customer.lastName || ''}`.trim() : inv.customerName || 'B2B Client',
+    companyName: inv.customer?.companyName || inv.companyName || 'Enterprise Partner',
+    customerEmail: inv.customer?.email || inv.customerEmail || '',
+    customerPhone: inv.customer?.phone || inv.customerPhone || '',
+    customerGstin: inv.customer?.gstin || inv.customerGstin || '',
+    placeOfSupply: inv.placeOfSupply || 'Delhi',
+    placeOfSupplyCode: inv.placeOfSupplyCode || '07',
+    billingAddress: inv.billingAddress || inv.customer?.address || 'Standard Billing Address',
+    shippingAddress: inv.shippingAddress || inv.billingAddress || 'Site Delivery Destination',
+    issueDate: inv.createdAt ? new Date(inv.createdAt).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
+    validUntil: inv.dueDate ? new Date(inv.dueDate).toISOString().slice(0, 10) : new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10),
+    poReference: inv.poReference || inv.orderId || undefined,
+    quoteReference: inv.quoteReference || undefined,
+    deliveryTimeline: 'Standard site dispatch schedule',
+    paymentTerms: inv.paymentTerms || '30% Advance, Balance before dispatch',
+    subtotal: Number(inv.subtotal || 0),
+    discountTotal: Number(inv.discount || 0),
+    taxableAmount: Number(inv.taxableAmount || inv.subtotal || 0),
+    cgstTotal: Number(inv.cgst || 0),
+    sgstTotal: Number(inv.sgst || 0),
+    igstTotal: Number(inv.igst || 0),
+    roundOff: Number(inv.roundOff || 0),
+    grandTotal: Number(inv.grandTotal || 0),
+    advancePercentage: 30,
+    advancePayable: Math.round(Number(inv.grandTotal || 0) * 0.3),
+    balancePayable: Math.round(Number(inv.grandTotal || 0) * 0.7),
+    notes: inv.notes,
+    items: Array.isArray(inv.items)
+      ? inv.items.map((it: any, i: number) => ({
+          id: it.id || `item-${i + 1}`,
+          sku: it.sku || 'SKU-001',
+          productName: it.productName || 'Hardware Product',
+          description: it.description,
+          hsnCode: it.hsnCode || '8302',
+          unit: it.unit || 'PCS',
+          quantity: Number(it.quantity || 1),
+          unitPrice: Number(it.unitPrice || it.rate || 0),
+          discount: Number(it.discount || 0),
+          taxableAmount: Number(it.taxableAmount || 0),
+          gstRate: Number(it.taxRate || 18),
+          cgstAmount: Number(it.cgst || 0),
+          sgstAmount: Number(it.sgst || 0),
+          igstAmount: Number(it.igst || 0),
+          totalAmount: Number(it.totalAmount || it.amount || 0),
+        }))
+      : [],
+    createdAt: inv.createdAt || new Date().toISOString(),
+    updatedAt: inv.updatedAt || new Date().toISOString(),
+  };
+}

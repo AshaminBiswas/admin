@@ -302,9 +302,13 @@ export type AdminView =
   | 'invoice-detail'
   | 'projects'
   | 'po-management'
-  | 'po-detail';
+  | 'po-detail'
+  | 'proforma-invoices'
+  | 'proforma-create'
+  | 'proforma-detail';
 
 export * from './poManagement';
+export * from './proforma';
 
 /* ─── Admin 360° Profile & Audit Dossier Types ────────────────────────────── */
 
