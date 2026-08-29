@@ -25,6 +25,7 @@ import {
   Eye,
   CheckSquare,
   Square,
+  Tag,
 } from 'lucide-react';
 import {
   PoClassification,
@@ -689,13 +690,20 @@ export function POManagementPage({ onViewPo }: POManagementPageProps = {}) {
                           />
                         </td>
 
-                        {/* PO Submission ID */}
+                        {/* PO Submission ID + Customer PO # */}
                         <td className="py-3.5 px-3 font-mono font-bold text-slate-900 dark:text-white">
-                          {item.poSubmissionId ? (
-                            <span className="text-[#8B5CF6] group-hover:underline">{item.poSubmissionId}</span>
-                          ) : (
-                            <span className="text-slate-400 text-[11px]">GENERAL</span>
-                          )}
+                          <div className="space-y-1">
+                            {item.poSubmissionId ? (
+                              <span className="text-[#8B5CF6] group-hover:underline block">{item.poSubmissionId}</span>
+                            ) : (
+                              <span className="text-slate-400 text-[11px] block">GENERAL</span>
+                            )}
+                            {item.customerPoNumber && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-violet-50 dark:bg-violet-950/60 text-violet-700 dark:text-violet-300 text-[10px] font-mono font-bold border border-violet-200 dark:border-violet-800">
+                                <Tag size={10} /> {item.customerPoNumber}
+                              </span>
+                            )}
+                          </div>
                         </td>
 
                         {/* Classification Badge */}
@@ -722,8 +730,8 @@ export function POManagementPage({ onViewPo }: POManagementPageProps = {}) {
                           <div className="space-y-0.5">
                             <p className="font-bold text-slate-900 dark:text-white">{item.customerName || item.customerEmail}</p>
                             {item.companyName && (
-                              <p className="text-[11px] text-slate-500 dark:text-[#A1A1AA] flex items-center gap-1">
-                                <Building size={10} /> {item.companyName}
+                              <p className="text-[11px] text-slate-500 dark:text-[#A1A1AA] flex items-center gap-1 font-medium">
+                                <Building size={10} className="text-[#8B5CF6]" /> {item.companyName}
                               </p>
                             )}
                             <p className="text-[10px] text-slate-400 font-mono">{item.customerEmail}</p>
@@ -849,6 +857,11 @@ export function POManagementPage({ onViewPo }: POManagementPageProps = {}) {
                         <span className="font-mono font-bold text-xs text-[#8B5CF6]">
                           {item.poSubmissionId || 'GENERAL'}
                         </span>
+                        {item.customerPoNumber && (
+                          <span className="px-1.5 py-0.5 rounded bg-violet-50 dark:bg-violet-950/60 text-violet-700 dark:text-violet-300 text-[10px] font-mono font-bold border border-violet-200 dark:border-violet-800">
+                            PO: {item.customerPoNumber}
+                          </span>
+                        )}
                       </div>
                       <div className="flex items-center gap-2">
                         <span
@@ -887,7 +900,12 @@ export function POManagementPage({ onViewPo }: POManagementPageProps = {}) {
 
                     <div>
                       <h4 className="text-xs font-bold text-slate-900 dark:text-white line-clamp-1">{item.subject}</h4>
-                      <p className="text-[11px] text-slate-500">{item.customerName || item.customerEmail}</p>
+                      <div className="flex items-center gap-2 text-[11px] text-slate-500 pt-0.5 flex-wrap">
+                        <span>{item.customerName || item.customerEmail}</span>
+                        {item.companyName && (
+                          <span className="text-slate-400 font-medium">({item.companyName})</span>
+                        )}
+                      </div>
                     </div>
 
                     <div className="flex items-center justify-between text-[10px] text-slate-400 pt-1 border-t border-slate-100 dark:border-[#27272A]">
