@@ -177,6 +177,10 @@ export async function fetchAdminApi<T = any>(
     ...(options.headers as Record<string, string>),
   };
 
+  if (options.body instanceof FormData) {
+    delete headers["Content-Type"];
+  }
+
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
   }

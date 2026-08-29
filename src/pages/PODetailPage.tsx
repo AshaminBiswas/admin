@@ -43,6 +43,7 @@ import {
   updateCustomerPoNumber,
   addInternalNote,
   deletePoSubmission,
+  replyToPoSubmission,
 } from '../api/poManagementService';
 import { fetchAdminApi, API_BASE_URL } from '../api/adminApi';
 
@@ -86,6 +87,17 @@ export function PODetailPage({ poId, onBack }: PODetailPageProps) {
   const [staffList, setStaffList] = useState<Array<{ id: string; name: string; email: string }>>([]);
   const [deleting, setDeleting] = useState(false);
 
+  // Reply Composer State
+  const [replyTo, setReplyTo] = useState('');
+  const [replyCc, setReplyCc] = useState('');
+  const [replySubject, setReplySubject] = useState('');
+  const [replyMessage, setReplyMessage] = useState('');
+  const [replyStatus, setReplyStatus] = useState<PoStatus | ''>('');
+  const [replyFiles, setReplyFiles] = useState<File[]>([]);
+  const [sendingReply, setSendingReply] = useState(false);
+  const [replySuccessMsg, setReplySuccessMsg] = useState('');
+  const [replyErrorMsg, setReplyErrorMsg] = useState('');
+
   const currentPoId = poId || (typeof window !== 'undefined' ? localStorage.getItem('prc_admin_selected_po_id') : null);
 
   useEffect(() => {
@@ -96,6 +108,13 @@ export function PODetailPage({ poId, onBack }: PODetailPageProps) {
       setLoading(false);
     }
   }, [currentPoId]);
+
+  useEffect(() => {
+    if (po) {
+      setReplyTo(po.customerEmail || '');
+      setReplySubject(po.subject?.startsWith('Re:') ? po.subject : `Re: ${po.subject || ''}`);
+    }
+  }, [po]);
 
   const handleDeletePo = async () => {
     if (!po) return;
@@ -214,6 +233,39 @@ export function PODetailPage({ poId, onBack }: PODetailPageProps) {
       alert(err.message || 'Failed to add note');
     } finally {
       setSavingNote(false);
+    }
+  };
+
+  const handleSendReply = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!po || !replyMessage.trim() || !replySubject.trim()) return;
+
+    setSendingReply(true);
+    setReplyErrorMsg('');
+    setReplySuccessMsg('');
+
+    try {
+      const formData = new FormData();
+      formData.append('to', replyTo.trim());
+      formData.append('subject', replySubject.trim());
+      formData.append('message', replyMessage.trim());
+      if (replyCc.trim()) formData.append('cc', replyCc.trim());
+      if (replyStatus) formData.append('newStatus', replyStatus);
+
+      for (const file of replyFiles) {
+        formData.append('attachments', file);
+      }
+
+      const updated = await replyToPoSubmission(po.id, formData);
+      setPo(updated);
+      setReplyMessage('');
+      setReplyFiles([]);
+      setReplySuccessMsg('Reply and attachments sent successfully!');
+      setTimeout(() => setReplySuccessMsg(''), 5000);
+    } catch (err: any) {
+      setReplyErrorMsg(err.message || 'Failed to send reply');
+    } finally {
+      setSendingReply(false);
     }
   };
 
@@ -561,34 +613,234 @@ export function PODetailPage({ poId, onBack }: PODetailPageProps) {
                 )}
               </div>
 
-              {/* Threaded Customer Replies */}
+              {/* Threaded Customer & Admin Replies */}
               {threadedReplies.length > 0 && (
                 <div className="space-y-4 pt-6 border-t border-slate-200 dark:border-[#27272A]">
                   <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-400">
-                    Threaded Conversation History ({threadedReplies.length} Replies)
+                    Threaded Conversation History ({threadedReplies.length} Messages)
                   </h4>
-                  {threadedReplies.map((reply, i) => (
-                    <div
-                      key={reply.id}
-                      className="p-5 rounded-2xl bg-slate-50 dark:bg-[#09090B] border border-slate-200 dark:border-[#27272A] space-y-2"
-                    >
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="font-bold text-slate-900 dark:text-white">
-                          Reply #{i + 1} from {reply.senderEmail}
-                        </span>
-                        <span className="text-slate-400">{new Date(reply.receivedAt).toLocaleString()}</span>
-                      </div>
-                      <p className="text-xs font-semibold text-[#8B5CF6]">{reply.subject}</p>
+                  {threadedReplies.map((reply, i) => {
+                    const isOutgoing = reply.direction === 'OUTGOING';
+                    return (
                       <div
-                        className="prose dark:prose-invert max-w-none text-xs pt-3 border-t border-slate-200 dark:border-[#27272A]/50"
-                        dangerouslySetInnerHTML={{
-                          __html: DOMPurify.sanitize(reply.htmlBody || reply.plainTextBody || ''),
-                        }}
-                      />
-                    </div>
-                  ))}
+                        key={reply.id}
+                        className={`p-5 rounded-2xl border space-y-3 ${
+                          isOutgoing
+                            ? 'bg-violet-50/40 dark:bg-violet-950/20 border-violet-200 dark:border-violet-800/60 ml-4 sm:ml-8'
+                            : 'bg-slate-50 dark:bg-[#09090B] border-slate-200 dark:border-[#27272A]'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between text-xs">
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${
+                                isOutgoing
+                                  ? 'bg-[#8B5CF6]/20 text-[#8B5CF6]'
+                                  : 'bg-blue-500/15 text-blue-600 dark:text-blue-400'
+                              }`}
+                            >
+                              {isOutgoing ? 'OUTGOING REPLY' : 'CUSTOMER REPLY'}
+                            </span>
+                            <span className="font-bold text-slate-900 dark:text-white">
+                              {isOutgoing
+                                ? `You (PRC Hardware) → ${reply.recipientEmail}`
+                                : `${reply.senderName || reply.senderEmail}`}
+                            </span>
+                          </div>
+                          <span className="text-slate-400 text-[11px]">{new Date(reply.receivedAt).toLocaleString()}</span>
+                        </div>
+
+                        <p className="text-xs font-semibold text-[#8B5CF6]">{reply.subject}</p>
+
+                        <div
+                          className="prose dark:prose-invert max-w-none text-xs pt-2 border-t border-slate-200 dark:border-[#27272A]/50"
+                          dangerouslySetInnerHTML={{
+                            __html: DOMPurify.sanitize(reply.htmlBody || reply.plainTextBody || ''),
+                          }}
+                        />
+
+                        {/* Reply Attachments */}
+                        {reply.attachments && reply.attachments.length > 0 && (
+                          <div className="pt-2 flex flex-wrap gap-2">
+                            {reply.attachments.map((att) => (
+                              <a
+                                key={att.id}
+                                href={getAttachmentUrl(att.storageUrl)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] text-slate-700 dark:text-[#E4E4E7] hover:text-[#8B5CF6] text-[11px] font-medium"
+                              >
+                                <Paperclip size={12} className="text-[#8B5CF6]" />
+                                <span className="truncate max-w-[160px]">{att.fileName}</span>
+                                <ExternalLink size={10} className="text-slate-400" />
+                              </a>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
+
+              {/* REPLY COMPOSER HUB */}
+              <div className="pt-6 border-t border-slate-200 dark:border-[#27272A] space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-xl bg-[#8B5CF6]/15 text-[#8B5CF6] flex items-center justify-center">
+                      <Send size={16} />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-extrabold text-slate-900 dark:text-[#FAFAFA]">Reply to Customer</h4>
+                      <p className="text-[11px] text-slate-500">Send an official email response with PDF and document attachments</p>
+                    </div>
+                  </div>
+                </div>
+
+                <form onSubmit={handleSendReply} className="p-5 rounded-2xl bg-white dark:bg-[#09090B] border border-slate-200 dark:border-[#27272A] space-y-4 shadow-xs">
+                  {/* To & CC */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-500 dark:text-[#A1A1AA] mb-1">Recipient (To)</label>
+                      <input
+                        type="email"
+                        required
+                        value={replyTo}
+                        onChange={(e) => setReplyTo(e.target.value)}
+                        placeholder="customer@example.com"
+                        className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] text-slate-900 dark:text-white font-mono text-xs focus:outline-none focus:border-[#8B5CF6]"
+                      />
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[11px] font-bold text-slate-500 dark:text-[#A1A1AA]">CC (Optional)</label>
+                        <span className="text-[10px] text-slate-400">Comma separated</span>
+                      </div>
+                      <input
+                        type="text"
+                        value={replyCc}
+                        onChange={(e) => setReplyCc(e.target.value)}
+                        placeholder="sales@example.com, manager@example.com"
+                        className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] text-slate-900 dark:text-white font-mono text-xs focus:outline-none focus:border-[#8B5CF6]"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Subject & Status */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                    <div className="sm:col-span-2">
+                      <label className="block text-[11px] font-bold text-slate-500 dark:text-[#A1A1AA] mb-1">Subject</label>
+                      <input
+                        type="text"
+                        required
+                        value={replySubject}
+                        onChange={(e) => setReplySubject(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] text-slate-900 dark:text-white text-xs font-semibold focus:outline-none focus:border-[#8B5CF6]"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-500 dark:text-[#A1A1AA] mb-1">Update Status On Send</label>
+                      <select
+                        value={replyStatus}
+                        onChange={(e) => setReplyStatus(e.target.value as PoStatus)}
+                        className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] text-slate-800 dark:text-[#FAFAFA] text-xs font-semibold focus:outline-none focus:border-[#8B5CF6]"
+                      >
+                        <option value="">Keep current ({po.status})</option>
+                        <option value="WAITING_FOR_CUSTOMER">🟠 WAITING FOR CUSTOMER</option>
+                        <option value="PROCESSING">🟣 PROCESSING</option>
+                        <option value="UNDER_REVIEW">🟡 UNDER REVIEW</option>
+                        <option value="COMPLETED">✅ COMPLETED</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Message Body */}
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-500 dark:text-[#A1A1AA] mb-1">Message Body</label>
+                    <textarea
+                      required
+                      rows={5}
+                      value={replyMessage}
+                      onChange={(e) => setReplyMessage(e.target.value)}
+                      placeholder="Type your reply to the customer here... (e.g. Thank you for your Purchase Order. Please find attached our formal quotation and invoice.)"
+                      className="w-full p-3 rounded-xl bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] text-slate-900 dark:text-white text-xs leading-relaxed focus:outline-none focus:border-[#8B5CF6] resize-y"
+                    />
+                  </div>
+
+                  {/* File Attachments Dropzone / List */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] font-bold text-slate-500 dark:text-[#A1A1AA] flex items-center gap-1.5">
+                        <Paperclip size={13} className="text-[#8B5CF6]" /> Attachments ({replyFiles.length})
+                      </label>
+                      <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-100 dark:bg-[#27272A] text-slate-700 dark:text-[#E4E4E7] hover:bg-[#8B5CF6] hover:text-white text-xs font-bold transition-colors">
+                        <Paperclip size={13} />
+                        <span>Add Files (PDF, Excel, Docs, Images)</span>
+                        <input
+                          type="file"
+                          multiple
+                          className="hidden"
+                          onChange={(e) => {
+                            if (e.target.files) {
+                              const newFiles = Array.from(e.target.files);
+                              setReplyFiles((prev) => [...prev, ...newFiles]);
+                            }
+                          }}
+                        />
+                      </label>
+                    </div>
+
+                    {replyFiles.length > 0 && (
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        {replyFiles.map((file, idx) => (
+                          <div
+                            key={idx}
+                            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-violet-50 dark:bg-violet-950/40 border border-violet-200 dark:border-violet-800 text-violet-700 dark:text-violet-300 text-xs font-semibold"
+                          >
+                            <FileText size={13} />
+                            <span className="truncate max-w-[200px]">{file.name}</span>
+                            <span className="text-[10px] text-violet-500">({(file.size / 1024).toFixed(1)} KB)</span>
+                            <button
+                              type="button"
+                              onClick={() => setReplyFiles((prev) => prev.filter((_, i) => i !== idx))}
+                              className="text-violet-400 hover:text-rose-600 ml-1"
+                              title="Remove file"
+                            >
+                              <X size={13} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Status Alerts */}
+                  {replySuccessMsg && (
+                    <div className="p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-xs font-bold flex items-center gap-2">
+                      <CheckCircle2 size={15} /> {replySuccessMsg}
+                    </div>
+                  )}
+                  {replyErrorMsg && (
+                    <div className="p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-600 dark:text-rose-400 text-xs font-bold flex items-center gap-2">
+                      <AlertCircle size={15} /> {replyErrorMsg}
+                    </div>
+                  )}
+
+                  {/* Action Buttons */}
+                  <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-[#27272A]">
+                    <button
+                      type="submit"
+                      disabled={sendingReply || !replyMessage.trim() || !replySubject.trim()}
+                      className="px-5 py-2.5 rounded-xl bg-[#8B5CF6] hover:bg-[#7C3AED] text-white font-bold text-xs flex items-center gap-2 transition-all disabled:opacity-50 shadow-md shadow-[#8B5CF6]/20"
+                    >
+                      <Send size={14} className={sendingReply ? 'animate-spin' : ''} />
+                      <span>{sendingReply ? 'Sending Reply & Uploading Files...' : 'Send Reply to Customer'}</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
             </div>
           )}
 

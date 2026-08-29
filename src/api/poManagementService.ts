@@ -198,3 +198,14 @@ export async function bulkDeletePoSubmissions(ids: string[]): Promise<{ success:
   }
   return res.data;
 }
+
+export async function replyToPoSubmission(id: string, formData: FormData): Promise<PoSubmissionDetail> {
+  const res = await fetchAdminApi<PoSubmissionDetail>(`/po-management/${id}/reply`, {
+    method: 'POST',
+    body: formData,
+  });
+  if (!res.success || !res.data) {
+    throw new Error(res.error?.message || 'Failed to send reply');
+  }
+  return res.data;
+}
