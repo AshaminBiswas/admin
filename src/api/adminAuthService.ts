@@ -290,6 +290,40 @@ export const adminAuthService = {
     return { success: false };
   },
 
+  async changePassword(
+    currentPassword: string,
+    newPassword: string,
+    confirmPassword?: string
+  ): Promise<{ success: boolean; message: string }> {
+    try {
+      const res = await fetchAdminApi("/auth/change-password", {
+        method: "POST",
+        body: JSON.stringify({
+          currentPassword,
+          newPassword,
+          confirmPassword: confirmPassword || newPassword,
+        }),
+      });
+
+      if (res.success) {
+        return {
+          success: true,
+          message: res.message || "Password changed successfully! All active sessions have been updated.",
+        };
+      }
+
+      return {
+        success: false,
+        message: res.error?.message || res.message || "Failed to update password. Please check your current password.",
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        message: err.message || "Network error while changing password.",
+      };
+    }
+  },
+
   async logout(): Promise<void> {
     const refreshToken = getAdminRefreshToken();
     if (refreshToken) {

@@ -1,5 +1,20 @@
 import React, { useState, useEffect } from "react";
-import { ShieldCheck, ShieldAlert, KeyRound, QrCode, Copy, Check, Lock, Smartphone, RefreshCw, AlertCircle, CheckCircle2 } from "lucide-react";
+import {
+  ShieldCheck,
+  ShieldAlert,
+  KeyRound,
+  QrCode,
+  Copy,
+  Check,
+  Lock,
+  Smartphone,
+  RefreshCw,
+  AlertCircle,
+  CheckCircle2,
+  Eye,
+  EyeOff,
+  Loader2,
+} from "lucide-react";
 import { useAdminAuth } from "../../context/AdminAuthContext";
 import { adminAuthService } from "../../api/adminAuthService";
 import { TwoFactorSetupData } from "../../types/admin";
@@ -17,9 +32,57 @@ export function AdminSecuritySettings() {
   const [showDisableModal, setShowDisableModal] = useState<boolean>(false);
   const [disableConfirmText, setDisableConfirmText] = useState<string>("");
 
+  // Change Password State
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [passwordFeedback, setPasswordFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
   useEffect(() => {
     setIs2FAActive(!!adminUser?.isTwoFactorEnabled);
   }, [adminUser]);
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordFeedback(null);
+
+    if (!currentPassword.trim()) {
+      setPasswordFeedback({ type: "error", text: "Please provide your current password." });
+      return;
+    }
+
+    if (newPassword.length < 8) {
+      setPasswordFeedback({ type: "error", text: "New password must be at least 8 characters in length." });
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setPasswordFeedback({ type: "error", text: "New password and confirmation password do not match." });
+      return;
+    }
+
+    if (currentPassword === newPassword) {
+      setPasswordFeedback({ type: "error", text: "New password cannot be the same as your current password." });
+      return;
+    }
+
+    setIsChangingPassword(true);
+    const res = await adminAuthService.changePassword(currentPassword, newPassword, confirmPassword);
+    setIsChangingPassword(false);
+
+    if (res.success) {
+      setPasswordFeedback({ type: "success", text: res.message || "Password updated successfully!" });
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    } else {
+      setPasswordFeedback({ type: "error", text: res.message || "Failed to update password." });
+    }
+  };
 
   const handleStartSetup = async () => {
     setFeedback(null);
@@ -314,6 +377,141 @@ export function AdminSecuritySettings() {
             </div>
           </div>
         )}
+      </div>
+
+      {/* ─── Change Account Password Card ─── */}
+      <div className="bg-[#18181B] border border-[#27272A] rounded-tr-3xl rounded-bl-3xl p-6 shadow-xl space-y-5">
+        <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-[#27272A] pb-5 gap-3">
+          <div className="space-y-1">
+            <h2 className="text-lg font-bold font-serif text-[#FAFAFA] flex items-center gap-2">
+              <Lock className="text-[#8B5CF6]" size={20} />
+              <span>Change Account Password</span>
+            </h2>
+            <p className="text-xs text-[#A1A1AA]">
+              Update your executive login password. All sessions and refresh tokens will be secured.
+            </p>
+          </div>
+        </div>
+
+        {passwordFeedback && (
+          <div
+            className={`p-4 rounded-tr-2xl rounded-bl-2xl border text-xs flex items-center gap-3 ${
+              passwordFeedback.type === "success"
+                ? "bg-emerald-950/60 border-emerald-500/40 text-emerald-300"
+                : "bg-red-950/60 border-red-500/40 text-red-300"
+            }`}
+          >
+            {passwordFeedback.type === "success" ? (
+              <CheckCircle2 size={18} className="text-emerald-400 flex-shrink-0" />
+            ) : (
+              <AlertCircle size={18} className="text-red-400 flex-shrink-0" />
+            )}
+            <span>{passwordFeedback.text}</span>
+          </div>
+        )}
+
+        <form onSubmit={handleChangePassword} className="space-y-4 max-w-xl">
+          {/* Current Password */}
+          <div>
+            <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-[#A1A1AA] mb-1.5">
+              Current Password
+            </label>
+            <div className="relative">
+              <input
+                type={showCurrentPassword ? "text" : "password"}
+                required
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                placeholder="Enter current admin password"
+                className="w-full bg-[#09090B] text-[#FAFAFA] text-xs px-3.5 py-2.5 rounded-tr-xl rounded-bl-xl border border-[#27272A] focus:outline-none focus:border-[#8B5CF6] transition-colors pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowCurrentPassword((p) => !p)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors"
+                title={showCurrentPassword ? "Hide password" : "Show password"}
+              >
+                {showCurrentPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+              </button>
+            </div>
+          </div>
+
+          {/* New Password & Confirm Password */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-[#A1A1AA] mb-1.5">
+                New Password
+              </label>
+              <div className="relative">
+                <input
+                  type={showNewPassword ? "text" : "password"}
+                  required
+                  minLength={8}
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="At least 8 characters"
+                  className="w-full bg-[#09090B] text-[#FAFAFA] text-xs px-3.5 py-2.5 rounded-tr-xl rounded-bl-xl border border-[#27272A] focus:outline-none focus:border-[#8B5CF6] transition-colors pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowNewPassword((p) => !p)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors"
+                  title={showNewPassword ? "Hide password" : "Show password"}
+                >
+                  {showNewPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-[#A1A1AA] mb-1.5">
+                Confirm New Password
+              </label>
+              <div className="relative">
+                <input
+                  type={showConfirmPassword ? "text" : "password"}
+                  required
+                  minLength={8}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Re-enter new password"
+                  className="w-full bg-[#09090B] text-[#FAFAFA] text-xs px-3.5 py-2.5 rounded-tr-xl rounded-bl-xl border border-[#27272A] focus:outline-none focus:border-[#8B5CF6] transition-colors pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword((p) => !p)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors"
+                  title={showConfirmPassword ? "Hide password" : "Show password"}
+                >
+                  {showConfirmPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <p className="text-[10px] text-slate-500">
+              Must be at least 8 characters. Includes letters, numbers, or symbols.
+            </p>
+            <button
+              type="submit"
+              disabled={isChangingPassword}
+              className="bg-[#8B5CF6] text-white hover:bg-[#A855F7] font-semibold py-2.5 px-6 rounded-tr-xl rounded-bl-xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-[#8B5CF6]/20 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+            >
+              {isChangingPassword ? (
+                <>
+                  <Loader2 size={14} className="animate-spin" />
+                  <span>Updating Password...</span>
+                </>
+              ) : (
+                <>
+                  <Lock size={14} />
+                  <span>Update Password</span>
+                </>
+              )}
+            </button>
+          </div>
+        </form>
       </div>
 
       {/* DISABLE MODAL */}

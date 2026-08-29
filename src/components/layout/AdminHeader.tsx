@@ -23,6 +23,8 @@ import {
   AlertCircle,
   Loader2,
   Building,
+  KeyRound,
+  Lock,
 } from "lucide-react";
 import { useAdminAuth } from "../../context/AdminAuthContext";
 import { useTheme } from "../../context/ThemeContext";
@@ -352,6 +354,21 @@ export function AdminHeader({ isCollapsed, onToggleCollapse, onToggleMobile }: A
                       <span>Roles & Permissions (RBAC)</span>
                     </div>
                     <span className="text-[9px] font-bold text-[#8B5CF6] bg-[#8B5CF6]/10 px-1.5 py-0.5 rounded">Manage</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCurrentView("settings");
+                      setIsProfileOpen(false);
+                    }}
+                    className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold text-slate-800 dark:text-[#FAFAFA] hover:bg-slate-200/70 dark:hover:bg-[#27272A] hover:text-[#8B5CF6] transition-colors"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Lock size={14} className="text-[#8B5CF6]" />
+                      <span>Security & Password (2FA)</span>
+                    </div>
+                    <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded">Password</span>
                   </button>
                 </div>
 
