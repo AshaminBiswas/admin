@@ -48,6 +48,7 @@ const GSTInvoiceHub = lazyWithRetry(() => import("../../pages/GSTInvoiceHub"));
 const ProjectsPage = lazyWithRetry(() => import("../../pages/ProjectsPage").then((m) => ({ default: m.ProjectsPage })));
 const POManagementPage = lazyWithRetry(() => import("../../pages/POManagementPage").then((m) => ({ default: m.POManagementPage })));
 const PODetailPage = lazyWithRetry(() => import("../../pages/PODetailPage").then((m) => ({ default: m.PODetailPage })));
+import { AICopilot } from "../ai/AICopilot";
 
 function ViewLoadingSkeleton() {
   return (
@@ -380,6 +381,12 @@ export function AdminLayout() {
           </div>
         </main>
       </div>
+
+      {/* ─── AI Copilot Floating Assistant ─── */}
+      <AICopilot
+        currentPoId={currentView === "po-detail" ? selectedPoId : null}
+        currentView={currentView}
+      />
 
       {/* ─── Mobile Native App Bottom Navigation Dock ─── */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-[#18181B]/95 backdrop-blur-lg border-t border-slate-200 dark:border-[#27272A] px-1 py-1 flex items-center justify-around shadow-2xl safe-area-pb">
