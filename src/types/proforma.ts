@@ -1,6 +1,6 @@
 export interface ProformaFacility {
   id: string;
-  code: 'DELHI_WORKS' | 'MUMBAI_DEPOT';
+  code: 'DELHI_WORKS' | 'MUMBAI_DEPOT' | string;
   name: string;
   tagline: string;
   address: string;
@@ -103,7 +103,7 @@ export interface ProformaInvoice {
   invoiceNumber?: string;
   financialYear: string;
   status: ProformaStatus;
-  facilityCode: 'DELHI_WORKS' | 'MUMBAI_DEPOT';
+  facilityCode: 'DELHI_WORKS' | 'MUMBAI_DEPOT' | string;
   facility: ProformaFacility;
 
   // Customer / Buyer Details
@@ -151,7 +151,8 @@ export interface ProformaInvoice {
 }
 
 export interface CreateProformaInvoicePayload {
-  facilityCode: 'DELHI_WORKS' | 'MUMBAI_DEPOT';
+  facilityCode: 'DELHI_WORKS' | 'MUMBAI_DEPOT' | string;
+  facility?: ProformaFacility;
   customerId?: string;
   customerName: string;
   companyName: string;

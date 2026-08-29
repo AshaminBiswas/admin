@@ -112,11 +112,8 @@ export const proformaService = {
     return local || null;
   },
 
-  /**
-   * Create a new Proforma Invoice
-   */
   async createProformaInvoice(payload: CreateProformaInvoicePayload): Promise<ProformaInvoice> {
-    const facility: ProformaFacility = PROFORMA_FACILITIES[payload.facilityCode] || PROFORMA_FACILITIES.DELHI_WORKS;
+    const facility: ProformaFacility = payload.facility || PROFORMA_FACILITIES[payload.facilityCode] || PROFORMA_FACILITIES.DELHI_WORKS;
 
     // Calculate line item totals & taxes
     const isInterState =

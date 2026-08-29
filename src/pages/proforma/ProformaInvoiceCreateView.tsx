@@ -3,13 +3,15 @@ import {
   Building2, Users, Search, Plus, Minus, Trash2, ArrowLeft,
   FileText, ShieldCheck, Printer, Download, Sparkles, CheckCircle2,
   AlertCircle, RefreshCw, X, Package, MapPin, Phone, Mail,
-  CreditCard, Calendar, Truck, Layers, ChevronDown, Image as ImageIcon
+  CreditCard, Calendar, Truck, Layers, ChevronDown, Image as ImageIcon,
+  Warehouse
 } from 'lucide-react';
 import {
   PROFORMA_FACILITIES,
   ProformaFacility,
   ProformaInvoice,
-  CreateProformaInvoicePayload
+  CreateProformaInvoicePayload,
+  GST_STATE_MAPPING
 } from '../../types/proforma';
 import {
   proformaService,
@@ -17,6 +19,8 @@ import {
   CustomerSavedAddressSummary,
   ProductSearchResult
 } from '../../api/proformaService';
+import { inventoryApi } from '../../api/adminApi';
+import type { Branch } from '../../types/admin';
 import { getCachedCategories } from '../../utils/referenceDataCache';
 import { printProformaInvoice } from '../../utils/proformaPdfGenerator';
 
@@ -47,10 +51,106 @@ const DEFAULT_CATEGORY_OPTIONS = [
   { label: 'Shower & Glass Hardware', slug: 'shower-hardware' },
 ];
 
+/**
+ * Maps an Inventory Fulfillment Branch into a rich ProformaFacility
+ */
+function mapBranchToProformaFacility(b: any): ProformaFacility {
+  const branchCodeUpper = (b.code || '').toUpperCase();
+  const staticMatch = Object.values(PROFORMA_FACILITIES).find(
+    (sf) => sf.code.toUpperCase() === branchCodeUpper || sf.id === b.id
+  );
+
+  let stateCode = '07';
+  const branchState = b.state || 'Delhi';
+  const match = Object.entries(GST_STATE_MAPPING).find(
+    ([, sName]) => sName.toLowerCase() === branchState.toLowerCase()
+  );
+  if (match) stateCode = match[0];
+  if (branchState.toLowerCase() === 'maharashtra') stateCode = '27';
+  if (branchState.toLowerCase() === 'west bengal') stateCode = '19';
+
+  const gstin =
+    b.gstNumber ||
+    b.gstin ||
+    (stateCode === '27'
+      ? '27AABCP1234F1Z9'
+      : stateCode === '19'
+      ? '19AABCP1234F1Z9'
+      : '07AABCP1234F1Z9');
+
+  return {
+    id: b.id || `fac-${b.code}`,
+    code: b.code || b.name,
+    name: staticMatch?.name || `PRC Hardware - ${b.name}`,
+    tagline:
+      staticMatch?.tagline ||
+      (branchCodeUpper === 'DEL' || branchCodeUpper === 'DELHI_WORKS'
+        ? 'Main Corporate Works & Central Logistics Hub'
+        : 'Fulfillment Branch & Logistics Depot'),
+    address:
+      b.address ||
+      staticMatch?.address ||
+      'H-3, J.R. Complex, Gate No 4, Mela Ram Farm, Mandoli',
+    city: b.city || staticMatch?.city || 'Delhi',
+    state: branchState,
+    stateCode,
+    pincode:
+      b.pincode ||
+      staticMatch?.pincode ||
+      (stateCode === '27' ? '421302' : stateCode === '19' ? '700001' : '110093'),
+    gstin,
+    email: b.email || staticMatch?.email || 'billing@pacifichardware.com',
+    phone: b.phone || staticMatch?.phone || '+91 11 2233 4455',
+    bankName:
+      staticMatch?.bankName ||
+      (stateCode === '27'
+        ? 'ICICI Bank Ltd'
+        : stateCode === '19'
+        ? 'Axis Bank Ltd'
+        : 'HDFC Bank Ltd'),
+    accountName: 'Pacific Products and Solutions',
+    accountNumber:
+      staticMatch?.accountNumber ||
+      (stateCode === '27'
+        ? '001105023456'
+        : stateCode === '19'
+        ? '91902008899112'
+        : '50200088991122'),
+    ifscCode:
+      staticMatch?.ifscCode ||
+      (stateCode === '27'
+        ? 'ICIC0000011'
+        : stateCode === '19'
+        ? 'UTIB0000019'
+        : 'HDFC0001234'),
+    branch: staticMatch?.branch || `${b.city || 'Central Works'}, India`,
+    upiId:
+      staticMatch?.upiId ||
+      (stateCode === '27' ? 'prchardware@icici' : 'prchardware@hdfcbank'),
+  };
+}
+
 export function ProformaInvoiceCreateView({ onBack, onSaved }: Props) {
-  // Facility
-  const [facilityCode, setFacilityCode] = useState<'DELHI_WORKS' | 'MUMBAI_DEPOT'>('DELHI_WORKS');
-  const facility = PROFORMA_FACILITIES[facilityCode];
+  // Fulfillment Facilities (Loaded dynamically from Inventory Page)
+  const [facilities, setFacilities] = useState<ProformaFacility[]>([
+    PROFORMA_FACILITIES.DELHI_WORKS,
+    PROFORMA_FACILITIES.MUMBAI_DEPOT,
+  ]);
+  const [selectedFacilityCode, setSelectedFacilityCode] = useState<string>('DELHI_WORKS');
+  const [loadingFacilities, setLoadingFacilities] = useState<boolean>(false);
+
+  // Active facility object
+  const facility = useMemo(() => {
+    return (
+      facilities.find(
+        (f) =>
+          f.code.toUpperCase() === selectedFacilityCode.toUpperCase() ||
+          f.id === selectedFacilityCode
+      ) ||
+      facilities[0] ||
+      PROFORMA_FACILITIES.DELHI_WORKS
+    );
+  }, [facilities, selectedFacilityCode]);
 
   // Customer Search & Details
   const [customerSearch, setCustomerSearch] = useState('');
@@ -85,21 +185,8 @@ export function ProformaInvoiceCreateView({ onBack, onSaved }: Props) {
   const [deliveryTimeline, setDeliveryTimeline] = useState('Immediate dispatch within 5-7 working days');
   const [notes, setNotes] = useState('');
 
-  // Line Items
-  const [items, setItems] = useState<DraftLineItem[]>([
-    {
-      productId: 'p-1',
-      sku: 'PRC-SS-GH-304',
-      productName: 'Grade 304 SS Heavy Duty Restroom Gravity Hinge Set',
-      description: 'Spring-assisted self-closing gravity hinge set with mounting fasteners',
-      hsnCode: '83024110',
-      unit: 'SETS',
-      quantity: 10,
-      unitPrice: 850,
-      discount: 0,
-      gstRate: 18,
-    },
-  ]);
+  // Line Items (Initialized as EMPTY array with no default product)
+  const [items, setItems] = useState<DraftLineItem[]>([]);
 
   // Categories & Product Search
   const [categoryOptions, setCategoryOptions] = useState(DEFAULT_CATEGORY_OPTIONS);
@@ -114,7 +201,31 @@ export function ProformaInvoiceCreateView({ onBack, onSaved }: Props) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
-  // Load Categories on mount
+  // 1. Load Fulfillment Facilities dynamically from Inventory Page (inventoryApi.getBranches)
+  useEffect(() => {
+    const fetchFulfillmentFacilities = async () => {
+      setLoadingFacilities(true);
+      try {
+        const res = await inventoryApi.getBranches({ isActive: true });
+        if (res?.success && Array.isArray(res.data) && res.data.length > 0) {
+          const mappedFacilities = res.data.map(mapBranchToProformaFacility);
+          setFacilities(mappedFacilities);
+          // Set first facility as default
+          if (mappedFacilities.length > 0) {
+            setSelectedFacilityCode(mappedFacilities[0].code);
+          }
+        }
+      } catch (err) {
+        console.warn('Could not load inventory fulfillment facilities:', err);
+      } finally {
+        setLoadingFacilities(false);
+      }
+    };
+
+    fetchFulfillmentFacilities();
+  }, []);
+
+  // 2. Load Categories on mount
   useEffect(() => {
     getCachedCategories()
       .then((cats) => {
@@ -387,7 +498,7 @@ export function ProformaInvoiceCreateView({ onBack, onSaved }: Props) {
       return;
     }
     if (items.length === 0) {
-      setErrorMsg('Please add at least one line item.');
+      setErrorMsg('Please add at least one hardware product to generate the Proforma Invoice.');
       return;
     }
     if (items.some((it) => !it.productName.trim() || it.quantity <= 0)) {
@@ -398,7 +509,8 @@ export function ProformaInvoiceCreateView({ onBack, onSaved }: Props) {
     setIsSubmitting(true);
     try {
       const payload: CreateProformaInvoicePayload = {
-        facilityCode,
+        facilityCode: facility.code,
+        facility,
         customerId: selectedCustomerId,
         customerName: customerName.trim() || companyName.trim(),
         companyName: companyName.trim() || customerName.trim(),
@@ -452,7 +564,7 @@ export function ProformaInvoiceCreateView({ onBack, onSaved }: Props) {
               <h1 className="text-xl font-bold text-white tracking-tight">Create Proforma Invoice (PI)</h1>
             </div>
             <p className="text-xs text-zinc-400 mt-0.5">
-              Issue an official Commercial Proforma Invoice with dual facility routing, B2B customer auto-fill, and GST computation.
+              Issue an official Commercial Proforma Invoice with inventory fulfillment facility routing, B2B customer auto-fill, and GST computation.
             </p>
           </div>
         </div>
@@ -491,83 +603,81 @@ export function ProformaInvoiceCreateView({ onBack, onSaved }: Props) {
         </div>
       )}
 
-      {/* ─── 1. FACILITY SELECTION CARD (2 FACILITIES) ────────────────────── */}
+      {/* ─── 1. FACILITY SELECTION CARD (LINKED WITH INVENTORY FULFILLMENT FACILITIES) ─── */}
       <div className="bg-[#18181B] border border-[#27272A] rounded-2xl p-5 space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#27272A] pb-3">
           <div>
             <h2 className="text-sm font-bold text-white flex items-center gap-2">
-              <Building2 size={16} className="text-[#8B5CF6]" /> 1. Select Origin Dispatch Facility
+              <Warehouse size={16} className="text-[#8B5CF6]" /> 1. Select Origin Dispatch Facility (Fulfillment Facilities)
             </h2>
             <p className="text-xs text-zinc-400">
-              Determines billing entity, state code for GST (IGST vs CGST+SGST), registered warehouse address, and bank payment instructions.
+              Directly linked with Inventory Fulfillment Facilities. Sets billing entity works, registered warehouse address, GST State Code (IGST vs CGST+SGST), and RTGS bank transfer details.
             </p>
           </div>
-          <span className="text-[11px] font-mono font-bold text-[#A78BFA] bg-[#8B5CF6]/10 px-2.5 py-1 rounded-full border border-[#8B5CF6]/20">
-            Active: {facility.name}
+          <span className="text-[11px] font-mono font-bold text-[#A78BFA] bg-[#8B5CF6]/10 px-2.5 py-1 rounded-full border border-[#8B5CF6]/20 flex items-center gap-1.5">
+            <CheckCircle2 size={12} className="text-[#8B5CF6]" />
+            <span>Active: {facility.name}</span>
           </span>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          
-          {/* Facility 1: Delhi Works */}
-          <div
-            onClick={() => setFacilityCode('DELHI_WORKS')}
-            className={`p-4 rounded-xl border-2 cursor-pointer transition-all duration-200 space-y-2 ${
-              facilityCode === 'DELHI_WORKS'
-                ? 'bg-[#8B5CF6]/10 border-[#8B5CF6] shadow-md shadow-purple-950/20'
-                : 'bg-[#27272A]/40 border-[#27272A] hover:border-zinc-600'
-            }`}
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-black px-2 py-0.5 rounded bg-zinc-800 text-zinc-200 border border-zinc-700">
-                  FACILITY 01
-                </span>
-                <strong className="text-sm text-white">Delhi Corporate Works</strong>
-              </div>
-              {facilityCode === 'DELHI_WORKS' && (
-                <CheckCircle2 size={18} className="text-[#8B5CF6]" />
-              )}
-            </div>
-            <p className="text-xs text-zinc-300">
-              {PROFORMA_FACILITIES.DELHI_WORKS.address}, {PROFORMA_FACILITIES.DELHI_WORKS.city} - {PROFORMA_FACILITIES.DELHI_WORKS.pincode}
-            </p>
-            <div className="pt-1 text-[11px] text-zinc-400 space-y-0.5">
-              <div><strong>GSTIN:</strong> <span className="font-mono text-zinc-200">{PROFORMA_FACILITIES.DELHI_WORKS.gstin}</span> (State Code: 07)</div>
-              <div><strong>Bank RTGS:</strong> {PROFORMA_FACILITIES.DELHI_WORKS.bankName} (A/C: {PROFORMA_FACILITIES.DELHI_WORKS.accountNumber})</div>
-            </div>
+        {loadingFacilities ? (
+          <div className="p-6 text-center text-xs text-zinc-400 flex items-center justify-center gap-2">
+            <RefreshCw size={14} className="animate-spin text-[#8B5CF6]" />
+            <span>Loading active fulfillment facilities from inventory...</span>
           </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {facilities.map((fac, idx) => {
+              const isSelected =
+                facility.code.toUpperCase() === fac.code.toUpperCase() ||
+                facility.id === fac.id;
 
-          {/* Facility 2: Mumbai Depot */}
-          <div
-            onClick={() => setFacilityCode('MUMBAI_DEPOT')}
-            className={`p-4 rounded-xl border-2 cursor-pointer transition-all duration-200 space-y-2 ${
-              facilityCode === 'MUMBAI_DEPOT'
-                ? 'bg-[#8B5CF6]/10 border-[#8B5CF6] shadow-md shadow-purple-950/20'
-                : 'bg-[#27272A]/40 border-[#27272A] hover:border-zinc-600'
-            }`}
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-black px-2 py-0.5 rounded bg-zinc-800 text-zinc-200 border border-zinc-700">
-                  FACILITY 02
-                </span>
-                <strong className="text-sm text-white">Western Regional Logistics Depot</strong>
-              </div>
-              {facilityCode === 'MUMBAI_DEPOT' && (
-                <CheckCircle2 size={18} className="text-[#8B5CF6]" />
-              )}
-            </div>
-            <p className="text-xs text-zinc-300">
-              {PROFORMA_FACILITIES.MUMBAI_DEPOT.address}, {PROFORMA_FACILITIES.MUMBAI_DEPOT.city} - {PROFORMA_FACILITIES.MUMBAI_DEPOT.pincode}
-            </p>
-            <div className="pt-1 text-[11px] text-zinc-400 space-y-0.5">
-              <div><strong>GSTIN:</strong> <span className="font-mono text-zinc-200">{PROFORMA_FACILITIES.MUMBAI_DEPOT.gstin}</span> (State Code: 27)</div>
-              <div><strong>Bank RTGS:</strong> {PROFORMA_FACILITIES.MUMBAI_DEPOT.bankName} (A/C: {PROFORMA_FACILITIES.MUMBAI_DEPOT.accountNumber})</div>
-            </div>
+              return (
+                <div
+                  key={fac.id || fac.code || idx}
+                  onClick={() => setSelectedFacilityCode(fac.code || fac.id)}
+                  className={`p-4 rounded-xl border-2 cursor-pointer transition-all duration-200 space-y-2.5 relative flex flex-col justify-between ${
+                    isSelected
+                      ? 'bg-[#8B5CF6]/10 border-[#8B5CF6] shadow-md shadow-purple-950/20 ring-1 ring-[#8B5CF6]/50'
+                      : 'bg-[#27272A]/40 border-[#27272A] hover:border-zinc-600 hover:bg-[#27272A]/70'
+                  }`}
+                >
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-[10px] font-black px-2 py-0.5 rounded bg-zinc-800 text-zinc-200 border border-zinc-700 font-mono shrink-0">
+                          {fac.code || `FACILITY 0${idx + 1}`}
+                        </span>
+                        <strong className="text-xs text-white truncate block">
+                          {fac.name}
+                        </strong>
+                      </div>
+                      {isSelected && (
+                        <CheckCircle2 size={18} className="text-[#8B5CF6] shrink-0" />
+                      )}
+                    </div>
+
+                    <p className="text-[11.5px] text-zinc-300 leading-relaxed line-clamp-2">
+                      {fac.address}, {fac.city} - {fac.pincode}
+                    </p>
+                  </div>
+
+                  <div className="pt-2 border-t border-zinc-800/80 text-[11px] text-zinc-400 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span>GSTIN: <span className="font-mono text-zinc-200 font-bold">{fac.gstin}</span></span>
+                      <span className="font-mono text-[10px] bg-purple-950/60 text-purple-300 border border-purple-800/50 px-1.5 py-0.2 rounded">
+                        State: {fac.stateCode} ({fac.state})
+                      </span>
+                    </div>
+                    <div className="truncate text-[10.5px]">
+                      <span className="text-zinc-500">Bank:</span> {fac.bankName} • <span className="font-mono text-zinc-300">A/C: {fac.accountNumber}</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
-
-        </div>
+        )}
       </div>
 
       {/* ─── 2. B2B CUSTOMER SEARCH & ADDRESS AUTO-FILL ───────────────────── */}
