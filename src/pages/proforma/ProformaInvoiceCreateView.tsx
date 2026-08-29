@@ -43,6 +43,7 @@ export function ProformaInvoiceCreateView({ onBack, onSaved }: Props) {
 
   // Customer Search & Details
   const [customerSearch, setCustomerSearch] = useState('');
+  const [customerSearchType, setCustomerSearchType] = useState<'ALL' | 'GSTIN' | 'EMAIL' | 'PHONE' | 'COMPANY'>('ALL');
   const [customerResults, setCustomerResults] = useState<B2BCustomerSearchResult[]>([]);
   const [searchingCustomer, setSearchingCustomer] = useState(false);
   const [isCustomerDropdownOpen, setIsCustomerDropdownOpen] = useState(false);
@@ -121,7 +122,7 @@ export function ProformaInvoiceCreateView({ onBack, onSaved }: Props) {
     const timer = setTimeout(async () => {
       setSearchingCustomer(true);
       try {
-        const results = await proformaService.searchB2BCustomers(customerSearch);
+        const results = await proformaService.searchB2BCustomers(customerSearch, customerSearchType);
         setCustomerResults(results);
         setIsCustomerDropdownOpen(true);
       } catch (err) {
@@ -129,9 +130,9 @@ export function ProformaInvoiceCreateView({ onBack, onSaved }: Props) {
       } finally {
         setSearchingCustomer(false);
       }
-    }, 300);
+    }, 250);
     return () => clearTimeout(timer);
-  }, [customerSearch]);
+  }, [customerSearch, customerSearchType]);
 
   // Debounced Product Search
   useEffect(() => {
@@ -481,18 +482,67 @@ export function ProformaInvoiceCreateView({ onBack, onSaved }: Props) {
       <div className="bg-[#18181B] border border-[#27272A] rounded-2xl p-5 space-y-4">
         <div className="border-b border-[#27272A] pb-3 flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h2 className="text-sm font-bold text-white flex items-center gap-2">
-              <Users size={16} className="text-[#8B5CF6]" /> 2. B2B Customer / Buyer Information
-            </h2>
-            <p className="text-xs text-zinc-400">
-              Search by company name, contact, email, phone or GSTIN to automatically populate customer billing credentials.
+            <div className="flex items-center gap-2">
+              <h2 className="text-sm font-bold text-white flex items-center gap-2">
+                <Users size={16} className="text-[#8B5CF6]" /> 2. B2B Customer / Buyer Directory Search
+              </h2>
+              <span className="bg-purple-500/10 text-purple-300 border border-purple-500/20 text-[10px] font-extrabold px-2 py-0.5 rounded-full uppercase">
+                B2B Clients Only
+              </span>
+            </div>
+            <p className="text-xs text-zinc-400 mt-0.5">
+              Search strictly queries registered commercial B2B buyers & RFQ quotation accounts (Vendors & Suppliers excluded).
             </p>
           </div>
           {selectedCustomerId && (
-            <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-[10px] font-black px-2.5 py-0.5 rounded-full flex items-center gap-1">
-              <CheckCircle2 size={12} /> Auto-Linked Profile
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-[10px] font-black px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                <CheckCircle2 size={12} /> Verified B2B Buyer Linked
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedCustomerId(undefined);
+                  setCustomerSearch('');
+                  setCompanyName('');
+                  setCustomerName('');
+                  setCustomerEmail('');
+                  setCustomerPhone('');
+                  setCustomerGstin('');
+                  setBillingAddress('');
+                  setShippingAddress('');
+                }}
+                className="text-[11px] text-rose-400 hover:text-rose-300 underline font-bold"
+              >
+                Clear / Re-search
+              </button>
+            </div>
           )}
+        </div>
+
+        {/* Search Criteria Tabs */}
+        <div className="flex flex-wrap items-center gap-1.5 pt-1">
+          <span className="text-[11px] font-bold text-zinc-400 mr-1">Search By:</span>
+          {[
+            { id: 'ALL', label: '⚡ All Criteria' },
+            { id: 'GSTIN', label: '📄 15-Digit GSTIN' },
+            { id: 'EMAIL', label: '✉️ Email Address' },
+            { id: 'PHONE', label: '📞 Phone Number' },
+            { id: 'COMPANY', label: '🏢 Company Name' },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setCustomerSearchType(tab.id as any)}
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all ${
+                customerSearchType === tab.id
+                  ? 'bg-[#8B5CF6] text-white border-[#8B5CF6] shadow-xs'
+                  : 'bg-[#27272A]/50 text-zinc-400 border-[#27272A] hover:text-zinc-200 hover:bg-[#27272A]'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
 
         {/* Live Search Combobox */}
@@ -506,7 +556,17 @@ export function ProformaInvoiceCreateView({ onBack, onSaved }: Props) {
               onFocus={() => {
                 if (customerResults.length > 0) setIsCustomerDropdownOpen(true);
               }}
-              placeholder="Type customer or company name (e.g. Apex Infrastructure, Sharma Solutions, GSTIN)..."
+              placeholder={
+                customerSearchType === 'GSTIN'
+                  ? 'Enter 15-digit GSTIN (e.g. 07AAACA1234A1Z5, 27AABCS...)...'
+                  : customerSearchType === 'EMAIL'
+                  ? 'Enter client billing email (e.g. procurement@apexinfra.com)...'
+                  : customerSearchType === 'PHONE'
+                  ? 'Enter client 10-digit mobile number (e.g. 9811223344)...'
+                  : customerSearchType === 'COMPANY'
+                  ? 'Enter commercial enterprise or company legal name...'
+                  : 'Search B2B Client by GSTIN, Email, Phone, or Company Name...'
+              }
               className="w-full pl-10 pr-10 py-2.5 bg-[#27272A]/50 border border-[#27272A] focus:border-[#8B5CF6] rounded-xl text-xs text-white placeholder-zinc-500 focus:outline-none transition-all"
             />
             {searchingCustomer && (
@@ -516,32 +576,42 @@ export function ProformaInvoiceCreateView({ onBack, onSaved }: Props) {
 
           {/* Customer Dropdown Results */}
           {isCustomerDropdownOpen && customerResults.length > 0 && (
-            <div className="absolute z-30 left-0 right-0 mt-1.5 bg-[#18181B] border border-[#27272A] rounded-xl shadow-2xl overflow-hidden max-h-64 overflow-y-auto divide-y divide-zinc-800">
+            <div className="absolute z-30 left-0 right-0 mt-1.5 bg-[#18181B] border border-[#27272A] rounded-xl shadow-2xl overflow-hidden max-h-64 overflow-y-auto divide-y divide-zinc-800 animate-in fade-in zoom-in-98 duration-150">
+              <div className="px-3 py-1.5 bg-[#121214] text-[10px] font-bold text-zinc-400 uppercase tracking-wider flex justify-between">
+                <span>Matching B2B Clients ({customerResults.length})</span>
+                <span className="text-[#A78BFA]">Click to Auto-Populate</span>
+              </div>
               {customerResults.map((c) => (
                 <div
                   key={c.id}
                   onClick={() => handleSelectCustomer(c)}
-                  className="p-3 hover:bg-[#27272A]/70 cursor-pointer transition-colors flex items-center justify-between text-xs"
+                  className="p-3 hover:bg-[#8B5CF6]/15 cursor-pointer transition-colors flex items-center justify-between text-xs"
                 >
                   <div className="space-y-0.5">
                     <div className="flex items-center gap-2">
                       <strong className="text-white font-bold">{c.companyName || c.name}</strong>
-                      {c.gstin && (
-                        <span className="font-mono text-[10px] bg-zinc-800 text-zinc-300 px-1.5 py-0.2 rounded border border-zinc-700">
-                          {c.gstin}
+                      {c.gstin ? (
+                        <span className="font-mono text-[10px] bg-purple-950/60 text-purple-300 px-1.5 py-0.2 rounded border border-purple-800/60">
+                          GSTIN: {c.gstin}
+                        </span>
+                      ) : (
+                        <span className="text-[9.5px] text-zinc-500 bg-zinc-800 px-1.5 py-0.2 rounded">
+                          Unregistered B2B
                         </span>
                       )}
                     </div>
-                    <div className="text-[11px] text-zinc-400 flex items-center gap-3">
-                      <span>{c.name}</span>
+                    <div className="text-[11px] text-zinc-400 flex flex-wrap items-center gap-2 pt-0.5">
+                      <span>👤 {c.name}</span>
                       <span>•</span>
-                      <span>{c.email}</span>
+                      <span>✉️ {c.email}</span>
                       <span>•</span>
-                      <span>{c.phone}</span>
+                      <span>📞 {c.phone}</span>
+                      <span>•</span>
+                      <span>📍 {c.city}, {c.state} ({c.stateCode || '07'})</span>
                     </div>
                   </div>
-                  <span className="text-[10px] font-bold text-[#8B5CF6] bg-[#8B5CF6]/10 px-2 py-1 rounded-lg">
-                    Select →
+                  <span className="text-[10px] font-bold text-[#A78BFA] bg-[#8B5CF6]/20 border border-[#8B5CF6]/30 px-2.5 py-1 rounded-lg shrink-0">
+                    Auto-Fill ↓
                   </span>
                 </div>
               ))}

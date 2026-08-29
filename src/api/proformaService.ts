@@ -251,27 +251,46 @@ export const proformaService = {
   },
 
   /**
-   * Search B2B Customers
+   * Search B2B Customers by GSTIN, Email, Phone, or Company Name (Excludes Vendors/Suppliers)
    */
-  async searchB2BCustomers(queryText: string): Promise<B2BCustomerSearchResult[]> {
+  async searchB2BCustomers(
+    queryText: string,
+    searchType: 'ALL' | 'GSTIN' | 'EMAIL' | 'PHONE' | 'COMPANY' = 'ALL'
+  ): Promise<B2BCustomerSearchResult[]> {
     const q = queryText.toLowerCase().trim();
+    if (!q) return [];
+
+    const resultsMap = new Map<string, B2BCustomerSearchResult>();
+
+    // 1. Query Users / B2B Accounts
     try {
       const users = await fetchAdminApi<any[]>(`/users?limit=50&search=${encodeURIComponent(q)}`);
       if (Array.isArray(users) && users.length > 0) {
-        return users.map((u) => {
-          const comp = u.companyName || u.businessName || (u.company && u.company.name) || `${u.firstName || ''} ${u.lastName || ''}`.trim() || 'Enterprise Client';
-          const gstin = u.gstin || u.gstNumber || (u.addresses && u.addresses[0]?.gstin) || '';
-          const address = u.addresses && u.addresses[0]
-            ? `${u.addresses[0].addressLine1 || ''}, ${u.addresses[0].city || ''}, ${u.addresses[0].state || ''} - ${u.addresses[0].postalCode || ''}`
-            : u.address || 'Standard Registered Office';
+        users.forEach((u) => {
+          // Strictly exclude internal staff, vendors, or suppliers
+          const roleSlug = ((u.role && u.role.slug) || (typeof u.role === 'string' ? u.role : '') || '').toUpperCase();
+          if (roleSlug.includes('VENDOR') || roleSlug.includes('SUPPLIER')) {
+            return;
+          }
 
-          // Extract state code from GSTIN if present
+          const comp =
+            u.companyName ||
+            u.businessName ||
+            (u.company && u.company.name) ||
+            `${u.firstName || ''} ${u.lastName || ''}`.trim() ||
+            'Enterprise B2B Client';
+          const gstin = u.gstin || u.gstNumber || (u.addresses && u.addresses[0]?.gstin) || '';
+          const address =
+            u.addresses && u.addresses[0]
+              ? `${u.addresses[0].addressLine1 || ''}${u.addresses[0].addressLine2 ? ', ' + u.addresses[0].addressLine2 : ''}, ${u.addresses[0].city || ''}, ${u.addresses[0].state || ''} - ${u.addresses[0].postalCode || ''}`
+              : u.address || 'Standard Registered Office';
+
           let stateCode = '07';
           if (gstin && gstin.length >= 2 && /^\d{2}/.test(gstin)) {
             stateCode = gstin.substring(0, 2);
           }
 
-          return {
+          const resItem: B2BCustomerSearchResult = {
             id: u.id,
             name: `${u.firstName || ''} ${u.lastName || ''}`.trim() || comp,
             firstName: u.firstName,
@@ -282,50 +301,75 @@ export const proformaService = {
             gstin,
             billingAddress: address,
             shippingAddress: address,
-            city: u.city || 'Delhi',
-            state: u.state || 'Delhi',
+            city: (u.addresses && u.addresses[0]?.city) || u.city || 'Delhi',
+            state: (u.addresses && u.addresses[0]?.state) || u.state || 'Delhi',
             stateCode,
           };
+
+          const key = (u.email || u.gstin || u.id).toLowerCase();
+          resultsMap.set(key, resItem);
         });
       }
     } catch (err) {
-      console.warn('[proformaService] B2B search fallback:', err);
+      console.warn('[proformaService] B2B Users search fallback:', err);
     }
 
-    // Return sensible fallback defaults matching query
-    return [
-      {
-        id: 'cust-apex-01',
-        name: 'Apex Infrastructure Pvt Ltd',
-        companyName: 'Apex Infrastructure Pvt Ltd',
-        email: 'procurement@apexinfra.com',
-        phone: '9811223344',
-        gstin: '07AAACA1234A1Z5',
-        billingAddress: 'Tower B, 7th Floor, DLF Cyber City, Sector 25, Gurugram, Haryana - 122002',
-        shippingAddress: 'Project Site, Commercial Hub Phase 3, Noida Sector 62, UP - 201301',
-        city: 'Gurugram',
-        state: 'Haryana',
-        stateCode: '06',
-      },
-      {
-        id: 'cust-sharma-02',
-        name: 'Sharma Modular Solutions',
-        companyName: 'Sharma Modular Solutions',
-        email: 'rahul@sharmamodular.in',
-        phone: '9822334455',
-        gstin: '27AABCS5566K1Z2',
-        billingAddress: 'Plot 45, MIDC Industrial Area, Andheri East, Mumbai, Maharashtra - 400093',
-        shippingAddress: 'Plot 45, MIDC Industrial Area, Andheri East, Mumbai, Maharashtra - 400093',
-        city: 'Mumbai',
-        state: 'Maharashtra',
-        stateCode: '27',
-      },
-    ].filter((c) =>
-      c.companyName.toLowerCase().includes(q) ||
-      c.name.toLowerCase().includes(q) ||
-      c.email.toLowerCase().includes(q) ||
-      (c.gstin && c.gstin.toLowerCase().includes(q))
-    );
+    // 2. Query Quotes to find active enterprise B2B quotation customers
+    try {
+      const quotesRes = await fetchAdminApi<any>(`/quotes?limit=50&search=${encodeURIComponent(q)}`);
+      const quotes = Array.isArray(quotesRes) ? quotesRes : quotesRes?.data || [];
+      if (Array.isArray(quotes) && quotes.length > 0) {
+        quotes.forEach((qt: any) => {
+          const comp = qt.companyName || `${qt.firstName || ''} ${qt.lastName || ''}`.trim() || 'B2B Client';
+          const gstin = qt.gstNo || qt.gstin || '';
+          let stateCode = '07';
+          if (gstin && gstin.length >= 2 && /^\d{2}/.test(gstin)) {
+            stateCode = gstin.substring(0, 2);
+          }
+
+          const resItem: B2BCustomerSearchResult = {
+            id: qt.userId || qt.id,
+            name: `${qt.firstName || ''} ${qt.lastName || ''}`.trim() || comp,
+            firstName: qt.firstName,
+            lastName: qt.lastName,
+            companyName: comp,
+            email: qt.email || '',
+            phone: qt.phone || '',
+            gstin,
+            billingAddress: qt.billingAddress || qt.address || 'Registered B2B Site Address',
+            shippingAddress: qt.shippingAddress || qt.billingAddress || qt.address || 'Registered B2B Site Address',
+            city: qt.city || 'Delhi',
+            state: qt.state || 'Delhi',
+            stateCode,
+          };
+
+          const key = (qt.email || qt.gstNo || qt.id).toLowerCase();
+          if (!resultsMap.has(key)) {
+            resultsMap.set(key, resItem);
+          }
+        });
+      }
+    } catch (err) {
+      console.warn('[proformaService] Quotes customer search fallback:', err);
+    }
+
+    const allResults = Array.from(resultsMap.values());
+
+    // Apply strict searchType filter if specified
+    if (searchType === 'GSTIN') {
+      return allResults.filter((c) => c.gstin && c.gstin.toLowerCase().includes(q));
+    }
+    if (searchType === 'EMAIL') {
+      return allResults.filter((c) => c.email && c.email.toLowerCase().includes(q));
+    }
+    if (searchType === 'PHONE') {
+      return allResults.filter((c) => c.phone && c.phone.toLowerCase().includes(q));
+    }
+    if (searchType === 'COMPANY') {
+      return allResults.filter((c) => c.companyName && c.companyName.toLowerCase().includes(q));
+    }
+
+    return allResults;
   },
 
   /**
