@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
-  Building2, Users, Search, Plus, Trash2, ArrowLeft,
+  Building2, Users, Search, Plus, Minus, Trash2, ArrowLeft,
   FileText, ShieldCheck, Printer, Download, Sparkles, CheckCircle2,
   AlertCircle, RefreshCw, X, Package, MapPin, Phone, Mail,
-  CreditCard, Calendar, Truck, Layers, ChevronDown
+  CreditCard, Calendar, Truck, Layers, ChevronDown, Image as ImageIcon
 } from 'lucide-react';
 import {
   PROFORMA_FACILITIES,
@@ -17,6 +17,7 @@ import {
   CustomerSavedAddressSummary,
   ProductSearchResult
 } from '../../api/proformaService';
+import { getCachedCategories } from '../../utils/referenceDataCache';
 import { printProformaInvoice } from '../../utils/proformaPdfGenerator';
 
 interface Props {
@@ -35,7 +36,16 @@ interface DraftLineItem {
   unitPrice: number;
   discount: number;
   gstRate: number;
+  thumbnail?: string;
 }
+
+const DEFAULT_CATEGORY_OPTIONS = [
+  { label: 'All Hardware Categories', slug: '' },
+  { label: 'Restroom & Cubicle Hardware', slug: 'cubicle-hardware' },
+  { label: 'Locker & Cabinet Hardware', slug: 'locker-hardware' },
+  { label: 'Urinal & Partition Hardware', slug: 'urinal-hardware' },
+  { label: 'Shower & Glass Hardware', slug: 'shower-hardware' },
+];
 
 export function ProformaInvoiceCreateView({ onBack, onSaved }: Props) {
   // Facility
@@ -91,7 +101,9 @@ export function ProformaInvoiceCreateView({ onBack, onSaved }: Props) {
     },
   ]);
 
-  // Catalog Product Search for line items
+  // Categories & Product Search
+  const [categoryOptions, setCategoryOptions] = useState(DEFAULT_CATEGORY_OPTIONS);
+  const [selectedCategory, setSelectedCategory] = useState('');
   const [productSearch, setProductSearch] = useState('');
   const [productResults, setProductResults] = useState<ProductSearchResult[]>([]);
   const [searchingProduct, setSearchingProduct] = useState(false);
@@ -101,6 +113,29 @@ export function ProformaInvoiceCreateView({ onBack, onSaved }: Props) {
   // Submission State
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+
+  // Load Categories on mount
+  useEffect(() => {
+    getCachedCategories()
+      .then((cats) => {
+        if (Array.isArray(cats) && cats.length > 0) {
+          const dynamicOptions = cats.map((c) => ({
+            label: c.name,
+            slug: c.slug || c.name.toLowerCase().replace(/\s+/g, '-'),
+          }));
+          const merged = [...DEFAULT_CATEGORY_OPTIONS];
+          dynamicOptions.forEach((opt) => {
+            if (!merged.some((m) => m.slug === opt.slug)) {
+              merged.push(opt);
+            }
+          });
+          setCategoryOptions(merged);
+        }
+      })
+      .catch((err) => {
+        console.warn('Could not load cached categories:', err);
+      });
+  }, []);
 
   // Close dropdowns on outside click
   useEffect(() => {
@@ -137,26 +172,28 @@ export function ProformaInvoiceCreateView({ onBack, onSaved }: Props) {
     return () => clearTimeout(timer);
   }, [customerSearch, customerSearchType]);
 
-  // Debounced Product Search
+  // Debounced Product Search with Category Filter
   useEffect(() => {
-    if (!productSearch.trim()) {
-      setProductResults([]);
-      return;
-    }
+    let active = true;
+    setSearchingProduct(true);
     const timer = setTimeout(async () => {
-      setSearchingProduct(true);
       try {
-        const results = await proformaService.searchProducts(productSearch);
-        setProductResults(results);
-        setIsProductDropdownOpen(true);
+        const results = await proformaService.searchProducts(productSearch, selectedCategory);
+        if (active) {
+          setProductResults(results);
+        }
       } catch (err) {
         console.error(err);
       } finally {
-        setSearchingProduct(false);
+        if (active) setSearchingProduct(false);
       }
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [productSearch]);
+    }, 250);
+
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [productSearch, selectedCategory]);
 
   // Handle Customer Selection
   const handleSelectCustomer = async (c: B2BCustomerSearchResult) => {
@@ -217,25 +254,56 @@ export function ProformaInvoiceCreateView({ onBack, onSaved }: Props) {
     setIsCustomerDropdownOpen(false);
   };
 
-  // Handle Product Selection into line items
+  // Handle Product Selection into line items (Replicated from B2B Quotation form)
   const handleAddProduct = (p: ProductSearchResult) => {
-    setItems((prev) => [
-      ...prev,
-      {
-        productId: p.id,
-        sku: p.sku,
-        productName: p.name,
-        description: p.description || '',
-        hsnCode: p.hsnCode || '83024110',
-        unit: p.unit || 'PCS',
-        quantity: 1,
-        unitPrice: p.price || 0,
-        discount: 0,
-        gstRate: p.gstRate || 18,
-      },
-    ]);
+    const existingIndex = items.findIndex(
+      (i) =>
+        (i.productId && i.productId === p.id) ||
+        (i.sku && i.sku.toLowerCase() === p.sku.toLowerCase())
+    );
+
+    if (existingIndex >= 0) {
+      setItems((prev) => {
+        const next = [...prev];
+        const currentQty = Number(next[existingIndex].quantity) || 1;
+        next[existingIndex] = {
+          ...next[existingIndex],
+          quantity: currentQty + 1,
+        };
+        return next;
+      });
+    } else {
+      setItems((prev) => [
+        ...prev,
+        {
+          productId: p.id,
+          sku: p.sku,
+          productName: p.name,
+          description: p.description || '',
+          hsnCode: p.hsnCode || '83024110',
+          unit: p.unit || 'PCS',
+          quantity: 1,
+          unitPrice: p.price || 0,
+          discount: 0,
+          gstRate: p.gstRate || 18,
+          thumbnail: p.thumbnail || (p.images && p.images[0]),
+        },
+      ]);
+    }
+
     setProductSearch('');
     setIsProductDropdownOpen(false);
+  };
+
+  // Quantity Stepper Change Handler
+  const handleQuantityChange = (index: number, newQty: number) => {
+    const parsed = Number(newQty);
+    const validQty = isNaN(parsed) || parsed < 1 ? 1 : Math.floor(parsed);
+    setItems((prev) => {
+      const next = [...prev];
+      next[index] = { ...next[index], quantity: validQty };
+      return next;
+    });
   };
 
   // Add empty custom item
@@ -452,36 +520,25 @@ export function ProformaInvoiceCreateView({ onBack, onSaved }: Props) {
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-[#8B5CF6]/20 text-[#A78BFA] flex items-center justify-center font-black text-xs">
-                  01
-                </div>
-                <div>
-                  <h3 className="text-xs font-extrabold text-white">Delhi Corporate Works & HQ</h3>
-                  <span className="text-[10px] text-zinc-400 block">Pacific Products and Solutions</span>
-                </div>
+                <span className="text-xs font-black px-2 py-0.5 rounded bg-zinc-800 text-zinc-200 border border-zinc-700">
+                  FACILITY 01
+                </span>
+                <strong className="text-sm text-white">Delhi Corporate Works</strong>
               </div>
-              <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
-                facilityCode === 'DELHI_WORKS' ? 'bg-[#8B5CF6] text-white' : 'bg-zinc-800 text-zinc-400'
-              }`}>
-                {facilityCode === 'DELHI_WORKS' ? '✓ SELECTED' : 'SELECT'}
-              </span>
+              {facilityCode === 'DELHI_WORKS' && (
+                <CheckCircle2 size={18} className="text-[#8B5CF6]" />
+              )}
             </div>
-
-            <div className="text-[11px] text-zinc-300 space-y-1 bg-[#121214] p-2.5 rounded-lg border border-zinc-800/80">
-              <div className="flex items-start gap-1 text-zinc-400">
-                <MapPin size={12} className="shrink-0 mt-0.5 text-zinc-500" />
-                <span>H-3, J.R. Complex, Gate No 4, Mandoli, Delhi - 110093</span>
-              </div>
-              <div className="grid grid-cols-2 gap-2 pt-1 font-mono text-[10.5px]">
-                <div><strong className="text-zinc-500 font-sans">GSTIN:</strong> 07AABCP1234F1Z9</div>
-                <div><strong className="text-zinc-500 font-sans">State:</strong> Delhi (07)</div>
-                <div><strong className="text-zinc-500 font-sans">Bank:</strong> HDFC Bank Ltd</div>
-                <div><strong className="text-zinc-500 font-sans">A/C:</strong> ...88991122</div>
-              </div>
+            <p className="text-xs text-zinc-300">
+              {PROFORMA_FACILITIES.DELHI_WORKS.address}, {PROFORMA_FACILITIES.DELHI_WORKS.city} - {PROFORMA_FACILITIES.DELHI_WORKS.pincode}
+            </p>
+            <div className="pt-1 text-[11px] text-zinc-400 space-y-0.5">
+              <div><strong>GSTIN:</strong> <span className="font-mono text-zinc-200">{PROFORMA_FACILITIES.DELHI_WORKS.gstin}</span> (State Code: 07)</div>
+              <div><strong>Bank RTGS:</strong> {PROFORMA_FACILITIES.DELHI_WORKS.bankName} (A/C: {PROFORMA_FACILITIES.DELHI_WORKS.accountNumber})</div>
             </div>
           </div>
 
-          {/* Facility 2: Mumbai Regional Depot */}
+          {/* Facility 2: Mumbai Depot */}
           <div
             onClick={() => setFacilityCode('MUMBAI_DEPOT')}
             className={`p-4 rounded-xl border-2 cursor-pointer transition-all duration-200 space-y-2 ${
@@ -492,58 +549,42 @@ export function ProformaInvoiceCreateView({ onBack, onSaved }: Props) {
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-indigo-500/20 text-indigo-400 flex items-center justify-center font-black text-xs">
-                  02
-                </div>
-                <div>
-                  <h3 className="text-xs font-extrabold text-white">Maharashtra Regional Depot</h3>
-                  <span className="text-[10px] text-zinc-400 block">Western Logistics Park</span>
-                </div>
+                <span className="text-xs font-black px-2 py-0.5 rounded bg-zinc-800 text-zinc-200 border border-zinc-700">
+                  FACILITY 02
+                </span>
+                <strong className="text-sm text-white">Western Regional Logistics Depot</strong>
               </div>
-              <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
-                facilityCode === 'MUMBAI_DEPOT' ? 'bg-[#8B5CF6] text-white' : 'bg-zinc-800 text-zinc-400'
-              }`}>
-                {facilityCode === 'MUMBAI_DEPOT' ? '✓ SELECTED' : 'SELECT'}
-              </span>
+              {facilityCode === 'MUMBAI_DEPOT' && (
+                <CheckCircle2 size={18} className="text-[#8B5CF6]" />
+              )}
             </div>
-
-            <div className="text-[11px] text-zinc-300 space-y-1 bg-[#121214] p-2.5 rounded-lg border border-zinc-800/80">
-              <div className="flex items-start gap-1 text-zinc-400">
-                <MapPin size={12} className="shrink-0 mt-0.5 text-zinc-500" />
-                <span>Unit 14-16, Logistics Park Phase II, Bhiwandi, Thane, MH - 421302</span>
-              </div>
-              <div className="grid grid-cols-2 gap-2 pt-1 font-mono text-[10.5px]">
-                <div><strong className="text-zinc-500 font-sans">GSTIN:</strong> 27AABCP1234F1Z9</div>
-                <div><strong className="text-zinc-500 font-sans">State:</strong> Maharashtra (27)</div>
-                <div><strong className="text-zinc-500 font-sans">Bank:</strong> ICICI Bank Ltd</div>
-                <div><strong className="text-zinc-500 font-sans">A/C:</strong> ...00110502</div>
-              </div>
+            <p className="text-xs text-zinc-300">
+              {PROFORMA_FACILITIES.MUMBAI_DEPOT.address}, {PROFORMA_FACILITIES.MUMBAI_DEPOT.city} - {PROFORMA_FACILITIES.MUMBAI_DEPOT.pincode}
+            </p>
+            <div className="pt-1 text-[11px] text-zinc-400 space-y-0.5">
+              <div><strong>GSTIN:</strong> <span className="font-mono text-zinc-200">{PROFORMA_FACILITIES.MUMBAI_DEPOT.gstin}</span> (State Code: 27)</div>
+              <div><strong>Bank RTGS:</strong> {PROFORMA_FACILITIES.MUMBAI_DEPOT.bankName} (A/C: {PROFORMA_FACILITIES.MUMBAI_DEPOT.accountNumber})</div>
             </div>
           </div>
 
         </div>
       </div>
 
-      {/* ─── 2. B2B CUSTOMER SEARCH & AUTO-FILL CARD ─────────────────────── */}
+      {/* ─── 2. B2B CUSTOMER SEARCH & ADDRESS AUTO-FILL ───────────────────── */}
       <div className="bg-[#18181B] border border-[#27272A] rounded-2xl p-5 space-y-4">
         <div className="border-b border-[#27272A] pb-3 flex flex-wrap items-center justify-between gap-2">
           <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-sm font-bold text-white flex items-center gap-2">
-                <Users size={16} className="text-[#8B5CF6]" /> 2. B2B Customer / Buyer Directory
-              </h2>
-              <span className="bg-purple-500/10 text-purple-300 border border-purple-500/20 text-[10px] font-extrabold px-2 py-0.5 rounded-full uppercase">
-                B2B Clients Only
-              </span>
-            </div>
-            <p className="text-xs text-zinc-400 mt-0.5">
-              Search strictly queries registered commercial B2B buyers & RFQ quotation accounts (Vendors & Suppliers excluded).
+            <h2 className="text-sm font-bold text-white flex items-center gap-2">
+              <Users size={16} className="text-[#8B5CF6]" /> 2. B2B Customer Account & Delivery Address
+            </h2>
+            <p className="text-xs text-zinc-400">
+              Search by 15-digit GSTIN, client email, phone, or company name to instantly pull registered billing & shipping addresses.
             </p>
           </div>
           {selectedCustomer && (
             <div className="flex items-center gap-2">
-              <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-[10px] font-black px-2.5 py-0.5 rounded-full flex items-center gap-1">
-                <CheckCircle2 size={12} /> Account Linked
+              <span className="text-[11px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2.5 py-0.5 rounded-full font-bold flex items-center gap-1">
+                <CheckCircle2 size={12} /> B2B Account Linked
               </span>
               <button
                 type="button"
@@ -887,6 +928,7 @@ export function ProformaInvoiceCreateView({ onBack, onSaved }: Props) {
       </div>
 
       {/* ─── 3. CATALOG PRODUCT SEARCH & LINE ITEMS COMPOSER ─────────────── */}
+      {/* (Replicated directly from Storefront B2B Quotation Form) */}
       <div className="bg-[#18181B] border border-[#27272A] rounded-2xl p-5 space-y-4">
         <div className="border-b border-[#27272A] pb-3 flex flex-wrap items-center justify-between gap-2">
           <div>
@@ -894,7 +936,7 @@ export function ProformaInvoiceCreateView({ onBack, onSaved }: Props) {
               <Package size={16} className="text-[#8B5CF6]" /> 3. Line Items & Product Selector ({items.length})
             </h2>
             <p className="text-xs text-zinc-400">
-              Select products from catalog or add customized SKUs with custom rates, HSN codes, and GST rates.
+              Filter by category, search live catalog with image previews, and adjust quantities with 1-click steppers.
             </p>
           </div>
           <button
@@ -906,163 +948,397 @@ export function ProformaInvoiceCreateView({ onBack, onSaved }: Props) {
           </button>
         </div>
 
-        {/* Product Catalog Combobox */}
-        <div className="relative" ref={productDropdownRef}>
+        {/* Product Catalog Search & Category Filter Combobox (Replicated from B2B Quotation Form) */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3">
+          
+          {/* Category Filter */}
           <div className="relative">
-            <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" />
-            <input
-              type="text"
-              value={productSearch}
-              onChange={(e) => setProductSearch(e.target.value)}
-              onFocus={() => {
-                if (productResults.length > 0) setIsProductDropdownOpen(true);
+            <select
+              value={selectedCategory}
+              onChange={(e) => {
+                setSelectedCategory(e.target.value);
+                setIsProductDropdownOpen(true);
               }}
-              placeholder="Search product catalog by name, SKU or HSN (e.g. Gravity Hinge, Indicator Bolt, Supporting Leg)..."
-              className="w-full pl-10 pr-10 py-2.5 bg-[#27272A]/50 border border-[#27272A] focus:border-[#8B5CF6] rounded-xl text-xs text-white placeholder-zinc-500 focus:outline-none transition-all"
-            />
-            {searchingProduct && (
-              <RefreshCw size={14} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#8B5CF6] animate-spin" />
-            )}
+              className="w-full px-3.5 py-2.5 bg-[#27272A]/50 border border-[#27272A] focus:border-[#8B5CF6] rounded-xl text-xs text-white font-bold focus:outline-none appearance-none cursor-pointer pr-9"
+            >
+              {categoryOptions.map((c) => (
+                <option key={c.slug} value={c.slug} className="bg-[#18181B] text-white">
+                  {c.label}
+                </option>
+              ))}
+            </select>
+            <ChevronDown size={14} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" />
           </div>
 
-          {/* Product Dropdown Results */}
-          {isProductDropdownOpen && productResults.length > 0 && (
-            <div className="absolute z-30 left-0 right-0 mt-1.5 bg-[#18181B] border border-[#27272A] rounded-xl shadow-2xl overflow-hidden max-h-64 overflow-y-auto divide-y divide-zinc-800">
-              {productResults.map((p) => (
+          {/* Search Bar with Autocomplete Dropdown */}
+          <div className="sm:col-span-2 relative" ref={productDropdownRef}>
+            <div className="relative">
+              <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" />
+              <input
+                type="text"
+                value={productSearch}
+                onChange={(e) => {
+                  setProductSearch(e.target.value);
+                  setIsProductDropdownOpen(true);
+                }}
+                onFocus={() => setIsProductDropdownOpen(true)}
+                placeholder="Search active catalog by product name, SKU, or HSN..."
+                className="w-full pl-10 pr-10 py-2.5 bg-[#27272A]/50 border border-[#27272A] focus:border-[#8B5CF6] rounded-xl text-xs text-white placeholder-zinc-500 focus:outline-none transition-all"
+              />
+              {searchingProduct && (
+                <RefreshCw size={14} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#8B5CF6] animate-spin" />
+              )}
+            </div>
+
+            {/* Product Dropdown Results (Replicated from B2B Quotation Form) */}
+            {isProductDropdownOpen && (
+              <div className="absolute z-30 left-0 right-0 mt-1.5 bg-[#18181B] border border-[#27272A] rounded-2xl shadow-2xl overflow-hidden max-h-72 overflow-y-auto divide-y divide-zinc-800 animate-in fade-in zoom-in-98 duration-150">
+                <div className="px-3.5 py-2 bg-[#121214] text-[10px] font-bold text-zinc-400 uppercase tracking-wider flex items-center justify-between border-b border-zinc-800">
+                  <span>
+                    {productResults.length > 0
+                      ? `Matching Catalog Products (${productResults.length})`
+                      : 'No Matching Products'}
+                  </span>
+                  <span className="text-[#A78BFA] font-bold">Click to Add / Increment Qty</span>
+                </div>
+
+                {searchingProduct ? (
+                  <div className="p-4 text-center text-xs text-zinc-400 flex items-center justify-center gap-2">
+                    <RefreshCw size={14} className="animate-spin text-[#8B5CF6]" />
+                    <span>Searching catalog database...</span>
+                  </div>
+                ) : productResults.length === 0 ? (
+                  <div className="p-4 text-center text-xs text-zinc-400">
+                    No hardware products found matching current query and category filter.
+                  </div>
+                ) : (
+                  productResults.map((p) => (
+                    <div
+                      key={p.id}
+                      onClick={() => handleAddProduct(p)}
+                      className="p-3 hover:bg-[#8B5CF6]/15 cursor-pointer transition-colors flex items-center justify-between text-xs group"
+                    >
+                      <div className="flex items-center gap-3 min-w-0 pr-3">
+                        {p.thumbnail ? (
+                          <img
+                            src={p.thumbnail}
+                            alt={p.name}
+                            className="w-10 h-10 object-cover rounded-lg border border-zinc-700 shrink-0 bg-zinc-900"
+                          />
+                        ) : (
+                          <div className="w-10 h-10 bg-zinc-800/80 rounded-lg flex items-center justify-center text-zinc-400 border border-zinc-700 shrink-0">
+                            <Building2 size={16} />
+                          </div>
+                        )}
+                        <div className="min-w-0 space-y-0.5">
+                          <strong className="text-white font-bold group-hover:text-[#A78BFA] transition-colors truncate block">
+                            {p.name}
+                          </strong>
+                          <div className="text-[11px] text-zinc-400 flex flex-wrap items-center gap-2">
+                            <span className="font-mono text-zinc-300 font-bold">SKU: {p.sku}</span>
+                            <span>•</span>
+                            <span className="font-mono text-zinc-400">HSN: {p.hsnCode}</span>
+                            {p.category && (
+                              <>
+                                <span>•</span>
+                                <span className="text-purple-300">{p.category}</span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="text-right shrink-0 space-y-1">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <span className="text-xs font-black text-white font-mono">
+                            ₹{p.price.toLocaleString('en-IN')}
+                          </span>
+                          <span className="text-[9px] font-bold text-purple-300 bg-purple-950/80 border border-purple-800/80 px-1.5 py-0.2 rounded">
+                            B2B RATE
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-end gap-1.5">
+                          <span className="text-[10px] text-zinc-400 font-mono">
+                            Stock: {p.stock} {p.unit}
+                          </span>
+                          <span className="text-[10px] font-extrabold text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 rounded-md transition-all group-hover:bg-emerald-500/25">
+                            + Add to PI
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Mobile Line Item Touch Cards (Small Screens, Replicated from Storefront) */}
+        <div className="md:hidden space-y-2.5 pt-1">
+          {items.length === 0 ? (
+            <div className="p-6 text-center text-xs text-zinc-400 bg-[#121214] rounded-xl border border-[#27272A]">
+              No line items added yet. Search products above to add items to this Proforma Invoice.
+            </div>
+          ) : (
+            items.map((item, idx) => {
+              const lineSubtotal = Math.round(Number(item.quantity || 0) * Number(item.unitPrice || 0));
+              const taxable = Math.max(0, lineSubtotal - Number(item.discount || 0));
+              const gst = Math.round((taxable * Number(item.gstRate || 18)) / 100);
+              const total = taxable + gst;
+
+              return (
                 <div
-                  key={p.id}
-                  onClick={() => handleAddProduct(p)}
-                  className="p-3 hover:bg-[#27272A]/70 cursor-pointer transition-colors flex items-center justify-between text-xs"
+                  key={idx}
+                  className="bg-[#121214] p-3.5 rounded-xl border border-[#27272A] space-y-3 shadow-xs"
                 >
-                  <div className="space-y-0.5">
-                    <strong className="text-white font-bold">{p.name}</strong>
-                    <div className="text-[11px] text-zinc-400 flex items-center gap-3">
-                      <span className="font-mono text-zinc-300">SKU: {p.sku}</span>
-                      <span>•</span>
-                      <span className="font-mono">HSN: {p.hsnCode}</span>
-                      <span>•</span>
-                      <span className="text-emerald-400 font-bold">₹{p.price.toLocaleString('en-IN')} / {p.unit}</span>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      {item.thumbnail ? (
+                        <img
+                          src={item.thumbnail}
+                          alt={item.productName}
+                          className="w-10 h-10 object-cover rounded-lg border border-zinc-700 shrink-0"
+                        />
+                      ) : (
+                        <div className="w-10 h-10 bg-zinc-800 rounded-lg flex items-center justify-center text-zinc-400 shrink-0">
+                          <Package size={16} />
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <input
+                          type="text"
+                          value={item.productName}
+                          onChange={(e) => handleUpdateItem(idx, 'productName', e.target.value)}
+                          placeholder="Item Name"
+                          className="w-full bg-transparent font-bold text-xs text-white focus:outline-none focus:border-b border-[#8B5CF6]"
+                        />
+                        <div className="flex items-center gap-2 text-[10px] text-zinc-400 font-mono mt-0.5">
+                          <span>SKU: {item.sku}</span>
+                          <span>•</span>
+                          <span>HSN: {item.hsnCode}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveItem(idx)}
+                      className="text-rose-400 hover:text-rose-300 p-1 rounded-lg bg-rose-500/10 transition-colors"
+                      title="Remove item"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 text-xs pt-1 border-t border-zinc-800">
+                    <div className="space-y-1">
+                      <label className="text-[10px] text-zinc-400 font-bold block">Quantity Stepper</label>
+                      <div className="flex items-center border border-zinc-700 rounded-lg overflow-hidden bg-zinc-900 w-fit">
+                        <button
+                          type="button"
+                          onClick={() => handleQuantityChange(idx, item.quantity - 1)}
+                          disabled={item.quantity <= 1}
+                          className="w-7 h-7 flex items-center justify-center font-bold text-zinc-300 hover:bg-zinc-800 disabled:opacity-30 transition-colors"
+                          title="Decrease quantity"
+                        >
+                          <Minus size={12} />
+                        </button>
+                        <input
+                          type="number"
+                          min={1}
+                          value={item.quantity}
+                          onChange={(e) => handleQuantityChange(idx, parseInt(e.target.value) || 1)}
+                          className="w-10 text-center font-mono font-bold text-xs bg-transparent border-x border-zinc-700 py-0.5 focus:outline-none text-white"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleQuantityChange(idx, item.quantity + 1)}
+                          className="w-7 h-7 flex items-center justify-center font-bold text-zinc-300 hover:bg-zinc-800 transition-colors"
+                          title="Increase quantity"
+                        >
+                          <Plus size={12} />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="text-right space-y-0.5">
+                      <span className="text-[10px] text-zinc-400 block">
+                        ₹{Number(item.unitPrice || 0).toLocaleString('en-IN')} / {item.unit}
+                      </span>
+                      <span className="font-mono font-black text-xs text-white">
+                        ₹{total.toLocaleString('en-IN')}
+                      </span>
                     </div>
                   </div>
-                  <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded-lg border border-emerald-500/20">
-                    + Add to PI
-                  </span>
                 </div>
-              ))}
-            </div>
+              );
+            })
           )}
         </div>
 
-        {/* Line Items Table */}
-        <div className="overflow-x-auto rounded-xl border border-[#27272A] bg-[#121214]">
+        {/* Desktop Line Items Table (Replicated with Quantity Steppers & Thumbnails) */}
+        <div className="hidden md:block overflow-x-auto rounded-xl border border-[#27272A] bg-[#121214]">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="bg-[#18181B] border-b border-[#27272A] text-[11px] font-bold text-zinc-400 uppercase">
                 <th className="p-3 w-10 text-center">#</th>
-                <th className="p-3">Product Name & SKU</th>
+                <th className="p-3">Hardware Product & SKU</th>
                 <th className="p-3 w-28">HSN Code</th>
                 <th className="p-3 w-20">Unit</th>
-                <th className="p-3 w-24 text-right">Qty</th>
+                <th className="p-3 w-36 text-center">Quantity</th>
                 <th className="p-3 w-28 text-right">Unit Rate (₹)</th>
-                <th className="p-3 w-24 text-center">GST %</th>
+                <th className="p-3 w-20 text-center">GST %</th>
                 <th className="p-3 w-32 text-right">Line Total (₹)</th>
                 <th className="p-3 w-12 text-center">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#27272A]">
-              {items.map((item, idx) => {
-                const lineSubtotal = Math.round(Number(item.quantity || 0) * Number(item.unitPrice || 0));
-                const taxable = Math.max(0, lineSubtotal - Number(item.discount || 0));
-                const gst = Math.round((taxable * Number(item.gstRate || 18)) / 100);
-                const total = taxable + gst;
+              {items.length === 0 ? (
+                <tr>
+                  <td colSpan={9} className="p-8 text-center text-xs text-zinc-500">
+                    No line items added yet. Use the category filter or search bar above to append hardware products to this PI.
+                  </td>
+                </tr>
+              ) : (
+                items.map((item, idx) => {
+                  const lineSubtotal = Math.round(Number(item.quantity || 0) * Number(item.unitPrice || 0));
+                  const taxable = Math.max(0, lineSubtotal - Number(item.discount || 0));
+                  const gst = Math.round((taxable * Number(item.gstRate || 18)) / 100);
+                  const total = taxable + gst;
 
-                return (
-                  <tr key={idx} className="hover:bg-[#18181B]/50 transition-colors">
-                    <td className="p-3 text-center text-zinc-500 font-mono">{idx + 1}</td>
-                    <td className="p-3">
-                      <input
-                        type="text"
-                        value={item.productName}
-                        onChange={(e) => handleUpdateItem(idx, 'productName', e.target.value)}
-                        placeholder="Product title / description"
-                        className="w-full px-2.5 py-1.5 bg-[#27272A]/40 border border-[#27272A] rounded-lg text-white text-xs focus:outline-none focus:border-[#8B5CF6]"
-                      />
-                      <input
-                        type="text"
-                        value={item.sku}
-                        onChange={(e) => handleUpdateItem(idx, 'sku', e.target.value)}
-                        placeholder="SKU"
-                        className="w-full mt-1 px-2 py-0.5 bg-transparent text-[10px] font-mono text-zinc-400 border-0 focus:outline-none"
-                      />
-                    </td>
-                    <td className="p-3">
-                      <input
-                        type="text"
-                        value={item.hsnCode}
-                        onChange={(e) => handleUpdateItem(idx, 'hsnCode', e.target.value)}
-                        className="w-full px-2 py-1.5 bg-[#27272A]/40 border border-[#27272A] rounded-lg text-white font-mono text-xs focus:outline-none"
-                      />
-                    </td>
-                    <td className="p-3">
-                      <select
-                        value={item.unit}
-                        onChange={(e) => handleUpdateItem(idx, 'unit', e.target.value)}
-                        className="w-full px-2 py-1.5 bg-[#27272A]/40 border border-[#27272A] rounded-lg text-white text-xs focus:outline-none"
-                      >
-                        <option value="PCS">PCS</option>
-                        <option value="SETS">SETS</option>
-                        <option value="PAIRS">PAIRS</option>
-                        <option value="MTR">MTR</option>
-                        <option value="BOX">BOX</option>
-                      </select>
-                    </td>
-                    <td className="p-3 text-right">
-                      <input
-                        type="number"
-                        min="1"
-                        value={item.quantity}
-                        onChange={(e) => handleUpdateItem(idx, 'quantity', Number(e.target.value))}
-                        className="w-20 px-2 py-1.5 bg-[#27272A]/40 border border-[#27272A] rounded-lg text-white font-bold text-right text-xs focus:outline-none"
-                      />
-                    </td>
-                    <td className="p-3 text-right">
-                      <input
-                        type="number"
-                        min="0"
-                        value={item.unitPrice}
-                        onChange={(e) => handleUpdateItem(idx, 'unitPrice', Number(e.target.value))}
-                        className="w-24 px-2 py-1.5 bg-[#27272A]/40 border border-[#27272A] rounded-lg text-white font-mono text-right text-xs focus:outline-none"
-                      />
-                    </td>
-                    <td className="p-3 text-center">
-                      <select
-                        value={item.gstRate}
-                        onChange={(e) => handleUpdateItem(idx, 'gstRate', Number(e.target.value))}
-                        className="px-2 py-1.5 bg-[#27272A]/40 border border-[#27272A] rounded-lg text-white font-mono text-xs focus:outline-none"
-                      >
-                        <option value={18}>18%</option>
-                        <option value={12}>12%</option>
-                        <option value={5}>5%</option>
-                        <option value={28}>28%</option>
-                        <option value={0}>0%</option>
-                      </select>
-                    </td>
-                    <td className="p-3 text-right font-mono font-bold text-white">
-                      ₹{total.toLocaleString('en-IN')}
-                    </td>
-                    <td className="p-3 text-center">
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveItem(idx)}
-                        className="text-rose-400 hover:text-rose-300 p-1 transition-colors"
-                        title="Remove Item"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
+                  return (
+                    <tr key={idx} className="hover:bg-[#18181B]/50 transition-colors">
+                      <td className="p-3 text-center text-zinc-500 font-mono">{idx + 1}</td>
+                      <td className="p-3">
+                        <div className="flex items-center gap-2.5">
+                          {item.thumbnail ? (
+                            <img
+                              src={item.thumbnail}
+                              alt={item.productName}
+                              className="w-9 h-9 object-cover rounded-lg border border-zinc-700 shrink-0 bg-zinc-900"
+                            />
+                          ) : (
+                            <div className="w-9 h-9 bg-zinc-800 rounded-lg flex items-center justify-center text-zinc-500 shrink-0">
+                              <Package size={15} />
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <input
+                              type="text"
+                              value={item.productName}
+                              onChange={(e) => handleUpdateItem(idx, 'productName', e.target.value)}
+                              placeholder="Product title / description"
+                              className="w-full px-2 py-1 bg-[#27272A]/40 border border-[#27272A] rounded-lg text-white font-bold text-xs focus:outline-none focus:border-[#8B5CF6]"
+                            />
+                            <div className="flex items-center gap-2 mt-1">
+                              <input
+                                type="text"
+                                value={item.sku}
+                                onChange={(e) => handleUpdateItem(idx, 'sku', e.target.value)}
+                                placeholder="SKU"
+                                className="w-32 px-1.5 py-0.5 bg-transparent text-[10.5px] font-mono text-zinc-400 border border-zinc-800 rounded focus:outline-none focus:border-zinc-600"
+                              />
+                              <input
+                                type="text"
+                                value={item.description || ''}
+                                onChange={(e) => handleUpdateItem(idx, 'description', e.target.value)}
+                                placeholder="Optional specification / details"
+                                className="flex-1 px-1.5 py-0.5 bg-transparent text-[10px] text-zinc-500 border border-zinc-800 rounded focus:outline-none focus:border-zinc-600"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="p-3">
+                        <input
+                          type="text"
+                          value={item.hsnCode}
+                          onChange={(e) => handleUpdateItem(idx, 'hsnCode', e.target.value)}
+                          className="w-full px-2 py-1.5 bg-[#27272A]/40 border border-[#27272A] rounded-lg text-white font-mono text-xs focus:outline-none"
+                        />
+                      </td>
+                      <td className="p-3">
+                        <select
+                          value={item.unit}
+                          onChange={(e) => handleUpdateItem(idx, 'unit', e.target.value)}
+                          className="w-full px-2 py-1.5 bg-[#27272A]/40 border border-[#27272A] rounded-lg text-white text-xs focus:outline-none"
+                        >
+                          <option value="PCS">PCS</option>
+                          <option value="SETS">SETS</option>
+                          <option value="PAIRS">PAIRS</option>
+                          <option value="MTR">MTR</option>
+                          <option value="BOX">BOX</option>
+                        </select>
+                      </td>
+                      <td className="p-3 text-center">
+                        {/* Interactive Stepper (Replicated from B2B Quotation Form) */}
+                        <div className="inline-flex items-center border border-zinc-700 rounded-xl overflow-hidden bg-zinc-900 shadow-xs">
+                          <button
+                            type="button"
+                            onClick={() => handleQuantityChange(idx, item.quantity - 1)}
+                            disabled={item.quantity <= 1}
+                            className="w-7 h-7 flex items-center justify-center font-bold text-zinc-300 hover:bg-[#8B5CF6] hover:text-white disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-zinc-500 transition-colors"
+                            title="Decrease quantity"
+                          >
+                            <Minus size={12} />
+                          </button>
+                          <input
+                            type="number"
+                            min={1}
+                            value={item.quantity}
+                            onChange={(e) => handleQuantityChange(idx, parseInt(e.target.value) || 1)}
+                            className="w-12 text-center font-mono font-bold text-xs bg-zinc-950 border-x border-zinc-700 py-1 focus:outline-none text-white"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleQuantityChange(idx, item.quantity + 1)}
+                            className="w-7 h-7 flex items-center justify-center font-bold text-zinc-300 hover:bg-[#8B5CF6] hover:text-white transition-colors"
+                            title="Increase quantity"
+                          >
+                            <Plus size={12} />
+                          </button>
+                        </div>
+                      </td>
+                      <td className="p-3 text-right">
+                        <input
+                          type="number"
+                          min="0"
+                          value={item.unitPrice}
+                          onChange={(e) => handleUpdateItem(idx, 'unitPrice', Number(e.target.value))}
+                          className="w-24 px-2 py-1.5 bg-[#27272A]/40 border border-[#27272A] rounded-lg text-white font-mono text-right text-xs focus:outline-none"
+                        />
+                      </td>
+                      <td className="p-3 text-center">
+                        <select
+                          value={item.gstRate}
+                          onChange={(e) => handleUpdateItem(idx, 'gstRate', Number(e.target.value))}
+                          className="px-2 py-1.5 bg-[#27272A]/40 border border-[#27272A] rounded-lg text-white font-mono text-xs focus:outline-none"
+                        >
+                          <option value={18}>18%</option>
+                          <option value={12}>12%</option>
+                          <option value={5}>5%</option>
+                          <option value={28}>28%</option>
+                          <option value={0}>0%</option>
+                        </select>
+                      </td>
+                      <td className="p-3 text-right font-mono font-bold text-white">
+                        ₹{total.toLocaleString('en-IN')}
+                      </td>
+                      <td className="p-3 text-center">
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveItem(idx)}
+                          className="text-rose-400 hover:text-rose-300 p-1.5 rounded-lg hover:bg-rose-500/10 transition-colors"
+                          title="Remove Item"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>

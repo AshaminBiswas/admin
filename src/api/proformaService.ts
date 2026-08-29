@@ -59,6 +59,10 @@ export interface ProductSearchResult {
   price: number;
   stock: number;
   gstRate: number;
+  thumbnail?: string;
+  images?: string[];
+  category?: string;
+  categorySlug?: string;
 }
 
 export const proformaService = {
@@ -691,12 +695,17 @@ export const proformaService = {
   },
 
   /**
-   * Search Products from Catalog
+   * Search Products from Catalog with Category Filter & Rich Thumbnails
    */
-  async searchProducts(queryText: string): Promise<ProductSearchResult[]> {
-    const q = queryText.toLowerCase().trim();
+  async searchProducts(queryText = '', categorySlug = ''): Promise<ProductSearchResult[]> {
+    const q = (queryText || '').toLowerCase().trim();
     try {
-      const res = await fetchAdminApi<any>(`/products?limit=50&search=${encodeURIComponent(q)}`);
+      const params = new URLSearchParams();
+      if (q) params.append('search', q);
+      if (categorySlug) params.append('category', categorySlug);
+      params.append('limit', '50');
+
+      const res = await fetchAdminApi<any>(`/products?${params.toString()}`);
       const list = Array.isArray(res)
         ? res
         : (res?.data?.items || res?.data || res?.products || []);
@@ -705,12 +714,16 @@ export const proformaService = {
           id: p.id,
           name: p.name,
           sku: p.sku || `SKU-${p.id.slice(0, 6)}`,
-          description: p.shortDesc || p.description,
+          description: p.shortDesc || p.description || '',
           hsnCode: p.hsn_sac || p.hsnCode || '83024110',
-          unit: 'PCS',
+          unit: p.unit || 'PCS',
           price: Number(p.salePrice || p.price || 450),
           stock: Number(p.stock || 100),
           gstRate: Number(p.gst_rate || 18),
+          thumbnail: p.thumbnail || (Array.isArray(p.images) ? p.images[0] : undefined),
+          images: Array.isArray(p.images) ? p.images : [],
+          category: p.category?.name || (typeof p.category === 'string' ? p.category : undefined),
+          categorySlug: p.category?.slug,
         }));
       }
     } catch (err) {
@@ -718,7 +731,7 @@ export const proformaService = {
     }
 
     // Default high-demand architectural catalog hardware
-    return [
+    const fallbackList: ProductSearchResult[] = [
       {
         id: 'p-1',
         name: 'Grade 304 SS Heavy Duty Restroom Gravity Hinge Set',
@@ -729,6 +742,8 @@ export const proformaService = {
         price: 850,
         stock: 450,
         gstRate: 18,
+        category: 'Cubicle Hardware',
+        categorySlug: 'cubicle-hardware',
       },
       {
         id: 'p-2',
@@ -740,6 +755,8 @@ export const proformaService = {
         price: 620,
         stock: 800,
         gstRate: 18,
+        category: 'Cubicle Hardware',
+        categorySlug: 'cubicle-hardware',
       },
       {
         id: 'p-3',
@@ -751,6 +768,8 @@ export const proformaService = {
         price: 540,
         stock: 620,
         gstRate: 18,
+        category: 'Cubicle Hardware',
+        categorySlug: 'cubicle-hardware',
       },
       {
         id: 'p-4',
@@ -762,6 +781,8 @@ export const proformaService = {
         price: 390,
         stock: 350,
         gstRate: 18,
+        category: 'Cubicle Hardware',
+        categorySlug: 'cubicle-hardware',
       },
       {
         id: 'p-5',
@@ -773,12 +794,20 @@ export const proformaService = {
         price: 180,
         stock: 1200,
         gstRate: 18,
+        category: 'Locker Hardware',
+        categorySlug: 'locker-hardware',
       },
-    ].filter((p) =>
-      p.name.toLowerCase().includes(q) ||
-      p.sku.toLowerCase().includes(q) ||
-      p.hsnCode.includes(q)
-    );
+    ];
+
+    return fallbackList.filter((p) => {
+      if (categorySlug && p.categorySlug && p.categorySlug !== categorySlug) return false;
+      if (!q) return true;
+      return (
+        p.name.toLowerCase().includes(q) ||
+        p.sku.toLowerCase().includes(q) ||
+        p.hsnCode.includes(q)
+      );
+    });
   },
 };
 
