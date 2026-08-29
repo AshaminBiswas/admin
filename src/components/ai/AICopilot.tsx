@@ -1,4 +1,4 @@
-﻿import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import {
   Sparkles,
   X,
@@ -10,10 +10,16 @@ import {
   BarChart3,
   Mail,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Copy,
   Check,
   RefreshCw,
   Inbox,
+  AlertTriangle,
+  CreditCard,
+  Truck,
+  TrendingUp,
 } from "lucide-react";
 import {
   copilotChat,
@@ -24,7 +30,7 @@ import {
 } from "../../api/aiAgentService";
 import { useAdminAuth } from "../../context/AdminAuthContext";
 
-// â”€â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface Message {
   id: string;
@@ -39,24 +45,103 @@ interface AICopilotProps {
   currentView?: string;
 }
 
-const QUICK_PROMPTS = [
-  { icon: <BarChart3 size={13} />, label: "Executive Summary", prompt: "Generate an executive summary of business performance this month" },
-  { icon: <Inbox size={13} />, label: "PO Analysis", prompt: "Analyze recent purchase orders and give me key insights" },
-  { icon: <FileText size={13} />, label: "Low Stock Alert", prompt: "Which products are running low on stock and need immediate reordering?" },
-  { icon: <Mail size={13} />, label: "Payment Issues", prompt: "Are there any failed or pending payments that need follow-up?" },
+interface QuickPrompt {
+  icon: React.ReactNode;
+  label: string;
+  prompt: string;
+}
+
+const QUICK_PROMPTS: QuickPrompt[] = [
+  {
+    icon: <BarChart3 size={13} />,
+    label: "Executive Summary",
+    prompt: "Generate an executive summary of business performance this month",
+  },
+  {
+    icon: <Inbox size={13} />,
+    label: "PO Analysis",
+    prompt: "Analyze recent purchase orders and give me key insights",
+  },
+  {
+    icon: <AlertTriangle size={13} />,
+    label: "Low Stock Alert",
+    prompt: "Which products are running low on stock and need immediate reordering?",
+  },
+  {
+    icon: <CreditCard size={13} />,
+    label: "Payment Issues",
+    prompt: "Are there any failed or pending payments that need follow-up?",
+  },
+  {
+    icon: <Truck size={13} />,
+    label: "Dispatch Status",
+    prompt: "Check recent customer orders and courier dispatch status",
+  },
+  {
+    icon: <FileText size={13} />,
+    label: "Pending Quotations",
+    prompt: "Summarize pending B2B quotations waiting for approval",
+  },
+  {
+    icon: <TrendingUp size={13} />,
+    label: "Revenue Trends",
+    prompt: "Show sales revenue trends and high-value orders this month",
+  },
 ];
 
-const REPORT_TYPES: { id: ReportType; label: string }[] = [
-  { id: "executive_summary", label: "ðŸ“Š Executive Summary" },
-  { id: "po_analysis", label: "ðŸ“¦ PO Analysis" },
-  { id: "inventory_health", label: "ðŸ­ Inventory Health" },
-  { id: "quotation_pipeline", label: "ðŸ“‹ Quotation Pipeline" },
-  { id: "payment_reconciliation", label: "ðŸ’³ Payment Reconciliation" },
-  { id: "low_stock_alerts", label: "âš ï¸ Low Stock Alerts" },
-  { id: "revenue_trends", label: "ðŸ“ˆ Revenue Trends" },
+interface ReportOption {
+  id: ReportType;
+  label: string;
+  desc: string;
+  icon: string;
+}
+
+const REPORT_TYPES: ReportOption[] = [
+  {
+    id: "executive_summary",
+    label: "Executive Summary",
+    desc: "Orders, Revenue & PO highlights",
+    icon: "📊",
+  },
+  {
+    id: "po_analysis",
+    label: "PO & Email Pipeline",
+    desc: "Classification, priorities & volume",
+    icon: "📦",
+  },
+  {
+    id: "inventory_health",
+    label: "Inventory Health",
+    desc: "Stockout alerts & reorder thresholds",
+    icon: "🏭",
+  },
+  {
+    id: "quotation_pipeline",
+    label: "Quotation Pipeline",
+    desc: "Approval rates & estimated values",
+    icon: "📋",
+  },
+  {
+    id: "payment_reconciliation",
+    label: "Payment Reconciliation",
+    desc: "Gateways, settlements & failed transactions",
+    icon: "💳",
+  },
+  {
+    id: "low_stock_alerts",
+    label: "Low Stock Alerts",
+    desc: "Immediate reorder recommendations",
+    icon: "⚠️",
+  },
+  {
+    id: "revenue_trends",
+    label: "Revenue & Sales Trends",
+    desc: "Top products and growth metrics",
+    icon: "📈",
+  },
 ];
 
-// â”€â”€â”€ Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Component ────────────────────────────────────────────────────────────────
 
 export function AICopilot({ currentPoId, currentView }: AICopilotProps) {
   const { adminUser } = useAdminAuth();
@@ -65,7 +150,14 @@ export function AICopilot({ currentPoId, currentView }: AICopilotProps) {
     {
       id: "welcome",
       role: "assistant",
-      content: `Hello${adminUser?.firstName ? ` ${adminUser.firstName}` : ""}! ðŸ‘‹ I am your **PRC PILOT**, powered by NVIDIA llama-3.2-90b-vision. I can help you:\n\nâ€¢ **Draft professional email replies** for customer POs\nâ€¢ **Analyze business data** and generate executive reports\nâ€¢ **Detect low stock**, payment issues, and dispatch delays\nâ€¢ **Answer questions** about orders, quotations, and inventory\n\nWhat would you like help with today?`,
+      content: `Hello${adminUser?.firstName ? ` ${adminUser.firstName}` : ""}! 👋 I am your **PRC PILOT**, powered by NVIDIA llama-3.2-90b-vision. I can help you:
+
+• **Draft professional email replies** for customer POs & quotations
+• **Analyze business data** and generate live executive reports
+• **Detect low stock**, payment issues, and dispatch delays
+• **Answer questions** about orders, inventory, and B2B pricing
+
+What would you like help with today?`,
       timestamp: new Date(),
     },
   ]);
@@ -79,6 +171,42 @@ export function AICopilot({ currentPoId, currentView }: AICopilotProps) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const reportMenuRef = useRef<HTMLDivElement>(null);
   const chatHistory = useRef<AiChatMessage[]>([]);
+
+  // ── Drag-to-Scroll State for Suggestions ──
+  const promptScrollRef = useRef<HTMLDivElement>(null);
+  const [isMouseDown, setIsMouseDown] = useState(false);
+  const dragStartX = useRef(0);
+  const dragScrollLeft = useRef(0);
+  const hasDragged = useRef(false);
+
+  const handleDragStart = (e: React.MouseEvent) => {
+    if (!promptScrollRef.current) return;
+    setIsMouseDown(true);
+    hasDragged.current = false;
+    dragStartX.current = e.pageX - promptScrollRef.current.offsetLeft;
+    dragScrollLeft.current = promptScrollRef.current.scrollLeft;
+  };
+
+  const handleDragMove = (e: React.MouseEvent) => {
+    if (!isMouseDown || !promptScrollRef.current) return;
+    e.preventDefault();
+    const x = e.pageX - promptScrollRef.current.offsetLeft;
+    const walk = (x - dragStartX.current) * 1.5;
+    if (Math.abs(walk) > 4) {
+      hasDragged.current = true;
+    }
+    promptScrollRef.current.scrollLeft = dragScrollLeft.current - walk;
+  };
+
+  const handleDragEnd = () => {
+    setIsMouseDown(false);
+  };
+
+  const scrollRibbon = (direction: "left" | "right") => {
+    if (!promptScrollRef.current) return;
+    const offset = direction === "left" ? -180 : 180;
+    promptScrollRef.current.scrollBy({ left: offset, behavior: "smooth" });
+  };
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
@@ -368,29 +496,31 @@ ${draft.body}
 
             {/* Context Banner */}
             {currentPoId && (
-              <div className="px-3 py-2 bg-violet-950/30 border-b border-violet-900/30 shrink-0">
-                <p className="text-[11px] text-violet-300">
-                  ðŸ“Œ PO context active â€” <span className="font-semibold">AI can draft replies for this PO</span>
+              <div className="px-3 py-2 bg-violet-950/40 border-b border-violet-900/40 shrink-0 flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+                <p className="text-[11px] text-violet-200 truncate">
+                  PO context active: <span className="font-semibold text-white">AI can draft replies for this PO</span>
                 </p>
               </div>
             )}
 
-            {/* Quick Action Bar */}
-            <div className="flex items-center gap-1.5 px-3 py-2 border-b border-[#27272A] overflow-x-auto no-scrollbar shrink-0">
-              {/* Draft Reply button */}
-              <div className="flex items-center gap-1 shrink-0">
+            {/* ── Quick Action Bar (relative z-30, NOT overflow-hidden, so dropdown opens freely) ── */}
+            <div className="relative z-30 flex items-center justify-between px-3 py-2 border-b border-[#27272A] bg-[#0E0E11] shrink-0">
+              {/* Draft Reply controls */}
+              <div className="flex items-center gap-1.5">
                 <button
+                  type="button"
                   onClick={handleDraftReply}
                   disabled={isDraftingReply || isLoading}
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium bg-violet-900/40 hover:bg-violet-800/50 text-violet-200 border border-violet-800/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium bg-violet-900/40 hover:bg-violet-800/60 text-violet-200 border border-violet-700/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap active:scale-95"
                 >
                   {isDraftingReply ? <Loader2 size={11} className="animate-spin" /> : <Mail size={11} />}
-                  Draft Reply
+                  <span>Draft Reply</span>
                 </button>
                 <select
                   value={draftTone}
                   onChange={(e) => setDraftTone(e.target.value as typeof draftTone)}
-                  className="text-[10px] bg-[#18181B] border border-[#27272A] text-[#A1A1AA] rounded-lg px-1.5 py-1.5 focus:outline-none focus:border-violet-600"
+                  className="text-[10px] bg-[#18181B] border border-[#27272A] text-[#A1A1AA] rounded-lg px-2 py-1.5 focus:outline-none focus:border-violet-600 cursor-pointer"
                 >
                   <option value="professional">Professional</option>
                   <option value="friendly">Friendly</option>
@@ -399,28 +529,54 @@ ${draft.body}
                 </select>
               </div>
 
-              {/* Report Dropdown */}
-              <div className="relative shrink-0" ref={reportMenuRef}>
+              {/* ── Working Reports Dropdown with High Z-Index & Clean Modal Popover ── */}
+              <div className="relative" ref={reportMenuRef}>
                 <button
+                  type="button"
                   onClick={() => setShowReportMenu((p) => !p)}
                   disabled={isLoading}
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium bg-emerald-900/30 hover:bg-emerald-800/40 text-emerald-300 border border-emerald-800/40 transition-colors disabled:opacity-50 whitespace-nowrap"
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all active:scale-95 ${
+                    showReportMenu
+                      ? "bg-emerald-600 text-white shadow-lg shadow-emerald-900/40 border border-emerald-500"
+                      : "bg-emerald-950/50 hover:bg-emerald-900/60 text-emerald-300 border border-emerald-700/50"
+                  }`}
                 >
-                  <BarChart3 size={11} />
-                  Reports
-                  <ChevronDown size={10} className={`transition-transform ${showReportMenu ? "rotate-180" : ""}`} />
+                  <BarChart3 size={12} />
+                  <span>Reports</span>
+                  <ChevronDown
+                    size={11}
+                    className={`transition-transform duration-200 ${showReportMenu ? "rotate-180" : ""}`}
+                  />
                 </button>
+
+                {/* Dropdown Menu Modal */}
                 {showReportMenu && (
-                  <div className="absolute top-full left-0 mt-1 w-52 bg-[#18181B] border border-[#27272A] rounded-xl shadow-2xl z-10 overflow-hidden">
-                    {REPORT_TYPES.map((r) => (
-                      <button
-                        key={r.id}
-                        onClick={() => handleGenerateReport(r.id)}
-                        className="w-full text-left px-3 py-2 text-[11px] text-[#A1A1AA] hover:bg-[#27272A] hover:text-white transition-colors"
-                      >
-                        {r.label}
-                      </button>
-                    ))}
+                  <div className="absolute right-0 top-full mt-1.5 w-64 bg-[#18181B] border border-[#3F3F46] rounded-xl shadow-2xl z-50 overflow-hidden divide-y divide-[#27272A] animate-in fade-in slide-in-from-top-2 duration-150">
+                    <div className="px-3 py-2 bg-gradient-to-r from-emerald-950/80 to-[#18181B]">
+                      <p className="text-[11px] font-bold text-white flex items-center gap-1.5">
+                        <BarChart3 size={12} className="text-emerald-400" />
+                        Generate Live AI Report
+                      </p>
+                      <p className="text-[9px] text-[#A1A1AA]">Analyzes real-time database metrics</p>
+                    </div>
+                    <div className="py-1 max-h-72 overflow-y-auto no-scrollbar">
+                      {REPORT_TYPES.map((r) => (
+                        <button
+                          key={r.id}
+                          type="button"
+                          onClick={() => handleGenerateReport(r.id)}
+                          className="w-full text-left px-3 py-2 hover:bg-[#27272A] transition-colors group flex items-start gap-2.5"
+                        >
+                          <span className="text-sm mt-0.5">{r.icon}</span>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[11px] font-medium text-white group-hover:text-emerald-300 transition-colors">
+                              {r.label}
+                            </p>
+                            <p className="text-[9px] text-[#71717A] truncate">{r.desc}</p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
@@ -486,20 +642,63 @@ ${draft.body}
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Quick Prompts */}
-            <div className="px-3 py-2 border-t border-[#27272A] overflow-x-auto no-scrollbar shrink-0">
-              <div className="flex gap-1.5">
-                {QUICK_PROMPTS.map((p) => (
+            {/* ── Left/Right Draggable Suggestions Ribbon ── */}
+            <div className="px-3 py-2 border-t border-[#27272A] bg-[#09090B] shrink-0 select-none">
+              {/* Header Label + Scroll Controls */}
+              <div className="flex items-center justify-between text-[9px] text-[#71717A] mb-1.5 px-0.5">
+                <span className="flex items-center gap-1 font-medium text-[#A1A1AA]">
+                  <Sparkles size={10} className="text-violet-400" />
+                  Quick Suggestions (Drag Left / Right ↔)
+                </span>
+                <div className="flex items-center gap-1">
                   <button
-                    key={p.label}
-                    onClick={() => sendMessage(p.prompt)}
-                    disabled={isLoading}
-                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-medium bg-[#18181B] hover:bg-[#27272A] text-[#A1A1AA] hover:text-white border border-[#27272A] transition-colors disabled:opacity-40 whitespace-nowrap shrink-0"
+                    type="button"
+                    onClick={() => scrollRibbon("left")}
+                    className="p-1 rounded hover:bg-[#27272A] text-[#71717A] hover:text-white transition-colors"
+                    title="Scroll left"
                   >
-                    {p.icon}
-                    {p.label}
+                    <ChevronLeft size={12} />
                   </button>
-                ))}
+                  <button
+                    type="button"
+                    onClick={() => scrollRibbon("right")}
+                    className="p-1 rounded hover:bg-[#27272A] text-[#71717A] hover:text-white transition-colors"
+                    title="Scroll right"
+                  >
+                    <ChevronRight size={12} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Draggable Ribbon */}
+              <div className="relative">
+                <div
+                  ref={promptScrollRef}
+                  onMouseDown={handleDragStart}
+                  onMouseMove={handleDragMove}
+                  onMouseUp={handleDragEnd}
+                  onMouseLeave={handleDragEnd}
+                  className={`flex gap-1.5 overflow-x-auto no-scrollbar pb-1 touch-pan-x ${
+                    isMouseDown ? "cursor-grabbing" : "cursor-grab"
+                  }`}
+                  style={{ scrollBehavior: isMouseDown ? "auto" : "smooth" }}
+                >
+                  {QUICK_PROMPTS.map((p) => (
+                    <button
+                      key={p.label}
+                      type="button"
+                      onClick={() => {
+                        if (hasDragged.current) return;
+                        sendMessage(p.prompt);
+                      }}
+                      disabled={isLoading}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium bg-[#18181B] hover:bg-[#27272A] text-[#D4D4D8] hover:text-white border border-[#27272A] hover:border-violet-600/50 transition-all disabled:opacity-40 whitespace-nowrap shrink-0 shadow-sm active:scale-95"
+                    >
+                      <span className="text-violet-400">{p.icon}</span>
+                      <span>{p.label}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
