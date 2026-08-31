@@ -522,7 +522,7 @@ export function generateProformaInvoiceHtml(pi: ProformaInvoice): string {
               <div><strong>Verified Authenticity:</strong> Official Commercial Proforma Invoice</div>
               <div><strong>Verification ID:</strong> <span class="font-mono">${pi.verificationId || pi.id}</span></div>
               <div><strong>Signed By:</strong> PRC Commercial Desk</div>
-              <div style="color: #64748b; font-size: 7.5px;">SHA256: ${(pi.documentHash || pi.verificationToken || 'ff225fc588da0fbe8c').slice(0, 20)}...</div>
+              <div style="color: #64748b; font-size: 7.5px;">SHA256: ${(pi.documentHash || pi.verificationToken || pi.id || '').replace(/-/g, '').slice(0, 20)}...</div>
             </div>
           </div>
 
