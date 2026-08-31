@@ -88,6 +88,7 @@ export interface ProformaLineItem {
   discount: number; // in ₹ or percentage
   taxableAmount: number;
   gstRate: number; // 0, 5, 12, 18, 28
+  taxAmount?: number;
   cgstAmount: number;
   sgstAmount: number;
   igstAmount: number;
@@ -150,6 +151,10 @@ export interface ProformaInvoice {
   qrCodeDataUrl?: string;
   verificationId?: string;
   verificationToken?: string;
+  documentHash?: string;
+  digitalSignature?: string;
+  signedBy?: string;
+  signedAt?: string;
 
   createdAt: string;
   updatedAt: string;
