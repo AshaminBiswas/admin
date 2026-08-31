@@ -1002,4 +1002,143 @@ export interface ProjectLocationsSummaryResponse {
   }[];
 }
 
+/* ─── Proforma Invoices (PI) Types ───────────────────────────────────────── */
+
+export type ProformaInvoiceStatus =
+  | 'DRAFT'
+  | 'ISSUED'
+  | 'SENT'
+  | 'APPROVED'
+  | 'ACCEPTED'
+  | 'ADVANCE_RECEIVED'
+  | 'CONVERTED_TO_INVOICE'
+  | 'CANCELLED'
+  | 'EXPIRED';
+
+export interface ProformaInvoiceItem {
+  id: string;
+  proformaInvoiceId: string;
+  productId?: string | null;
+  sku: string;
+  productName: string;
+  description?: string | null;
+  hsnCode?: string | null;
+  unit: string;
+  quantity: number;
+  unitRate: number;
+  discountPercent: number;
+  taxableAmount: number;
+  cgstRate: number;
+  cgstAmount: number;
+  sgstRate: number;
+  sgstAmount: number;
+  igstRate: number;
+  igstAmount: number;
+  lineTotal: number;
+  createdAt: string;
+  product?: {
+    id: string;
+    name: string;
+    sku: string;
+    price: number;
+    stock: number;
+    thumbnail?: string | null;
+  } | null;
+}
+
+export interface ProformaInvoiceHistory {
+  id: string;
+  proformaInvoiceId: string;
+  action: string;
+  performedBy?: string | null;
+  details?: string | null;
+  metadata?: Record<string, any> | null;
+  createdAt: string;
+}
+
+export interface ProformaInvoice {
+  id: string;
+  piNumber: string;
+  financialYear: string;
+  sequenceNo: number;
+  status: ProformaInvoiceStatus;
+  quoteId?: string | null;
+  quoteNumber?: string | null;
+  poId?: string | null;
+  poNumber?: string | null;
+  customerPoNumber?: string | null;
+  orderId?: string | null;
+  customerId?: string | null;
+  customerName: string;
+  companyName?: string | null;
+  customerEmail: string;
+  customerPhone?: string | null;
+  gstin?: string | null;
+  pan?: string | null;
+  billingAddress?: string | null;
+  shippingAddress?: string | null;
+  placeOfSupply?: string | null;
+  subtotal: number;
+  taxableAmount: number;
+  cgst: number;
+  sgst: number;
+  igst: number;
+  cess: number;
+  discount: number;
+  shippingCost: number;
+  roundOff: number;
+  grandTotal: number;
+  currency: string;
+  advancePercentage: number;
+  advanceAmount: number;
+  balanceDue: number;
+  paymentTerms?: string | null;
+  deliveryTimeline?: string | null;
+  validUntil?: string | null;
+  verificationToken: string;
+  verificationId: string;
+  documentHash: string;
+  digitalSignature?: string | null;
+  signedBy?: string | null;
+  signedAt?: string | null;
+  qrCodeDataUrl?: string | null;
+  pdfPath?: string | null;
+  notes?: string | null;
+  termsAndConditions?: string | null;
+  bankDetails?: Record<string, any> | null;
+  convertedInvoiceId?: string | null;
+  convertedInvoiceNumber?: string | null;
+  convertedAt?: string | null;
+  createdBy?: string | null;
+  updatedBy?: string | null;
+  approvedBy?: string | null;
+  approvedAt?: string | null;
+  sentAt?: string | null;
+  cancelledAt?: string | null;
+  cancelledReason?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt?: string | null;
+  items?: ProformaInvoiceItem[];
+  history?: ProformaInvoiceHistory[];
+  customer?: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone?: string | null;
+    companyName?: string | null;
+    gstin?: string | null;
+  } | null;
+}
+
+export interface ProformaInvoiceMetrics {
+  totalCount: number;
+  totalGrandValue: number;
+  totalAdvanceRequired: number;
+  totalBalanceDue: number;
+  statusCounts: Record<string, number>;
+}
+
+
 

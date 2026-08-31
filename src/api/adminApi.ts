@@ -1589,5 +1589,110 @@ export const inventoryApi = {
   },
 };
 
+/* ─── Proforma Invoices (PI) API Client ──────────────────────────────────── */
+
+export const proformaInvoicesApi = {
+  list: async (params?: Record<string, any>) => {
+    const query = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([key, val]) => {
+        if (val !== undefined && val !== null && val !== '') {
+          query.append(key, String(val));
+        }
+      });
+    }
+    const qStr = query.toString();
+    return fetchAdminApi<any>(`/proforma-invoices${qStr ? `?${qStr}` : ''}`);
+  },
+
+  getById: async (id: string) => {
+    return fetchAdminApi<any>(`/proforma-invoices/${encodeURIComponent(id)}`);
+  },
+
+  create: async (payload: any) => {
+    return fetchAdminApi<any>('/proforma-invoices', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  createFromQuote: async (quoteId: string) => {
+    return fetchAdminApi<any>(`/proforma-invoices/from-quote/${encodeURIComponent(quoteId)}`, {
+      method: 'POST',
+    });
+  },
+
+  createFromPo: async (poId: string) => {
+    return fetchAdminApi<any>(`/proforma-invoices/from-po/${encodeURIComponent(poId)}`, {
+      method: 'POST',
+    });
+  },
+
+  update: async (id: string, payload: any) => {
+    return fetchAdminApi<any>(`/proforma-invoices/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  updateItems: async (id: string, payload: { items: any[]; supplierState?: string; placeOfSupply?: string; shippingCost?: number; advancePercentage?: number }) => {
+    return fetchAdminApi<any>(`/proforma-invoices/${encodeURIComponent(id)}/items`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  updateStatus: async (id: string, status: string, notes?: string, reason?: string) => {
+    return fetchAdminApi<any>(`/proforma-invoices/${encodeURIComponent(id)}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status, notes, reason }),
+    });
+  },
+
+  sign: async (id: string, signerName?: string, signerDesignation?: string, notes?: string) => {
+    return fetchAdminApi<any>(`/proforma-invoices/${encodeURIComponent(id)}/sign`, {
+      method: 'POST',
+      body: JSON.stringify({ signerName, signerDesignation, notes }),
+    });
+  },
+
+  email: async (id: string, payload: { email?: string; message?: string; cc?: string | string[] }) => {
+    return fetchAdminApi<any>(`/proforma-invoices/${encodeURIComponent(id)}/email`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  convertToInvoice: async (id: string) => {
+    return fetchAdminApi<any>(`/proforma-invoices/${encodeURIComponent(id)}/convert-to-invoice`, {
+      method: 'POST',
+    });
+  },
+
+  downloadPdf: async (id: string, customFilename?: string) => {
+    const token = getAdminToken();
+    const res = await fetch(`${API_BASE_URL}/proforma-invoices/${encodeURIComponent(id)}/pdf`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error('Failed to download Proforma Invoice PDF');
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = customFilename || `Proforma-Invoice-${id}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  },
+
+  delete: async (id: string) => {
+    return fetchAdminApi<any>(`/proforma-invoices/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    });
+  },
+};
+
+
 
 
