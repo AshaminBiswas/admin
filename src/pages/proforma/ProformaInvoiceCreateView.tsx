@@ -341,57 +341,17 @@ export function ProformaInvoiceCreateView({ onBack, onSaved }: Props) {
     setIsCustomerDropdownOpen(false);
     setCustomerResults([]);
 
-    // Fetch customer-specific B2B pricing matrix
-    if (c.id && !c.id.startsWith('quote-')) {
-      setLoadingCustomPrices(true);
-      try {
-        const pricingRes = await b2bPricingApi.getCustomerPricing(c.id);
-        const pItems = pricingRes?.data?.items || pricingRes?.items || pricingRes?.data || [];
-        const pMap: Record<string, any> = {};
-        if (Array.isArray(pItems)) {
-          pItems.forEach((it: any) => {
-            const hasCustom = Boolean(it.hasCustomPrice || it.customPrice);
-            pMap[it.productId || it.id] = {
-              customPrice: Number(it.customPrice || it.price),
-              hasCustomPrice: hasCustom,
-              standardPrice: Number(it.standardPrice || it.salePrice || it.price),
-              discountPercent: Number(it.discountPercent || 0),
-              minQuantity: it.minQuantity || 1,
-              notes: it.notes || null,
-            };
-          });
-        }
-        setCustomerPricingMap(pMap);
-
-        // Update already added line items if they have custom pricing
-        setItems((prevItems) =>
-          prevItems.map((item) => {
-            if (item.productId && pMap[item.productId]?.hasCustomPrice) {
-              const rule = pMap[item.productId];
-              return {
-                ...item,
-                unitPrice: rule.customPrice,
-                isCustomB2BPrice: true,
-                customB2BDiscountPercent: rule.discountPercent,
-              };
-            }
-            return item;
-          })
-        );
-      } catch (pErr) {
-        console.warn('Could not load B2B custom prices for customer:', pErr);
-        setCustomerPricingMap({});
-      } finally {
-        setLoadingCustomPrices(false);
-      }
+    // Trigger B2B custom pricing matrix parallel fetch
+    const lookupKey = c.id || c.email || c.phone;
+    if (lookupKey) {
+      fetchAndApplyCustomerPricing(lookupKey);
     } else {
       setCustomerPricingMap({});
     }
 
     // Asynchronously fetch full 360 customer profile to retrieve all saved addresses
     if (c.id && !c.id.startsWith('quote-')) {
-      try {
-        const full = await proformaService.getCustomerFullDetails(c.id);
+      proformaService.getCustomerFullDetails(c.id).then((full) => {
         if (full) {
           setSelectedCustomer(full);
           if (full.addresses && full.addresses.length > 0) {
@@ -404,9 +364,68 @@ export function ProformaInvoiceCreateView({ onBack, onSaved }: Props) {
             setShippingAddress(full.shippingAddress);
           }
         }
-      } catch (err) {
+      }).catch((err) => {
         console.warn('Could not load customer 360 full details:', err);
+      });
+    }
+  };
+
+  /**
+   * Parallel Fetch: Loads all product custom B2B prices for the chosen customer
+   * and auto-applies them to line items.
+   */
+  const fetchAndApplyCustomerPricing = async (targetIdOrEmail: string) => {
+    if (!targetIdOrEmail) return;
+    setLoadingCustomPrices(true);
+    try {
+      const pricingRes = await b2bPricingApi.getCustomerPricing(targetIdOrEmail);
+      const pItems = pricingRes?.data?.items || pricingRes?.items || pricingRes?.data || [];
+      const pMap: Record<string, any> = {};
+
+      if (Array.isArray(pItems)) {
+        pItems.forEach((it: any) => {
+          const hasCustom = Boolean(it.hasCustomPrice || (it.customPrice && Number(it.customPrice) > 0));
+          const rule = {
+            customPrice: Number(it.customPrice || it.price),
+            hasCustomPrice: hasCustom,
+            standardPrice: Number(it.standardPrice || it.salePrice || it.price),
+            discountPercent: Number(it.discountPercent || 0),
+            minQuantity: it.minQuantity || 1,
+            notes: it.notes || null,
+          };
+          if (it.productId) pMap[it.productId] = rule;
+          if (it.id) pMap[it.id] = rule;
+          if (it.sku) pMap[it.sku.toLowerCase()] = rule;
+          if (it.slug) pMap[it.slug.toLowerCase()] = rule;
+          if (it.name) pMap[it.name.toLowerCase().trim()] = rule;
+        });
       }
+      setCustomerPricingMap(pMap);
+
+      // Automatically update existing line items if any were already selected
+      setItems((prevItems) =>
+        prevItems.map((item) => {
+          const rule =
+            (item.productId && pMap[item.productId]) ||
+            (item.sku && pMap[item.sku.toLowerCase()]) ||
+            (item.productName && pMap[item.productName.toLowerCase().trim()]);
+
+          if (rule && rule.hasCustomPrice && rule.customPrice > 0) {
+            return {
+              ...item,
+              unitPrice: rule.customPrice,
+              isCustomB2BPrice: true,
+              customB2BDiscountPercent: rule.discountPercent,
+            };
+          }
+          return item;
+        })
+      );
+    } catch (pErr) {
+      console.warn('Could not load B2B custom prices for customer:', pErr);
+      setCustomerPricingMap({});
+    } finally {
+      setLoadingCustomPrices(false);
     }
   };
 
@@ -430,7 +449,10 @@ export function ProformaInvoiceCreateView({ onBack, onSaved }: Props) {
 
   // Handle Product Selection into line items (With Customer-Specific B2B Pricing Lookup)
   const handleAddProduct = (p: ProductSearchResult) => {
-    const customRule = customerPricingMap[p.id];
+    const customRule =
+      customerPricingMap[p.id] ||
+      (p.sku ? customerPricingMap[p.sku.toLowerCase()] : undefined) ||
+      (p.name ? customerPricingMap[p.name.toLowerCase().trim()] : undefined);
     const hasCustomPrice = Boolean(customRule && customRule.hasCustomPrice && customRule.customPrice > 0);
     const effectiveUnitPrice = hasCustomPrice ? customRule.customPrice : Number(p.price || 0);
 
@@ -449,29 +471,27 @@ export function ProformaInvoiceCreateView({ onBack, onSaved }: Props) {
           quantity: currentQty + 1,
           unitPrice: effectiveUnitPrice,
           isCustomB2BPrice: hasCustomPrice,
-          customB2BDiscountPercent: customRule?.discountPercent || 0,
+          customB2BDiscountPercent: hasCustomPrice ? customRule?.discountPercent : undefined,
         };
         return next;
       });
     } else {
-      setItems((prev) => [
-        ...prev,
-        {
-          productId: p.id,
-          sku: p.sku,
-          productName: p.name,
-          description: p.description || '',
-          hsnCode: p.hsnCode || '83024110',
-          unit: p.unit || 'PCS',
-          quantity: 1,
-          unitPrice: effectiveUnitPrice,
-          discount: 0,
-          gstRate: p.gstRate || 18,
-          thumbnail: p.thumbnail || (p.images && p.images[0]),
-          isCustomB2BPrice: hasCustomPrice,
-          customB2BDiscountPercent: customRule?.discountPercent || 0,
-        },
-      ]);
+      const newItem: DraftLineItem = {
+        productId: p.id,
+        sku: p.sku,
+        productName: p.name,
+        description: p.description || '',
+        hsnCode: p.hsnCode || '83024110',
+        unit: p.unit || 'PCS',
+        quantity: 1,
+        unitPrice: effectiveUnitPrice,
+        discount: 0,
+        gstRate: p.gstRate || 18,
+        thumbnail: p.thumbnail || (p.images && p.images[0]),
+        isCustomB2BPrice: hasCustomPrice,
+        customB2BDiscountPercent: hasCustomPrice ? customRule?.discountPercent : undefined,
+      };
+      setItems((prev) => [...prev, newItem]);
     }
 
     setProductSearch('');
@@ -1329,7 +1349,10 @@ export function ProformaInvoiceCreateView({ onBack, onSaved }: Props) {
                       </div>
                     ) : (
                       productResults.map((p) => {
-                        const customRule = customerPricingMap[p.id];
+                        const customRule =
+                          customerPricingMap[p.id] ||
+                          (p.sku ? customerPricingMap[p.sku.toLowerCase()] : undefined) ||
+                          (p.name ? customerPricingMap[p.name.toLowerCase().trim()] : undefined);
                         const hasCustomPrice = Boolean(customRule && customRule.hasCustomPrice && customRule.customPrice > 0);
                         const effectivePrice = hasCustomPrice ? customRule.customPrice : Number(p.price || 0);
 
