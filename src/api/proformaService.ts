@@ -80,17 +80,20 @@ export const proformaService = {
     if (params.endDate) query.append('endDate', params.endDate);
 
     try {
-      const res = await fetchAdminApi<any>(`/invoices?${query.toString()}`);
-      if (res && Array.isArray(res)) {
-        return { data: res, pagination: { total: res.length, page: 1, limit: 50, totalPages: 1 } };
-      }
+      const res = await fetchAdminApi<any>(`/proforma-invoices?${query.toString()}`);
       if (res && res.data && Array.isArray(res.data)) {
-        return res;
+        return {
+          data: res.data.map(transformBackendInvoiceToPI),
+          pagination: res.pagination || { total: res.data.length, page: 1, limit: 50, totalPages: 1 },
+          metrics: res.metrics,
+        };
+      }
+      if (res && Array.isArray(res)) {
+        return { data: res.map(transformBackendInvoiceToPI), pagination: { total: res.length, page: 1, limit: 50, totalPages: 1 } };
       }
       return { data: [], pagination: { total: 0, page: 1, limit: 20, totalPages: 0 } };
     } catch (err) {
-      console.warn('[proformaService] list error:', err);
-      // Fallback from localStorage if server is cold
+      console.warn('[proformaService] list error, using local fallback:', err);
       const localPIs = getLocalProformaInvoices();
       return { data: localPIs, pagination: { total: localPIs.length, page: 1, limit: 50, totalPages: 1 } };
     }
@@ -101,9 +104,10 @@ export const proformaService = {
    */
   async getProformaInvoiceById(id: string): Promise<ProformaInvoice | null> {
     try {
-      const res = await fetchAdminApi<any>(`/invoices/${id}`);
-      if (res && res.id) {
-        return transformBackendInvoiceToPI(res);
+      const res = await fetchAdminApi<any>(`/proforma-invoices/${encodeURIComponent(id)}`);
+      const payload = res?.data || res;
+      if (payload && payload.id) {
+        return transformBackendInvoiceToPI(payload);
       }
     } catch (err) {
       console.warn('[proformaService] get error, searching local:', err);
@@ -246,18 +250,25 @@ export const proformaService = {
     // Attempt to persist to backend
     try {
       const backendPayload = {
-        invoiceType: 'PROFORMA_INVOICE',
         customerId: payload.customerId,
         customerName: payload.customerName,
+        companyName: payload.companyName,
         customerEmail: payload.customerEmail,
         customerPhone: payload.customerPhone,
-        customerGstin: payload.customerGstin,
+        gstin: payload.customerGstin,
+        billingAddress: payload.billingAddress,
+        shippingAddress: payload.shippingAddress,
         placeOfSupply: payload.placeOfSupply,
         supplierState: facility.state,
         branchCode: payload.facilityCode,
-        notes: payload.notes,
+        shippingCost: payload.shippingCharges,
+        advancePercentage: newPI.advancePercentage,
         paymentTerms: newPI.paymentTerms,
-        dueDate: newPI.validUntil,
+        deliveryTimeline: newPI.deliveryTimeline,
+        validUntil: newPI.validUntil,
+        notes: payload.notes,
+        poNumber: payload.poReference,
+        quoteNumber: payload.quoteReference,
         items: payload.items.map((it) => ({
           productId: it.productId,
           sku: it.sku,
@@ -266,23 +277,27 @@ export const proformaService = {
           hsnCode: it.hsnCode || '8302',
           unit: it.unit || 'PCS',
           quantity: it.quantity,
-          unitPrice: it.unitPrice,
-          discount: it.discount || 0,
-          taxRate: it.gstRate || 18,
+          unitRate: it.unitPrice,
+          discountPercent: it.discount || 0,
+          gstRate: it.gstRate || 18,
         })),
       };
 
-      const res = await fetchAdminApi<any>('/invoices', {
+      const res = await fetchAdminApi<any>('/proforma-invoices', {
         method: 'POST',
         body: JSON.stringify(backendPayload),
       });
 
-      if (res && res.id) {
-        newPI.id = res.id;
-        if (res.invoiceNumber) newPI.piNumber = res.invoiceNumber;
+      const data = res?.data || res;
+      if (data && data.id) {
+        newPI.id = data.id;
+        if (data.piNumber) newPI.piNumber = data.piNumber;
+        if (data.qrCodeDataUrl) newPI.qrCodeDataUrl = data.qrCodeDataUrl;
+        if (data.verificationId) newPI.verificationId = data.verificationId;
+        if (data.verificationToken) newPI.verificationToken = data.verificationToken;
       }
     } catch (err) {
-      console.warn('[proformaService] Backend invoice post warning:', err);
+      console.warn('[proformaService] Backend proforma-invoice post warning:', err);
     }
 
     // Save copy in localStorage for instant access
@@ -304,47 +319,12 @@ export const proformaService = {
       throw new Error('Recipient email is required to send Proforma Invoice.');
     }
 
-    const payload = {
-      piNumber: pi.piNumber,
-      customerName: pi.customerName,
-      companyName: pi.companyName,
-      customerEmail: targetEmail,
-      customerPhone: pi.customerPhone,
-      customerGstin: pi.customerGstin,
-      issueDate: pi.issueDate,
-      validUntil: pi.validUntil,
-      facilityCode: pi.facilityCode,
-      facilityName: pi.facility.name,
-      billingAddress: pi.billingAddress,
-      shippingAddress: pi.shippingAddress,
-      grandTotal: pi.grandTotal,
-      subtotal: pi.subtotal,
-      cgstTotal: pi.cgstTotal,
-      sgstTotal: pi.sgstTotal,
-      igstTotal: pi.igstTotal,
-      advancePercentage: pi.advancePercentage,
-      advancePayable: pi.advancePayable,
-      balancePayable: pi.balancePayable,
-      poReference: pi.poReference,
-      quoteReference: pi.quoteReference,
-      notes: notes || pi.notes,
-      items: pi.items.map((it) => ({
-        sku: it.sku,
-        productName: it.productName,
-        description: it.description,
-        hsnCode: it.hsnCode,
-        unit: it.unit,
-        quantity: it.quantity,
-        unitPrice: it.unitPrice,
-        gstRate: it.gstRate,
-        total: it.totalAmount ?? it.total ?? 0,
-      })),
-    };
-
-    // Call dedicated backend dispatch endpoint
-    const res = await fetchAdminApi<any>('/invoices/proforma/send-email', {
+    const res = await fetchAdminApi<any>(`/proforma-invoices/${encodeURIComponent(pi.id)}/email`, {
       method: 'POST',
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        email: targetEmail,
+        message: notes || pi.notes || undefined,
+      }),
     });
 
     return {

@@ -4,7 +4,7 @@ import {
   FileText, ShieldCheck, Printer, Download, Sparkles, CheckCircle2,
   AlertCircle, RefreshCw, X, Package, MapPin, Phone, Mail,
   CreditCard, Calendar, Truck, Layers, ChevronDown, Image as ImageIcon,
-  Warehouse
+  Warehouse, Lock, Tag
 } from 'lucide-react';
 import {
   PROFORMA_FACILITIES,
@@ -19,7 +19,7 @@ import {
   CustomerSavedAddressSummary,
   ProductSearchResult
 } from '../../api/proformaService';
-import { inventoryApi } from '../../api/adminApi';
+import { inventoryApi, b2bPricingApi } from '../../api/adminApi';
 import type { Branch } from '../../types/admin';
 import { getCachedCategories } from '../../utils/referenceDataCache';
 import { printProformaInvoice } from '../../utils/proformaPdfGenerator';
@@ -41,6 +41,8 @@ interface DraftLineItem {
   discount: number;
   gstRate: number;
   thumbnail?: string;
+  isCustomB2BPrice?: boolean;
+  customB2BDiscountPercent?: number;
 }
 
 const DEFAULT_CATEGORY_OPTIONS = [
@@ -173,6 +175,17 @@ export function ProformaInvoiceCreateView({ onBack, onSaved }: Props) {
   const [billingAddress, setBillingAddress] = useState('');
   const [shippingAddress, setShippingAddress] = useState('');
   const [sameAsBilling, setSameAsBilling] = useState(true);
+
+  // Customer-Specific B2B Pricing Matrix Map (Loaded automatically upon customer selection)
+  const [customerPricingMap, setCustomerPricingMap] = useState<Record<string, {
+    customPrice: number;
+    hasCustomPrice: boolean;
+    standardPrice: number;
+    discountPercent: number;
+    minQuantity?: number;
+    notes?: string | null;
+  }>>({});
+  const [loadingCustomPrices, setLoadingCustomPrices] = useState(false);
 
   // Dates & Commercial Terms
   const [issueDate, setIssueDate] = useState(new Date().toISOString().slice(0, 10));
@@ -328,6 +341,53 @@ export function ProformaInvoiceCreateView({ onBack, onSaved }: Props) {
     setIsCustomerDropdownOpen(false);
     setCustomerResults([]);
 
+    // Fetch customer-specific B2B pricing matrix
+    if (c.id && !c.id.startsWith('quote-')) {
+      setLoadingCustomPrices(true);
+      try {
+        const pricingRes = await b2bPricingApi.getCustomerPricing(c.id);
+        const pItems = pricingRes?.data?.items || pricingRes?.items || pricingRes?.data || [];
+        const pMap: Record<string, any> = {};
+        if (Array.isArray(pItems)) {
+          pItems.forEach((it: any) => {
+            const hasCustom = Boolean(it.hasCustomPrice || it.customPrice);
+            pMap[it.productId || it.id] = {
+              customPrice: Number(it.customPrice || it.price),
+              hasCustomPrice: hasCustom,
+              standardPrice: Number(it.standardPrice || it.salePrice || it.price),
+              discountPercent: Number(it.discountPercent || 0),
+              minQuantity: it.minQuantity || 1,
+              notes: it.notes || null,
+            };
+          });
+        }
+        setCustomerPricingMap(pMap);
+
+        // Update already added line items if they have custom pricing
+        setItems((prevItems) =>
+          prevItems.map((item) => {
+            if (item.productId && pMap[item.productId]?.hasCustomPrice) {
+              const rule = pMap[item.productId];
+              return {
+                ...item,
+                unitPrice: rule.customPrice,
+                isCustomB2BPrice: true,
+                customB2BDiscountPercent: rule.discountPercent,
+              };
+            }
+            return item;
+          })
+        );
+      } catch (pErr) {
+        console.warn('Could not load B2B custom prices for customer:', pErr);
+        setCustomerPricingMap({});
+      } finally {
+        setLoadingCustomPrices(false);
+      }
+    } else {
+      setCustomerPricingMap({});
+    }
+
     // Asynchronously fetch full 360 customer profile to retrieve all saved addresses
     if (c.id && !c.id.startsWith('quote-')) {
       try {
@@ -354,6 +414,7 @@ export function ProformaInvoiceCreateView({ onBack, onSaved }: Props) {
   const handleClearCustomer = () => {
     setSelectedCustomerId(undefined);
     setSelectedCustomer(null);
+    setCustomerPricingMap({});
     setCustomerSavedAddresses([]);
     setCustomerSearch('');
     setCompanyName('');
@@ -367,8 +428,12 @@ export function ProformaInvoiceCreateView({ onBack, onSaved }: Props) {
     setIsCustomerDropdownOpen(false);
   };
 
-  // Handle Product Selection into line items (Replicated from B2B Quotation form)
+  // Handle Product Selection into line items (With Customer-Specific B2B Pricing Lookup)
   const handleAddProduct = (p: ProductSearchResult) => {
+    const customRule = customerPricingMap[p.id];
+    const hasCustomPrice = Boolean(customRule && customRule.hasCustomPrice && customRule.customPrice > 0);
+    const effectiveUnitPrice = hasCustomPrice ? customRule.customPrice : Number(p.price || 0);
+
     const existingIndex = items.findIndex(
       (i) =>
         (i.productId && i.productId === p.id) ||
@@ -382,6 +447,9 @@ export function ProformaInvoiceCreateView({ onBack, onSaved }: Props) {
         next[existingIndex] = {
           ...next[existingIndex],
           quantity: currentQty + 1,
+          unitPrice: effectiveUnitPrice,
+          isCustomB2BPrice: hasCustomPrice,
+          customB2BDiscountPercent: customRule?.discountPercent || 0,
         };
         return next;
       });
@@ -396,10 +464,12 @@ export function ProformaInvoiceCreateView({ onBack, onSaved }: Props) {
           hsnCode: p.hsnCode || '83024110',
           unit: p.unit || 'PCS',
           quantity: 1,
-          unitPrice: p.price || 0,
+          unitPrice: effectiveUnitPrice,
           discount: 0,
           gstRate: p.gstRate || 18,
           thumbnail: p.thumbnail || (p.images && p.images[0]),
+          isCustomB2BPrice: hasCustomPrice,
+          customB2BDiscountPercent: customRule?.discountPercent || 0,
         },
       ]);
     }
@@ -1099,151 +1169,250 @@ export function ProformaInvoiceCreateView({ onBack, onSaved }: Props) {
       </div>
 
       {/* ─── 3. CATALOG PRODUCT SEARCH & LINE ITEMS COMPOSER ─────────────── */}
-      {/* (Replicated directly from Storefront B2B Quotation Form) */}
-      <div className="bg-[#18181B] border border-[#27272A] rounded-2xl p-5 space-y-4">
-        <div className="border-b border-[#27272A] pb-3 flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <h2 className="text-sm font-bold text-white flex items-center gap-2">
-              <Package size={16} className="text-[#8B5CF6]" /> 3. Line Items & Product Selector ({items.length})
-            </h2>
-            <p className="text-xs text-zinc-400">
-              Filter by category, search live catalog with image previews, and adjust quantities with 1-click steppers.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={handleAddCustomItem}
-            className="px-3 py-1.5 bg-[#27272A] hover:bg-[#3F3F46] text-white text-xs font-bold rounded-xl border border-zinc-700 flex items-center gap-1.5 transition-all"
-          >
-            <Plus size={13} /> Add Custom Line Item
-          </button>
-        </div>
+      {/* (Requires Customer Selection First; Replicated with B2B Custom Pricing Matrix) */}
+      {(() => {
+        const isCustomerSelected = Boolean(
+          selectedCustomerId ||
+          (companyName.trim() && (customerEmail.trim() || customerPhone.trim())) ||
+          customerName.trim()
+        );
+        const customPriceRulesCount = Object.values(customerPricingMap).filter((v) => v.hasCustomPrice).length;
 
-        {/* Product Catalog Search & Category Filter Combobox (Replicated from B2B Quotation Form) */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3">
-          
-          {/* Category Filter */}
-          <div className="relative">
-            <select
-              value={selectedCategory}
-              onChange={(e) => {
-                setSelectedCategory(e.target.value);
-                setIsProductDropdownOpen(true);
-              }}
-              className="w-full px-3.5 py-2.5 bg-[#27272A]/50 border border-[#27272A] focus:border-[#8B5CF6] rounded-xl text-xs text-white font-bold focus:outline-none appearance-none cursor-pointer pr-9"
-            >
-              {categoryOptions.map((c) => (
-                <option key={c.slug} value={c.slug} className="bg-[#18181B] text-white">
-                  {c.label}
-                </option>
-              ))}
-            </select>
-            <ChevronDown size={14} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" />
-          </div>
-
-          {/* Search Bar with Autocomplete Dropdown */}
-          <div className="sm:col-span-2 relative" ref={productDropdownRef}>
-            <div className="relative">
-              <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" />
-              <input
-                type="text"
-                value={productSearch}
-                onChange={(e) => {
-                  setProductSearch(e.target.value);
-                  setIsProductDropdownOpen(true);
-                }}
-                onFocus={() => setIsProductDropdownOpen(true)}
-                placeholder="Search active catalog by product name, SKU, or HSN..."
-                className="w-full pl-10 pr-10 py-2.5 bg-[#27272A]/50 border border-[#27272A] focus:border-[#8B5CF6] rounded-xl text-xs text-white placeholder-zinc-500 focus:outline-none transition-all"
-              />
-              {searchingProduct && (
-                <RefreshCw size={14} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#8B5CF6] animate-spin" />
-              )}
+        return (
+          <div className="bg-[#18181B] border border-[#27272A] rounded-2xl p-5 space-y-4">
+            <div className="border-b border-[#27272A] pb-3 flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h2 className="text-sm font-bold text-white flex items-center gap-2">
+                  <Package size={16} className="text-[#8B5CF6]" /> 3. Line Items & Product Selector ({items.length})
+                </h2>
+                <p className="text-xs text-zinc-400">
+                  {isCustomerSelected
+                    ? `Catalog unlocked. Showing custom B2B contract pricing for ${companyName || customerName}.`
+                    : 'Product selection is locked. Please select a B2B customer account above first.'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleAddCustomItem}
+                disabled={!isCustomerSelected}
+                title={!isCustomerSelected ? 'Select a customer in Step 2 to add items' : 'Add custom item'}
+                className="px-3 py-1.5 bg-[#27272A] hover:bg-[#3F3F46] disabled:opacity-40 disabled:hover:bg-[#27272A] text-white text-xs font-bold rounded-xl border border-zinc-700 flex items-center gap-1.5 transition-all disabled:cursor-not-allowed"
+              >
+                <Plus size={13} /> Add Custom Line Item
+              </button>
             </div>
 
-            {/* Product Dropdown Results (Replicated from B2B Quotation Form) */}
-            {isProductDropdownOpen && (
-              <div className="absolute z-30 left-0 right-0 mt-1.5 bg-[#18181B] border border-[#27272A] rounded-2xl shadow-2xl overflow-hidden max-h-72 overflow-y-auto divide-y divide-zinc-800 animate-in fade-in zoom-in-98 duration-150">
-                <div className="px-3.5 py-2 bg-[#121214] text-[10px] font-bold text-zinc-400 uppercase tracking-wider flex items-center justify-between border-b border-zinc-800">
-                  <span>
-                    {productResults.length > 0
-                      ? `Matching Catalog Products (${productResults.length})`
-                      : 'No Matching Products'}
-                  </span>
-                  <span className="text-[#A78BFA] font-bold">Click to Add / Increment Qty</span>
+            {/* Customer Requirement Notice / B2B Pricing Status Banner */}
+            {!isCustomerSelected ? (
+              <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 sm:p-4.5 flex items-start gap-3.5 text-amber-200 animate-in fade-in duration-150">
+                <div className="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0 mt-0.5">
+                  <Lock size={16} />
                 </div>
-
-                {searchingProduct ? (
-                  <div className="p-4 text-center text-xs text-zinc-400 flex items-center justify-center gap-2">
-                    <RefreshCw size={14} className="animate-spin text-[#8B5CF6]" />
-                    <span>Searching catalog database...</span>
+                <div className="space-y-1">
+                  <h4 className="font-bold text-amber-300 text-xs tracking-wide uppercase flex items-center gap-1.5">
+                    Product Selection Locked — Select Customer First
+                  </h4>
+                  <p className="text-xs text-amber-200/80 leading-relaxed">
+                    By default, product catalog search and selection are disabled until a customer is selected in <strong>Step 2 (Customer & Buyer Details)</strong>. Once a customer is selected, product search will automatically enable and load that customer's pre-negotiated <strong>B2B Custom Pricing</strong>.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-purple-950/30 border border-purple-800/40 rounded-2xl p-3 sm:p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs animate-in fade-in duration-150">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-7 h-7 rounded-lg bg-[#8B5CF6]/20 border border-[#8B5CF6]/40 flex items-center justify-center text-[#A78BFA] shrink-0">
+                    <Sparkles size={15} />
                   </div>
-                ) : productResults.length === 0 ? (
-                  <div className="p-4 text-center text-xs text-zinc-400">
-                    No hardware products found matching current query and category filter.
+                  <div>
+                    <span className="font-bold text-white flex items-center gap-1.5">
+                      <span>B2B Contract Pricing Matrix Active for:</span>
+                      <span className="text-[#C4B5FD] font-mono">{companyName || customerName}</span>
+                    </span>
+                    <p className="text-[11px] text-zinc-400">
+                      {loadingCustomPrices ? (
+                        <span className="flex items-center gap-1 text-[#C4B5FD]">
+                          <RefreshCw size={11} className="animate-spin" /> Fetching customer pricing matrix...
+                        </span>
+                      ) : customPriceRulesCount > 0 ? (
+                        <span>
+                          Found <strong className="text-emerald-400">{customPriceRulesCount} custom pricing rules</strong> for this client. Contract rates will be applied automatically upon selection.
+                        </span>
+                      ) : (
+                        <span>Standard B2B wholesale tier rates apply. You can also manually adjust unit rates below.</span>
+                      )}
+                    </p>
                   </div>
-                ) : (
-                  productResults.map((p) => (
-                    <div
-                      key={p.id}
-                      onClick={() => handleAddProduct(p)}
-                      className="p-3 hover:bg-[#8B5CF6]/15 cursor-pointer transition-colors flex items-center justify-between text-xs group"
-                    >
-                      <div className="flex items-center gap-3 min-w-0 pr-3">
-                        {p.thumbnail ? (
-                          <img
-                            src={p.thumbnail}
-                            alt={p.name}
-                            className="w-10 h-10 object-cover rounded-lg border border-zinc-700 shrink-0 bg-zinc-900"
-                          />
-                        ) : (
-                          <div className="w-10 h-10 bg-zinc-800/80 rounded-lg flex items-center justify-center text-zinc-400 border border-zinc-700 shrink-0">
-                            <Building2 size={16} />
-                          </div>
-                        )}
-                        <div className="min-w-0 space-y-0.5">
-                          <strong className="text-white font-bold group-hover:text-[#A78BFA] transition-colors truncate block">
-                            {p.name}
-                          </strong>
-                          <div className="text-[11px] text-zinc-400 flex flex-wrap items-center gap-2">
-                            <span className="font-mono text-zinc-300 font-bold">SKU: {p.sku}</span>
-                            <span>•</span>
-                            <span className="font-mono text-zinc-400">HSN: {p.hsnCode}</span>
-                            {p.category && (
-                              <>
-                                <span>•</span>
-                                <span className="text-purple-300">{p.category}</span>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="text-right shrink-0 space-y-1">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <span className="text-xs font-black text-white font-mono">
-                            ₹{p.price.toLocaleString('en-IN')}
-                          </span>
-                          <span className="text-[9px] font-bold text-purple-300 bg-purple-950/80 border border-purple-800/80 px-1.5 py-0.2 rounded">
-                            B2B RATE
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-end gap-1.5">
-                          <span className="text-[10px] text-zinc-400 font-mono">
-                            Stock: {p.stock} {p.unit}
-                          </span>
-                          <span className="text-[10px] font-extrabold text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 rounded-md transition-all group-hover:bg-emerald-500/25">
-                            + Add to PI
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  ))
+                </div>
+                {customPriceRulesCount > 0 && !loadingCustomPrices && (
+                  <span className="text-[10.5px] bg-emerald-950 text-emerald-300 border border-emerald-700/80 px-2.5 py-1 rounded-lg font-bold flex items-center gap-1 shrink-0">
+                    <Tag size={12} className="text-emerald-400" />
+                    {customPriceRulesCount} Custom Prices Loaded
+                  </span>
                 )}
               </div>
             )}
-          </div>
-        </div>
+
+            {/* Product Catalog Search & Category Filter Combobox */}
+            <div className={`grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3 ${!isCustomerSelected ? 'opacity-50 pointer-events-none' : ''}`}>
+              
+              {/* Category Filter */}
+              <div className="relative">
+                <select
+                  disabled={!isCustomerSelected}
+                  value={selectedCategory}
+                  onChange={(e) => {
+                    setSelectedCategory(e.target.value);
+                    setIsProductDropdownOpen(true);
+                  }}
+                  className="w-full px-3.5 py-2.5 bg-[#27272A]/50 border border-[#27272A] focus:border-[#8B5CF6] rounded-xl text-xs text-white font-bold focus:outline-none appearance-none cursor-pointer pr-9 disabled:cursor-not-allowed"
+                >
+                  {categoryOptions.map((c) => (
+                    <option key={c.slug} value={c.slug} className="bg-[#18181B] text-white">
+                      {c.label}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown size={14} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" />
+              </div>
+
+              {/* Search Bar with Autocomplete Dropdown */}
+              <div className="sm:col-span-2 relative" ref={productDropdownRef}>
+                <div className="relative">
+                  {isCustomerSelected ? (
+                    <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" />
+                  ) : (
+                    <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-amber-400" />
+                  )}
+                  <input
+                    type="text"
+                    disabled={!isCustomerSelected}
+                    value={productSearch}
+                    onChange={(e) => {
+                      setProductSearch(e.target.value);
+                      setIsProductDropdownOpen(true);
+                    }}
+                    onFocus={() => {
+                      if (isCustomerSelected) setIsProductDropdownOpen(true);
+                    }}
+                    placeholder={
+                      !isCustomerSelected
+                        ? '🔒 Select a B2B customer in Step 2 above to unlock product search...'
+                        : 'Search active catalog by product name, SKU, or HSN...'
+                    }
+                    className="w-full pl-10 pr-10 py-2.5 bg-[#27272A]/50 border border-[#27272A] focus:border-[#8B5CF6] rounded-xl text-xs text-white placeholder-zinc-500 focus:outline-none transition-all disabled:cursor-not-allowed disabled:bg-zinc-900/40"
+                  />
+                  {searchingProduct && (
+                    <RefreshCw size={14} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#8B5CF6] animate-spin" />
+                  )}
+                </div>
+
+                {/* Product Dropdown Results with B2B Custom Price Badge */}
+                {isProductDropdownOpen && isCustomerSelected && (
+                  <div className="absolute z-30 left-0 right-0 mt-1.5 bg-[#18181B] border border-[#27272A] rounded-2xl shadow-2xl overflow-hidden max-h-72 overflow-y-auto divide-y divide-zinc-800 animate-in fade-in zoom-in-98 duration-150">
+                    <div className="px-3.5 py-2 bg-[#121214] text-[10px] font-bold text-zinc-400 uppercase tracking-wider flex items-center justify-between border-b border-zinc-800">
+                      <span>
+                        {productResults.length > 0
+                          ? `Matching Catalog Products (${productResults.length})`
+                          : 'No Matching Products'}
+                      </span>
+                      <span className="text-[#A78BFA] font-bold">Click to Add / Increment Qty</span>
+                    </div>
+
+                    {searchingProduct ? (
+                      <div className="p-4 text-center text-xs text-zinc-400 flex items-center justify-center gap-2">
+                        <RefreshCw size={14} className="animate-spin text-[#8B5CF6]" />
+                        <span>Searching catalog database...</span>
+                      </div>
+                    ) : productResults.length === 0 ? (
+                      <div className="p-4 text-center text-xs text-zinc-400">
+                        No hardware products found matching current query and category filter.
+                      </div>
+                    ) : (
+                      productResults.map((p) => {
+                        const customRule = customerPricingMap[p.id];
+                        const hasCustomPrice = Boolean(customRule && customRule.hasCustomPrice && customRule.customPrice > 0);
+                        const effectivePrice = hasCustomPrice ? customRule.customPrice : Number(p.price || 0);
+
+                        return (
+                          <div
+                            key={p.id}
+                            onClick={() => handleAddProduct(p)}
+                            className="p-3 hover:bg-[#8B5CF6]/15 cursor-pointer transition-colors flex items-center justify-between text-xs group"
+                          >
+                            <div className="flex items-center gap-3 min-w-0 pr-3">
+                              {p.thumbnail ? (
+                                <img
+                                  src={p.thumbnail}
+                                  alt={p.name}
+                                  className="w-10 h-10 object-cover rounded-lg border border-zinc-700 shrink-0 bg-zinc-900"
+                                />
+                              ) : (
+                                <div className="w-10 h-10 bg-zinc-800/80 rounded-lg flex items-center justify-center text-zinc-400 border border-zinc-700 shrink-0">
+                                  <Building2 size={16} />
+                                </div>
+                              )}
+                              <div className="min-w-0 space-y-0.5">
+                                <strong className="text-white font-bold group-hover:text-[#A78BFA] transition-colors truncate block">
+                                  {p.name}
+                                </strong>
+                                <div className="text-[11px] text-zinc-400 flex flex-wrap items-center gap-2">
+                                  <span className="font-mono text-zinc-300 font-bold">SKU: {p.sku}</span>
+                                  <span>•</span>
+                                  <span className="font-mono text-zinc-400">HSN: {p.hsnCode}</span>
+                                  {p.category && (
+                                    <>
+                                      <span>•</span>
+                                      <span className="text-purple-300">{p.category}</span>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="text-right shrink-0 space-y-1">
+                              <div className="flex items-center justify-end gap-1.5">
+                                {hasCustomPrice ? (
+                                  <div className="space-y-0.5 text-right">
+                                    <div className="flex items-center justify-end gap-1.5">
+                                      <span className="text-xs font-black text-emerald-400 font-mono">
+                                        ₹{effectivePrice.toLocaleString('en-IN')}
+                                      </span>
+                                      <span className="text-[9px] font-extrabold text-emerald-300 bg-emerald-950 border border-emerald-700 px-1.5 py-0.2 rounded flex items-center gap-0.5">
+                                        <Tag size={9} /> B2B CUSTOM PRICE
+                                      </span>
+                                    </div>
+                                    <div className="text-[10px] text-zinc-400 line-through">
+                                      Standard: ₹{Number(p.price || 0).toLocaleString('en-IN')}
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center justify-end gap-1.5">
+                                    <span className="text-xs font-black text-white font-mono">
+                                      ₹{p.price.toLocaleString('en-IN')}
+                                    </span>
+                                    <span className="text-[9px] font-bold text-purple-300 bg-purple-950/80 border border-purple-800/80 px-1.5 py-0.2 rounded">
+                                      B2B RATE
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                              <div className="flex items-center justify-end gap-1.5">
+                                <span className="text-[10px] text-zinc-400 font-mono">
+                                  Stock: {p.stock} {p.unit}
+                                </span>
+                                <span className="text-[10px] font-extrabold text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 rounded-md transition-all group-hover:bg-emerald-500/25">
+                                  + Add to PI
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
 
         {/* Mobile Line Item Touch Cards (Small Screens, Replicated from Storefront) */}
         <div className="md:hidden space-y-2.5 pt-1">
@@ -1334,10 +1503,17 @@ export function ProformaInvoiceCreateView({ onBack, onSaved }: Props) {
                     </div>
 
                     <div className="text-right space-y-0.5">
-                      <span className="text-[10px] text-zinc-400 block">
-                        ₹{Number(item.unitPrice || 0).toLocaleString('en-IN')} / {item.unit}
-                      </span>
-                      <span className="font-mono font-black text-xs text-white">
+                      <div className="flex items-center justify-end gap-1">
+                        <span className="text-[10px] text-zinc-400 font-mono">
+                          ₹{Number(item.unitPrice || 0).toLocaleString('en-IN')} / {item.unit}
+                        </span>
+                        {item.isCustomB2BPrice && (
+                          <span className="text-[8.5px] font-bold text-emerald-400 bg-emerald-950 border border-emerald-800 px-1 rounded">
+                            B2B
+                          </span>
+                        )}
+                      </div>
+                      <span className="font-mono font-black text-xs text-white block">
                         ₹{total.toLocaleString('en-IN')}
                       </span>
                     </div>
@@ -1358,7 +1534,7 @@ export function ProformaInvoiceCreateView({ onBack, onSaved }: Props) {
                 <th className="p-3 w-28">HSN Code</th>
                 <th className="p-3 w-20">Unit</th>
                 <th className="p-3 w-36 text-center">Quantity</th>
-                <th className="p-3 w-28 text-right">Unit Rate (₹)</th>
+                <th className="p-3 w-32 text-right">Unit Rate (₹)</th>
                 <th className="p-3 w-20 text-center">GST %</th>
                 <th className="p-3 w-32 text-right">Line Total (₹)</th>
                 <th className="p-3 w-12 text-center">Action</th>
@@ -1472,13 +1648,20 @@ export function ProformaInvoiceCreateView({ onBack, onSaved }: Props) {
                         </div>
                       </td>
                       <td className="p-3 text-right">
-                        <input
-                          type="number"
-                          min="0"
-                          value={item.unitPrice}
-                          onChange={(e) => handleUpdateItem(idx, 'unitPrice', Number(e.target.value))}
-                          className="w-24 px-2 py-1.5 bg-[#27272A]/40 border border-[#27272A] rounded-lg text-white font-mono text-right text-xs focus:outline-none"
-                        />
+                        <div className="space-y-1">
+                          <input
+                            type="number"
+                            min="0"
+                            value={item.unitPrice}
+                            onChange={(e) => handleUpdateItem(idx, 'unitPrice', Number(e.target.value))}
+                            className="w-24 px-2 py-1.5 bg-[#27272A]/40 border border-[#27272A] rounded-lg text-white font-mono text-right text-xs focus:outline-none"
+                          />
+                          {item.isCustomB2BPrice && (
+                            <span className="text-[9px] text-emerald-400 font-bold block flex items-center justify-end gap-0.5">
+                              <Tag size={9} /> B2B Price
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="p-3 text-center">
                         <select
@@ -1514,6 +1697,8 @@ export function ProformaInvoiceCreateView({ onBack, onSaved }: Props) {
           </table>
         </div>
       </div>
+    );
+  })()}
 
       {/* ─── 4. COMMERCIAL TERMS & FINANCIAL SUMMARY ─────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">

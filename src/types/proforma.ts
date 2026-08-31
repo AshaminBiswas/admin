@@ -147,6 +147,9 @@ export interface ProformaInvoice {
   notes?: string;
   termsConditions?: string[];
   items: ProformaLineItem[];
+  qrCodeDataUrl?: string;
+  verificationId?: string;
+  verificationToken?: string;
 
   createdAt: string;
   updatedAt: string;
