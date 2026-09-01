@@ -577,4 +577,71 @@ export const proformaService = {
     }
     return [];
   },
+
+  /**
+   * Quick QR Code Verification Resolver
+   */
+  async verifyQrToken(tokenOrQuery: string): Promise<any> {
+    try {
+      const res = await fetchAdminApi<any>(`/proforma-invoices/verify/${encodeURIComponent(tokenOrQuery)}`);
+      return res?.data || res;
+    } catch (err: any) {
+      console.error('[proformaService] verifyQrToken error:', err);
+      throw err;
+    }
+  },
+
+  /**
+   * Comprehensive Document Tamper Validation Engine
+   * Validates whether a printed document has been altered vs database records & cryptographic signature
+   */
+  async validateDocumentTamper(payload: {
+    query: string;
+    claimedTotal?: number;
+    claimedAdvance?: number;
+    claimedGstin?: string;
+    claimedCustomer?: string;
+    claimedItemsCount?: number;
+    claimedSignature?: string;
+  }): Promise<{
+    success: boolean;
+    verdict: 'AUTHENTIC' | 'MANIPULATED' | 'UNSIGNED_DRAFT' | 'DOCUMENT_NOT_FOUND';
+    isTampered: boolean;
+    message: string;
+    discrepancies?: Array<{
+      field: string;
+      originalValue: any;
+      claimedValue: any;
+      status: 'MATCH' | 'MISMATCH';
+      message: string;
+    }>;
+    cryptoResult?: any;
+    document?: any;
+  }> {
+    try {
+      const res = await fetchAdminApi<any>('/proforma-invoices/validate-tamper', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      return res?.data || res;
+    } catch (err: any) {
+      console.error('[proformaService] validateDocumentTamper error:', err);
+      return {
+        success: false,
+        verdict: 'DOCUMENT_NOT_FOUND',
+        isTampered: true,
+        message: err?.message || 'Verification service failed to query document record.',
+        discrepancies: [
+          {
+            field: 'RECORD_SEARCH',
+            originalValue: 'SERVER_RECORD',
+            claimedValue: payload.query,
+            status: 'MISMATCH',
+            message: err?.message || 'Document not found or network connection error.',
+          },
+        ],
+      };
+    }
+  },
 };
+

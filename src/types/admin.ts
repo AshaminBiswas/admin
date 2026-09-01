@@ -305,7 +305,9 @@ export type AdminView =
   | 'po-detail'
   | 'proforma-invoices'
   | 'proforma-create'
-  | 'proforma-detail';
+  | 'proforma-detail'
+  | 'qr-validator'
+  | 'document-validator';
 
 export * from './poManagement';
 export * from './proforma';

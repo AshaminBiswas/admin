@@ -143,7 +143,9 @@ export interface ProformaInvoice {
 
   advancePercentage: number;
   advancePayable: number;
+  advanceAmount?: number;
   balancePayable: number;
+  balanceDue?: number;
 
   notes?: string;
   termsConditions?: string[];

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   FileCheck, Plus, Search, Filter, RefreshCw, Printer, Download,
   Eye, Building2, MapPin, CheckCircle2, Clock, AlertCircle,
-  FileText, ArrowRight, ShieldCheck, ChevronRight, Layers, Trash2
+  FileText, ArrowRight, ShieldCheck, ChevronRight, Layers, Trash2, QrCode
 } from 'lucide-react';
 import { ProformaInvoice } from '../types/proforma';
 import { useAdminAuth } from '../context/AdminAuthContext';
@@ -18,7 +18,7 @@ export function ProformaInvoicesPage() {
   const [invoices, setInvoices] = useState<ProformaInvoice[]>([]);
   const [selectedInvoice, setSelectedInvoice] = useState<ProformaInvoice | null>(null);
   const [loading, setLoading] = useState(true);
-  const { adminUser } = useAdminAuth();
+  const { adminUser, setCurrentView } = useAdminAuth();
   const isSuperAdmin = Boolean(
     adminUser && (
       String(adminUser.role || '').toUpperCase() === 'SUPER_ADMIN' ||
@@ -150,6 +150,15 @@ export function ProformaInvoicesPage() {
             title="Refresh Invoices"
           >
             <RefreshCw size={15} className={loading ? 'animate-spin text-[#8B5CF6]' : ''} />
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setCurrentView('qr-validator')}
+            className="px-3.5 py-2 bg-[#18181B] border border-[#27272A] hover:border-violet-500 text-zinc-200 hover:text-white text-xs font-bold rounded-xl flex items-center gap-2 transition-all"
+            title="Scan or inspect document for tampering"
+          >
+            <QrCode size={15} className="text-violet-400" /> QR Scanner & Validator
           </button>
 
           <button

@@ -49,6 +49,7 @@ const ProjectsPage = lazyWithRetry(() => import("../../pages/ProjectsPage").then
 const POManagementPage = lazyWithRetry(() => import("../../pages/POManagementPage").then((m) => ({ default: m.POManagementPage })));
 const PODetailPage = lazyWithRetry(() => import("../../pages/PODetailPage").then((m) => ({ default: m.PODetailPage })));
 const ProformaInvoicesPage = lazyWithRetry(() => import("../../pages/ProformaInvoicesPage").then((m) => ({ default: m.ProformaInvoicesPage })));
+const QRDocumentValidatorPage = lazyWithRetry(() => import("../../pages/QRDocumentValidatorPage").then((m) => ({ default: m.QRDocumentValidatorPage })));
 import { AICopilot } from "../ai/AICopilot";
 
 function ViewLoadingSkeleton() {
@@ -210,6 +211,9 @@ export function AdminLayout() {
       case "proforma-create":
       case "proforma-detail":
         return <ProformaInvoicesPage />;
+      case "qr-validator":
+      case "document-validator":
+        return <QRDocumentValidatorPage />;
       case "checkouts":
         return (
           <ModelManagementPage
