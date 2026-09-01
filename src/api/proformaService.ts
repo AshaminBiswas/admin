@@ -438,7 +438,8 @@ export const proformaService = {
   },
 
   /**
-   * Fetch full 360 details of a customer
+   * Fetch full 360 details of a customer — directly parses the /users/:id
+   * response which now returns addresses + SavedAddress. No secondary search needed.
    */
   async getCustomerFullDetails(customerId: string): Promise<B2BCustomerSearchResult | null> {
     try {
@@ -446,8 +447,95 @@ export const proformaService = {
       const u = res?.data || res;
       if (!u || !u.id) return null;
 
-      const results = await this.searchB2BCustomers(u.email || u.gstin || u.id);
-      return results.find((r) => r.id === customerId) || results[0] || null;
+      const formatAddr = (a: any): string => {
+        if (!a) return '';
+        if (typeof a === 'string') return a.trim();
+        const parts = [
+          a.addressLine1 || a.line1 || a.street || a.address,
+          a.addressLine2 || a.line2,
+          a.landmark,
+          a.city,
+          a.state,
+          (a.postalCode || a.pincode) ? `- ${a.postalCode || a.pincode}` : '',
+        ].filter(Boolean);
+        return parts.join(', ');
+      };
+
+      const compName = (
+        u.companyName || u.businessName || (u.company && u.company.name) || ''
+      ).trim();
+
+      const gstin = (
+        u.gstin || u.gstNumber || u.gstNo || ''
+      ).trim();
+
+      const resolvedCompanyName =
+        compName ||
+        `${u.firstName || ''} ${u.lastName || ''}`.trim() ||
+        'B2B Enterprise Client';
+
+      // Merge both address types
+      const allAddresses = [
+        ...(Array.isArray(u.addresses) ? u.addresses : []),
+        ...(Array.isArray(u.SavedAddress) ? u.SavedAddress : []),
+        ...(Array.isArray(u.savedAddresses) ? u.savedAddresses : []),
+      ];
+
+      const formattedAddressList: CustomerSavedAddressSummary[] = allAddresses.map((a: any) => ({
+        id: a.id || Math.random().toString(),
+        type: a.type || (a.isDefaultBilling ? 'BILLING' : 'SHIPPING'),
+        label:
+          a.label ||
+          (a.isDefaultBilling ? 'Billing Address' : 'Site / Delivery Address'),
+        addressLine1: a.addressLine1 || a.address || a.line1 || '',
+        addressLine2: a.addressLine2 || a.line2 || '',
+        city: a.city || '',
+        state: a.state || '',
+        postalCode: a.postalCode || a.pincode || '',
+        fullAddress: formatAddr(a),
+        isDefault: Boolean(a.isDefault || a.isDefaultBilling || a.isDefaultDelivery),
+      })).filter((a) => a.fullAddress.trim().length > 0);
+
+      const billObj =
+        formattedAddressList.find(
+          (a) => (a.type || '').toUpperCase() === 'BILLING' || a.isDefault
+        ) || formattedAddressList[0];
+
+      const shipObj =
+        formattedAddressList.find(
+          (a) => (a.type || '').toUpperCase() === 'SHIPPING'
+        ) || billObj;
+
+      const billingAddress =
+        billObj?.fullAddress || formatAddr(u) || '';
+      const shippingAddress = shipObj?.fullAddress || billingAddress;
+
+      const state =
+        billObj?.state ||
+        u.state ||
+        (gstin ? getStateFromGstin(gstin).state : 'Delhi');
+
+      const stateCode = gstin
+        ? getStateFromGstin(gstin).stateCode
+        : (billObj?.state ? getStateFromGstin(billObj.state).stateCode : '07');
+
+      return {
+        id: u.id,
+        name: `${u.firstName || ''} ${u.lastName || ''}`.trim() || resolvedCompanyName,
+        firstName: u.firstName,
+        lastName: u.lastName,
+        companyName: resolvedCompanyName,
+        email: u.email || '',
+        phone: u.phone || '',
+        gstin: gstin || undefined,
+        billingAddress,
+        shippingAddress,
+        city: billObj?.city || u.city,
+        state,
+        pincode: billObj?.postalCode || u.pincode,
+        stateCode,
+        addresses: formattedAddressList,
+      };
     } catch (err) {
       console.warn('[proformaService] Customer 360 error:', err);
       return null;

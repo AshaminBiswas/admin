@@ -98,18 +98,18 @@ export function generateProformaInvoiceHtml(pi: ProformaInvoice): string {
       line-height: 1.35;
     }
     .qr-box {
-      width: 72px;
-      height: 72px;
+      width: 78px;
+      height: 78px;
       padding: 0;
       display: inline-block;
     }
     .qr-img {
-      width: 72px;
-      height: 72px;
+      width: 78px;
+      height: 78px;
       object-fit: contain;
     }
     .qr-label {
-      font-size: 7.5px;
+      font-size: 6.2px;
       font-weight: 700;
       color: #000000;
       text-align: right;
@@ -352,13 +352,14 @@ export function generateProformaInvoiceHtml(pi: ProformaInvoice): string {
           <div class="company-subtext">Email: ${companyEmail}</div>
           <div class="company-subtext">Phone: ${companyPhone}  |  Website: www.pacifichardware.com</div>
         </td>
-        <td style="text-align: right; vertical-align: top; width: 140px;">
+        <td style="text-align: right; vertical-align: top; width: 150px;">
           ${pi.qrCodeDataUrl ? `
             <div style="display: inline-block; text-align: right;">
               <div class="qr-box">
                 <img src="${pi.qrCodeDataUrl}" class="qr-img" alt="QR Verification" />
               </div>
-              <div class="qr-label">QR VERIFICATION</div>
+              <div class="qr-label">SCAN TO VERIFY AUTHENTICITY</div>
+              <div style="font-size: 6px; color: #444444; text-align: right; margin-top: 1px;">pacifichardware.com/verify/pi</div>
             </div>
           ` : ''}
           <div class="pi-no-text">PI No.: ${pi.piNumber}</div>
