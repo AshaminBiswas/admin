@@ -321,11 +321,11 @@ export function ProformaInvoicesPage() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => printProformaInvoice(inv)}
+                          onClick={() => proformaService.downloadProformaPdf(inv.id, inv.piNumber)}
                           className="p-1.5 bg-[#27272A] hover:bg-[#3F3F46] text-zinc-300 hover:text-white rounded-lg transition-all"
-                          title="Print / Download PDF"
+                          title="Download Official Black & White PDF"
                         >
-                          <Printer size={14} />
+                          <Download size={14} />
                         </button>
                       </div>
                     </td>

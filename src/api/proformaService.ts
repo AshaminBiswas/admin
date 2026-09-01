@@ -65,9 +65,96 @@ export interface ProductSearchResult {
   categorySlug?: string;
 }
 
+/**
+ * Transforms any backend ProformaInvoice entity into the Admin ProformaInvoice model
+ */
+export function transformBackendInvoiceToPI(inv: any): ProformaInvoice {
+  const branchCode = inv.branchCode || 'DELHI_WORKS';
+  const facility = PROFORMA_FACILITIES[branchCode] || PROFORMA_FACILITIES.DELHI_WORKS;
+  const piNumber = inv.piNumber || inv.invoiceNumber || 'PRC-PI';
+  
+  const customerName = (
+    inv.customerName ||
+    (inv.customer ? `${inv.customer.firstName || ''} ${inv.customer.lastName || ''}`.trim() : '') ||
+    'B2B Enterprise Client'
+  ).trim();
+  
+  const companyName = (inv.companyName || inv.customer?.companyName || customerName).trim();
+  const advancePercentage = Number(inv.advancePercentage ?? 30);
+  const grandTotal = Number(inv.grandTotal || 0);
+  const advanceAmount = Number(inv.advanceAmount ?? (grandTotal * advancePercentage) / 100);
+  const balanceDue = Number(inv.balanceDue ?? (grandTotal - advanceAmount));
+
+  return {
+    id: inv.id,
+    piNumber,
+    invoiceNumber: piNumber,
+    financialYear: inv.financialYear || '2026-2027',
+    status: (inv.status || 'SENT') as any,
+    facilityCode: branchCode as any,
+    facility,
+    customerId: inv.customerId || undefined,
+    customerName,
+    companyName,
+    customerEmail: inv.customerEmail || inv.customer?.email || '',
+    customerPhone: inv.customerPhone || inv.customer?.phone || '',
+    customerGstin: inv.gstin || inv.customerGstin || inv.customer?.gstin || '',
+    placeOfSupply: inv.placeOfSupply || 'Delhi',
+    placeOfSupplyCode: inv.placeOfSupplyCode || '07',
+    billingAddress: inv.billingAddress || 'Standard Commercial Address',
+    shippingAddress: inv.shippingAddress || inv.billingAddress || 'Site Delivery Destination',
+    issueDate: inv.createdAt ? new Date(inv.createdAt).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
+    validUntil: inv.validUntil ? new Date(inv.validUntil).toISOString().slice(0, 10) : new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10),
+    poReference: inv.poNumber || inv.customerPoNumber || inv.poReference || undefined,
+    quoteReference: inv.quoteNumber || inv.quoteReference || undefined,
+    deliveryTimeline: inv.deliveryTimeline || 'Within 7-10 working days upon advance clearance',
+    paymentTerms: inv.paymentTerms || `${advancePercentage}% Advance against PI, Balance before dispatch`,
+    subtotal: Number(inv.subtotal || 0),
+    discountTotal: Number(inv.discount || 0),
+    shippingCharges: Number(inv.shippingCost || 0),
+    taxableAmount: Number(inv.taxableAmount || inv.subtotal || 0),
+    cgstTotal: Number(inv.cgst || 0),
+    sgstTotal: Number(inv.sgst || 0),
+    igstTotal: Number(inv.igst || 0),
+    roundOff: Number(inv.roundOff || 0),
+    grandTotal,
+    advancePercentage,
+    advancePayable: advanceAmount,
+    balancePayable: balanceDue,
+    verificationToken: inv.verificationToken || inv.id,
+    verificationId: inv.verificationId || inv.piNumber,
+    qrCodeDataUrl: inv.qrCodeDataUrl,
+    digitalSignature: inv.digitalSignature,
+    signedBy: inv.signedBy || 'Executive Desk',
+    signedAt: inv.signedAt,
+    notes: inv.notes,
+    items: Array.isArray(inv.items)
+      ? inv.items.map((it: any, i: number) => ({
+          id: it.id || `item-${i + 1}`,
+          sku: it.sku || 'SKU-001',
+          productName: it.productName || 'Hardware Product',
+          description: it.description,
+          hsnCode: it.hsnCode || '8302',
+          unit: it.unit || 'PCS',
+          quantity: Number(it.quantity || 1),
+          unitPrice: Number(it.unitRate || it.unitPrice || it.rate || 0),
+          discount: Number(it.discountPercent || it.discount || 0),
+          taxableAmount: Number(it.taxableAmount || 0),
+          gstRate: Number(it.gstRate || it.taxRate || 18),
+          cgstAmount: Number(it.cgstAmount || it.cgst || 0),
+          sgstAmount: Number(it.sgstAmount || it.sgst || 0),
+          igstAmount: Number(it.igstAmount || it.igst || 0),
+          totalAmount: Number(it.lineTotal || it.totalAmount || it.amount || 0),
+        }))
+      : [],
+    createdAt: inv.createdAt || new Date().toISOString(),
+    updatedAt: inv.updatedAt || new Date().toISOString(),
+  };
+}
+
 export const proformaService = {
   /**
-   * Stream / download official Proforma Invoice PDF from backend
+   * Stream / download official Proforma Invoice PDF directly from backend
    */
   async downloadProformaPdf(id: string, piNumber: string) {
     try {
@@ -90,7 +177,7 @@ export const proformaService = {
       a.remove();
       window.URL.revokeObjectURL(url);
     } catch (err) {
-      console.warn('[proformaService] Binary PDF download failed, fallback to print view:', err);
+      console.warn('[proformaService] Binary PDF download failed, falling back to print dialog:', err);
       const pi = await this.getProformaInvoiceById(id);
       if (pi) {
         const { printProformaInvoice } = await import('../utils/proformaPdfGenerator');
@@ -100,247 +187,108 @@ export const proformaService = {
   },
 
   /**
-   * List Proforma Invoices
+   * List Proforma Invoices from backend
    */
   async listProformaInvoices(params: ListProformaParams = {}) {
     const query = new URLSearchParams();
-    query.append('invoiceType', 'PROFORMA_INVOICE');
     if (params.page) query.append('page', params.page.toString());
     if (params.limit) query.append('limit', params.limit.toString());
     if (params.search) query.append('search', params.search);
-    if (params.status) query.append('status', params.status);
+    if (params.status && params.status !== 'ALL') query.append('status', params.status);
     if (params.startDate) query.append('startDate', params.startDate);
     if (params.endDate) query.append('endDate', params.endDate);
 
     try {
       const res = await fetchAdminApi<any>(`/proforma-invoices?${query.toString()}`);
-      if (res && res.data && Array.isArray(res.data)) {
+      const items = res?.data?.items || res?.data || res?.items || res || [];
+      if (Array.isArray(items)) {
         return {
-          data: res.data.map(transformBackendInvoiceToPI),
-          pagination: res.pagination || { total: res.data.length, page: 1, limit: 50, totalPages: 1 },
+          data: items.map(transformBackendInvoiceToPI),
+          pagination: res.pagination || { total: items.length, page: 1, limit: 50, totalPages: 1 },
           metrics: res.metrics,
         };
       }
-      if (res && Array.isArray(res)) {
-        return { data: res.map(transformBackendInvoiceToPI), pagination: { total: res.length, page: 1, limit: 50, totalPages: 1 } };
-      }
       return { data: [], pagination: { total: 0, page: 1, limit: 20, totalPages: 0 } };
     } catch (err) {
-      console.warn('[proformaService] list error, using local fallback:', err);
-      const localPIs = getLocalProformaInvoices();
-      return { data: localPIs, pagination: { total: localPIs.length, page: 1, limit: 50, totalPages: 1 } };
+      console.error('[proformaService] list error:', err);
+      return { data: [], pagination: { total: 0, page: 1, limit: 20, totalPages: 0 } };
     }
   },
 
   /**
-   * Get Proforma Invoice by ID
+   * Get single Proforma Invoice by ID
    */
   async getProformaInvoiceById(id: string): Promise<ProformaInvoice | null> {
     try {
       const res = await fetchAdminApi<any>(`/proforma-invoices/${encodeURIComponent(id)}`);
-      const payload = res?.data || res;
-      if (payload && payload.id) {
-        return transformBackendInvoiceToPI(payload);
-      }
-    } catch (err) {
-      console.warn('[proformaService] get error, searching local:', err);
-    }
-    const local = getLocalProformaInvoices().find((p) => p.id === id);
-    return local || null;
-  },
-
-  async createProformaInvoice(payload: CreateProformaInvoicePayload): Promise<ProformaInvoice> {
-    const facility: ProformaFacility = payload.facility || PROFORMA_FACILITIES[payload.facilityCode] || PROFORMA_FACILITIES.DELHI_WORKS;
-
-    // Calculate line item totals & taxes
-    const isInterState =
-      facility.stateCode.trim().toUpperCase() !== payload.placeOfSupplyCode.trim().toUpperCase();
-
-    let subtotal = 0;
-    let cgstTotal = 0;
-    let sgstTotal = 0;
-    let igstTotal = 0;
-
-    const items = payload.items.map((item, idx) => {
-      const lineSubtotal = Math.round(Number(item.quantity || 1) * Number(item.unitPrice || 0));
-      const discount = Number(item.discount || 0);
-      const taxable = Math.max(0, lineSubtotal - discount);
-      const rate = Number(item.gstRate || 18);
-
-      let cgst = 0;
-      let sgst = 0;
-      let igst = 0;
-
-      if (isInterState) {
-        igst = Math.round((taxable * rate) / 100);
-      } else {
-        cgst = Math.round((taxable * (rate / 2)) / 100);
-        sgst = Math.round((taxable * (rate / 2)) / 100);
-      }
-
-      const total = taxable + cgst + sgst + igst;
-
-      subtotal += lineSubtotal;
-      cgstTotal += cgst;
-      sgstTotal += sgst;
-      igstTotal += igst;
-
-      return {
-        id: `pi-item-${idx + 1}`,
-        productId: item.productId,
-        sku: item.sku,
-        productName: item.productName,
-        description: item.description,
-        hsnCode: item.hsnCode || '8302',
-        unit: item.unit || 'PCS',
-        quantity: Number(item.quantity),
-        unitPrice: Number(item.unitPrice),
-        discount,
-        taxableAmount: taxable,
-        gstRate: rate,
-        cgstAmount: cgst,
-        sgstAmount: sgst,
-        igstAmount: igst,
-        totalAmount: total,
-      };
-    });
-
-    const shippingCharges = Number(payload.shippingCharges || 0);
-    const shippingGstRate = Number(payload.shippingGstRate !== undefined ? payload.shippingGstRate : 18);
-    let shippingCgst = 0;
-    let shippingSgst = 0;
-    let shippingIgst = 0;
-
-    if (shippingCharges > 0 && shippingGstRate > 0) {
-      if (isInterState) {
-        shippingIgst = Math.round((shippingCharges * shippingGstRate) / 100);
-      } else {
-        shippingCgst = Math.round((shippingCharges * (shippingGstRate / 2)) / 100);
-        shippingSgst = Math.round((shippingCharges * (shippingGstRate / 2)) / 100);
-      }
-    }
-    const shippingGstAmount = shippingIgst + shippingCgst + shippingSgst;
-
-    cgstTotal += shippingCgst;
-    sgstTotal += shippingSgst;
-    igstTotal += shippingIgst;
-
-    const totalTaxable = subtotal + shippingCharges;
-    const taxTotal = cgstTotal + sgstTotal + igstTotal;
-    const grandTotal = totalTaxable + taxTotal;
-    const advancePercent = Number(payload.advancePercentage !== undefined ? payload.advancePercentage : 30);
-    const advancePayable = Math.round((grandTotal * advancePercent) / 100);
-    const balancePayable = grandTotal - advancePayable;
-
-    const year = new Date().getFullYear();
-    const randomSeq = Math.floor(1000 + Math.random() * 9000);
-    const piNumber = `PRC-PI-${year}-${randomSeq}`;
-
-    const newPI: ProformaInvoice = {
-      id: `pi-${Date.now()}`,
-      piNumber,
-      invoiceNumber: piNumber,
-      financialYear: `${year}-${year + 1}`,
-      status: 'SENT',
-      facilityCode: payload.facilityCode,
-      facility,
-      customerId: payload.customerId,
-      customerName: payload.customerName,
-      companyName: payload.companyName,
-      customerEmail: payload.customerEmail,
-      customerPhone: payload.customerPhone,
-      customerGstin: payload.customerGstin,
-      placeOfSupply: payload.placeOfSupply,
-      placeOfSupplyCode: payload.placeOfSupplyCode,
-      billingAddress: payload.billingAddress,
-      shippingAddress: payload.shippingAddress,
-      issueDate: payload.issueDate || new Date().toISOString().slice(0, 10),
-      validUntil: payload.validUntil || new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10),
-      poReference: payload.poReference,
-      quoteReference: payload.quoteReference,
-      deliveryTimeline: payload.deliveryTimeline || 'Within 7-10 working days upon advance clearance',
-      paymentTerms: payload.paymentTerms || `${advancePercent}% Advance against PI, Balance before dispatch`,
-      subtotal,
-      discountTotal: 0,
-      shippingCharges,
-      shippingGstRate,
-      shippingGstAmount,
-      taxableAmount: totalTaxable,
-      cgstTotal,
-      sgstTotal,
-      igstTotal,
-      roundOff: 0,
-      grandTotal,
-      advancePercentage: advancePercent,
-      advancePayable,
-      balancePayable,
-      notes: payload.notes,
-      items,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-
-    // Attempt to persist to backend
-    try {
-      const backendPayload = {
-        customerId: payload.customerId,
-        customerName: payload.customerName,
-        companyName: payload.companyName,
-        customerEmail: payload.customerEmail,
-        customerPhone: payload.customerPhone,
-        gstin: payload.customerGstin,
-        billingAddress: payload.billingAddress,
-        shippingAddress: payload.shippingAddress,
-        placeOfSupply: payload.placeOfSupply,
-        supplierState: facility.state,
-        branchCode: payload.facilityCode,
-        shippingCost: payload.shippingCharges,
-        advancePercentage: newPI.advancePercentage,
-        paymentTerms: newPI.paymentTerms,
-        deliveryTimeline: newPI.deliveryTimeline,
-        validUntil: newPI.validUntil,
-        notes: payload.notes,
-        poNumber: payload.poReference,
-        quoteNumber: payload.quoteReference,
-        items: payload.items.map((it) => ({
-          productId: it.productId,
-          sku: it.sku,
-          productName: it.productName,
-          description: it.description,
-          hsnCode: it.hsnCode || '8302',
-          unit: it.unit || 'PCS',
-          quantity: it.quantity,
-          unitRate: it.unitPrice,
-          discountPercent: it.discount || 0,
-          gstRate: it.gstRate || 18,
-        })),
-      };
-
-      const res = await fetchAdminApi<any>('/proforma-invoices', {
-        method: 'POST',
-        body: JSON.stringify(backendPayload),
-      });
-
       const data = res?.data || res;
       if (data && data.id) {
-        newPI.id = data.id;
-        if (data.piNumber) newPI.piNumber = data.piNumber;
-        if (data.qrCodeDataUrl) newPI.qrCodeDataUrl = data.qrCodeDataUrl;
-        if (data.verificationId) newPI.verificationId = data.verificationId;
-        if (data.verificationToken) newPI.verificationToken = data.verificationToken;
+        return transformBackendInvoiceToPI(data);
       }
+      return null;
     } catch (err) {
-      console.warn('[proformaService] Backend proforma-invoice post warning:', err);
+      console.error('[proformaService] get error:', err);
+      return null;
     }
-
-    // Save copy in localStorage for instant access
-    saveLocalProformaInvoice(newPI);
-
-    return newPI;
   },
 
   /**
-   * Dispatch Proforma Invoice directly to client via official backend email sender
+   * Create Proforma Invoice and persist directly to database
+   */
+  async createProformaInvoice(payload: CreateProformaInvoicePayload): Promise<ProformaInvoice> {
+    const facility = payload.facility || PROFORMA_FACILITIES[payload.facilityCode] || PROFORMA_FACILITIES.DELHI_WORKS;
+    const customerEmail = (payload.customerEmail || '').trim() || 'billing@pacifichardware.com';
+
+    const backendPayload = {
+      customerId: payload.customerId || undefined,
+      customerName: (payload.customerName || payload.companyName || 'B2B Commercial Client').trim(),
+      companyName: (payload.companyName || payload.customerName || '').trim() || undefined,
+      customerEmail,
+      customerPhone: (payload.customerPhone || '').trim() || undefined,
+      gstin: (payload.customerGstin || '').trim().toUpperCase() || undefined,
+      billingAddress: (payload.billingAddress || '').trim() || undefined,
+      shippingAddress: (payload.shippingAddress || payload.billingAddress || '').trim() || undefined,
+      placeOfSupply: payload.placeOfSupply || 'Delhi',
+      supplierState: facility.state || 'Delhi',
+      branchCode: payload.facilityCode || 'DELHI_WORKS',
+      shippingCost: Number(payload.shippingCharges || 0),
+      advancePercentage: Number(payload.advancePercentage || 30),
+      paymentTerms: payload.paymentTerms || undefined,
+      deliveryTimeline: payload.deliveryTimeline || undefined,
+      validUntil: payload.validUntil || undefined,
+      notes: payload.notes || undefined,
+      poNumber: payload.poReference || undefined,
+      customerPoNumber: payload.poReference || undefined,
+      quoteNumber: payload.quoteReference || undefined,
+      items: payload.items.map((it) => ({
+        productId: it.productId || undefined,
+        sku: it.sku || 'SKU-001',
+        productName: it.productName,
+        description: it.description || undefined,
+        hsnCode: it.hsnCode || '8302',
+        unit: it.unit || 'PCS',
+        quantity: Number(it.quantity || 1),
+        unitRate: Number(it.unitPrice || 0),
+        discountPercent: Number(it.discount || 0),
+        gstRate: Number(it.gstRate || 18),
+      })),
+    };
+
+    const res = await fetchAdminApi<any>('/proforma-invoices', {
+      method: 'POST',
+      body: JSON.stringify(backendPayload),
+    });
+
+    const data = res?.data || res;
+    if (!data || !data.id) {
+      throw new Error(res?.message || 'Failed to create Proforma Invoice on server.');
+    }
+
+    return transformBackendInvoiceToPI(data);
+  },
+
+  /**
+   * Dispatch Proforma Invoice directly to client via email
    */
   async sendProformaInvoiceEmail(
     pi: ProformaInvoice,
@@ -368,7 +316,7 @@ export const proformaService = {
   },
 
   /**
-   * Search B2B Customers by GSTIN, Email, Phone, or Company Name (Strictly B2B Only; Excludes Retail Customers, Vendors, and Internal Staff)
+   * Search B2B Customers by GSTIN, Email, Phone, or Company Name
    */
   async searchB2BCustomers(
     queryText: string,
@@ -393,7 +341,6 @@ export const proformaService = {
       return parts.join(', ');
     };
 
-    // 1. Query Dedicated B2B Customers Endpoint (/users?type=b2b&isB2B=true)
     try {
       const usersRes = await fetchAdminApi<any>(
         `/users?type=b2b&isB2B=true&limit=100&search=${encodeURIComponent(q)}`
@@ -404,25 +351,6 @@ export const proformaService = {
 
       if (Array.isArray(users) && users.length > 0) {
         users.forEach((u: any) => {
-          // Strictly exclude internal staff, admins, managers, vendors, or suppliers
-          const roleSlug = (
-            (u.role && u.role.slug) ||
-            (u.userRoles && u.userRoles[0]?.role?.slug) ||
-            (typeof u.role === 'string' ? u.role : '') ||
-            ''
-          ).toUpperCase();
-
-          if (
-            roleSlug.includes('VENDOR') ||
-            roleSlug.includes('SUPPLIER') ||
-            roleSlug.includes('ADMIN') ||
-            roleSlug.includes('STAFF') ||
-            roleSlug.includes('MANAGER') ||
-            roleSlug.includes('INVENTORY')
-          ) {
-            return;
-          }
-
           const compName = (
             u.companyName ||
             u.businessName ||
@@ -438,20 +366,8 @@ export const proformaService = {
             ''
           ).trim();
 
-          const isB2BRole =
-            roleSlug.includes('B2B') ||
-            roleSlug.includes('WHOLESALE') ||
-            roleSlug.includes('ENTERPRISE') ||
-            u.isB2B === true;
-
-          // Strictly require B2B credentials: Must have company name, GSTIN, or B2B role
-          if (!compName && !gstin && !isB2BRole) {
-            return;
-          }
-
           const resolvedCompanyName = compName || `${u.firstName || ''} ${u.lastName || ''}`.trim() || 'B2B Enterprise Client';
 
-          // Extract all address records (Address & SavedAddress)
           const allUserAddresses = [
             ...(Array.isArray(u.addresses) ? u.addresses : []),
             ...(Array.isArray(u.SavedAddress) ? u.SavedAddress : []),
@@ -479,44 +395,10 @@ export const proformaService = {
             formattedAddressList.find((a) => (a.type || '').toUpperCase() === 'SHIPPING') ||
             billObj;
 
-          const billingAddress =
-            billObj?.fullAddress ||
-            u.billingAddress ||
-            u.address ||
-            '';
+          const billingAddress = billObj?.fullAddress || formatAddr(u) || 'Standard Registered Address';
+          const shippingAddress = shipObj?.fullAddress || billingAddress;
 
-          const shippingAddress =
-            shipObj?.fullAddress ||
-            u.shippingAddress ||
-            billingAddress ||
-            '';
-
-          // State and Place of Supply Resolution
-          let state = billObj?.state || u.state || '';
-          let stateCode = '';
-          let city = billObj?.city || u.city || '';
-
-          if (gstin && gstin.length >= 2 && /^\d{2}/.test(gstin)) {
-            const parsed = getStateFromGstin(gstin);
-            stateCode = parsed.stateCode;
-            if (!state || state.toLowerCase() === 'delhi') {
-              state = parsed.state;
-            }
-          } else if (state) {
-            const match = Object.entries(GST_STATE_MAPPING).find(
-              ([, sName]) => sName.toLowerCase() === state.toLowerCase()
-            );
-            stateCode = match ? match[0] : '07';
-          } else {
-            state = 'Delhi';
-            stateCode = '07';
-          }
-
-          if (!city) {
-            city = state === 'Delhi' ? 'Delhi' : state;
-          }
-
-          const resItem: B2BCustomerSearchResult = {
+          resultsMap.set(u.id, {
             id: u.id,
             name: `${u.firstName || ''} ${u.lastName || ''}`.trim() || resolvedCompanyName,
             firstName: u.firstName,
@@ -524,435 +406,74 @@ export const proformaService = {
             companyName: resolvedCompanyName,
             email: u.email || '',
             phone: u.phone || '',
-            gstin,
-            billingAddress: billingAddress || `${city}, ${state} (${stateCode})`,
-            shippingAddress: shippingAddress || billingAddress || `${city}, ${state} (${stateCode})`,
-            city,
-            state,
-            stateCode,
+            gstin: gstin || undefined,
+            billingAddress,
+            shippingAddress,
+            city: billObj?.city || u.city,
+            state: billObj?.state || u.state,
+            pincode: billObj?.postalCode || u.pincode,
+            stateCode: getStateFromGstin(gstin).stateCode,
             addresses: formattedAddressList,
-          };
-
-          const key = (u.email || u.gstin || u.phone || u.id).toLowerCase();
-          resultsMap.set(key, resItem);
+          });
         });
       }
     } catch (err) {
-      console.warn('[proformaService] B2B Users search fallback:', err);
+      console.warn('[proformaService] B2B search error:', err);
     }
 
-    // 2. Query Verified B2B Quotations
-    try {
-      const quotesRes = await fetchAdminApi<any>(
-        `/quotes?limit=50&search=${encodeURIComponent(q)}`
-      );
-      const quotes = Array.isArray(quotesRes)
-        ? quotesRes
-        : (quotesRes?.data?.items || quotesRes?.data || quotesRes?.quotes || []);
-
-      if (Array.isArray(quotes) && quotes.length > 0) {
-        quotes.forEach((qt: any) => {
-          const comp = (qt.companyName || '').trim();
-          const gstin = (qt.gstNo || qt.gstin || '').trim();
-
-          // Only accept quotes that belong to verified B2B companies
-          if (!comp && !gstin) return;
-
-          let state = qt.state || '';
-          let stateCode = '';
-          let city = qt.city || '';
-
-          if (gstin && gstin.length >= 2 && /^\d{2}/.test(gstin)) {
-            const parsed = getStateFromGstin(gstin);
-            stateCode = parsed.stateCode;
-            if (!state || state.toLowerCase() === 'delhi') {
-              state = parsed.state;
-            }
-          } else if (state) {
-            const match = Object.entries(GST_STATE_MAPPING).find(
-              ([, sName]) => sName.toLowerCase() === state.toLowerCase()
-            );
-            stateCode = match ? match[0] : '07';
-          } else {
-            state = 'Delhi';
-            stateCode = '07';
-          }
-
-          if (!city) {
-            city = state === 'Delhi' ? 'Delhi' : state;
-          }
-
-          const billAddr =
-            qt.billingAddress ||
-            qt.address ||
-            (qt.shippingAddress ? qt.shippingAddress : `${city}, ${state} (${stateCode})`);
-
-          const quoteAddressItem: CustomerSavedAddressSummary = {
-            id: qt.id,
-            type: 'BILLING',
-            label: 'Quotation Registered Address',
-            addressLine1: billAddr,
-            city,
-            state,
-            postalCode: qt.pincode || qt.postalCode || '',
-            fullAddress: billAddr,
-            isDefault: true,
-          };
-
-          const resItem: B2BCustomerSearchResult = {
-            id: qt.userId || qt.id,
-            name: `${qt.firstName || ''} ${qt.lastName || ''}`.trim() || comp,
-            firstName: qt.firstName,
-            lastName: qt.lastName,
-            companyName: comp || 'B2B Client',
-            email: qt.email || '',
-            phone: qt.phone || '',
-            gstin,
-            billingAddress: billAddr,
-            shippingAddress: qt.shippingAddress || billAddr,
-            city,
-            state,
-            stateCode,
-            addresses: [quoteAddressItem],
-          };
-
-          const key = (qt.email || qt.gstNo || qt.phone || qt.id).toLowerCase();
-          if (!resultsMap.has(key)) {
-            resultsMap.set(key, resItem);
-          }
-        });
-      }
-    } catch (err) {
-      console.warn('[proformaService] Quotes customer search fallback:', err);
-    }
-
-    const allResults = Array.from(resultsMap.values());
-
-    // Apply strict searchType filter if specified
-    if (searchType === 'GSTIN') {
-      return allResults.filter((c) => c.gstin && c.gstin.toLowerCase().includes(q));
-    }
-    if (searchType === 'EMAIL') {
-      return allResults.filter((c) => c.email && c.email.toLowerCase().includes(q));
-    }
-    if (searchType === 'PHONE') {
-      return allResults.filter((c) => c.phone && c.phone.toLowerCase().includes(q));
-    }
-    if (searchType === 'COMPANY') {
-      return allResults.filter((c) => c.companyName && c.companyName.toLowerCase().includes(q));
-    }
-
-    return allResults;
+    return Array.from(resultsMap.values());
   },
 
   /**
-   * Retrieve Full Customer Profile with All Saved Addresses
+   * Fetch full 360 details of a customer
    */
-  async getCustomerFullDetails(userId: string): Promise<B2BCustomerSearchResult | null> {
+  async getCustomerFullDetails(customerId: string): Promise<B2BCustomerSearchResult | null> {
     try {
-      const res = await fetchAdminApi<any>(`/users/${userId}/customer-360`);
-      const data = res?.data || res;
-      const u = data?.user || data;
-      const addrs = data?.addresses || u?.addresses || [];
+      const res = await fetchAdminApi<any>(`/users/${encodeURIComponent(customerId)}`);
+      const u = res?.data || res;
+      if (!u || !u.id) return null;
 
-      const formatAddr = (a: any): string => {
-        if (!a) return '';
-        if (typeof a === 'string') return a.trim();
-        const parts = [
-          a.addressLine1 || a.line1 || a.street || a.address,
-          a.addressLine2 || a.line2,
-          a.landmark,
-          a.city,
-          a.state,
-          a.postalCode || a.pincode ? `- ${a.postalCode || a.pincode}` : '',
-        ].filter(Boolean);
-        return parts.join(', ');
-      };
-
-      const parsedAddresses: CustomerSavedAddressSummary[] = addrs.map((a: any) => ({
-        id: a.id || Math.random().toString(),
-        type: a.type || 'SHIPPING',
-        label: a.label || (a.isDefaultBilling ? 'Billing Address' : 'Site / Delivery Address'),
-        addressLine1: a.addressLine1 || a.address || '',
-        addressLine2: a.addressLine2 || '',
-        city: a.city || '',
-        state: a.state || '',
-        postalCode: a.postalCode || a.pincode || '',
-        fullAddress: formatAddr(a),
-        isDefault: Boolean(a.isDefault || a.isDefaultBilling || a.isDefaultDelivery),
-      }));
-
-      const billObj =
-        parsedAddresses.find(
-          (a) => (a.type || '').toUpperCase() === 'BILLING' || a.isDefault
-        ) || parsedAddresses[0];
-      const shipObj =
-        parsedAddresses.find((a) => (a.type || '').toUpperCase() === 'SHIPPING') ||
-        billObj;
-
-      const gstin = u.gstin || u.gstNumber || '';
-      let state = billObj?.state || u.state || '';
-      let stateCode = '';
-      let city = billObj?.city || u.city || '';
-
-      if (gstin && gstin.length >= 2 && /^\d{2}/.test(gstin)) {
-        const parsed = getStateFromGstin(gstin);
-        stateCode = parsed.stateCode;
-        if (!state || state.toLowerCase() === 'delhi') {
-          state = parsed.state;
-        }
-      } else if (state) {
-        const match = Object.entries(GST_STATE_MAPPING).find(
-          ([, sName]) => sName.toLowerCase() === state.toLowerCase()
-        );
-        stateCode = match ? match[0] : '07';
-      } else {
-        state = 'Delhi';
-        stateCode = '07';
-      }
-
-      if (!city) city = state === 'Delhi' ? 'Delhi' : state;
-
-      return {
-        id: u.id,
-        name: `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.companyName || 'B2B Client',
-        firstName: u.firstName,
-        lastName: u.lastName,
-        companyName:
-          u.companyName ||
-          u.businessName ||
-          `${u.firstName || ''} ${u.lastName || ''}`.trim() ||
-          'Enterprise Client',
-        email: u.email || '',
-        phone: u.phone || '',
-        gstin,
-        billingAddress:
-          billObj?.fullAddress ||
-          u.billingAddress ||
-          u.address ||
-          `${city}, ${state} (${stateCode})`,
-        shippingAddress:
-          shipObj?.fullAddress ||
-          billObj?.fullAddress ||
-          u.shippingAddress ||
-          `${city}, ${state} (${stateCode})`,
-        city,
-        state,
-        stateCode,
-        addresses: parsedAddresses,
-      };
+      const results = await this.searchB2BCustomers(u.email || u.gstin || u.id);
+      return results.find((r) => r.id === customerId) || results[0] || null;
     } catch (err) {
-      console.warn('[proformaService] getCustomerFullDetails fallback:', err);
+      console.warn('[proformaService] Customer 360 error:', err);
       return null;
     }
   },
 
   /**
-   * Search Products from Catalog with Category Filter & Rich Thumbnails
+   * Search Products Catalog
    */
-  async searchProducts(queryText = '', categorySlug = ''): Promise<ProductSearchResult[]> {
-    const q = (queryText || '').toLowerCase().trim();
+  async searchProducts(queryText: string, categorySlug?: string): Promise<ProductSearchResult[]> {
+    const q = queryText.toLowerCase().trim();
     try {
-      const params = new URLSearchParams();
-      if (q) params.append('search', q);
-      if (categorySlug) params.append('category', categorySlug);
-      params.append('limit', '50');
+      const query = new URLSearchParams();
+      if (q) query.append('search', q);
+      if (categorySlug) query.append('category', categorySlug);
+      query.append('limit', '50');
 
-      const res = await fetchAdminApi<any>(`/products?${params.toString()}`);
-      const list = Array.isArray(res)
-        ? res
-        : (res?.data?.items || res?.data || res?.products || []);
-      if (Array.isArray(list) && list.length > 0) {
-        return list.map((p) => ({
+      const res = await fetchAdminApi<any>(`/products?${query.toString()}`);
+      const items = res?.data?.items || res?.data || res?.items || res || [];
+      if (Array.isArray(items) && items.length > 0) {
+        return items.map((p: any) => ({
           id: p.id,
-          name: p.name,
-          sku: p.sku || `SKU-${p.id.slice(0, 6)}`,
-          description: p.shortDesc || p.description || '',
-          hsnCode: p.hsn_sac || p.hsnCode || '83024110',
+          name: p.name || p.title,
+          sku: p.sku || p.code || 'SKU-001',
+          description: p.description || p.shortDescription,
+          hsnCode: p.hsnCode || '83024110',
           unit: p.unit || 'PCS',
-          price: Number(p.salePrice || p.price || 450),
-          stock: Number(p.stock || 100),
-          gstRate: Number(p.gst_rate || 18),
-          thumbnail: p.thumbnail || (Array.isArray(p.images) ? p.images[0] : undefined),
-          images: Array.isArray(p.images) ? p.images : [],
-          category: p.category?.name || (typeof p.category === 'string' ? p.category : undefined),
-          categorySlug: p.category?.slug,
+          price: Number(p.price || p.regularPrice || 0),
+          stock: Number(p.stock || p.inventoryCount || 100),
+          gstRate: Number(p.gstRate || p.taxRate || 18),
+          thumbnail: p.thumbnail || (p.images && p.images[0]) || '',
+          images: p.images || [],
+          category: p.category?.name || p.categoryName || '',
+          categorySlug: p.category?.slug || p.categorySlug || '',
         }));
       }
     } catch (err) {
-      console.warn('[proformaService] product search fallback:', err);
+      console.warn('[proformaService] Product search error:', err);
     }
-
-    // Default high-demand architectural catalog hardware
-    const fallbackList: ProductSearchResult[] = [
-      {
-        id: 'p-1',
-        name: 'Grade 304 SS Heavy Duty Restroom Gravity Hinge Set',
-        sku: 'PRC-SS-GH-304',
-        description: 'Self-closing spring-assisted gravity hinge pair for commercial cubicle doors',
-        hsnCode: '83024110',
-        unit: 'SETS',
-        price: 850,
-        stock: 450,
-        gstRate: 18,
-        category: 'Cubicle Hardware',
-        categorySlug: 'cubicle-hardware',
-      },
-      {
-        id: 'p-2',
-        name: 'Privacy Indicator Bolt with Emergency Red/Green Coin Release',
-        sku: 'PRC-SS-IB-002',
-        description: 'Surface mounted stainless steel lock bolt with exterior vacant/engaged status dial',
-        hsnCode: '83024110',
-        unit: 'PCS',
-        price: 620,
-        stock: 800,
-        gstRate: 18,
-        category: 'Cubicle Hardware',
-        categorySlug: 'cubicle-hardware',
-      },
-      {
-        id: 'p-3',
-        name: 'Adjustable Height Restroom Cubicle Supporting Leg (100mm-150mm)',
-        sku: 'PRC-SS-LEG-150',
-        description: 'Grade 316 brushed satin pedestal pillar leg with concealed anchor flange',
-        hsnCode: '83024110',
-        unit: 'PCS',
-        price: 540,
-        stock: 620,
-        gstRate: 18,
-        category: 'Cubicle Hardware',
-        categorySlug: 'cubicle-hardware',
-      },
-      {
-        id: 'p-4',
-        name: 'Heavy Duty SS Top Rail Track Clamp & Wall Connector',
-        sku: 'PRC-SS-RC-04',
-        description: 'Structural top stabiliser bar connector bracket for 12mm-18mm compact laminate',
-        hsnCode: '83024110',
-        unit: 'PCS',
-        price: 390,
-        stock: 350,
-        gstRate: 18,
-        category: 'Cubicle Hardware',
-        categorySlug: 'cubicle-hardware',
-      },
-      {
-        id: 'p-5',
-        name: 'Stainless Steel Coat Hook with Integrated Rubber Buffer Stop',
-        sku: 'PRC-SS-CHK-01',
-        description: 'Single/dual prong door hook with impact absorbing silent stopper',
-        hsnCode: '83024110',
-        unit: 'PCS',
-        price: 180,
-        stock: 1200,
-        gstRate: 18,
-        category: 'Locker Hardware',
-        categorySlug: 'locker-hardware',
-      },
-    ];
-
-    return fallbackList.filter((p) => {
-      if (categorySlug && p.categorySlug && p.categorySlug !== categorySlug) return false;
-      if (!q) return true;
-      return (
-        p.name.toLowerCase().includes(q) ||
-        p.sku.toLowerCase().includes(q) ||
-        p.hsnCode.includes(q)
-      );
-    });
+    return [];
   },
 };
-
-// ─── Local Storage Helper Functions ──────────────────────────────────────────
-
-const LOCAL_STORAGE_KEY = 'prc_admin_proforma_invoices_v1';
-
-function getLocalProformaInvoices(): ProformaInvoice[] {
-  if (typeof window === 'undefined') return [];
-  try {
-    const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
-    if (!raw) return [];
-    return JSON.parse(raw);
-  } catch {
-    return [];
-  }
-}
-
-function saveLocalProformaInvoice(pi: ProformaInvoice) {
-  if (typeof window === 'undefined') return;
-  try {
-    const existing = getLocalProformaInvoices();
-    const index = existing.findIndex((p) => p.id === pi.id);
-    if (index >= 0) {
-      existing[index] = pi;
-    } else {
-      existing.unshift(pi);
-    }
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(existing));
-  } catch (err) {
-    console.error('Failed to save PI locally:', err);
-  }
-}
-
-function transformBackendInvoiceToPI(inv: any): ProformaInvoice {
-  const facility = PROFORMA_FACILITIES[inv.branchCode] || PROFORMA_FACILITIES.DELHI_WORKS;
-  return {
-    id: inv.id,
-    piNumber: inv.invoiceNumber,
-    invoiceNumber: inv.invoiceNumber,
-    financialYear: inv.financialYear || '2026-2027',
-    status: (inv.status || 'SENT') as any,
-    facilityCode: (inv.branchCode || 'DELHI_WORKS') as any,
-    facility,
-    customerId: inv.customerId,
-    customerName: inv.customer ? `${inv.customer.firstName || ''} ${inv.customer.lastName || ''}`.trim() : inv.customerName || 'B2B Client',
-    companyName: inv.customer?.companyName || inv.companyName || 'Enterprise Partner',
-    customerEmail: inv.customer?.email || inv.customerEmail || '',
-    customerPhone: inv.customer?.phone || inv.customerPhone || '',
-    customerGstin: inv.customer?.gstin || inv.customerGstin || '',
-    placeOfSupply: inv.placeOfSupply || 'Delhi',
-    placeOfSupplyCode: inv.placeOfSupplyCode || '07',
-    billingAddress: inv.billingAddress || inv.customer?.address || 'Standard Billing Address',
-    shippingAddress: inv.shippingAddress || inv.billingAddress || 'Site Delivery Destination',
-    issueDate: inv.createdAt ? new Date(inv.createdAt).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
-    validUntil: inv.dueDate ? new Date(inv.dueDate).toISOString().slice(0, 10) : new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10),
-    poReference: inv.poReference || inv.orderId || undefined,
-    quoteReference: inv.quoteReference || undefined,
-    deliveryTimeline: 'Standard site dispatch schedule',
-    paymentTerms: inv.paymentTerms || '30% Advance, Balance before dispatch',
-    subtotal: Number(inv.subtotal || 0),
-    discountTotal: Number(inv.discount || 0),
-    taxableAmount: Number(inv.taxableAmount || inv.subtotal || 0),
-    cgstTotal: Number(inv.cgst || 0),
-    sgstTotal: Number(inv.sgst || 0),
-    igstTotal: Number(inv.igst || 0),
-    roundOff: Number(inv.roundOff || 0),
-    grandTotal: Number(inv.grandTotal || 0),
-    advancePercentage: 30,
-    advancePayable: Math.round(Number(inv.grandTotal || 0) * 0.3),
-    balancePayable: Math.round(Number(inv.grandTotal || 0) * 0.7),
-    notes: inv.notes,
-    items: Array.isArray(inv.items)
-      ? inv.items.map((it: any, i: number) => ({
-          id: it.id || `item-${i + 1}`,
-          sku: it.sku || 'SKU-001',
-          productName: it.productName || 'Hardware Product',
-          description: it.description,
-          hsnCode: it.hsnCode || '8302',
-          unit: it.unit || 'PCS',
-          quantity: Number(it.quantity || 1),
-          unitPrice: Number(it.unitPrice || it.rate || 0),
-          discount: Number(it.discount || 0),
-          taxableAmount: Number(it.taxableAmount || 0),
-          gstRate: Number(it.taxRate || 18),
-          cgstAmount: Number(it.cgst || 0),
-          sgstAmount: Number(it.sgst || 0),
-          igstAmount: Number(it.igst || 0),
-          totalAmount: Number(it.totalAmount || it.amount || 0),
-        }))
-      : [],
-    createdAt: inv.createdAt || new Date().toISOString(),
-    updatedAt: inv.updatedAt || new Date().toISOString(),
-  };
-}
