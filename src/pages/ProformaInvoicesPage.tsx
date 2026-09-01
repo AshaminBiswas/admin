@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import {
   FileCheck, Plus, Search, Filter, RefreshCw, Printer, Download,
   Eye, Building2, MapPin, CheckCircle2, Clock, AlertCircle,
-  FileText, ArrowRight, ShieldCheck, ChevronRight, Layers
+  FileText, ArrowRight, ShieldCheck, ChevronRight, Layers, Trash2
 } from 'lucide-react';
 import { ProformaInvoice } from '../types/proforma';
+import { useAdminAuth } from '../context/AdminAuthContext';
 import { proformaService } from '../api/proformaService';
 import { ProformaInvoiceCreateView } from './proforma/ProformaInvoiceCreateView';
 import { ProformaInvoiceDetailView } from './proforma/ProformaInvoiceDetailView';
@@ -17,6 +18,40 @@ export function ProformaInvoicesPage() {
   const [invoices, setInvoices] = useState<ProformaInvoice[]>([]);
   const [selectedInvoice, setSelectedInvoice] = useState<ProformaInvoice | null>(null);
   const [loading, setLoading] = useState(true);
+  const { adminUser } = useAdminAuth();
+  const isSuperAdmin = Boolean(
+    adminUser && (
+      String(adminUser.role || '').toUpperCase() === 'SUPER_ADMIN' ||
+      String(adminUser.role || '').toUpperCase() === 'SUPER-ADMIN' ||
+      String(adminUser.role || '').toLowerCase() === 'super_admin' ||
+      String(adminUser.role || '').toLowerCase() === 'superadmin' ||
+      (adminUser as any).isSuperAdmin
+    )
+  );
+
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const handleDeleteInvoice = async (inv: ProformaInvoice) => {
+    if (!isSuperAdmin) {
+      alert('Only Super Administrators have permission to delete Proforma Invoices.');
+      return;
+    }
+    const confirmed = window.confirm(
+      `Are you sure you want to permanently delete / void Proforma Invoice ${inv.piNumber}?`
+    );
+    if (!confirmed) return;
+
+    setDeletingId(inv.id);
+    try {
+      await proformaService.deleteProformaInvoice(inv.id);
+      await loadInvoices();
+    } catch (err: any) {
+      console.error('Failed to delete PI:', err);
+      alert(err.message || 'Failed to delete Proforma Invoice.');
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -327,6 +362,17 @@ export function ProformaInvoicesPage() {
                         >
                           <Download size={14} />
                         </button>
+                        {isSuperAdmin && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteInvoice(inv)}
+                            disabled={deletingId === inv.id}
+                            className="p-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 border border-red-500/30 rounded-lg transition-all disabled:opacity-50"
+                            title="Delete / Void PI (Super Admin Only)"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

@@ -464,7 +464,7 @@ export function generateProformaInvoiceHtml(pi: ProformaInvoice): string {
               <td class="center">${idx + 1}</td>
               <td class="left">
                 <div class="product-title">${item.productName || 'HARDWARE FITTING'}</div>
-                <div class="sku-desc">SKU: ${item.sku || 'N/A'}${item.description ? `  |  ${item.description}` : ''}</div>
+                ${item.description ? `<div class="sku-desc">${item.description}</div>` : ''}
               </td>
               <td class="center">${item.hsnCode || '83024110'}</td>
               <td class="center">${item.unit || 'PCS'}</td>

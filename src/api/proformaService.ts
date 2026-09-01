@@ -218,6 +218,19 @@ export const proformaService = {
   /**
    * Get single Proforma Invoice by ID
    */
+  /**
+   * Delete / void Proforma Invoice (Super Admin Only)
+   */
+  async deleteProformaInvoice(id: string): Promise<{ success: boolean; message: string }> {
+    const res = await fetchAdminApi<any>(`/proforma-invoices/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    });
+    return {
+      success: true,
+      message: res?.message || 'Proforma Invoice deleted successfully',
+    };
+  },
+
   async getProformaInvoiceById(id: string): Promise<ProformaInvoice | null> {
     try {
       const res = await fetchAdminApi<any>(`/proforma-invoices/${encodeURIComponent(id)}`);

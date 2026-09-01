@@ -2,10 +2,11 @@ import React, { useState } from 'react';
 import {
   ArrowLeft, Printer, Download, Mail, CheckCircle2,
   Building2, MapPin, Phone, CreditCard, ShieldCheck,
-  Calendar, FileText, Send, Copy, RefreshCw, AlertCircle, X
+  Calendar, FileText, Send, Copy, RefreshCw, AlertCircle, X, Trash2
 } from 'lucide-react';
 import { ProformaInvoice } from '../../types/proforma';
 import { proformaService } from '../../api/proformaService';
+import { useAdminAuth } from '../../context/AdminAuthContext';
 import { printProformaInvoice } from '../../utils/proformaPdfGenerator';
 
 interface Props {
@@ -17,6 +18,41 @@ export function ProformaInvoiceDetailView({ invoice, onBack }: Props) {
   const [copied, setCopied] = useState(false);
   const [emailing, setEmailing] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
+  const { adminUser } = useAdminAuth();
+  const isSuperAdmin = Boolean(
+    adminUser && (
+      String(adminUser.role || '').toUpperCase() === 'SUPER_ADMIN' ||
+      String(adminUser.role || '').toUpperCase() === 'SUPER-ADMIN' ||
+      String(adminUser.role || '').toLowerCase() === 'super_admin' ||
+      String(adminUser.role || '').toLowerCase() === 'superadmin' ||
+      (adminUser as any).isSuperAdmin
+    )
+  );
+
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDeleteInvoice = async () => {
+    if (!isSuperAdmin) {
+      alert('Only Super Administrators have permission to delete Proforma Invoices.');
+      return;
+    }
+    const confirmed = window.confirm(
+      `Are you sure you want to permanently delete / void Proforma Invoice ${invoice.piNumber}?`
+    );
+    if (!confirmed) return;
+
+    setDeleting(true);
+    try {
+      await proformaService.deleteProformaInvoice(invoice.id);
+      alert(`Proforma Invoice ${invoice.piNumber} deleted successfully.`);
+      onBack();
+    } catch (err: any) {
+      console.error('Failed to delete PI:', err);
+      alert(err.message || 'Failed to delete Proforma Invoice.');
+    } finally {
+      setDeleting(false);
+    }
+  };
   const [emailError, setEmailError] = useState('');
   
   // Email Modal State
@@ -103,11 +139,23 @@ export function ProformaInvoiceDetailView({ invoice, onBack }: Props) {
 
           <button
             type="button"
-            onClick={() => printProformaInvoice(invoice)}
+            onClick={() => proformaService.downloadProformaPdf(invoice.id, invoice.piNumber)}
             className="px-4 py-2 bg-[#27272A] hover:bg-[#3F3F46] text-white text-xs font-bold rounded-xl border border-zinc-700 flex items-center gap-2 transition-all shadow-xs"
           >
             <Download size={14} /> Download PDF
           </button>
+
+          {isSuperAdmin && (
+            <button
+              type="button"
+              onClick={handleDeleteInvoice}
+              disabled={deleting}
+              className="px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 text-xs font-bold rounded-xl flex items-center gap-2 transition-all shadow-xs disabled:opacity-50"
+              title="Delete / Void Proforma Invoice (Super Admin Only)"
+            >
+              <Trash2 size={14} /> {deleting ? 'Deleting...' : 'Delete PI'}
+            </button>
+          )}
 
           <button
             type="button"

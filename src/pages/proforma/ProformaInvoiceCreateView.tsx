@@ -321,22 +321,22 @@ export function ProformaInvoiceCreateView({ onBack, onSaved }: Props) {
     };
   }, [productSearch, selectedCategory]);
 
-  // Handle Customer Selection
+    // Handle Customer Selection
   const handleSelectCustomer = async (c: B2BCustomerSearchResult) => {
     setSelectedCustomerId(c.id);
     setSelectedCustomer(c);
-    setCustomerName(c.name);
-    setCompanyName(c.companyName);
-    setCustomerEmail(c.email);
-    setCustomerPhone(c.phone);
+    setCustomerName(c.name || `${c.firstName || ''} ${c.lastName || ''}`.trim());
+    setCompanyName(c.companyName || c.name);
+    setCustomerEmail(c.email || '');
+    setCustomerPhone(c.phone || '');
     setCustomerGstin(c.gstin || '');
-    setBillingAddress(c.billingAddress);
-    setShippingAddress(c.shippingAddress || c.billingAddress);
+    if (c.billingAddress) setBillingAddress(c.billingAddress);
+    if (c.shippingAddress) setShippingAddress(c.shippingAddress);
     if (c.state) setPlaceOfSupply(c.state);
     if (c.stateCode) setPlaceOfSupplyCode(c.stateCode);
-    setCustomerSavedAddresses(c.addresses || []);
+    if (c.addresses && c.addresses.length > 0) setCustomerSavedAddresses(c.addresses);
 
-    // Clear search query so it does NOT auto-trigger search for company name
+    // Clear search query
     setCustomerSearch('');
     setIsCustomerDropdownOpen(false);
     setCustomerResults([]);
@@ -349,23 +349,27 @@ export function ProformaInvoiceCreateView({ onBack, onSaved }: Props) {
       setCustomerPricingMap({});
     }
 
-    // Asynchronously fetch full 360 customer profile to retrieve all saved addresses
+    // Automatically in background fetch complete 360 customer profile to get all saved addresses
     if (c.id && !c.id.startsWith('quote-')) {
       proformaService.getCustomerFullDetails(c.id).then((full) => {
         if (full) {
           setSelectedCustomer(full);
+          if (full.companyName && !c.companyName) setCompanyName(full.companyName);
+          if (full.gstin && !c.gstin) setCustomerGstin(full.gstin);
           if (full.addresses && full.addresses.length > 0) {
             setCustomerSavedAddresses(full.addresses);
           }
-          if (full.billingAddress && (!c.billingAddress || c.billingAddress.includes('Standard Registered'))) {
+          if (full.billingAddress) {
             setBillingAddress(full.billingAddress);
           }
-          if (full.shippingAddress && (!c.shippingAddress || c.shippingAddress.includes('Standard Registered'))) {
+          if (full.shippingAddress) {
             setShippingAddress(full.shippingAddress);
           }
+          if (full.state) setPlaceOfSupply(full.state);
+          if (full.stateCode) setPlaceOfSupplyCode(full.stateCode);
         }
       }).catch((err) => {
-        console.warn('Could not load customer 360 full details:', err);
+        console.warn('Could not auto-fetch customer address:', err);
       });
     }
   };
