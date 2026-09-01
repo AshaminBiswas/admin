@@ -72,17 +72,16 @@ export function generateProformaInvoiceHtml(pi: ProformaInvoice): string {
       margin-bottom: 6px;
     }
     .logo-box {
-      width: 54px;
-      height: 54px;
-      border: 1px solid #000000;
+      width: 74px;
+      height: 74px;
       display: flex;
       align-items: center;
       justify-content: center;
-      padding: 2px;
+      padding: 0;
     }
     .logo-img {
-      max-width: 48px;
-      max-height: 48px;
+      max-width: 72px;
+      max-height: 72px;
       object-fit: contain;
       filter: grayscale(100%);
     }
@@ -99,19 +98,18 @@ export function generateProformaInvoiceHtml(pi: ProformaInvoice): string {
       line-height: 1.35;
     }
     .qr-box {
-      width: 66px;
-      height: 66px;
-      border: 1px solid #000000;
-      padding: 2px;
+      width: 72px;
+      height: 72px;
+      padding: 0;
       display: inline-block;
     }
     .qr-img {
-      width: 60px;
-      height: 60px;
+      width: 72px;
+      height: 72px;
       object-fit: contain;
     }
     .qr-label {
-      font-size: 8px;
+      font-size: 7.5px;
       font-weight: 700;
       color: #000000;
       text-align: right;
@@ -119,11 +117,11 @@ export function generateProformaInvoiceHtml(pi: ProformaInvoice): string {
       letter-spacing: 0.3px;
     }
     .pi-no-text {
-      font-size: 13px;
+      font-size: 12px;
       font-weight: 700;
       color: #000000;
       text-align: right;
-      margin-top: 4px;
+      margin-top: 3px;
     }
 
     /* ── Dividing Rules ── */
@@ -341,7 +339,7 @@ export function generateProformaInvoiceHtml(pi: ProformaInvoice): string {
     <!-- 1. Header Row -->
     <table class="header-table">
       <tr>
-        <td style="width: 60px; vertical-align: top;">
+        <td style="width: 76px; vertical-align: top;">
           <div class="logo-box">
             <img src="${PRC_LOGO_DATA_URL}" class="logo-img" alt="PRC Logo" />
           </div>
@@ -354,7 +352,7 @@ export function generateProformaInvoiceHtml(pi: ProformaInvoice): string {
           <div class="company-subtext">Email: ${companyEmail}</div>
           <div class="company-subtext">Phone: ${companyPhone}  |  Website: www.pacifichardware.com</div>
         </td>
-        <td style="text-align: right; vertical-align: top; width: 180px;">
+        <td style="text-align: right; vertical-align: top; width: 140px;">
           ${pi.qrCodeDataUrl ? `
             <div style="display: inline-block; text-align: right;">
               <div class="qr-box">
