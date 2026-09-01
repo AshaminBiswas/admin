@@ -1,58 +1,8 @@
 import { ProformaInvoice } from '../types/proforma';
 import { PRC_LOGO_DATA_URL } from '../assets/logo.base64';
 
-// Helper to convert number to words in Indian Numbering System
-function numberToIndianRupees(amount: number): string {
-  const rounded = Math.round(amount);
-  if (rounded === 0) return 'Zero Rupees Only';
-
-  const singleDigits = [
-    '', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine',
-    'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen',
-    'Seventeen', 'Eighteen', 'Nineteen',
-  ];
-  const tens = [
-    '', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety',
-  ];
-
-  function convertTwoDigits(n: number): string {
-    if (n < 20) return singleDigits[n];
-    const unit = n % 10;
-    return `${tens[Math.floor(n / 10)]}${unit !== 0 ? ' ' + singleDigits[unit] : ''}`;
-  }
-
-  function convertThreeDigits(n: number): string {
-    const hundred = Math.floor(n / 100);
-    const rest = n % 100;
-    let str = '';
-    if (hundred > 0) str += `${singleDigits[hundred]} Hundred`;
-    if (rest > 0) {
-      if (str !== '') str += ' and ';
-      str += convertTwoDigits(rest);
-    }
-    return str;
-  }
-
-  let crore = Math.floor(rounded / 10000000);
-  let remainder = rounded % 10000000;
-  let lakh = Math.floor(remainder / 100000);
-  remainder = remainder % 100000;
-  let thousand = Math.floor(remainder / 1000);
-  remainder = remainder % 1000;
-  let hundred = remainder;
-
-  const parts: string[] = [];
-  if (crore > 0) parts.push(`${convertTwoDigits(crore)} Crore`);
-  if (lakh > 0) parts.push(`${convertTwoDigits(lakh)} Lakh`);
-  if (thousand > 0) parts.push(`${convertTwoDigits(thousand)} Thousand`);
-  if (hundred > 0) parts.push(convertThreeDigits(hundred));
-
-  return `Rupees ${parts.join(' ')} Only`;
-}
-
 /**
- * Generate official Proforma Invoice HTML for Print and PDF Export
- * Replaces hardcoded sample data with 100% dynamic Admin UI state and API inputs.
+ * Generate official Proforma Invoice HTML for Print and PDF Export (Strict Monochrome Black & White)
  */
 export function generateProformaInvoiceHtml(pi: ProformaInvoice): string {
   const isInterState = Number(pi.igstTotal || 0) > 0;
@@ -93,7 +43,7 @@ export function generateProformaInvoiceHtml(pi: ProformaInvoice): string {
   <style>
     @page {
       size: A4 portrait;
-      margin: 10mm 12mm 12mm 12mm;
+      margin: 8mm 10mm 10mm 10mm;
     }
     * {
       box-sizing: border-box;
@@ -102,7 +52,7 @@ export function generateProformaInvoiceHtml(pi: ProformaInvoice): string {
     }
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-      color: #20242A;
+      color: #000000;
       background: #ffffff;
       margin: 0;
       padding: 0;
@@ -119,12 +69,12 @@ export function generateProformaInvoiceHtml(pi: ProformaInvoice): string {
     .header-table {
       width: 100%;
       border-collapse: collapse;
-      margin-bottom: 8px;
+      margin-bottom: 6px;
     }
     .logo-box {
       width: 54px;
       height: 54px;
-      border: 1px solid #70757A;
+      border: 1px solid #000000;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -134,23 +84,24 @@ export function generateProformaInvoiceHtml(pi: ProformaInvoice): string {
       max-width: 48px;
       max-height: 48px;
       object-fit: contain;
+      filter: grayscale(100%);
     }
     .brand-title {
       font-size: 15px;
       font-weight: 700;
-      color: #20242A;
+      color: #000000;
       margin: 0 0 2px 0;
       line-height: 1.15;
     }
     .company-subtext {
       font-size: 9.5px;
-      color: #20242A;
+      color: #000000;
       line-height: 1.35;
     }
     .qr-box {
       width: 66px;
       height: 66px;
-      border: 1px solid #70757A;
+      border: 1px solid #000000;
       padding: 2px;
       display: inline-block;
     }
@@ -162,7 +113,7 @@ export function generateProformaInvoiceHtml(pi: ProformaInvoice): string {
     .qr-label {
       font-size: 8px;
       font-weight: 700;
-      color: #20242A;
+      color: #000000;
       text-align: right;
       margin-top: 2px;
       letter-spacing: 0.3px;
@@ -170,7 +121,7 @@ export function generateProformaInvoiceHtml(pi: ProformaInvoice): string {
     .pi-no-text {
       font-size: 13px;
       font-weight: 700;
-      color: #20242A;
+      color: #000000;
       text-align: right;
       margin-top: 4px;
     }
@@ -178,13 +129,13 @@ export function generateProformaInvoiceHtml(pi: ProformaInvoice): string {
     /* ── Dividing Rules ── */
     .rule-thick {
       height: 1.2px;
-      background: #70757A;
-      margin: 8px 0;
+      background: #000000;
+      margin: 6px 0;
     }
     .rule-thin {
       height: 0.9px;
-      background: #70757A;
-      margin: 8px 0;
+      background: #000000;
+      margin: 6px 0;
     }
 
     /* ── Title & Meta Strip ── */
@@ -197,14 +148,14 @@ export function generateProformaInvoiceHtml(pi: ProformaInvoice): string {
     .doc-type-title {
       font-size: 21px;
       font-weight: 800;
-      color: #20242A;
+      color: #000000;
       letter-spacing: 0.5px;
       margin: 0;
     }
     .date-meta-table {
       border-collapse: collapse;
       font-size: 10.5px;
-      color: #20242A;
+      color: #000000;
     }
     .date-meta-table td {
       padding: 1px 4px;
@@ -214,7 +165,7 @@ export function generateProformaInvoiceHtml(pi: ProformaInvoice): string {
     .dossier-table {
       width: 100%;
       border-collapse: collapse;
-      margin: 6px 0;
+      margin: 4px 0;
     }
     .dossier-table td {
       vertical-align: top;
@@ -222,19 +173,19 @@ export function generateProformaInvoiceHtml(pi: ProformaInvoice): string {
     .dossier-heading {
       font-size: 10.5px;
       font-weight: 700;
-      color: #20242A;
+      color: #000000;
       margin-bottom: 5px;
       text-transform: uppercase;
     }
     .dossier-client-name {
       font-size: 12px;
       font-weight: 700;
-      color: #20242A;
+      color: #000000;
       margin-bottom: 2px;
     }
     .dossier-text {
       font-size: 10px;
-      color: #20242A;
+      color: #000000;
       line-height: 1.4;
     }
 
@@ -242,19 +193,19 @@ export function generateProformaInvoiceHtml(pi: ProformaInvoice): string {
     .items-table {
       width: 100%;
       border-collapse: collapse;
-      margin: 10px 0 14px 0;
+      margin: 8px 0 12px 0;
       font-size: 10px;
     }
     .items-table th, .items-table td {
-      border: 1px solid #70757A;
+      border: 1px solid #000000;
       padding: 6px 8px;
     }
     .items-table th {
-      background: #F5F6F7;
+      background: #f2f2f2;
       font-weight: 700;
       font-size: 9.5px;
       text-align: center;
-      color: #20242A;
+      color: #000000;
     }
     .items-table th.left, .items-table td.left {
       text-align: left;
@@ -267,13 +218,13 @@ export function generateProformaInvoiceHtml(pi: ProformaInvoice): string {
     }
     .product-title {
       font-weight: 700;
-      color: #20242A;
+      color: #000000;
       font-size: 10.5px;
       text-transform: uppercase;
     }
     .sku-desc {
       font-size: 9px;
-      color: #4B5563;
+      color: #333333;
       margin-top: 2px;
     }
 
@@ -281,7 +232,7 @@ export function generateProformaInvoiceHtml(pi: ProformaInvoice): string {
     .bottom-table {
       width: 100%;
       border-collapse: collapse;
-      margin-top: 6px;
+      margin-top: 4px;
     }
     .bottom-table td {
       vertical-align: top;
@@ -289,7 +240,7 @@ export function generateProformaInvoiceHtml(pi: ProformaInvoice): string {
     .bank-heading {
       font-size: 10.5px;
       font-weight: 700;
-      color: #20242A;
+      color: #000000;
       margin-bottom: 6px;
     }
     .bank-meta-table {
@@ -299,7 +250,7 @@ export function generateProformaInvoiceHtml(pi: ProformaInvoice): string {
     }
     .bank-meta-table td {
       padding: 1.5px 2px;
-      color: #20242A;
+      color: #000000;
     }
     .summary-table {
       width: 100%;
@@ -308,49 +259,49 @@ export function generateProformaInvoiceHtml(pi: ProformaInvoice): string {
     }
     .summary-table td {
       padding: 2.5px 0;
-      color: #20242A;
+      color: #000000;
     }
     .grand-total-row td {
       font-size: 12.5px;
       font-weight: 800;
-      color: #20242A;
+      color: #000000;
       padding: 5px 0;
     }
 
     /* ── Signatory Section ── */
     .signatory-box {
-      margin-top: 20px;
+      margin-top: 18px;
     }
     .sign-title {
       font-size: 11px;
       font-weight: 700;
-      color: #20242A;
+      color: #000000;
     }
     .sign-company {
       font-size: 10px;
-      color: #20242A;
+      color: #000000;
       margin-top: 1px;
-      margin-bottom: 32px;
+      margin-bottom: 30px;
     }
     .sign-line {
       width: 160px;
-      border-bottom: 1px solid #70757A;
+      border-bottom: 1px solid #000000;
       margin-bottom: 4px;
     }
     .sign-name {
       font-size: 10px;
-      color: #20242A;
+      color: #000000;
     }
 
     /* ── Fixed Footer ── */
     .footer-bar {
-      margin-top: 24px;
-      border-top: 1px solid #70757A;
+      margin-top: 20px;
+      border-top: 1px solid #000000;
       padding-top: 6px;
       display: flex;
       justify-content: space-between;
       font-size: 9.5px;
-      color: #20242A;
+      color: #000000;
     }
 
     /* ── Page 2: Terms ── */
@@ -361,14 +312,14 @@ export function generateProformaInvoiceHtml(pi: ProformaInvoice): string {
     .terms-main-title {
       font-size: 17px;
       font-weight: 800;
-      color: #20242A;
+      color: #000000;
       margin-top: 2px;
       margin-bottom: 6px;
     }
     .terms-section-title {
       font-size: 11px;
       font-weight: 700;
-      color: #20242A;
+      color: #000000;
       margin-top: 10px;
       margin-bottom: 3px;
     }
@@ -376,7 +327,7 @@ export function generateProformaInvoiceHtml(pi: ProformaInvoice): string {
       margin: 0;
       padding-left: 18px;
       font-size: 9.8px;
-      color: #20242A;
+      color: #000000;
       line-height: 1.45;
     }
     .terms-list li {
@@ -453,7 +404,7 @@ export function generateProformaInvoiceHtml(pi: ProformaInvoice): string {
           <div class="dossier-text">${pi.billingAddress || 'As per client records'}</div>
         </td>
         <td style="width: 4%;">
-          <div style="width: 0.7px; height: 110px; background: #70757A; margin: 0 auto;"></div>
+          <div style="width: 0.7px; height: 110px; background: #000000; margin: 0 auto;"></div>
         </td>
         <td style="width: 48%;">
           <div class="dossier-heading">ORDER & PROJECT DETAILS</div>
@@ -481,14 +432,14 @@ export function generateProformaInvoiceHtml(pi: ProformaInvoice): string {
             <tr>
               <td style="padding: 1.5px 0; vertical-align: top;">Delivery Address</td>
               <td style="vertical-align: top;">:</td>
-              <td style="font-size: 9.5px; color: #20242A;">${pi.shippingAddress || pi.billingAddress || 'To be confirmed prior to dispatch'}</td>
+              <td style="font-size: 9.5px; color: #000000;">${pi.shippingAddress || pi.billingAddress || 'To be confirmed prior to dispatch'}</td>
             </tr>
           </table>
         </td>
       </tr>
     </table>
 
-    <!-- 6. Line Items Table with #F5F6F7 header -->
+    <!-- 6. Line Items Table with #F2F2F2 header -->
     <table class="items-table">
       <thead>
         <tr>
@@ -616,14 +567,14 @@ export function generateProformaInvoiceHtml(pi: ProformaInvoice): string {
               </tr>
             ` : ''}
             <tr>
-              <td colspan="2" style="padding: 3px 0;"><div style="height: 0.8px; background: #70757A;"></div></td>
+              <td colspan="2" style="padding: 3px 0;"><div style="height: 0.8px; background: #000000;"></div></td>
             </tr>
             <tr class="grand-total-row">
               <td>GRAND TOTAL</td>
               <td style="text-align: right;">₹${Number(pi.grandTotal || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
             </tr>
             <tr>
-              <td colspan="2" style="padding: 3px 0;"><div style="height: 0.8px; background: #70757A;"></div></td>
+              <td colspan="2" style="padding: 3px 0;"><div style="height: 0.8px; background: #000000;"></div></td>
             </tr>
             <tr>
               <td>Advance Payable (${advancePct}%)</td>
@@ -646,12 +597,12 @@ export function generateProformaInvoiceHtml(pi: ProformaInvoice): string {
 
     <!-- ── PAGE 2: GENERAL TERMS & CONDITIONS ── -->
     <div class="page-break">
-      <div style="font-size: 11px; font-weight: 700; color: #20242A;">${companyName}</div>
+      <div style="font-size: 11px; font-weight: 700; color: #000000;">${companyName}</div>
       <div class="terms-main-title">GENERAL TERMS & CONDITIONS</div>
       <div class="rule-thick"></div>
 
       <div class="terms-section-title">1. SPECIFICATIONS REQUIRED FOR PRODUCTION</div>
-      <div style="font-size: 9.8px; color: #20242A; margin-bottom: 4px;">The following technical parameters and approvals are strictly required prior to commencing manufacturing:</div>
+      <div style="font-size: 9.8px; color: #000000; margin-bottom: 4px;">The following technical parameters and approvals are strictly required prior to commencing manufacturing:</div>
       <ol class="terms-list">
         <li>Actual site measurements verified and certified by the client / project architect.</li>
         <li>Formal shop drawing approval signed off by the client or authorized project consultant.</li>
@@ -679,7 +630,7 @@ export function generateProformaInvoiceHtml(pi: ProformaInvoice): string {
       </ol>
 
       <div class="terms-section-title">4. SPECIAL NOTE (SITE DELAY & PAYMENT LIABILITY)</div>
-      <div style="font-size: 9.8px; color: #20242A; line-height: 1.45; margin-bottom: 8px;">
+      <div style="font-size: 9.8px; color: #000000; line-height: 1.45; margin-bottom: 8px;">
         If your site gets prolonged or is put on hold for whatever reason for more than 30 days from the date of delivery of material at your site, then we will be liable for 100% payment against material. You cannot delay our payment on account of unfinished project. However we will extend all help in installation etc. when you are ready for the same & we will provide you back up for the quality assurance therefore please do not hold back our payment for any reason in the interest of speedy supply to you.
       </div>
 
@@ -687,14 +638,14 @@ export function generateProformaInvoiceHtml(pi: ProformaInvoice): string {
         <tr>
           <td style="width: 48%; vertical-align: top;">
             <div class="terms-section-title">5. DELIVERY TIMELINE</div>
-            <div style="font-size: 9.8px; color: #20242A; line-height: 1.45;">
+            <div style="font-size: 9.8px; color: #000000; line-height: 1.45;">
               ${pi.deliveryTimeline || '12 - 15 working days from the date of your clear Advance Payment, purchase order, approval of shop drawing, and colour approval for compact board & hardware.'}
             </div>
           </td>
           <td style="width: 4%;"></td>
           <td style="width: 48%; vertical-align: top;">
             <div class="terms-section-title">6. STATUTORY COMPLIANCE</div>
-            <div style="font-size: 9.8px; color: #20242A; line-height: 1.45;">
+            <div style="font-size: 9.8px; color: #000000; line-height: 1.45;">
               a) For SEZ sale: GST, Service Tax is exempted against the submission of SEZ approval certificate and FORM - I confirmation from the client.
             </div>
           </td>
@@ -705,15 +656,15 @@ export function generateProformaInvoiceHtml(pi: ProformaInvoice): string {
       <table style="width: 100%; border-collapse: collapse; margin-top: 36px;">
         <tr>
           <td style="width: 48%; vertical-align: top;">
-            <div style="width: 180px; border-bottom: 1px solid #70757A; margin-bottom: 6px;"></div>
-            <div style="font-size: 10.5px; font-weight: 700; color: #20242A;">${pi.digitalSignature ? `✔ Digitally Accepted by: ${customerName}` : 'Client Acceptance & Confirmed Signature'}</div>
-            <div style="font-size: 9.5px; color: #4B5563;">Name, Designation & Company Official Stamp</div>
+            <div style="width: 180px; border-bottom: 1px solid #000000; margin-bottom: 6px;"></div>
+            <div style="font-size: 10.5px; font-weight: 700; color: #000000;">${pi.digitalSignature ? `✔ Digitally Accepted by: ${customerName}` : 'Client Acceptance & Confirmed Signature'}</div>
+            <div style="font-size: 9.5px; color: #333333;">Name, Designation & Company Official Stamp</div>
           </td>
           <td style="width: 4%;"></td>
           <td style="width: 48%; vertical-align: top;">
-            <div style="width: 180px; border-bottom: 1px solid #70757A; margin-bottom: 6px;"></div>
-            <div style="font-size: 10.5px; font-weight: 700; color: #20242A;">For ${companyName}, Delhi</div>
-            <div style="font-size: 9.5px; color: #4B5563;">Authorised Signatory (${pi.signedBy || 'Executive Desk'})</div>
+            <div style="width: 180px; border-bottom: 1px solid #000000; margin-bottom: 6px;"></div>
+            <div style="font-size: 10.5px; font-weight: 700; color: #000000;">For ${companyName}, Delhi</div>
+            <div style="font-size: 9.5px; color: #333333;">Authorised Signatory (${pi.signedBy || 'Executive Desk'})</div>
           </td>
         </tr>
       </table>

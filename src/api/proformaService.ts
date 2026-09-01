@@ -1,4 +1,4 @@
-import { fetchAdminApi } from './adminApi';
+import { fetchAdminApi, API_BASE_URL, getAdminToken } from './adminApi';
 import {
   ProformaInvoice,
   CreateProformaInvoicePayload,
@@ -66,6 +66,39 @@ export interface ProductSearchResult {
 }
 
 export const proformaService = {
+  /**
+   * Stream / download official Proforma Invoice PDF from backend
+   */
+  async downloadProformaPdf(id: string, piNumber: string) {
+    try {
+      const token = getAdminToken() || localStorage.getItem('token') || '';
+      const response = await fetch(`${API_BASE_URL}/proforma-invoices/${encodeURIComponent(id)}/pdf`, {
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+      if (!response.ok) {
+        throw new Error(`Download failed with status: ${response.status}`);
+      }
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Proforma-Invoice-${(piNumber || 'PRC-PI').replace(/[\/\\]/g, '-')}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.warn('[proformaService] Binary PDF download failed, fallback to print view:', err);
+      const pi = await this.getProformaInvoiceById(id);
+      if (pi) {
+        const { printProformaInvoice } = await import('../utils/proformaPdfGenerator');
+        printProformaInvoice(pi);
+      }
+    }
+  },
+
   /**
    * List Proforma Invoices
    */
