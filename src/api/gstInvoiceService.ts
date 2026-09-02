@@ -179,6 +179,18 @@ export async function validateGSTInvoice(id: string): Promise<{
   };
 }
 
+/**
+ * Approve / Validate a DRAFT invoice → transitions status to APPROVED.
+ * Calls the real backend endpoint: POST /api/v1/invoices/:id/approve
+ */
+export async function approveGSTInvoice(id: string): Promise<GSTInvoice> {
+  const res = await fetchAdminApi<GSTInvoice>(`/invoices/${id}/approve`, {
+    method: 'POST',
+  });
+  if (!res.success) throw new Error(res.error?.message || res.message || 'Failed to approve invoice');
+  return res.data!;
+}
+
 /* ─── E-Invoice / IRN ────────────────────────────────────────────────────── */
 
 export async function generateIRN(invoiceId: string): Promise<GSTInvoice> {

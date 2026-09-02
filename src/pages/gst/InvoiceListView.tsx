@@ -2,11 +2,12 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   Plus, Search, Eye, Download, Pencil, Receipt, IndianRupee,
   FileCheck, X, ChevronLeft, ChevronRight, RefreshCw, Shield,
-  TrendingUp, Clock, AlertCircle, CheckCircle,
+  TrendingUp, Clock, AlertCircle, CheckCircle, CheckCircle2,
 } from 'lucide-react';
 import {
   listGSTInvoices,
   downloadGSTInvoicePdf,
+  approveGSTInvoice,
   formatCurrency,
   formatDate,
 } from '../../api/gstInvoiceService';
@@ -49,6 +50,8 @@ export function InvoiceListView({ onCreateNew, onViewInvoice, onEditInvoice }: P
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
   const [downloading, setDownloading] = useState<string | null>(null);
+  const [validating, setValidating] = useState<string | null>(null);
+  const [confirmApprove, setConfirmApprove] = useState<GSTInvoice | null>(null);
   const [stats, setStats] = useState<{
     total_invoices: number;
     this_month_invoices: number;
@@ -93,6 +96,20 @@ export function InvoiceListView({ onCreateNew, onViewInvoice, onEditInvoice }: P
       alert(e.message);
     } finally {
       setDownloading(null);
+    }
+  };
+
+  const handleApproveInvoice = async () => {
+    if (!confirmApprove) return;
+    setValidating(confirmApprove.id);
+    setConfirmApprove(null);
+    try {
+      await approveGSTInvoice(confirmApprove.id);
+      await load(); // refresh the list
+    } catch (e: any) {
+      alert(`Validation failed: ${e.message}`);
+    } finally {
+      setValidating(null);
     }
   };
 
@@ -150,6 +167,51 @@ export function InvoiceListView({ onCreateNew, onViewInvoice, onEditInvoice }: P
 
   return (
     <div className="space-y-5">
+      {/* ── Confirm Validate Modal ─────────────────────────────────────── */}
+      {confirmApprove && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-sm rounded-2xl bg-[#18181B] border border-[#27272A] shadow-2xl p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-emerald-500/15 flex items-center justify-center text-emerald-400">
+                <CheckCircle2 size={20} />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-[#FAFAFA]">Validate Invoice?</h3>
+                <p className="text-[11px] text-[#71717A]">This action cannot be undone</p>
+              </div>
+            </div>
+            <div className="bg-[#09090B] rounded-xl p-3 border border-[#27272A] space-y-1">
+              <p className="text-xs text-[#A1A1AA]">
+                Invoice: <span className="font-mono font-bold text-[#8B5CF6]">{confirmApprove.invoice_number}</span>
+              </p>
+              <p className="text-xs text-[#A1A1AA]">
+                Customer: <span className="font-semibold text-[#FAFAFA]">{confirmApprove.customer_legal_name}</span>
+              </p>
+              <p className="text-xs text-[#A1A1AA]">
+                Amount: <span className="font-bold text-emerald-400">{formatCurrency(confirmApprove.grand_total)}</span>
+              </p>
+            </div>
+            <p className="text-xs text-[#71717A] leading-relaxed">
+              Approving this invoice will apply the <strong className="text-[#FAFAFA]">Administrative Seal</strong> and mark it as <strong className="text-emerald-400">VALIDATED</strong>. It will no longer be editable.
+            </p>
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={() => setConfirmApprove(null)}
+                className="flex-1 py-2 rounded-xl border border-[#27272A] text-[#A1A1AA] text-xs font-semibold hover:border-[#3F3F46] transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleApproveInvoice}
+                className="flex-1 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-colors flex items-center justify-center gap-1.5 shadow-md shadow-emerald-900/40"
+              >
+                <CheckCircle2 size={13} /> Validate & Seal
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
@@ -322,13 +384,25 @@ export function InvoiceListView({ onCreateNew, onViewInvoice, onEditInvoice }: P
                       title="View invoice"
                     />
                     {inv.status === 'DRAFT' && (
-                      <button
-                        onClick={() => onEditInvoice(inv.id)}
-                        className="py-1.5 px-2 rounded-lg text-xs font-bold text-blue-400 bg-blue-500/10"
-                        title="Edit draft"
-                      >
-                        <Pencil size={13} />
-                      </button>
+                      <>
+                        <button
+                          onClick={() => onEditInvoice(inv.id)}
+                          className="py-1.5 px-2 rounded-lg text-xs font-bold text-blue-400 bg-blue-500/10"
+                          title="Edit draft"
+                        >
+                          <Pencil size={13} />
+                        </button>
+                        <button
+                          onClick={() => setConfirmApprove(inv)}
+                          disabled={validating === inv.id}
+                          className="py-1.5 px-2 rounded-lg text-xs font-bold text-emerald-400 bg-emerald-500/10 disabled:opacity-50"
+                          title="Validate & seal invoice"
+                        >
+                          {validating === inv.id
+                            ? <RefreshCw size={13} className="animate-spin" />
+                            : <CheckCircle2 size={13} />}
+                        </button>
+                      </>
                     )}
                   </div>
                 </div>
@@ -422,13 +496,25 @@ export function InvoiceListView({ onCreateNew, onViewInvoice, onEditInvoice }: P
                             title="View invoice"
                           />
                           {inv.status === 'DRAFT' && (
-                            <button
-                              onClick={() => onEditInvoice(inv.id)}
-                              className="p-1.5 rounded-lg text-[#A1A1AA] hover:text-blue-400 hover:bg-blue-500/10 transition-colors"
-                              title="Edit draft"
-                            >
-                              <Pencil size={13} />
-                            </button>
+                            <>
+                              <button
+                                onClick={() => onEditInvoice(inv.id)}
+                                className="p-1.5 rounded-lg text-[#A1A1AA] hover:text-blue-400 hover:bg-blue-500/10 transition-colors"
+                                title="Edit draft"
+                              >
+                                <Pencil size={13} />
+                              </button>
+                              <button
+                                onClick={() => setConfirmApprove(inv)}
+                                disabled={validating === inv.id}
+                                className="p-1.5 rounded-lg text-[#A1A1AA] hover:text-emerald-400 hover:bg-emerald-500/10 transition-colors disabled:opacity-50"
+                                title="Validate & apply administrative seal"
+                              >
+                                {validating === inv.id
+                                  ? <RefreshCw size={13} className="animate-spin text-emerald-400" />
+                                  : <CheckCircle2 size={13} />}
+                              </button>
+                            </>
                           )}
                           <AsyncActionButton
                             mode="download"
