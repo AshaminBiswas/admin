@@ -3,7 +3,7 @@ import {
   FileCheck, Plus, Search, Filter, RefreshCw, Printer, Download,
   Eye, Building2, MapPin, CheckCircle2, Clock, AlertCircle,
   FileText, ArrowRight, ShieldCheck, ChevronRight, Layers, Trash2, QrCode,
-  Landmark, Send
+  Landmark, Send, Edit3
 } from 'lucide-react';
 import { ProformaInvoice } from '../types/proforma';
 import { useAdminAuth } from '../context/AdminAuthContext';
@@ -12,7 +12,7 @@ import { ProformaInvoiceCreateView } from './proforma/ProformaInvoiceCreateView'
 import { ProformaInvoiceDetailView } from './proforma/ProformaInvoiceDetailView';
 import { printProformaInvoice } from '../utils/proformaPdfGenerator';
 
-type SubView = 'list' | 'create' | 'detail';
+type SubView = 'list' | 'create' | 'detail' | 'edit';
 
 export function ProformaInvoicesPage() {
   const [subView, setSubView] = useState<SubView>('list');
@@ -165,6 +165,23 @@ export function ProformaInvoicesPage() {
     );
   }
 
+  if (subView === 'edit' && selectedInvoice) {
+    return (
+      <ProformaInvoiceCreateView
+        initialInvoice={selectedInvoice}
+        onBack={() => {
+          setSubView('detail');
+          loadInvoices();
+        }}
+        onSaved={(updatedPI) => {
+          setSelectedInvoice(updatedPI);
+          setSubView('detail');
+          loadInvoices();
+        }}
+      />
+    );
+  }
+
   if (subView === 'detail' && selectedInvoice) {
     return (
       <ProformaInvoiceDetailView
@@ -173,6 +190,10 @@ export function ProformaInvoicesPage() {
           setSelectedInvoice(null);
           setSubView('list');
           loadInvoices();
+        }}
+        onEdit={(inv) => {
+          setSelectedInvoice(inv);
+          setSubView('edit');
         }}
       />
     );
@@ -453,6 +474,17 @@ export function ProformaInvoicesPage() {
                           title="View PI Dossier"
                         >
                           <Eye size={14} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedInvoice(inv);
+                            setSubView('edit');
+                          }}
+                          className="p-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 hover:text-white border border-amber-500/30 rounded-lg transition-all"
+                          title="Edit Proforma Invoice Details & Line Items"
+                        >
+                          <Edit3 size={14} />
                         </button>
                         <button
                           type="button"

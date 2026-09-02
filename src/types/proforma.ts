@@ -208,6 +208,8 @@ export interface CreateProformaInvoicePayload {
   shippingCharges?: number;
   shippingGstRate?: number;
   notes?: string;
+  termsAndConditions?: string;
+  customBankDetails?: any;
   items: Array<{
     productId?: string;
     sku: string;

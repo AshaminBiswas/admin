@@ -27,6 +27,7 @@ import { printProformaInvoice } from '../../utils/proformaPdfGenerator';
 interface Props {
   onBack: () => void;
   onSaved: (pi: ProformaInvoice) => void;
+  initialInvoice?: ProformaInvoice | null;
 }
 
 interface DraftLineItem {
@@ -132,13 +133,17 @@ function mapBranchToProformaFacility(b: any): ProformaFacility {
   };
 }
 
-export function ProformaInvoiceCreateView({ onBack, onSaved }: Props) {
+export function ProformaInvoiceCreateView({ onBack, onSaved, initialInvoice }: Props) {
+  const isEditing = Boolean(initialInvoice && initialInvoice.id);
+
   // Fulfillment Facilities (Loaded dynamically from Inventory Page)
   const [facilities, setFacilities] = useState<ProformaFacility[]>([
     PROFORMA_FACILITIES.DELHI_WORKS,
     PROFORMA_FACILITIES.MUMBAI_DEPOT,
   ]);
-  const [selectedFacilityCode, setSelectedFacilityCode] = useState<string>('DELHI_WORKS');
+  const [selectedFacilityCode, setSelectedFacilityCode] = useState<string>(
+    initialInvoice?.facilityCode || 'DELHI_WORKS'
+  );
   const [loadingFacilities, setLoadingFacilities] = useState<boolean>(false);
 
   // Active facility object
@@ -160,21 +165,25 @@ export function ProformaInvoiceCreateView({ onBack, onSaved }: Props) {
   const [customerResults, setCustomerResults] = useState<B2BCustomerSearchResult[]>([]);
   const [searchingCustomer, setSearchingCustomer] = useState(false);
   const [isCustomerDropdownOpen, setIsCustomerDropdownOpen] = useState(false);
-  const [selectedCustomerId, setSelectedCustomerId] = useState<string | undefined>();
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | undefined>(
+    initialInvoice?.customerId || undefined
+  );
   const [selectedCustomer, setSelectedCustomer] = useState<B2BCustomerSearchResult | null>(null);
   const [customerSavedAddresses, setCustomerSavedAddresses] = useState<CustomerSavedAddressSummary[]>([]);
   const customerDropdownRef = useRef<HTMLDivElement>(null);
 
-  const [customerName, setCustomerName] = useState('');
-  const [companyName, setCompanyName] = useState('');
-  const [customerEmail, setCustomerEmail] = useState('');
-  const [customerPhone, setCustomerPhone] = useState('');
-  const [customerGstin, setCustomerGstin] = useState('');
-  const [placeOfSupply, setPlaceOfSupply] = useState('Delhi');
-  const [placeOfSupplyCode, setPlaceOfSupplyCode] = useState('07');
-  const [billingAddress, setBillingAddress] = useState('');
-  const [shippingAddress, setShippingAddress] = useState('');
-  const [sameAsBilling, setSameAsBilling] = useState(true);
+  const [customerName, setCustomerName] = useState(initialInvoice?.customerName || '');
+  const [companyName, setCompanyName] = useState(initialInvoice?.companyName || '');
+  const [customerEmail, setCustomerEmail] = useState(initialInvoice?.customerEmail || '');
+  const [customerPhone, setCustomerPhone] = useState(initialInvoice?.customerPhone || '');
+  const [customerGstin, setCustomerGstin] = useState(initialInvoice?.customerGstin || '');
+  const [placeOfSupply, setPlaceOfSupply] = useState(initialInvoice?.placeOfSupply || 'Delhi');
+  const [placeOfSupplyCode, setPlaceOfSupplyCode] = useState(initialInvoice?.placeOfSupplyCode || '07');
+  const [billingAddress, setBillingAddress] = useState(initialInvoice?.billingAddress || '');
+  const [shippingAddress, setShippingAddress] = useState(initialInvoice?.shippingAddress || '');
+  const [sameAsBilling, setSameAsBilling] = useState(
+    !initialInvoice?.shippingAddress || initialInvoice.shippingAddress === initialInvoice.billingAddress
+  );
 
   // Customer-Specific B2B Pricing Matrix Map (Loaded automatically upon customer selection)
   const [customerPricingMap, setCustomerPricingMap] = useState<Record<string, {
@@ -188,20 +197,40 @@ export function ProformaInvoiceCreateView({ onBack, onSaved }: Props) {
   const [loadingCustomPrices, setLoadingCustomPrices] = useState(false);
 
   // Dates & Commercial Terms
-  const [issueDate, setIssueDate] = useState(new Date().toISOString().slice(0, 10));
-  const [validUntil, setValidUntil] = useState(
-    new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10)
+  const [issueDate, setIssueDate] = useState(
+    initialInvoice?.issueDate ? new Date(initialInvoice.issueDate).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10)
   );
-  const [poReference, setPoReference] = useState('');
-  const [quoteReference, setQuoteReference] = useState('');
-  const [advancePercentage, setAdvancePercentage] = useState<number>(30);
-  const [shippingCharges, setShippingCharges] = useState<number>(0);
+  const [validUntil, setValidUntil] = useState(
+    initialInvoice?.validUntil ? new Date(initialInvoice.validUntil).toISOString().slice(0, 10) : new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10)
+  );
+  const [poReference, setPoReference] = useState(initialInvoice?.poReference || '');
+  const [quoteReference, setQuoteReference] = useState(initialInvoice?.quoteReference || '');
+  const [advancePercentage, setAdvancePercentage] = useState<number>(initialInvoice?.advancePercentage ?? 30);
+  const [shippingCharges, setShippingCharges] = useState<number>(initialInvoice?.shippingCharges ?? 0);
   const [shippingGstRate, setShippingGstRate] = useState<number>(18);
-  const [deliveryTimeline, setDeliveryTimeline] = useState('Immediate dispatch within 5-7 working days');
-  const [notes, setNotes] = useState('');
+  const [deliveryTimeline, setDeliveryTimeline] = useState(
+    initialInvoice?.deliveryTimeline || 'Immediate dispatch within 5-7 working days'
+  );
+  const [notes, setNotes] = useState(initialInvoice?.notes || '');
 
-  // Line Items (Initialized as EMPTY array with no default product)
-  const [items, setItems] = useState<DraftLineItem[]>([]);
+  // Line Items (Initialized with initialInvoice items if editing, else empty array)
+  const [items, setItems] = useState<DraftLineItem[]>(() => {
+    if (initialInvoice && Array.isArray(initialInvoice.items) && initialInvoice.items.length > 0) {
+      return initialInvoice.items.map((it) => ({
+        productId: it.productId,
+        sku: it.sku || 'SKU-001',
+        productName: it.productName,
+        description: it.description,
+        hsnCode: it.hsnCode || '83024110',
+        unit: it.unit || 'PCS',
+        quantity: it.quantity || 1,
+        unitPrice: Number(it.unitPrice || (it as any).unitRate || 0),
+        discount: Number(it.discount || 0),
+        gstRate: Number(it.gstRate || (it as any).igstRate || 18),
+      }));
+    }
+    return [];
+  });
 
   // Categories & Product Search
   const [categoryOptions, setCategoryOptions] = useState(DEFAULT_CATEGORY_OPTIONS);
@@ -656,11 +685,16 @@ export function ProformaInvoiceCreateView({ onBack, onSaved }: Props) {
         items,
       };
 
-      const created = await proformaService.createProformaInvoice(payload);
-      onSaved(created);
+      let result: ProformaInvoice;
+      if (isEditing && initialInvoice?.id) {
+        result = await proformaService.updateProformaInvoice(initialInvoice.id, payload);
+      } else {
+        result = await proformaService.createProformaInvoice(payload);
+      }
+      onSaved(result);
     } catch (err: any) {
       console.error(err);
-      setErrorMsg(err.message || 'Failed to generate Proforma Invoice. Please check all fields.');
+      setErrorMsg(err.message || 'Failed to save Proforma Invoice. Please check all fields.');
     } finally {
       setIsSubmitting(false);
     }
@@ -676,19 +710,27 @@ export function ProformaInvoiceCreateView({ onBack, onSaved }: Props) {
             type="button"
             onClick={onBack}
             className="w-9 h-9 rounded-xl bg-[#18181B] border border-[#27272A] flex items-center justify-center text-zinc-400 hover:text-white hover:border-zinc-500 transition-all"
-            title="Back to PI List"
+            title="Back"
           >
             <ArrowLeft size={16} />
           </button>
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-xs font-bold font-mono px-2 py-0.5 rounded-md bg-[#8B5CF6]/20 text-[#C4B5FD] border border-[#8B5CF6]/30">
-                PROFORMA GENERATOR
+              <span className={`text-xs font-bold font-mono px-2 py-0.5 rounded-md border ${
+                isEditing
+                  ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                  : 'bg-[#8B5CF6]/20 text-[#C4B5FD] border-[#8B5CF6]/30'
+              }`}>
+                {isEditing ? 'PROFORMA EDITOR' : 'PROFORMA GENERATOR'}
               </span>
-              <h1 className="text-xl font-bold text-white tracking-tight">Create Proforma Invoice (PI)</h1>
+              <h1 className="text-xl font-bold text-white tracking-tight">
+                {isEditing ? `Edit Proforma Invoice: ${initialInvoice?.piNumber}` : 'Create Proforma Invoice (PI)'}
+              </h1>
             </div>
             <p className="text-xs text-zinc-400 mt-0.5">
-              Issue an official Commercial Proforma Invoice with inventory fulfillment facility routing, B2B customer auto-fill, and GST computation.
+              {isEditing
+                ? 'Modify line items, quantities, custom B2B prices, commercial terms, or customer details for this Proforma Invoice.'
+                : 'Issue an official Commercial Proforma Invoice with inventory fulfillment facility routing, B2B customer auto-fill, and GST computation.'}
             </p>
           </div>
         </div>
@@ -709,11 +751,11 @@ export function ProformaInvoiceCreateView({ onBack, onSaved }: Props) {
           >
             {isSubmitting ? (
               <>
-                <RefreshCw size={14} className="animate-spin" /> Generating PI...
+                <RefreshCw size={14} className="animate-spin" /> {isEditing ? 'Saving Changes...' : 'Generating PI...'}
               </>
             ) : (
               <>
-                <Sparkles size={14} /> Generate & Issue PI
+                <Sparkles size={14} /> {isEditing ? 'Save & Update Proforma Invoice' : 'Generate & Issue PI'}
               </>
             )}
           </button>

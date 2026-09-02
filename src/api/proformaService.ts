@@ -657,6 +657,72 @@ export const proformaService = {
   },
 
   /**
+   * Update existing Proforma Invoice line items and metadata
+   */
+  async updateProformaInvoice(
+    id: string,
+    payload: CreateProformaInvoicePayload
+  ): Promise<ProformaInvoice> {
+    const facility = payload.facility || PROFORMA_FACILITIES[payload.facilityCode] || PROFORMA_FACILITIES.DELHI_WORKS;
+    const customerEmail = (payload.customerEmail || '').trim() || 'billing@prchardware.com';
+
+    // 1. Update line items
+    if (payload.items && payload.items.length > 0) {
+      await fetchAdminApi<any>(`/proforma-invoices/${encodeURIComponent(id)}/items`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          placeOfSupply: payload.placeOfSupply || 'Delhi',
+          supplierState: facility.state || 'Delhi',
+          shippingCost: Number(payload.shippingCharges || 0),
+          advancePercentage: Number(payload.advancePercentage || 30),
+          items: payload.items.map((it) => ({
+            productId: it.productId || undefined,
+            sku: it.sku || 'SKU-001',
+            productName: it.productName,
+            description: it.description || undefined,
+            hsnCode: it.hsnCode || '8302',
+            unit: it.unit || 'PCS',
+            quantity: Number(it.quantity || 1),
+            unitRate: Number(it.unitPrice || 0),
+            discountPercent: Number(it.discount || 0),
+            gstRate: Number(it.gstRate || 18),
+          })),
+        }),
+      });
+    }
+
+    // 2. Update metadata
+    const res = await fetchAdminApi<any>(`/proforma-invoices/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        customerName: (payload.customerName || payload.companyName || 'B2B Commercial Client').trim(),
+        companyName: (payload.companyName || payload.customerName || '').trim() || undefined,
+        customerEmail,
+        customerPhone: (payload.customerPhone || '').trim() || undefined,
+        gstin: (payload.customerGstin || '').trim().toUpperCase() || undefined,
+        billingAddress: (payload.billingAddress || '').trim() || undefined,
+        shippingAddress: (payload.shippingAddress || payload.billingAddress || '').trim() || undefined,
+        placeOfSupply: payload.placeOfSupply || 'Delhi',
+        advancePercentage: Number(payload.advancePercentage || 30),
+        paymentTerms: payload.paymentTerms || undefined,
+        deliveryTimeline: payload.deliveryTimeline || undefined,
+        validUntil: payload.validUntil || undefined,
+        shippingCost: Number(payload.shippingCharges || 0),
+        notes: payload.notes || undefined,
+        termsAndConditions: payload.termsAndConditions || undefined,
+        bankDetails: payload.customBankDetails || undefined,
+      }),
+    });
+
+    const data = res?.data || res;
+    if (!data || !data.id) {
+      throw new Error(res?.message || 'Failed to update Proforma Invoice on server.');
+    }
+
+    return transformBackendInvoiceToPI(data);
+  },
+
+  /**
    * Admin: Record / Confirm Advance Payment received for a Proforma Invoice
    */
   async recordPayment(

@@ -4,7 +4,7 @@ import {
   Building2, MapPin, Phone, CreditCard, ShieldCheck,
   Calendar, FileText, Send, Copy, RefreshCw, AlertCircle, X, Trash2,
   Landmark, MessageSquare, History, UserCheck, Check, Sparkles, Clock,
-  ExternalLink, Eye
+  ExternalLink, Eye, Edit3
 } from 'lucide-react';
 import { ProformaInvoice, ProformaInvoiceHistory } from '../../types/proforma';
 import { proformaService } from '../../api/proformaService';
@@ -14,9 +14,10 @@ import { printProformaInvoice } from '../../utils/proformaPdfGenerator';
 interface Props {
   invoice: ProformaInvoice;
   onBack: () => void;
+  onEdit?: (invoice: ProformaInvoice) => void;
 }
 
-export function ProformaInvoiceDetailView({ invoice: initialInvoice, onBack }: Props) {
+export function ProformaInvoiceDetailView({ invoice: initialInvoice, onBack, onEdit }: Props) {
   const [invoice, setInvoice] = useState<ProformaInvoice>(initialInvoice);
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -167,6 +168,17 @@ export function ProformaInvoiceDetailView({ invoice: initialInvoice, onBack }: P
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {onEdit && (
+            <button
+              type="button"
+              onClick={() => onEdit(invoice)}
+              className="px-4 py-2 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 hover:text-white text-xs font-bold rounded-xl border border-amber-500/40 flex items-center gap-2 transition-all shadow-xs"
+              title="Edit Proforma Invoice Details & Items"
+            >
+              <Edit3 size={14} /> Edit Proforma Invoice
+            </button>
+          )}
+
           <button
             type="button"
             onClick={() => printProformaInvoice(invoice)}
