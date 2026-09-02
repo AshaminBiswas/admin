@@ -5,7 +5,9 @@ import {
   Calendar, FileText, ExternalLink, Eye, ChevronRight, UserCheck,
   Building2, Phone, Mail, DollarSign, ArrowUpDown, X, Check,
   CreditCard, Sparkles, Receipt, Layers, Users, TrendingUp,
-  Percent, ArrowDownRight, ArrowUpRight, ChevronDown, CheckCheck
+  Percent, ArrowDownRight, ArrowUpRight, ChevronDown, CheckCheck,
+  PhoneForwarded, MessageSquare, CalendarPlus, History, Send,
+  CalendarCheck, AlertOctagon, MessageCircle, PhoneCall
 } from 'lucide-react';
 import { ProformaInvoice } from '../../types/proforma';
 import { GSTInvoice } from '../../types/admin';
@@ -65,6 +67,30 @@ export interface B2BPaymentRecord {
   lastPaymentDate?: string;
   notes?: string;
 
+  // Follow-up & Collections Intelligence
+  lastFollowUp?: {
+    date: string;
+    channel: string;
+    stage: string;
+    notes: string;
+    agent: string;
+    ptpDate?: string | null;
+    ptpAmount?: number | null;
+    nextFollowupDate?: string | null;
+  } | null;
+  ptpDate?: string | null;
+  ptpAmount?: number | null;
+  nextFollowupDate?: string | null;
+  followupStatus?: 'PTP_PROMISED' | 'FOLLOWUP_OVERDUE' | 'FOLLOWUP_DUE_TODAY' | 'FOLLOWUP_SCHEDULED' | 'NO_FOLLOWUP';
+  history?: Array<{
+    id?: string;
+    action: string;
+    performedBy?: string;
+    details?: string;
+    metadata?: any;
+    createdAt?: string;
+  }>;
+
   // Underlying Raw Document for Deep Navigation
   rawDoc?: any;
 }
@@ -95,6 +121,72 @@ export interface B2BCustomerAccountSummary {
   riskLevel: 'LOW_RISK' | 'MODERATE' | 'HIGH_RISK_OVERDUE';
 }
 
+// ─── Reminder Message Formatting Helpers ─────────────────────────────────────
+function generateWhatsAppReminderMessage(record: B2BPaymentRecord): string {
+  const isPi = record.sourceType === 'PROFORMA_INVOICE';
+  const docTitle = isPi ? `Proforma Invoice ${record.documentNumber}` : `Tax Invoice ${record.documentNumber}`;
+  const amountDue = isPi && record.advancePayable > 0 && record.advancePaid === 0 ? record.advancePayable : record.balanceDue;
+  const payType = isPi && record.advancePayable > 0 && record.advancePaid === 0
+    ? `${record.rawDoc?.advancePercentage || 30}% Advance Deposit`
+    : 'Commercial Settlement';
+
+  const verificationToken = record.rawDoc?.verificationToken || record.rawDoc?.id;
+  const onlinePayLink = verificationToken
+    ? `https://prchardware.com/pi/${verificationToken}`
+    : `https://prchardware.com`;
+
+  return `*PRC HARDWARE — Commercial Accounts Remittance Notice*
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+Dear *${record.customerName || record.companyName}*,
+
+This is a polite payment follow-up notice regarding *${docTitle}*.
+
+• *Total Invoiced Value:* ₹${record.grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+• *Amount Pending:* *₹${amountDue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}* (${payType})
+• *Due Date:* ${new Date(record.dueDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+
+*Official Bank Remittance Details (PRC Hardware):*
+• *Bank Name:* HDFC Bank Ltd
+• *Account Name:* Pacific Products and Solutions
+• *Account No:* 50200088991122
+• *IFSC Code:* HDFC0001234
+• *Branch:* Mandoli Works, Delhi - 110093
+• *UPI / VPA:* prchardware@hdfcbank
+
+*View Invoice & Submit Payment Proof / UTR:*
+${onlinePayLink}
+
+Kindly share your Bank UTR or payment screenshot upon transfer for immediate dispatch clearance.
+
+*PRC Hardware Commercial Accounts Desk*
+www.prchardware.com`;
+}
+
+function generateEmailReminder(record: B2BPaymentRecord) {
+  const isPi = record.sourceType === 'PROFORMA_INVOICE';
+  const docTitle = isPi ? `Proforma Invoice ${record.documentNumber}` : `Tax Invoice ${record.documentNumber}`;
+  const amountDue = isPi && record.advancePayable > 0 && record.advancePaid === 0 ? record.advancePayable : record.balanceDue;
+  const subject = encodeURIComponent(`Payment Reminder Notice — ${docTitle} [₹${amountDue.toLocaleString('en-IN')}] | PRC Hardware`);
+  const body = encodeURIComponent(
+`Dear ${record.customerName || record.companyName},
+
+Greetings from PRC Hardware Commercial Accounts Desk.
+
+This is a gentle reminder regarding the pending remittance for ${docTitle}.
+
+Amount Due: INR ${amountDue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+Due Date: ${new Date(record.dueDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+
+Kindly arrange the bank remittance via RTGS/NEFT/UPI to our HDFC Current Account (A/C: 50200088991122, IFSC: HDFC0001234) and provide the UTR reference for priority clearance.
+
+Thank you,
+Commercial Accounts Desk
+PRC Hardware
+www.prchardware.com`
+  );
+  return `mailto:${record.customerEmail || ''}?subject=${subject}&body=${body}`;
+}
+
 export function AdvancePaymentsTrackerPage() {
   const { setCurrentView } = useAdminAuth();
 
@@ -113,6 +205,7 @@ export function AdvancePaymentsTrackerPage() {
   const [sourceTypeFilter, setSourceTypeFilter] = useState<string>('ALL');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [agingFilter, setAgingFilter] = useState<string>('ALL');
+  const [followupFilter, setFollowupFilter] = useState<string>('ALL');
   const [selectedCustomerIdFilter, setSelectedCustomerIdFilter] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<'aging' | 'balance' | 'total' | 'date'>('aging');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
@@ -133,6 +226,23 @@ export function AdvancePaymentsTrackerPage() {
   const [paymentNotes, setPaymentNotes] = useState<string>('');
   const [savingPayment, setSavingPayment] = useState(false);
   const [paymentSuccessMsg, setPaymentSuccessMsg] = useState<string | null>(null);
+
+  // Commercial Follow-up Modal State
+  const [followupModalRecord, setFollowupModalRecord] = useState<B2BPaymentRecord | null>(null);
+  const [followupChannel, setFollowupChannel] = useState<'PHONE' | 'WHATSAPP' | 'EMAIL' | 'IN_PERSON' | 'LEGAL_NOTICE' | 'OTHER'>('PHONE');
+  const [followupStage, setFollowupStage] = useState<'COURTESY_REMINDER' | 'DUE_WARNING' | 'OVERDUE_ALERT' | 'PROMISE_TO_PAY' | 'ESCALATED' | 'DISPUTED' | 'OTHER'>('COURTESY_REMINDER');
+  const [followupNotes, setFollowupNotes] = useState<string>('');
+  const [followupContactPerson, setFollowupContactPerson] = useState<string>('');
+  const [followupContactPhone, setFollowupContactPhone] = useState<string>('');
+  const [followupContactEmail, setFollowupContactEmail] = useState<string>('');
+  const [followupPtpDate, setFollowupPtpDate] = useState<string>('');
+  const [followupPtpAmount, setFollowupPtpAmount] = useState<number>(0);
+  const [followupNextDate, setFollowupNextDate] = useState<string>('');
+  const [savingFollowup, setSavingFollowup] = useState(false);
+  const [followupSuccessMsg, setFollowupSuccessMsg] = useState<string | null>(null);
+
+  // Follow-up History Timeline Modal State
+  const [historyModalRecord, setHistoryModalRecord] = useState<B2BPaymentRecord | null>(null);
 
   // Receipt Lightbox Modal State
   const [previewReceiptUrl, setPreviewReceiptUrl] = useState<string | null>(null);
@@ -233,6 +343,63 @@ export function AdvancePaymentsTrackerPage() {
       else if (pi.status === 'ACCEPTED' || Boolean(customerUtr)) paymentStatus = 'CUSTOMER_SUBMITTED';
       else if (isOverdue) paymentStatus = 'OVERDUE';
 
+      // Follow-up intelligence from History & Notes
+      const followUpEvents = (pi.history || []).filter(
+        (h) => h.action === 'FOLLOW_UP_LOGGED' || (h.details && h.details.toLowerCase().includes('follow-up'))
+      );
+      const latestFollowUpEvent = followUpEvents[0];
+
+      let lastFollowUp: B2BPaymentRecord['lastFollowUp'] = null;
+      if (latestFollowUpEvent) {
+        const meta = latestFollowUpEvent.metadata || {};
+        lastFollowUp = {
+          date: latestFollowUpEvent.createdAt || meta.loggedAt || new Date().toISOString(),
+          channel: meta.channel || 'PHONE',
+          stage: meta.stage || 'COURTESY_REMINDER',
+          notes: meta.notes || latestFollowUpEvent.details || '',
+          agent: meta.loggedBy || latestFollowUpEvent.performedBy || 'Accounts Desk',
+          ptpDate: meta.ptpDate || null,
+          ptpAmount: meta.ptpAmount || null,
+          nextFollowupDate: meta.nextFollowupDate || null,
+        };
+      } else if (pi.notes && pi.notes.includes('[Follow-up')) {
+        const match = pi.notes.match(/\[Follow-up\s+([^\|\]]+)\s*\|\s*([^-]+)-\s*([^\]]+)\]:\s*([^\[]+)(?:\[PTP Promised:\s*₹?([0-9,]+)\s+on\s+([^\]]+)\])?(?:\[Next Follow-up Due:\s*([^\]]+)\])?/i);
+        if (match) {
+          lastFollowUp = {
+            date: match[1].trim(),
+            channel: match[2].trim(),
+            stage: match[3].trim(),
+            notes: match[4].trim(),
+            agent: 'Accounts Desk',
+            ptpAmount: match[5] ? Number(match[5].replace(/,/g, '')) : null,
+            ptpDate: match[6] ? match[6].trim() : null,
+            nextFollowupDate: match[7] ? match[7].trim() : null,
+          };
+        }
+      }
+
+      let ptpDate = lastFollowUp?.ptpDate || null;
+      let ptpAmount = lastFollowUp?.ptpAmount || null;
+      let nextFollowupDate = lastFollowUp?.nextFollowupDate || null;
+      let followupStatus: B2BPaymentRecord['followupStatus'] = 'NO_FOLLOWUP';
+
+      const todayStr = new Date().toISOString().slice(0, 10);
+      if (ptpDate) {
+        followupStatus = 'PTP_PROMISED';
+      } else if (nextFollowupDate) {
+        if (nextFollowupDate < todayStr) {
+          followupStatus = 'FOLLOWUP_OVERDUE';
+        } else if (nextFollowupDate === todayStr) {
+          followupStatus = 'FOLLOWUP_DUE_TODAY';
+        } else {
+          followupStatus = 'FOLLOWUP_SCHEDULED';
+        }
+      } else if (lastFollowUp) {
+        followupStatus = 'FOLLOWUP_SCHEDULED';
+      } else if (isOverdue || isExpiringSoon) {
+        followupStatus = 'FOLLOWUP_OVERDUE';
+      }
+
       records.push({
         id: `PI-${pi.id}`,
         sourceType: 'PROFORMA_INVOICE',
@@ -261,6 +428,12 @@ export function AdvancePaymentsTrackerPage() {
         transactionRef: customerUtr,
         receiptUrl,
         notes: pi.notes,
+        lastFollowUp,
+        ptpDate,
+        ptpAmount,
+        nextFollowupDate,
+        followupStatus,
+        history: pi.history || [],
         rawDoc: pi,
       });
     });
@@ -269,7 +442,6 @@ export function AdvancePaymentsTrackerPage() {
     gstInvoices.forEach((inv) => {
       const issueTime = new Date(inv.invoice_date || inv.created_at || now).getTime();
       const daysElapsed = Math.max(0, Math.floor((now - issueTime) / (1000 * 60 * 60 * 24)));
-      // Default Net 30 days credit terms for GST invoices
       const dueTime = issueTime + 30 * 86400000;
       const daysRemaining = Math.ceil((dueTime - now) / (1000 * 60 * 60 * 24));
 
@@ -286,6 +458,45 @@ export function AdvancePaymentsTrackerPage() {
       else if (isPaid) paymentStatus = 'FULLY_PAID';
       else if (isOverdue) paymentStatus = 'OVERDUE';
       else paymentStatus = 'PARTIALLY_PAID';
+
+      let lastFollowUp: B2BPaymentRecord['lastFollowUp'] = null;
+      if (inv.notes && inv.notes.includes('[Follow-up')) {
+        const match = inv.notes.match(/\[Follow-up\s+([^\|\]]+)\s*\|\s*([^-]+)-\s*([^\]]+)\]:\s*([^\[]+)(?:\[PTP Promised:\s*₹?([0-9,]+)\s+on\s+([^\]]+)\])?(?:\[Next Follow-up Due:\s*([^\]]+)\])?/i);
+        if (match) {
+          lastFollowUp = {
+            date: match[1].trim(),
+            channel: match[2].trim(),
+            stage: match[3].trim(),
+            notes: match[4].trim(),
+            agent: 'Accounts Desk',
+            ptpAmount: match[5] ? Number(match[5].replace(/,/g, '')) : null,
+            ptpDate: match[6] ? match[6].trim() : null,
+            nextFollowupDate: match[7] ? match[7].trim() : null,
+          };
+        }
+      }
+
+      let ptpDate = lastFollowUp?.ptpDate || null;
+      let ptpAmount = lastFollowUp?.ptpAmount || null;
+      let nextFollowupDate = lastFollowUp?.nextFollowupDate || null;
+      let followupStatus: B2BPaymentRecord['followupStatus'] = 'NO_FOLLOWUP';
+
+      const todayStr = new Date().toISOString().slice(0, 10);
+      if (ptpDate) {
+        followupStatus = 'PTP_PROMISED';
+      } else if (nextFollowupDate) {
+        if (nextFollowupDate < todayStr) {
+          followupStatus = 'FOLLOWUP_OVERDUE';
+        } else if (nextFollowupDate === todayStr) {
+          followupStatus = 'FOLLOWUP_DUE_TODAY';
+        } else {
+          followupStatus = 'FOLLOWUP_SCHEDULED';
+        }
+      } else if (lastFollowUp) {
+        followupStatus = 'FOLLOWUP_SCHEDULED';
+      } else if (isOverdue || isExpiringSoon) {
+        followupStatus = 'FOLLOWUP_OVERDUE';
+      }
 
       records.push({
         id: `GST-${inv.id}`,
@@ -311,6 +522,11 @@ export function AdvancePaymentsTrackerPage() {
         paymentType: 'FULL_SETTLEMENT',
         paymentMode: isPaid ? 'Bank Remittance (Net 30)' : undefined,
         notes: inv.notes,
+        lastFollowUp,
+        ptpDate,
+        ptpAmount,
+        nextFollowupDate,
+        followupStatus,
         rawDoc: inv,
       });
     });
@@ -337,6 +553,8 @@ export function AdvancePaymentsTrackerPage() {
       else if (isPaid) paymentStatus = 'FULLY_PAID';
       else if (isOverdue) paymentStatus = 'OVERDUE';
       else paymentStatus = 'PARTIALLY_PAID';
+
+      let followupStatus: B2BPaymentRecord['followupStatus'] = isOverdue ? 'FOLLOWUP_OVERDUE' : 'NO_FOLLOWUP';
 
       records.push({
         id: `ORD-${ord.id}`,
@@ -365,6 +583,7 @@ export function AdvancePaymentsTrackerPage() {
         paymentMode: ord.paymentMethod || 'RAZORPAY',
         transactionRef: ord.trackingNumber || undefined,
         notes: ord.notes,
+        followupStatus,
         rawDoc: ord,
       });
     });
@@ -454,6 +673,9 @@ export function AdvancePaymentsTrackerPage() {
     let overdueValue = 0;
     let customerUtrCount = 0;
     let customerUtrValue = 0;
+    let followupDueTodayCount = 0;
+    let ptpPromisedCount = 0;
+    let followupOverdueCount = 0;
 
     unifiedRecords.forEach((r) => {
       totalInvoiced += r.grandTotal;
@@ -469,6 +691,10 @@ export function AdvancePaymentsTrackerPage() {
         customerUtrCount++;
         customerUtrValue += r.advancePayable || r.grandTotal;
       }
+
+      if (r.followupStatus === 'FOLLOWUP_DUE_TODAY') followupDueTodayCount++;
+      if (r.followupStatus === 'PTP_PROMISED') ptpPromisedCount++;
+      if (r.followupStatus === 'FOLLOWUP_OVERDUE') followupOverdueCount++;
     });
 
     const activeDebtorsCount = customerAccounts.filter((c) => c.totalOutstandingDue > 0).length;
@@ -482,6 +708,9 @@ export function AdvancePaymentsTrackerPage() {
       customerUtrCount,
       customerUtrValue,
       activeDebtorsCount,
+      followupDueTodayCount,
+      ptpPromisedCount,
+      followupOverdueCount,
       totalDocuments: unifiedRecords.length,
       collectionRatio: totalInvoiced > 0 ? (totalCollected / totalInvoiced) * 100 : 0,
     };
@@ -530,6 +759,17 @@ export function AdvancePaymentsTrackerPage() {
           if (!rec.isOverdue) return false;
         }
 
+        // Follow-up Filter
+        if (followupFilter === 'DUE_TODAY') {
+          if (rec.followupStatus !== 'FOLLOWUP_DUE_TODAY') return false;
+        } else if (followupFilter === 'OVERDUE') {
+          if (rec.followupStatus !== 'FOLLOWUP_OVERDUE') return false;
+        } else if (followupFilter === 'PTP_PROMISED') {
+          if (rec.followupStatus !== 'PTP_PROMISED') return false;
+        } else if (followupFilter === 'NO_FOLLOWUP') {
+          if (rec.followupStatus !== 'NO_FOLLOWUP') return false;
+        }
+
         // Aging Filter
         if (agingFilter === 'UNDER_7') {
           if (rec.daysElapsed > 7) return false;
@@ -558,12 +798,12 @@ export function AdvancePaymentsTrackerPage() {
           return sortOrder === 'desc' ? dateB - dateA : dateA - dateB;
         }
       });
-  }, [unifiedRecords, searchQuery, sourceTypeFilter, statusFilter, agingFilter, selectedCustomerIdFilter, sortBy, sortOrder]);
+  }, [unifiedRecords, searchQuery, sourceTypeFilter, statusFilter, followupFilter, agingFilter, selectedCustomerIdFilter, sortBy, sortOrder]);
 
   // ─── Open Universal Record Payment Modal ────────────────────────────────────
   const handleOpenPaymentModal = (record: B2BPaymentRecord) => {
     setPaymentModalRecord(record);
-    setPaymentAmount(record.advancePayable > 0 ? record.advancePayable : record.balanceDue);
+    setPaymentAmount(record.advancePayable > 0 && record.advancePaid === 0 ? record.advancePayable : record.balanceDue);
     setPaymentType(record.sourceType === 'PROFORMA_INVOICE' ? 'ADVANCE_DEPOSIT' : 'FULL_SETTLEMENT');
     setPaymentMode('RTGS');
     setPaymentUtr(record.transactionRef || '');
@@ -572,6 +812,83 @@ export function AdvancePaymentsTrackerPage() {
     setTargetStatus(record.sourceType === 'PROFORMA_INVOICE' ? 'ADVANCE_RECEIVED' : 'PAID');
     setPaymentNotes('');
     setPaymentSuccessMsg(null);
+  };
+
+  // ─── Open Commercial Follow-up Modal ─────────────────────────────────────────
+  const handleOpenFollowupModal = (record: B2BPaymentRecord) => {
+    setFollowupModalRecord(record);
+    setFollowupContactPerson(record.customerName || '');
+    setFollowupContactPhone(record.customerPhone || '');
+    setFollowupContactEmail(record.customerEmail || '');
+    setFollowupNotes('');
+    setFollowupPtpDate(record.ptpDate || '');
+    setFollowupPtpAmount(record.ptpAmount || (record.sourceType === 'PROFORMA_INVOICE' && record.advancePayable > 0 && record.advancePaid === 0 ? record.advancePayable : record.balanceDue));
+    const nextDate = new Date();
+    nextDate.setDate(nextDate.getDate() + 3);
+    setFollowupNextDate(nextDate.toISOString().slice(0, 10));
+    setFollowupChannel('PHONE');
+    setFollowupStage(record.isOverdue ? 'OVERDUE_ALERT' : record.isExpiringSoon ? 'DUE_WARNING' : 'COURTESY_REMINDER');
+    setFollowupSuccessMsg(null);
+  };
+
+  // ─── Submit Follow-up Touchpoint ───────────────────────────────────────────
+  const handleSubmitFollowup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!followupModalRecord) return;
+    if (!followupNotes.trim()) {
+      alert('Please enter follow-up remarks / discussion notes.');
+      return;
+    }
+
+    setSavingFollowup(true);
+    try {
+      if (followupModalRecord.sourceType === 'PROFORMA_INVOICE') {
+        const rawPi = followupModalRecord.rawDoc as ProformaInvoice;
+        await proformaService.logFollowUp(rawPi.id, {
+          channel: followupChannel,
+          stage: followupStage,
+          notes: followupNotes.trim(),
+          contactedPerson: followupContactPerson.trim() || undefined,
+          contactPhone: followupContactPhone.trim() || undefined,
+          contactEmail: followupContactEmail.trim() || undefined,
+          ptpDate: followupPtpDate || undefined,
+          ptpAmount: followupPtpAmount > 0 ? Number(followupPtpAmount) : undefined,
+          nextFollowupDate: followupNextDate || undefined,
+        });
+      } else if (followupModalRecord.sourceType === 'GST_TAX_INVOICE') {
+        const rawGst = followupModalRecord.rawDoc as GSTInvoice;
+        const ptpStr = followupPtpDate ? ` [PTP: ₹${Number(followupPtpAmount || 0).toLocaleString('en-IN')} on ${followupPtpDate}]` : '';
+        const nextStr = followupNextDate ? ` [Next Due: ${followupNextDate}]` : '';
+        await fetchAdminApi(`/gst/invoices/${rawGst.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            notes: `${rawGst.notes ? `${rawGst.notes}\n` : ''}[Follow-up ${new Date().toLocaleDateString('en-IN')} | ${followupChannel} - ${followupStage}]: ${followupNotes.trim()}${ptpStr}${nextStr}`,
+          }),
+        });
+      }
+
+      setFollowupSuccessMsg(`Follow-up logged successfully for ${followupModalRecord.documentNumber}!`);
+      await fetchAllCommercialData();
+      setTimeout(() => {
+        setFollowupModalRecord(null);
+        setFollowupSuccessMsg(null);
+      }, 1200);
+    } catch (err: any) {
+      console.error('[AdvancePaymentsTracker] Followup error:', err);
+      alert(err?.message || 'Failed to record follow-up touchpoint on server.');
+    } finally {
+      setSavingFollowup(false);
+    }
+  };
+
+  const handleSendWhatsApp = (record: B2BPaymentRecord) => {
+    const rawPhone = (record.customerPhone || '').replace(/[^\d]/g, '');
+    const cleanPhone = rawPhone.length === 10 ? `91${rawPhone}` : rawPhone;
+    const msg = generateWhatsAppReminderMessage(record);
+    const url = cleanPhone
+      ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`
+      : `https://wa.me/?text=${encodeURIComponent(msg)}`;
+    window.open(url, '_blank');
   };
 
   // ─── Submit Payment Clearance ───────────────────────────────────────────────
@@ -975,6 +1292,24 @@ export function AdvancePaymentsTrackerPage() {
                 </select>
               </div>
 
+              {/* Follow-up / Reminders Filter */}
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] text-purple-400 font-bold shrink-0 flex items-center gap-1">
+                  <PhoneForwarded size={12} /> Follow-up:
+                </span>
+                <select
+                  value={followupFilter}
+                  onChange={(e) => setFollowupFilter(e.target.value as any)}
+                  className="px-3 py-2 bg-[#09090B] border border-[#27272A] focus:border-[#8B5CF6] rounded-xl text-xs text-purple-300 focus:outline-none font-bold"
+                >
+                  <option value="ALL">All Follow-ups</option>
+                  <option value="DUE_TODAY">📞 Due Today ({executiveKpis.followupDueTodayCount})</option>
+                  <option value="OVERDUE">🚨 Follow-up Overdue ({executiveKpis.followupOverdueCount})</option>
+                  <option value="PTP_PROMISED">🤝 Promise to Pay (PTP) ({executiveKpis.ptpPromisedCount})</option>
+                  <option value="NO_FOLLOWUP">⚡ No Follow-up Logged</option>
+                </select>
+              </div>
+
               {/* Aging Filter */}
               <div className="flex items-center gap-2">
                 <span className="text-[11px] text-zinc-400 font-bold shrink-0">Aging:</span>
@@ -1048,21 +1383,89 @@ export function AdvancePaymentsTrackerPage() {
                 <button
                   key={tab.id}
                   type="button"
-                  onClick={() => setStatusFilter(tab.id)}
+                  onClick={() => {
+                    setStatusFilter(tab.id);
+                    setFollowupFilter('ALL');
+                  }}
                   className={`px-3 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-                    statusFilter === tab.id
+                    statusFilter === tab.id && followupFilter === 'ALL'
                       ? 'bg-[#8B5CF6] text-white shadow-md'
                       : 'bg-[#27272A]/40 hover:bg-[#27272A] text-zinc-400 hover:text-zinc-200 border border-[#27272A]'
                   }`}
                 >
                   <span>{tab.label}</span>
                   <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
-                    statusFilter === tab.id ? 'bg-white/20 text-white' : 'bg-zinc-800 text-zinc-400'
+                    statusFilter === tab.id && followupFilter === 'ALL' ? 'bg-white/20 text-white' : 'bg-zinc-800 text-zinc-400'
                   }`}>
                     {tab.count}
                   </span>
                 </button>
               ))}
+
+              {/* Follow-up Quick Pills */}
+              <div className="h-4 w-px bg-zinc-700 mx-1 hidden sm:block" />
+
+              <button
+                type="button"
+                onClick={() => {
+                  setFollowupFilter(followupFilter === 'DUE_TODAY' ? 'ALL' : 'DUE_TODAY');
+                  setStatusFilter('ALL');
+                }}
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  followupFilter === 'DUE_TODAY'
+                    ? 'bg-amber-500 text-black shadow-md font-black'
+                    : 'bg-amber-950/40 hover:bg-amber-950/70 text-amber-300 border border-amber-800/60'
+                }`}
+              >
+                <PhoneForwarded size={12} />
+                <span>Follow-up Due Today</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                  followupFilter === 'DUE_TODAY' ? 'bg-black/30 text-black' : 'bg-amber-900/60 text-amber-200'
+                }`}>
+                  {executiveKpis.followupDueTodayCount}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setFollowupFilter(followupFilter === 'PTP_PROMISED' ? 'ALL' : 'PTP_PROMISED');
+                  setStatusFilter('ALL');
+                }}
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  followupFilter === 'PTP_PROMISED'
+                    ? 'bg-emerald-500 text-black shadow-md font-black'
+                    : 'bg-emerald-950/40 hover:bg-emerald-950/70 text-emerald-300 border border-emerald-800/60'
+                }`}
+              >
+                <span>🤝 PTP Promised</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                  followupFilter === 'PTP_PROMISED' ? 'bg-black/30 text-black' : 'bg-emerald-900/60 text-emerald-200'
+                }`}>
+                  {executiveKpis.ptpPromisedCount}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setFollowupFilter(followupFilter === 'OVERDUE' ? 'ALL' : 'OVERDUE');
+                  setStatusFilter('ALL');
+                }}
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  followupFilter === 'OVERDUE'
+                    ? 'bg-rose-600 text-white shadow-md font-black'
+                    : 'bg-rose-950/40 hover:bg-rose-950/70 text-rose-300 border border-rose-800/60'
+                }`}
+              >
+                <AlertOctagon size={12} />
+                <span>Overdue Follow-ups</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                  followupFilter === 'OVERDUE' ? 'bg-black/30 text-white' : 'bg-rose-900/60 text-rose-200'
+                }`}>
+                  {executiveKpis.followupOverdueCount}
+                </span>
+              </button>
             </div>
 
           </div>
@@ -1102,7 +1505,7 @@ export function AdvancePaymentsTrackerPage() {
                       <th className="py-3 px-4 text-right">Advance / Paid</th>
                       <th className="py-3 px-4 text-right">Outstanding Due</th>
                       <th className="py-3 px-4">Payment / UTR Proof</th>
-                      <th className="py-3 px-4 text-center">Aging & SLA</th>
+                      <th className="py-3 px-4 text-center">Aging & Follow-up Status</th>
                       <th className="py-3 px-4 text-center">Actions</th>
                     </tr>
                   </thead>
@@ -1232,82 +1635,116 @@ export function AdvancePaymentsTrackerPage() {
                             )}
                           </td>
 
-                          {/* Aging & SLA */}
-                          <td className="py-3.5 px-4 text-center">
+                          {/* Aging & Follow-up SLA */}
+                          <td className="py-3.5 px-4 space-y-1 text-center">
+                            {/* Primary SLA Chip */}
                             {rec.balanceDue === 0 ? (
-                              <span className="inline-flex items-center gap-1 text-[10.5px] font-bold px-2.5 py-1 rounded-full bg-purple-500/10 text-purple-300 border border-purple-500/30">
-                                <CheckCircle2 size={12} />
-                                <span>Fully Paid</span>
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-300 border border-purple-500/30">
+                                <CheckCircle2 size={11} />
+                                <span>Fully Settled</span>
                               </span>
                             ) : rec.isOverdue ? (
-                              <div className="space-y-0.5">
-                                <span className="inline-flex items-center gap-1 text-[10.5px] font-black px-2.5 py-1 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/40 animate-pulse">
-                                  <AlertTriangle size={12} />
-                                  <span>Overdue by {Math.abs(rec.daysRemaining)}d</span>
-                                </span>
-                                <div className="text-[10px] text-rose-400/80 font-mono">
-                                  SLA Breached
-                                </div>
-                              </div>
+                              <span className="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/40 animate-pulse">
+                                <AlertTriangle size={11} />
+                                <span>Overdue {Math.abs(rec.daysRemaining)}d</span>
+                              </span>
                             ) : rec.isExpiringSoon ? (
-                              <div className="space-y-0.5">
-                                <span className="inline-flex items-center gap-1 text-[10.5px] font-bold px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40">
-                                  <Clock size={12} />
-                                  <span>Due in {rec.daysRemaining}d</span>
-                                </span>
-                                <div className="text-[10px] text-amber-400/80 font-mono">
-                                  Follow-up Due
-                                </div>
-                              </div>
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                                <Clock size={11} />
+                                <span>Due in {rec.daysRemaining}d</span>
+                              </span>
                             ) : (
-                              <div className="space-y-0.5">
-                                <span className="inline-flex items-center gap-1 text-[10.5px] font-bold px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/30">
-                                  <Clock size={12} />
-                                  <span>{rec.daysRemaining}d remaining</span>
-                                </span>
-                                <div className="text-[10px] text-zinc-400 font-mono">
-                                  Within SLA
-                                </div>
-                              </div>
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/30">
+                                <Clock size={11} />
+                                <span>{rec.daysRemaining}d SLA</span>
+                              </span>
                             )}
+
+                            {/* Follow-up Touchpoint Badges */}
+                            {rec.ptpDate ? (
+                              <div className="inline-flex items-center gap-1 text-[9.5px] font-bold px-2 py-0.5 rounded bg-emerald-950/70 text-emerald-300 border border-emerald-800/60 block mx-auto max-w-[170px] truncate" title={`Promised to pay on ${rec.ptpDate}`}>
+                                <span>🤝 PTP: {new Date(rec.ptpDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}</span>
+                              </div>
+                            ) : rec.lastFollowUp ? (
+                              <div className="inline-flex items-center gap-1 text-[9.5px] font-bold px-1.5 py-0.5 rounded bg-zinc-800/80 text-zinc-300 border border-zinc-700 block mx-auto max-w-[170px] truncate" title={`${rec.lastFollowUp.channel} - ${rec.lastFollowUp.stage}: ${rec.lastFollowUp.notes}`}>
+                                <span>{rec.lastFollowUp.channel === 'WHATSAPP' ? '💬 WA' : rec.lastFollowUp.channel === 'EMAIL' ? '✉️ Mail' : '📞 Call'} ({rec.lastFollowUp.stage.slice(0, 8)})</span>
+                              </div>
+                            ) : rec.balanceDue > 0 ? (
+                              <div className="text-[9.5px] text-zinc-500 italic block">
+                                No follow-up logged
+                              </div>
+                            ) : null}
                           </td>
 
                           {/* Actions */}
-                          <td className="py-3.5 px-4 text-center space-x-1.5">
-                            {/* Record Payment Button */}
-                            <button
-                              type="button"
-                              onClick={() => handleOpenPaymentModal(rec)}
-                              className="px-2.5 py-1.5 bg-[#8B5CF6]/20 hover:bg-[#8B5CF6] text-purple-300 hover:text-white border border-[#8B5CF6]/40 rounded-lg text-xs font-bold transition-all"
-                              title="Record Payment Clearance"
-                            >
-                              <Landmark size={13} className="inline mr-1" />
-                              <span>Clear Payment</span>
-                            </button>
-
-                            {/* View PI Details */}
-                            {isPi && (
+                          <td className="py-3.5 px-4 text-center">
+                            <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                              {/* Record Payment Button */}
                               <button
                                 type="button"
-                                onClick={() => setSelectedProforma(rec.rawDoc)}
-                                className="p-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg border border-zinc-700 transition-colors"
-                                title="View Proforma Invoice"
+                                onClick={() => handleOpenPaymentModal(rec)}
+                                className="px-2 py-1 bg-[#8B5CF6]/20 hover:bg-[#8B5CF6] text-purple-300 hover:text-white border border-[#8B5CF6]/40 rounded-lg text-xs font-bold transition-all shrink-0"
+                                title="Record & Reconcile Payment"
                               >
-                                <Eye size={13} />
+                                <Landmark size={12} className="inline mr-1" />
+                                <span>Clear</span>
                               </button>
-                            )}
 
-                            {/* Download PDF */}
-                            {isPi && (
+                              {/* Follow-up Button */}
                               <button
                                 type="button"
-                                onClick={() => proformaService.downloadProformaPdf(rec.rawDoc.id, rec.rawDoc.piNumber)}
-                                className="p-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg border border-zinc-700 transition-colors"
-                                title="Download PDF"
+                                onClick={() => handleOpenFollowupModal(rec)}
+                                className="px-2 py-1 bg-amber-500/15 hover:bg-amber-500 text-amber-300 hover:text-black border border-amber-500/40 rounded-lg text-xs font-bold transition-all shrink-0 flex items-center gap-1"
+                                title="Log Commercial Follow-up"
                               >
-                                <Download size={13} />
+                                <PhoneForwarded size={12} />
+                                <span>Follow-up</span>
                               </button>
-                            )}
+
+                              {/* WhatsApp Reminder Button */}
+                              <button
+                                type="button"
+                                onClick={() => handleSendWhatsApp(rec)}
+                                className="p-1.5 bg-emerald-950/60 hover:bg-emerald-600 text-emerald-300 hover:text-white border border-emerald-800/60 rounded-lg transition-colors shrink-0"
+                                title="Send 1-Click WhatsApp Notice"
+                              >
+                                <MessageSquare size={13} />
+                              </button>
+
+                              {/* Timeline History */}
+                              <button
+                                type="button"
+                                onClick={() => setHistoryModalRecord(rec)}
+                                className="p-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg border border-zinc-700 transition-colors shrink-0"
+                                title="View Follow-up & Audit Timeline"
+                              >
+                                <History size={13} />
+                              </button>
+
+                              {/* View PI Details */}
+                              {isPi && (
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedProforma(rec.rawDoc)}
+                                  className="p-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg border border-zinc-700 transition-colors shrink-0"
+                                  title="View Proforma Invoice"
+                                >
+                                  <Eye size={13} />
+                                </button>
+                              )}
+
+                              {/* Download PDF */}
+                              {isPi && (
+                                <button
+                                  type="button"
+                                  onClick={() => proformaService.downloadProformaPdf(rec.rawDoc.id, rec.rawDoc.piNumber)}
+                                  className="p-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg border border-zinc-700 transition-colors shrink-0"
+                                  title="Download PDF"
+                                >
+                                  <Download size={13} />
+                                </button>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       );
@@ -1416,17 +1853,34 @@ export function AdvancePaymentsTrackerPage() {
                   </div>
 
                   {/* Action Bar */}
-                  <div className="pt-2 border-t border-[#27272A] flex items-center justify-between">
+                  <div className="pt-2 border-t border-[#27272A] grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const targetDoc = unifiedRecords.find((r) => (r.companyName === account.companyName || r.customerName === account.customerName) && r.balanceDue > 0) || unifiedRecords.find((r) => r.companyName === account.companyName || r.customerName === account.customerName);
+                        if (targetDoc) {
+                          handleOpenFollowupModal(targetDoc);
+                        } else {
+                          setSelectedCustomerIdFilter(account.companyName);
+                          setActiveTab('DOCUMENTS_LEDGER');
+                        }
+                      }}
+                      className="py-2 bg-amber-500/15 hover:bg-amber-500 text-amber-300 hover:text-black border border-amber-500/40 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5"
+                    >
+                      <PhoneForwarded size={13} />
+                      <span>Log Follow-up</span>
+                    </button>
+
                     <button
                       type="button"
                       onClick={() => {
                         setSelectedCustomerIdFilter(account.companyName);
                         setActiveTab('DOCUMENTS_LEDGER');
                       }}
-                      className="w-full py-2 bg-[#8B5CF6]/15 hover:bg-[#8B5CF6] text-purple-300 hover:text-white border border-[#8B5CF6]/40 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5"
+                      className="py-2 bg-[#8B5CF6]/15 hover:bg-[#8B5CF6] text-purple-300 hover:text-white border border-[#8B5CF6]/40 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5"
                     >
                       <Eye size={13} />
-                      <span>View Full Customer Account Ledger</span>
+                      <span>Account Ledger</span>
                     </button>
                   </div>
                 </div>
@@ -1597,6 +2051,374 @@ export function AdvancePaymentsTrackerPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ─── COMMERCIAL PAYMENT FOLLOW-UP MODAL ──────────────────────────── */}
+      {followupModalRecord && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-[#18181B] border border-[#27272A] rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-4 max-h-[95vh] overflow-y-auto">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-[#27272A] pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400">
+                  <PhoneForwarded size={18} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">Log Commercial Payment Follow-up</h3>
+                  <p className="text-[11px] text-zinc-400">
+                    Doc: <strong className="text-purple-300 font-mono">{followupModalRecord.documentNumber}</strong> • {followupModalRecord.companyName || followupModalRecord.customerName}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setFollowupModalRecord(null)}
+                className="p-1 text-zinc-400 hover:text-white rounded-lg"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Quick 1-Click Communications Strip */}
+            <div className="p-3 bg-[#09090B] border border-[#27272A] rounded-xl flex flex-wrap items-center justify-between gap-2">
+              <span className="text-[11px] font-bold text-zinc-400">1-Click Instant Communication:</span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleSendWhatsApp(followupModalRecord)}
+                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 shadow transition-all"
+                >
+                  <MessageSquare size={13} />
+                  <span>Send WhatsApp Alert</span>
+                </button>
+
+                {followupModalRecord.customerEmail && (
+                  <a
+                    href={generateEmailReminder(followupModalRecord)}
+                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 shadow transition-all"
+                  >
+                    <Mail size={13} />
+                    <span>Send Email Notice</span>
+                  </a>
+                )}
+
+                {followupModalRecord.customerPhone && (
+                  <a
+                    href={`tel:${followupModalRecord.customerPhone}`}
+                    className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold rounded-lg flex items-center gap-1.5 border border-zinc-700 transition-all"
+                  >
+                    <Phone size={13} />
+                    <span>Call Phone</span>
+                  </a>
+                )}
+              </div>
+            </div>
+
+            {followupSuccessMsg && (
+              <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-xs text-emerald-400 flex items-center gap-2">
+                <CheckCircle2 size={16} />
+                <span>{followupSuccessMsg}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSubmitFollowup} className="space-y-3.5 text-xs">
+              
+              {/* Channel & Stage Row */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-zinc-300 font-bold mb-1">Follow-up Channel</label>
+                  <select
+                    value={followupChannel}
+                    onChange={(e) => setFollowupChannel(e.target.value as any)}
+                    className="w-full px-3 py-2 bg-[#09090B] border border-[#27272A] focus:border-[#8B5CF6] rounded-xl text-white focus:outline-none"
+                  >
+                    <option value="PHONE">📞 Phone Call (Accounts / Procurement)</option>
+                    <option value="WHATSAPP">💬 WhatsApp Commercial Notice</option>
+                    <option value="EMAIL">✉️ Email Formal Reminder</option>
+                    <option value="IN_PERSON">🏢 Site / In-Person Commercial Visit</option>
+                    <option value="LEGAL_NOTICE">⚠️ Legal / Formal Demand Notice</option>
+                    <option value="OTHER">Other Touchpoint</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-zinc-300 font-bold mb-1">Follow-up Stage & Escalation</label>
+                  <select
+                    value={followupStage}
+                    onChange={(e) => setFollowupStage(e.target.value as any)}
+                    className="w-full px-3 py-2 bg-[#09090B] border border-[#27272A] focus:border-[#8B5CF6] rounded-xl text-white focus:outline-none"
+                  >
+                    <option value="COURTESY_REMINDER">🟢 Courtesy Commercial Reminder</option>
+                    <option value="DUE_WARNING">🟡 Upcoming Due Date Warning</option>
+                    <option value="OVERDUE_ALERT">🔴 Overdue Payment Notice (&gt;30 Days)</option>
+                    <option value="PROMISE_TO_PAY">🤝 Promise to Pay (PTP Agreed)</option>
+                    <option value="ESCALATED">🚨 Escalated to Head of Sales / Director</option>
+                    <option value="DISPUTED">⚠️ Query / Rate Dispute Under Review</option>
+                    <option value="OTHER">Other Stage</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Contact Information */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-zinc-300 font-bold mb-1">Contacted Person</label>
+                  <input
+                    type="text"
+                    value={followupContactPerson}
+                    onChange={(e) => setFollowupContactPerson(e.target.value)}
+                    placeholder="e.g. Accounts Officer / Mr. Sharma"
+                    className="w-full px-3 py-2 bg-[#09090B] border border-[#27272A] focus:border-[#8B5CF6] rounded-xl text-white focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-zinc-300 font-bold mb-1">Phone Number</label>
+                  <input
+                    type="text"
+                    value={followupContactPhone}
+                    onChange={(e) => setFollowupContactPhone(e.target.value)}
+                    placeholder="+91 98765 43210"
+                    className="w-full px-3 py-2 bg-[#09090B] border border-[#27272A] focus:border-[#8B5CF6] rounded-xl text-white font-mono focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-zinc-300 font-bold mb-1">Email Address</label>
+                  <input
+                    type="email"
+                    value={followupContactEmail}
+                    onChange={(e) => setFollowupContactEmail(e.target.value)}
+                    placeholder="accounts@buyer.com"
+                    className="w-full px-3 py-2 bg-[#09090B] border border-[#27272A] focus:border-[#8B5CF6] rounded-xl text-white focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* Promise to Pay (PTP) Section */}
+              <div className="p-3 bg-[#09090B] border border-emerald-900/40 rounded-xl space-y-2">
+                <span className="text-[11px] font-bold text-emerald-400 block flex items-center gap-1.5">
+                  <Clock size={13} /> Promise to Pay (PTP) Commitment (Optional):
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-zinc-400 text-[11px] mb-1">Promised Payment Date</label>
+                    <input
+                      type="date"
+                      value={followupPtpDate}
+                      onChange={(e) => setFollowupPtpDate(e.target.value)}
+                      className="w-full px-3 py-2 bg-[#18181B] border border-[#27272A] focus:border-emerald-500 rounded-xl text-white focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-zinc-400 text-[11px] mb-1">Promised Amount (INR)</label>
+                    <input
+                      type="number"
+                      value={followupPtpAmount || ''}
+                      onChange={(e) => setFollowupPtpAmount(Number(e.target.value))}
+                      placeholder="e.g. 50000"
+                      className="w-full px-3 py-2 bg-[#18181B] border border-[#27272A] focus:border-emerald-500 rounded-xl text-white font-mono focus:outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Discussion & Call Remarks */}
+              <div>
+                <label className="block text-zinc-300 font-bold mb-1">
+                  Follow-up Discussion Notes & Customer Response <span className="text-rose-500">*</span>
+                </label>
+                <textarea
+                  rows={3}
+                  value={followupNotes}
+                  onChange={(e) => setFollowupNotes(e.target.value)}
+                  placeholder="e.g. Spoke with Mr. Rakesh (Finance). Cheque has been processed for RTGS clearance by Thursday. Promised full advance deposit of ₹75,000."
+                  className="w-full px-3 py-2 bg-[#09090B] border border-[#27272A] focus:border-[#8B5CF6] rounded-xl text-white resize-none focus:outline-none"
+                  required
+                />
+              </div>
+
+              {/* Next Follow-up Reminder Date */}
+              <div>
+                <label className="block text-zinc-300 font-bold mb-1">Next Scheduled Follow-up Due Date</label>
+                <input
+                  type="date"
+                  value={followupNextDate}
+                  onChange={(e) => setFollowupNextDate(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#09090B] border border-[#27272A] focus:border-[#8B5CF6] rounded-xl text-white focus:outline-none"
+                />
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#27272A]">
+                <button
+                  type="button"
+                  onClick={() => setFollowupModalRecord(null)}
+                  className="px-3.5 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl font-bold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingFollowup}
+                  className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black font-black rounded-xl flex items-center gap-1.5 shadow-md disabled:opacity-50 transition-all"
+                >
+                  {savingFollowup ? <RefreshCw size={14} className="animate-spin" /> : <PhoneForwarded size={14} />}
+                  <span>Save Follow-up Touchpoint</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ─── FOLLOW-UP & AUDIT TIMELINE MODAL ────────────────────────────── */}
+      {historyModalRecord && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-[#18181B] border border-[#27272A] rounded-2xl max-w-2xl w-full p-6 shadow-2xl space-y-4 max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-[#27272A] pb-3 shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-purple-400">
+                  <History size={18} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">Commercial Follow-up & Audit Timeline</h3>
+                  <p className="text-[11px] text-zinc-400">
+                    Doc: <strong className="text-purple-300 font-mono">{historyModalRecord.documentNumber}</strong> • {historyModalRecord.companyName || historyModalRecord.customerName}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setHistoryModalRecord(null)}
+                className="p-1 text-zinc-400 hover:text-white rounded-lg"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Quick summary strip */}
+            <div className="p-3 bg-[#09090B] rounded-xl border border-[#27272A] grid grid-cols-3 gap-2 text-xs shrink-0">
+              <div>
+                <span className="text-[10px] text-zinc-500 block">Total Invoiced</span>
+                <span className="font-mono font-bold text-white">₹{historyModalRecord.grandTotal.toLocaleString('en-IN')}</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-zinc-500 block">Balance Pending</span>
+                <span className="font-mono font-bold text-amber-400">₹{historyModalRecord.balanceDue.toLocaleString('en-IN')}</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-zinc-500 block">Aging / SLA</span>
+                <span className={`font-bold ${historyModalRecord.isOverdue ? 'text-rose-400' : 'text-zinc-300'}`}>
+                  {historyModalRecord.daysElapsed}d ({historyModalRecord.isOverdue ? 'Overdue' : 'Active'})
+                </span>
+              </div>
+            </div>
+
+            {/* Timeline Events Scroll Area */}
+            <div className="overflow-y-auto space-y-3 pr-1 flex-1 text-xs">
+              {historyModalRecord.history && historyModalRecord.history.length > 0 ? (
+                historyModalRecord.history.map((h: any, idx: number) => {
+                  const isFollowup = h.action === 'FOLLOW_UP_LOGGED' || (h.details && h.details.toLowerCase().includes('follow-up'));
+                  const isPayment = h.action === 'PAYMENT_RECORDED' || h.action === 'PAYMENT_SUBMITTED';
+
+                  return (
+                    <div
+                      key={h.id || idx}
+                      className={`p-3.5 rounded-xl border space-y-1.5 ${
+                        isFollowup
+                          ? 'bg-amber-950/15 border-amber-800/40'
+                          : isPayment
+                          ? 'bg-purple-950/20 border-purple-800/40'
+                          : 'bg-[#09090B] border-[#27272A]'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded font-mono ${
+                            isFollowup
+                              ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                              : isPayment
+                              ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40'
+                              : 'bg-zinc-800 text-zinc-300 border border-zinc-700'
+                          }`}>
+                            {isFollowup ? 'Follow-up' : isPayment ? 'Payment' : h.action}
+                          </span>
+                          <span className="font-bold text-white text-xs">{h.performedBy || 'Commercial Desk'}</span>
+                        </div>
+                        <span className="text-[10px] text-zinc-500 font-mono">
+                          {new Date(h.createdAt || Date.now()).toLocaleString('en-IN', {
+                            day: '2-digit',
+                            month: 'short',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </span>
+                      </div>
+
+                      <p className="text-zinc-300 text-xs leading-relaxed">{h.details}</p>
+
+                      {h.metadata && (
+                        <div className="flex flex-wrap items-center gap-2 pt-1 text-[10.5px] text-zinc-400 font-mono">
+                          {h.metadata.channel && (
+                            <span className="px-1.5 py-0.5 bg-black/40 rounded border border-zinc-800">
+                              Channel: {h.metadata.channel}
+                            </span>
+                          )}
+                          {h.metadata.stage && (
+                            <span className="px-1.5 py-0.5 bg-black/40 rounded border border-zinc-800">
+                              Stage: {h.metadata.stage}
+                            </span>
+                          )}
+                          {h.metadata.ptpDate && (
+                            <span className="px-1.5 py-0.5 bg-emerald-950/60 text-emerald-300 rounded border border-emerald-800">
+                              PTP Date: {h.metadata.ptpDate}
+                            </span>
+                          )}
+                          {h.metadata.nextFollowupDate && (
+                            <span className="px-1.5 py-0.5 bg-amber-950/60 text-amber-300 rounded border border-amber-800">
+                              Next Due: {h.metadata.nextFollowupDate}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="py-12 text-center space-y-2 text-zinc-500">
+                  <History size={28} className="mx-auto text-zinc-600" />
+                  <div className="font-bold">No previous follow-up timeline events recorded</div>
+                  <p className="text-[11px]">Log your first touchpoint using the Follow-up button.</p>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-between pt-3 border-t border-[#27272A] shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  setHistoryModalRecord(null);
+                  handleOpenFollowupModal(historyModalRecord);
+                }}
+                className="px-3.5 py-2 bg-amber-500 hover:bg-amber-400 text-black font-black rounded-xl text-xs flex items-center gap-1.5 shadow"
+              >
+                <PhoneForwarded size={13} />
+                <span>Log New Touchpoint</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setHistoryModalRecord(null)}
+                className="px-3.5 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl font-bold text-xs"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}

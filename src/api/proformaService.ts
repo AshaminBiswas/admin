@@ -748,5 +748,35 @@ export const proformaService = {
       throw err;
     }
   },
+
+  /**
+   * Admin: Log commercial payment follow-up touchpoint
+   */
+  async logFollowUp(
+    id: string,
+    payload: {
+      channel: 'EMAIL' | 'PHONE' | 'WHATSAPP' | 'IN_PERSON' | 'LEGAL_NOTICE' | 'OTHER' | string;
+      stage: 'COURTESY_REMINDER' | 'DUE_WARNING' | 'OVERDUE_ALERT' | 'PROMISE_TO_PAY' | 'ESCALATED' | 'DISPUTED' | 'OTHER' | string;
+      notes: string;
+      contactedPerson?: string | null;
+      contactPhone?: string | null;
+      contactEmail?: string | null;
+      ptpDate?: string | null;
+      ptpAmount?: number | null;
+      nextFollowupDate?: string | null;
+    }
+  ): Promise<ProformaInvoice> {
+    try {
+      const res = await fetchAdminApi<any>(`/proforma-invoices/${encodeURIComponent(id)}/followup`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      const data = res?.data || res;
+      return transformBackendInvoiceToPI(data);
+    } catch (err: any) {
+      console.error('[proformaService] logFollowUp error:', err);
+      throw err;
+    }
+  },
 };
 
