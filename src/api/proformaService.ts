@@ -655,5 +655,32 @@ export const proformaService = {
       };
     }
   },
+
+  /**
+   * Admin: Record / Confirm Advance Payment received for a Proforma Invoice
+   */
+  async recordPayment(
+    id: string,
+    payload: {
+      amountPaid: number;
+      paymentMode: 'RTGS' | 'NEFT' | 'IMPS' | 'UPI' | 'CHEQUE' | 'CASH' | 'OTHER' | string;
+      transactionRef: string;
+      paymentDate?: string;
+      status?: 'ADVANCE_RECEIVED' | 'APPROVED' | 'ACCEPTED' | string;
+      notes?: string | null;
+    }
+  ): Promise<ProformaInvoice> {
+    try {
+      const res = await fetchAdminApi<any>(`/proforma-invoices/${id}/record-payment`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      const data = res?.data || res;
+      return transformBackendInvoiceToPI(data);
+    } catch (err: any) {
+      console.error('[proformaService] recordPayment error:', err);
+      throw err;
+    }
+  },
 };
 

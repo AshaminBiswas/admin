@@ -306,6 +306,8 @@ export type AdminView =
   | 'proforma-invoices'
   | 'proforma-create'
   | 'proforma-detail'
+  | 'advance-payments'
+  | 'payment-tracking'
   | 'qr-validator'
   | 'document-validator';
 

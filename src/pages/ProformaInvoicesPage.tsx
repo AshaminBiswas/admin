@@ -211,6 +211,15 @@ export function ProformaInvoicesPage() {
 
           <button
             type="button"
+            onClick={() => setCurrentView('advance-payments')}
+            className="px-3.5 py-2 bg-[#8B5CF6]/15 hover:bg-[#8B5CF6]/25 border border-[#8B5CF6]/40 text-[#C4B5FD] hover:text-white text-xs font-bold rounded-xl flex items-center gap-2 transition-all"
+            title="Advance & Payment Receivables Tracker"
+          >
+            <Landmark size={15} className="text-[#8B5CF6]" /> Advance & Payment Tracker
+          </button>
+
+          <button
+            type="button"
             onClick={() => setCurrentView('qr-validator')}
             className="px-3.5 py-2 bg-[#18181B] border border-[#27272A] hover:border-violet-500 text-zinc-200 hover:text-white text-xs font-bold rounded-xl flex items-center gap-2 transition-all"
             title="Scan or inspect document for tampering"

@@ -38,6 +38,7 @@ import {
   Inbox,
   FileCheck,
   QrCode,
+  Landmark,
   X,
 } from "lucide-react";
 import { useAdminAuth } from "../../context/AdminAuthContext";
@@ -87,6 +88,7 @@ export function AdminSidebar({
     { id: "orders", label: "Orders", category: "Sales & Fulfillment", icon: <ShoppingCart size={18} />, badge: "4" },
     { id: "po-management", label: "PO Management", category: "Sales & Fulfillment", icon: <Inbox size={18} />, badge: "PO" },
     { id: "proforma-invoices", label: "Proforma Invoices (PI)", category: "Sales & Fulfillment", icon: <FileCheck size={18} />, badge: "PI" },
+    { id: "advance-payments", label: "Advance & Payment Tracker", category: "Sales & Fulfillment", icon: <Landmark size={18} />, badge: "TRACK" },
     { id: "qr-validator", label: "QR & Document Validator", category: "Sales & Fulfillment", icon: <QrCode size={18} />, badge: "VERIFY" },
     { id: "checkouts", label: "Checkout Sessions", category: "Sales & Fulfillment", icon: <CreditCard size={18} /> },
     { id: "cart", label: "Shopping Carts", category: "Sales & Fulfillment", icon: <ShoppingBag size={18} /> },
