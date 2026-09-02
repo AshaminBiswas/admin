@@ -3,7 +3,7 @@ import {
   FileCheck, Plus, Search, Filter, RefreshCw, Printer, Download,
   Eye, Building2, MapPin, CheckCircle2, Clock, AlertCircle,
   FileText, ArrowRight, ShieldCheck, ChevronRight, Layers, Trash2, QrCode,
-  Landmark, Send, Edit3
+  Landmark, Send, Edit3, Paperclip
 } from 'lucide-react';
 import { ProformaInvoice } from '../types/proforma';
 import { useAdminAuth } from '../context/AdminAuthContext';
@@ -418,6 +418,12 @@ export function ProformaInvoicesPage() {
                         <div className="mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 bg-purple-950/60 border border-purple-800/60 text-purple-300 text-[10px] font-bold rounded">
                           <Landmark size={10} className="text-purple-400" />
                           <span>Advance UTR Submitted</span>
+                        </div>
+                      )}
+                      {inv.notes?.includes('[Receipt:') && (
+                        <div className="mt-1 ml-1 inline-flex items-center gap-1 px-1.5 py-0.5 bg-emerald-950/60 border border-emerald-800/60 text-emerald-300 text-[10px] font-bold rounded">
+                          <Paperclip size={10} className="text-emerald-400" />
+                          <span>Receipt Attached</span>
                         </div>
                       )}
                     </td>
