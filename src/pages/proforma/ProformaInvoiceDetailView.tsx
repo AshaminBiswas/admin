@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ArrowLeft, Printer, Download, Mail, CheckCircle2,
   Building2, MapPin, Phone, CreditCard, ShieldCheck,
-  Calendar, FileText, Send, Copy, RefreshCw, AlertCircle, X, Trash2
+  Calendar, FileText, Send, Copy, RefreshCw, AlertCircle, X, Trash2,
+  Landmark, MessageSquare, History, UserCheck, Check, Sparkles, Clock,
+  ExternalLink, Eye
 } from 'lucide-react';
-import { ProformaInvoice } from '../../types/proforma';
+import { ProformaInvoice, ProformaInvoiceHistory } from '../../types/proforma';
 import { proformaService } from '../../api/proformaService';
 import { useAdminAuth } from '../../context/AdminAuthContext';
 import { printProformaInvoice } from '../../utils/proformaPdfGenerator';
@@ -14,10 +16,13 @@ interface Props {
   onBack: () => void;
 }
 
-export function ProformaInvoiceDetailView({ invoice, onBack }: Props) {
+export function ProformaInvoiceDetailView({ invoice: initialInvoice, onBack }: Props) {
+  const [invoice, setInvoice] = useState<ProformaInvoice>(initialInvoice);
+  const [loadingDetails, setLoadingDetails] = useState(false);
   const [copied, setCopied] = useState(false);
   const [emailing, setEmailing] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
+  const [selectedReceiptUrl, setSelectedReceiptUrl] = useState<string | null>(null);
   const { adminUser } = useAdminAuth();
   const isSuperAdmin = Boolean(
     adminUser && (
@@ -30,6 +35,25 @@ export function ProformaInvoiceDetailView({ invoice, onBack }: Props) {
   );
 
   const [deleting, setDeleting] = useState(false);
+
+  // Fetch full live invoice data with history on mount
+  const fetchFreshDetails = async () => {
+    try {
+      setLoadingDetails(true);
+      const latest = await proformaService.getProformaInvoiceById(initialInvoice.id);
+      if (latest) {
+        setInvoice(latest);
+      }
+    } catch (err) {
+      console.warn('[ProformaInvoiceDetailView] Failed to refresh PI details:', err);
+    } finally {
+      setLoadingDetails(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchFreshDetails();
+  }, [initialInvoice.id]);
 
   const handleDeleteInvoice = async () => {
     if (!isSuperAdmin) {
@@ -83,6 +107,7 @@ export function ProformaInvoiceDetailView({ invoice, onBack }: Props) {
       await proformaService.sendProformaInvoiceEmail(invoice, targetEmail.trim(), emailNotes.trim());
       setEmailSent(true);
       setShowEmailModal(false);
+      await fetchFreshDetails();
       setTimeout(() => setEmailSent(false), 5000);
     } catch (err: any) {
       console.error('[ProformaInvoiceDetailView] Email error:', err);
@@ -91,6 +116,19 @@ export function ProformaInvoiceDetailView({ invoice, onBack }: Props) {
       setEmailing(false);
     }
   };
+
+  // Find customer feedback in history
+  const customerHistory = (invoice.history || []).filter((h) =>
+    h.action.toUpperCase().includes('CUSTOMER')
+  );
+  const latestCustomerFeedback = customerHistory[0];
+  const isCustomerAccepted = invoice.status === 'ACCEPTED' || invoice.status === 'ADVANCE_RECEIVED' || Boolean(latestCustomerFeedback);
+
+  // Extract payment proof / receipt URL from feedback metadata or notes
+  const receiptUrl =
+    latestCustomerFeedback?.metadata?.paymentReceiptUrl ||
+    (invoice.history?.find((h) => h.metadata?.paymentReceiptUrl)?.metadata?.paymentReceiptUrl) ||
+    (invoice.notes?.match(/\[Receipt:\s*(https?:\/\/[^\s\]]+|\/uploads\/[^\s\]]+)\]/i)?.[1]);
 
   return (
     <div className="space-y-6 max-w-[1200px] mx-auto pb-12 animate-in fade-in duration-200">
@@ -195,6 +233,163 @@ export function ProformaInvoiceDetailView({ invoice, onBack }: Props) {
         <div className="p-4 bg-rose-500/10 border border-rose-500/30 rounded-2xl text-xs text-rose-400 flex items-center gap-2.5 animate-in fade-in">
           <AlertCircle size={16} className="shrink-0" />
           <span>{emailError}</span>
+        </div>
+      )}
+
+      {/* ─── CUSTOMER ACCEPTANCE & REMITTANCE CONFIRMATION DOSSIER ────────── */}
+      {isCustomerAccepted && (
+        <div className="bg-gradient-to-r from-[#131f2f] to-[#18181B] border-2 border-cyan-500/40 rounded-3xl p-6 shadow-xl space-y-4 animate-in fade-in">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-cyan-500/20 pb-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-cyan-400 shrink-0">
+                {invoice.status === 'ADVANCE_RECEIVED' ? <Landmark size={20} /> : <CheckCircle2 size={20} />}
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] uppercase font-black tracking-widest text-cyan-400 bg-cyan-950/80 px-2 py-0.5 rounded border border-cyan-800/60">
+                    CUSTOMER SUBMISSION RECORD
+                  </span>
+                  <span className="text-xs text-zinc-400 font-mono">
+                    {latestCustomerFeedback?.createdAt
+                      ? new Date(latestCustomerFeedback.createdAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })
+                      : 'Recently submitted'}
+                  </span>
+                </div>
+                <h3 className="text-base font-bold text-white mt-0.5">
+                  {invoice.status === 'ADVANCE_RECEIVED'
+                    ? 'Customer Submitted Advance Payment Remittance'
+                    : 'Customer Confirmed Acceptance of Commercial Terms'}
+                </h3>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider border ${
+                invoice.status === 'ADVANCE_RECEIVED'
+                  ? 'bg-purple-500/20 text-purple-300 border-purple-500/40'
+                  : 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
+              }`}>
+                {invoice.status === 'ADVANCE_RECEIVED' ? 'Advance Payment Remitted' : 'Terms Confirmed & Accepted'}
+              </span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+            {/* Customer Details */}
+            <div className="bg-[#09090B]/80 p-3.5 rounded-xl border border-[#27272A] space-y-1.5">
+              <span className="text-[10px] uppercase font-bold text-zinc-400 block">Submitted By</span>
+              <div className="font-bold text-white text-sm">{latestCustomerFeedback?.performedBy || invoice.customerName}</div>
+              {invoice.companyName && invoice.companyName !== invoice.customerName && (
+                <div className="text-zinc-400">{invoice.companyName}</div>
+              )}
+              {invoice.customerPhone && (
+                <div className="text-zinc-400 flex items-center gap-1.5">
+                  <Phone size={12} className="text-zinc-500" />
+                  <span>{invoice.customerPhone}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Advance Payment Reference / UTR */}
+            <div className="bg-[#09090B]/80 p-3.5 rounded-xl border border-[#27272A] space-y-1.5">
+              <span className="text-[10px] uppercase font-bold text-zinc-400 block">Advance Payment UTR / Ref</span>
+              {latestCustomerFeedback?.metadata?.advancePaymentRef ? (
+                <div className="font-mono font-bold text-purple-300 text-sm bg-purple-950/60 px-2 py-1 rounded border border-purple-800/40 inline-block">
+                  {latestCustomerFeedback.metadata.advancePaymentRef}
+                </div>
+              ) : (
+                <div className="text-zinc-400 italic">No bank UTR entered (Customer accepted quotation terms)</div>
+              )}
+              <div className="text-[11px] text-zinc-400">
+                Advance Payable: <strong className="text-amber-400 font-mono">₹{invoice.advancePayable.toLocaleString('en-IN')}</strong> ({invoice.advancePercentage}%)
+              </div>
+            </div>
+
+            {/* Verification Status */}
+            <div className="bg-[#09090B]/80 p-3.5 rounded-xl border border-[#27272A] space-y-1.5">
+              <span className="text-[10px] uppercase font-bold text-zinc-400 block">Verification Protocol</span>
+              <div className="flex items-center gap-1.5 text-emerald-400 font-bold">
+                <ShieldCheck size={14} />
+                <span>Verified via Customer Access Token</span>
+              </div>
+              <div className="text-[11px] text-zinc-400 font-mono truncate" title={invoice.verificationToken || invoice.id}>
+                Token: {(invoice.verificationToken || invoice.id || '').slice(0, 16)}...
+              </div>
+            </div>
+          </div>
+
+          {/* Customer Uploaded Payment Proof / Receipt Screenshot */}
+          {receiptUrl && (
+            <div className="bg-[#09090B]/90 p-4 rounded-xl border border-purple-500/40 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2 text-purple-300 font-bold text-xs uppercase tracking-wider">
+                  <Landmark size={14} className="text-purple-400" />
+                  <span>Customer Uploaded Payment Proof / Receipt Document:</span>
+                </div>
+                <a
+                  href={receiptUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3 py-1 bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 text-xs font-bold rounded-lg border border-purple-500/40 inline-flex items-center gap-1.5 transition-colors"
+                >
+                  <ExternalLink size={13} />
+                  <span>Open Full Document</span>
+                </a>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-4 pt-1">
+                {receiptUrl.toLowerCase().endsWith('.pdf') || receiptUrl.includes('.pdf') ? (
+                  <div className="flex items-center gap-3 p-3 bg-[#18181B] rounded-xl border border-purple-900/40 w-full sm:w-auto">
+                    <div className="w-10 h-10 rounded-lg bg-purple-950/80 border border-purple-800/60 flex items-center justify-center text-purple-400 shrink-0">
+                      <FileText size={20} />
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold text-white">Payment Receipt Document (PDF)</div>
+                      <div className="text-[10px] text-zinc-400">Official bank transaction receipt uploaded by client</div>
+                    </div>
+                    <a
+                      href={receiptUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="ml-auto sm:ml-4 px-3 py-1.5 bg-[#8B5CF6] hover:bg-[#7C3AED] text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-1 shrink-0"
+                    >
+                      <Download size={13} /> Download PDF
+                    </a>
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    <div
+                      onClick={() => setSelectedReceiptUrl(receiptUrl)}
+                      className="relative cursor-pointer group max-w-xs rounded-xl overflow-hidden border border-purple-500/40 bg-black/60 shadow-lg"
+                    >
+                      <img
+                        src={receiptUrl}
+                        alt="Payment Proof Screenshot"
+                        className="max-h-48 w-auto object-contain transition-transform group-hover:scale-105"
+                      />
+                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-bold gap-1.5">
+                        <Eye size={16} /> Click to Enlarge
+                      </div>
+                    </div>
+                    <span className="text-[10.5px] text-zinc-400 block">Click image to expand in full-screen modal</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Customer Comments & Remarks */}
+          {(latestCustomerFeedback?.metadata?.feedbackComments || (invoice.notes && invoice.notes.includes('[Customer Feedback'))) && (
+            <div className="bg-[#09090B]/90 p-4 rounded-xl border border-cyan-500/30 space-y-1">
+              <div className="flex items-center gap-1.5 text-cyan-400 font-bold text-xs uppercase tracking-wider">
+                <MessageSquare size={13} />
+                <span>Customer Remarks & Site Delivery Notes:</span>
+              </div>
+              <p className="text-xs text-zinc-200 leading-relaxed font-sans whitespace-pre-wrap pl-4 border-l-2 border-cyan-500/50">
+                {latestCustomerFeedback?.metadata?.feedbackComments || invoice.notes}
+              </p>
+            </div>
+          )}
         </div>
       )}
 
@@ -494,11 +689,163 @@ export function ProformaInvoiceDetailView({ invoice, onBack }: Props) {
               </svg>
             </div>
             <strong className="text-slate-800 text-xs block">Authorized Signatory</strong>
-            <span className="text-[10px]">Pacific Products and Solutions</span>
+            <span className="text-[10px]">PRC Hardware</span>
           </div>
         </div>
 
       </div>
+
+      {/* ─── AUDIT TRAIL & COMMERCIAL LIFECYCLE HISTORY ─────────────────── */}
+      <div className="bg-[#18181B] border border-[#27272A] rounded-3xl p-6 space-y-4 shadow-xl">
+        <div className="flex items-center justify-between border-b border-[#27272A] pb-3">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-[#8B5CF6]/20 border border-[#8B5CF6]/40 flex items-center justify-center text-[#A78BFA]">
+              <History size={16} />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-white">Document Lifecycle & Customer Activity Trail</h3>
+              <p className="text-[11px] text-zinc-400">Complete immutable record of all customer submissions, status changes, and staff operations</p>
+            </div>
+          </div>
+          <span className="text-xs font-mono text-zinc-500 font-bold">
+            {(invoice.history || []).length} Event{(invoice.history || []).length !== 1 ? 's' : ''}
+          </span>
+        </div>
+
+        {(!invoice.history || invoice.history.length === 0) ? (
+          <div className="py-6 text-center text-xs text-zinc-500 italic">
+            No previous lifecycle events recorded for this Proforma Invoice.
+          </div>
+        ) : (
+          <div className="relative pl-6 space-y-6 before:absolute before:left-2.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-[#27272A]">
+            {invoice.history.map((h, i) => {
+              const isCustomer = h.action.toUpperCase().includes('CUSTOMER');
+              const isPayment = h.action.toUpperCase().includes('PAYMENT');
+              const isCreated = h.action.toUpperCase().includes('CREATE');
+
+              return (
+                <div key={h.id || i} className="relative group">
+                  {/* Timeline Dot */}
+                  <div className={`absolute -left-[29px] top-0.5 w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                    isPayment
+                      ? 'bg-purple-950 border-purple-500 text-purple-400'
+                      : isCustomer
+                      ? 'bg-cyan-950 border-cyan-500 text-cyan-400'
+                      : isCreated
+                      ? 'bg-zinc-900 border-zinc-500 text-zinc-400'
+                      : 'bg-emerald-950 border-emerald-500 text-emerald-400'
+                  }`}>
+                    {isPayment ? (
+                      <Landmark size={10} />
+                    ) : isCustomer ? (
+                      <UserCheck size={10} />
+                    ) : (
+                      <Clock size={10} />
+                    )}
+                  </div>
+
+                  <div className="bg-[#27272A]/40 hover:bg-[#27272A]/60 border border-[#27272A] rounded-2xl p-4 space-y-1.5 transition-colors">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border ${
+                          isPayment
+                            ? 'bg-purple-500/10 text-purple-300 border-purple-500/30'
+                            : isCustomer
+                            ? 'bg-cyan-500/10 text-cyan-300 border-cyan-500/30'
+                            : 'bg-zinc-700/30 text-zinc-300 border-zinc-600/30'
+                        }`}>
+                          {h.action.replace(/_/g, ' ')}
+                        </span>
+                        <span className="text-xs font-bold text-white">
+                          {h.performedBy || 'System'}
+                        </span>
+                      </div>
+                      <span className="text-[11px] text-zinc-400 font-mono">
+                        {new Date(h.createdAt).toLocaleString('en-IN', {
+                          day: '2-digit',
+                          month: 'short',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </span>
+                    </div>
+
+                    {h.details && (
+                      <p className="text-xs text-zinc-300 leading-relaxed">
+                        {h.details}
+                      </p>
+                    )}
+
+                    {/* Metadata tags */}
+                    {h.metadata && typeof h.metadata === 'object' && Object.keys(h.metadata).length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 pt-1">
+                        {h.metadata.advancePaymentRef && (
+                          <span className="text-[10.5px] font-mono bg-purple-950/80 text-purple-300 border border-purple-800/60 px-2 py-0.5 rounded-md">
+                            UTR: {h.metadata.advancePaymentRef}
+                          </span>
+                        )}
+                        {h.metadata.action && (
+                          <span className="text-[10.5px] font-mono bg-zinc-800 text-zinc-300 border border-zinc-700 px-2 py-0.5 rounded-md">
+                            Action: {h.metadata.action}
+                          </span>
+                        )}
+                        {h.metadata.paymentReceiptUrl && (
+                          <a
+                            href={h.metadata.paymentReceiptUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[10.5px] font-mono bg-purple-900/60 hover:bg-purple-800 text-purple-200 border border-purple-700 px-2 py-0.5 rounded-md flex items-center gap-1 transition-colors"
+                          >
+                            <ExternalLink size={10} /> View Receipt Proof
+                          </a>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* ─── PAYMENT RECEIPT LIGHTBOX MODAL ──────────────────────────────── */}
+      {selectedReceiptUrl && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm animate-in fade-in">
+          <div className="relative max-w-4xl max-h-[90vh] bg-[#18181B] border border-[#27272A] rounded-2xl p-4 shadow-2xl flex flex-col items-center space-y-3">
+            <div className="w-full flex items-center justify-between border-b border-[#27272A] pb-2 text-xs">
+              <span className="font-bold text-white flex items-center gap-2">
+                <Landmark size={15} className="text-purple-400" /> Customer Payment Confirmation Screenshot
+              </span>
+              <div className="flex items-center gap-2">
+                <a
+                  href={selectedReceiptUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[11px] rounded-lg border border-zinc-700 flex items-center gap-1 font-bold transition-colors"
+                >
+                  <ExternalLink size={12} /> Open Full Size
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setSelectedReceiptUrl(null)}
+                  className="p-1 text-zinc-400 hover:text-white rounded-lg transition-colors"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+            <div className="overflow-auto max-h-[75vh] flex items-center justify-center">
+              <img
+                src={selectedReceiptUrl}
+                alt="Payment Receipt Preview"
+                className="max-w-full max-h-[72vh] object-contain rounded-lg border border-zinc-800"
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

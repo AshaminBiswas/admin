@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import {
   FileCheck, Plus, Search, Filter, RefreshCw, Printer, Download,
   Eye, Building2, MapPin, CheckCircle2, Clock, AlertCircle,
-  FileText, ArrowRight, ShieldCheck, ChevronRight, Layers, Trash2, QrCode
+  FileText, ArrowRight, ShieldCheck, ChevronRight, Layers, Trash2, QrCode,
+  Landmark, Send
 } from 'lucide-react';
 import { ProformaInvoice } from '../types/proforma';
 import { useAdminAuth } from '../context/AdminAuthContext';
@@ -90,11 +91,66 @@ export function ProformaInvoicesPage() {
     );
   });
 
+  // Status Config Helper
+  const getStatusBadgeConfig = (status: string) => {
+    switch (status) {
+      case 'ACCEPTED':
+        return {
+          bg: 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30',
+          label: 'Customer Accepted',
+          icon: <CheckCircle2 size={11} className="text-cyan-400" />,
+        };
+      case 'ADVANCE_RECEIVED':
+        return {
+          bg: 'bg-purple-500/15 text-purple-300 border-purple-500/30',
+          label: 'Advance Remitted',
+          icon: <Landmark size={11} className="text-purple-400" />,
+        };
+      case 'APPROVED':
+        return {
+          bg: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
+          label: 'Approved & Sealed',
+          icon: <ShieldCheck size={11} className="text-emerald-400" />,
+        };
+      case 'CONVERTED_TO_INVOICE':
+      case 'CONVERTED':
+        return {
+          bg: 'bg-teal-500/15 text-teal-300 border-teal-500/30',
+          label: 'Tax Invoice Issued',
+          icon: <FileCheck size={11} className="text-teal-400" />,
+        };
+      case 'CANCELLED':
+        return {
+          bg: 'bg-rose-500/15 text-rose-300 border-rose-500/30',
+          label: 'Cancelled',
+          icon: <AlertCircle size={11} className="text-rose-400" />,
+        };
+      case 'EXPIRED':
+        return {
+          bg: 'bg-zinc-500/15 text-zinc-400 border-zinc-500/30',
+          label: 'Expired',
+          icon: <Clock size={11} className="text-zinc-400" />,
+        };
+      case 'DRAFT':
+        return {
+          bg: 'bg-slate-500/15 text-slate-400 border-slate-500/30',
+          label: 'Draft',
+          icon: <Clock size={11} className="text-slate-400" />,
+        };
+      default:
+        return {
+          bg: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
+          label: 'Issued / Sent',
+          icon: <Send size={11} className="text-amber-400" />,
+        };
+    }
+  };
+
   // KPI Calculations
   const totalCount = invoices.length;
   const totalValue = invoices.reduce((sum, inv) => sum + Number(inv.grandTotal || 0), 0);
+  const acceptedCount = invoices.filter((inv) => inv.status === 'ACCEPTED' || inv.status === 'ADVANCE_RECEIVED').length;
   const totalAdvanceExpected = invoices.reduce((sum, inv) => sum + Number(inv.advancePayable || 0), 0);
-  const activeCount = invoices.filter((inv) => inv.status === 'SENT' || inv.status === 'DRAFT').length;
 
   if (subView === 'create') {
     return (
@@ -116,6 +172,7 @@ export function ProformaInvoicesPage() {
         onBack={() => {
           setSelectedInvoice(null);
           setSubView('list');
+          loadInvoices();
         }}
       />
     );
@@ -181,6 +238,15 @@ export function ProformaInvoicesPage() {
         </div>
 
         <div className="bg-[#18181B] border border-[#27272A] rounded-2xl p-4 space-y-1">
+          <span className="text-[11px] font-bold text-zinc-400">Customer Accepted / Advance</span>
+          <div className="text-xl font-extrabold text-cyan-400 font-mono flex items-center gap-1.5">
+            <span>{acceptedCount}</span>
+            {acceptedCount > 0 && <span className="text-xs text-cyan-400/80 font-sans font-bold">Confirmed</span>}
+          </div>
+          <span className="text-[10px] text-zinc-500 block">Accepted or Advance UTR submitted</span>
+        </div>
+
+        <div className="bg-[#18181B] border border-[#27272A] rounded-2xl p-4 space-y-1">
           <span className="text-[11px] font-bold text-zinc-400">Total Proforma Value</span>
           <div className="text-xl font-extrabold text-purple-400 font-mono">
             ₹{totalValue.toLocaleString('en-IN')}
@@ -194,12 +260,6 @@ export function ProformaInvoicesPage() {
             ₹{totalAdvanceExpected.toLocaleString('en-IN')}
           </div>
           <span className="text-[10px] text-zinc-500 block">Deposits to commence dispatch</span>
-        </div>
-
-        <div className="bg-[#18181B] border border-[#27272A] rounded-2xl p-4 space-y-1">
-          <span className="text-[11px] font-bold text-zinc-400">Active Valid Documents</span>
-          <div className="text-xl font-extrabold text-emerald-400 font-mono">{activeCount}</div>
-          <span className="text-[10px] text-zinc-500 block">Under 30-day validity</span>
         </div>
 
       </div>
@@ -240,10 +300,13 @@ export function ProformaInvoicesPage() {
             className="px-3 py-2 bg-[#27272A]/50 border border-[#27272A] rounded-xl text-zinc-300 font-bold focus:outline-none"
           >
             <option value="ALL">All Statuses</option>
+            <option value="ACCEPTED">Customer Accepted</option>
+            <option value="ADVANCE_RECEIVED">Advance Payment Remitted</option>
+            <option value="APPROVED">Approved & Sealed</option>
             <option value="SENT">Issued / Sent</option>
             <option value="DRAFT">Draft</option>
-            <option value="CONVERTED">Converted to Order</option>
-            <option value="EXPIRED">Expired</option>
+            <option value="CONVERTED_TO_INVOICE">Converted to Tax Invoice</option>
+            <option value="CANCELLED">Cancelled</option>
           </select>
 
         </div>
@@ -314,6 +377,19 @@ export function ProformaInvoicesPage() {
                           </span>
                         )}
                       </div>
+                      {/* Customer Feedback indicator tags */}
+                      {inv.status === 'ACCEPTED' && (
+                        <div className="mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 bg-cyan-950/60 border border-cyan-800/60 text-cyan-300 text-[10px] font-bold rounded">
+                          <CheckCircle2 size={10} className="text-cyan-400" />
+                          <span>Customer Accepted Terms</span>
+                        </div>
+                      )}
+                      {inv.status === 'ADVANCE_RECEIVED' && (
+                        <div className="mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 bg-purple-950/60 border border-purple-800/60 text-purple-300 text-[10px] font-bold rounded">
+                          <Landmark size={10} className="text-purple-400" />
+                          <span>Advance UTR Submitted</span>
+                        </div>
+                      )}
                     </td>
 
                     <td className="p-3.5">
@@ -337,9 +413,15 @@ export function ProformaInvoicesPage() {
                     </td>
 
                     <td className="p-3.5 text-center">
-                      <span className="inline-block bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase">
-                        {inv.status || 'SENT'}
-                      </span>
+                      {(() => {
+                        const cfg = getStatusBadgeConfig(inv.status);
+                        return (
+                          <span className={`inline-flex items-center gap-1.5 border text-[10px] font-extrabold px-2.5 py-0.5 rounded-full uppercase whitespace-nowrap ${cfg.bg}`}>
+                            {cfg.icon}
+                            <span>{cfg.label}</span>
+                          </span>
+                        );
+                      })()}
                     </td>
 
                     <td className="p-3.5 text-zinc-400 text-[11px]">

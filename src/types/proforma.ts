@@ -96,7 +96,27 @@ export interface ProformaLineItem {
   total?: number;
 }
 
-export type ProformaStatus = 'DRAFT' | 'SENT' | 'CONVERTED' | 'EXPIRED' | 'CANCELLED';
+export type ProformaStatus =
+  | 'DRAFT'
+  | 'ISSUED'
+  | 'SENT'
+  | 'APPROVED'
+  | 'ACCEPTED'
+  | 'ADVANCE_RECEIVED'
+  | 'CONVERTED_TO_INVOICE'
+  | 'CONVERTED'
+  | 'CANCELLED'
+  | 'EXPIRED';
+
+export interface ProformaInvoiceHistory {
+  id: string;
+  proformaInvoiceId: string;
+  action: string;
+  performedBy?: string;
+  details?: string;
+  metadata?: Record<string, any>;
+  createdAt: string;
+}
 
 export interface ProformaInvoice {
   id: string;
@@ -149,7 +169,9 @@ export interface ProformaInvoice {
 
   notes?: string;
   termsConditions?: string[];
+  termsAndConditions?: string;
   items: ProformaLineItem[];
+  history?: ProformaInvoiceHistory[];
   qrCodeDataUrl?: string;
   verificationId?: string;
   verificationToken?: string;

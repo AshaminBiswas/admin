@@ -127,7 +127,19 @@ export function transformBackendInvoiceToPI(inv: any): ProformaInvoice {
     digitalSignature: inv.digitalSignature,
     signedBy: inv.signedBy || 'Executive Desk',
     signedAt: inv.signedAt,
-    notes: inv.notes,
+    notes: inv.notes || '',
+    termsAndConditions: inv.termsAndConditions || '',
+    history: Array.isArray(inv.history)
+      ? inv.history.map((h: any) => ({
+          id: h.id,
+          proformaInvoiceId: h.proformaInvoiceId,
+          action: h.action,
+          performedBy: h.performedBy,
+          details: h.details,
+          metadata: typeof h.metadata === 'string' ? JSON.parse(h.metadata) : h.metadata,
+          createdAt: h.createdAt || new Date().toISOString(),
+        }))
+      : [],
     items: Array.isArray(inv.items)
       ? inv.items.map((it: any, i: number) => ({
           id: it.id || `item-${i + 1}`,
