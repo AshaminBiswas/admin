@@ -7,7 +7,7 @@ import {
   CreditCard, Sparkles, Receipt, Layers, Users, TrendingUp,
   Percent, ArrowDownRight, ArrowUpRight, ChevronDown, CheckCheck,
   PhoneForwarded, MessageSquare, CalendarPlus, History, Send,
-  CalendarCheck, AlertOctagon, MessageCircle, PhoneCall
+  CalendarCheck, AlertOctagon, MessageCircle, PhoneCall, Paperclip
 } from 'lucide-react';
 import { ProformaInvoice } from '../../types/proforma';
 import { GSTInvoice } from '../../types/admin';
@@ -214,7 +214,11 @@ export function AdvancePaymentsTrackerPage() {
   const [selectedProforma, setSelectedProforma] = useState<ProformaInvoice | null>(null);
   const [editingProforma, setEditingProforma] = useState<ProformaInvoice | null>(null);
 
-  // Universal Record Payment Modal State
+  // Dedicated Full-Page View States for Follow-up & Payment Clearance
+  const [activeFollowupRecord, setActiveFollowupRecord] = useState<B2BPaymentRecord | null>(null);
+  const [activePaymentRecord, setActivePaymentRecord] = useState<B2BPaymentRecord | null>(null);
+
+  // Universal Record Payment State
   const [paymentModalRecord, setPaymentModalRecord] = useState<B2BPaymentRecord | null>(null);
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
   const [paymentType, setPaymentType] = useState<string>('ADVANCE_DEPOSIT');
@@ -227,7 +231,7 @@ export function AdvancePaymentsTrackerPage() {
   const [savingPayment, setSavingPayment] = useState(false);
   const [paymentSuccessMsg, setPaymentSuccessMsg] = useState<string | null>(null);
 
-  // Commercial Follow-up Modal State
+  // Commercial Follow-up State
   const [followupModalRecord, setFollowupModalRecord] = useState<B2BPaymentRecord | null>(null);
   const [followupChannel, setFollowupChannel] = useState<'PHONE' | 'WHATSAPP' | 'EMAIL' | 'IN_PERSON' | 'LEGAL_NOTICE' | 'OTHER'>('PHONE');
   const [followupStage, setFollowupStage] = useState<'COURTESY_REMINDER' | 'DUE_WARNING' | 'OVERDUE_ALERT' | 'PROMISE_TO_PAY' | 'ESCALATED' | 'DISPUTED' | 'OTHER'>('COURTESY_REMINDER');
@@ -800,8 +804,10 @@ export function AdvancePaymentsTrackerPage() {
       });
   }, [unifiedRecords, searchQuery, sourceTypeFilter, statusFilter, followupFilter, agingFilter, selectedCustomerIdFilter, sortBy, sortOrder]);
 
-  // ─── Open Universal Record Payment Modal ────────────────────────────────────
-  const handleOpenPaymentModal = (record: B2BPaymentRecord) => {
+  // ─── Open Universal Record Payment Full Page View ────────────────────────────
+  const handleOpenPaymentPage = (record: B2BPaymentRecord) => {
+    setActivePaymentRecord(record);
+    setActiveFollowupRecord(null);
     setPaymentModalRecord(record);
     setPaymentAmount(record.advancePayable > 0 && record.advancePaid === 0 ? record.advancePayable : record.balanceDue);
     setPaymentType(record.sourceType === 'PROFORMA_INVOICE' ? 'ADVANCE_DEPOSIT' : 'FULL_SETTLEMENT');
@@ -812,10 +818,15 @@ export function AdvancePaymentsTrackerPage() {
     setTargetStatus(record.sourceType === 'PROFORMA_INVOICE' ? 'ADVANCE_RECEIVED' : 'PAID');
     setPaymentNotes('');
     setPaymentSuccessMsg(null);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // ─── Open Commercial Follow-up Modal ─────────────────────────────────────────
-  const handleOpenFollowupModal = (record: B2BPaymentRecord) => {
+  const handleOpenPaymentModal = handleOpenPaymentPage;
+
+  // ─── Open Commercial Follow-up Full Page View ────────────────────────────────
+  const handleOpenFollowupPage = (record: B2BPaymentRecord) => {
+    setActiveFollowupRecord(record);
+    setActivePaymentRecord(null);
     setFollowupModalRecord(record);
     setFollowupContactPerson(record.customerName || '');
     setFollowupContactPhone(record.customerPhone || '');
@@ -829,12 +840,16 @@ export function AdvancePaymentsTrackerPage() {
     setFollowupChannel('PHONE');
     setFollowupStage(record.isOverdue ? 'OVERDUE_ALERT' : record.isExpiringSoon ? 'DUE_WARNING' : 'COURTESY_REMINDER');
     setFollowupSuccessMsg(null);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
+
+  const handleOpenFollowupModal = handleOpenFollowupPage;
 
   // ─── Submit Follow-up Touchpoint ───────────────────────────────────────────
   const handleSubmitFollowup = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!followupModalRecord) return;
+    const targetRecord = activeFollowupRecord || followupModalRecord;
+    if (!targetRecord) return;
     if (!followupNotes.trim()) {
       alert('Please enter follow-up remarks / discussion notes.');
       return;
@@ -842,8 +857,8 @@ export function AdvancePaymentsTrackerPage() {
 
     setSavingFollowup(true);
     try {
-      if (followupModalRecord.sourceType === 'PROFORMA_INVOICE') {
-        const rawPi = followupModalRecord.rawDoc as ProformaInvoice;
+      if (targetRecord.sourceType === 'PROFORMA_INVOICE') {
+        const rawPi = targetRecord.rawDoc as ProformaInvoice;
         await proformaService.logFollowUp(rawPi.id, {
           channel: followupChannel,
           stage: followupStage,
@@ -855,8 +870,8 @@ export function AdvancePaymentsTrackerPage() {
           ptpAmount: followupPtpAmount > 0 ? Number(followupPtpAmount) : undefined,
           nextFollowupDate: followupNextDate || undefined,
         });
-      } else if (followupModalRecord.sourceType === 'GST_TAX_INVOICE') {
-        const rawGst = followupModalRecord.rawDoc as GSTInvoice;
+      } else if (targetRecord.sourceType === 'GST_TAX_INVOICE') {
+        const rawGst = targetRecord.rawDoc as GSTInvoice;
         const ptpStr = followupPtpDate ? ` [PTP: ₹${Number(followupPtpAmount || 0).toLocaleString('en-IN')} on ${followupPtpDate}]` : '';
         const nextStr = followupNextDate ? ` [Next Due: ${followupNextDate}]` : '';
         await fetchAdminApi(`/gst/invoices/${rawGst.id}`, {
@@ -867,12 +882,11 @@ export function AdvancePaymentsTrackerPage() {
         });
       }
 
-      setFollowupSuccessMsg(`Follow-up logged successfully for ${followupModalRecord.documentNumber}!`);
+      setFollowupSuccessMsg(`Follow-up logged successfully for ${targetRecord.documentNumber}!`);
       await fetchAllCommercialData();
       setTimeout(() => {
-        setFollowupModalRecord(null);
         setFollowupSuccessMsg(null);
-      }, 1200);
+      }, 3000);
     } catch (err: any) {
       console.error('[AdvancePaymentsTracker] Followup error:', err);
       alert(err?.message || 'Failed to record follow-up touchpoint on server.');
@@ -894,7 +908,8 @@ export function AdvancePaymentsTrackerPage() {
   // ─── Submit Payment Clearance ───────────────────────────────────────────────
   const handleSubmitPayment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!paymentModalRecord) return;
+    const targetRecord = activePaymentRecord || paymentModalRecord;
+    if (!targetRecord) return;
 
     if (!paymentUtr.trim()) {
       alert('Please provide the Bank UTR / Transaction Reference Number.');
@@ -908,8 +923,8 @@ export function AdvancePaymentsTrackerPage() {
 
     setSavingPayment(true);
     try {
-      if (paymentModalRecord.sourceType === 'PROFORMA_INVOICE') {
-        const rawPi = paymentModalRecord.rawDoc as ProformaInvoice;
+      if (targetRecord.sourceType === 'PROFORMA_INVOICE') {
+        const rawPi = targetRecord.rawDoc as ProformaInvoice;
         await proformaService.recordPayment(rawPi.id, {
           amountPaid: Number(paymentAmount),
           paymentMode,
@@ -918,8 +933,8 @@ export function AdvancePaymentsTrackerPage() {
           status: targetStatus,
           notes: `${paymentNotes ? `${paymentNotes} | ` : ''}Credited to: ${bankAccountCredited}`,
         });
-      } else if (paymentModalRecord.sourceType === 'GST_TAX_INVOICE') {
-        const rawGst = paymentModalRecord.rawDoc as GSTInvoice;
+      } else if (targetRecord.sourceType === 'GST_TAX_INVOICE') {
+        const rawGst = targetRecord.rawDoc as GSTInvoice;
         await fetchAdminApi(`/gst/invoices/${rawGst.id}`, {
           method: 'PATCH',
           body: JSON.stringify({
@@ -930,10 +945,10 @@ export function AdvancePaymentsTrackerPage() {
       }
 
       setPaymentSuccessMsg(`Payment of ₹${paymentAmount.toLocaleString('en-IN')} recorded & reconciled successfully!`);
+      await fetchAllCommercialData();
       setTimeout(() => {
-        setPaymentModalRecord(null);
-        fetchAllCommercialData();
-      }, 1200);
+        setPaymentSuccessMsg(null);
+      }, 3000);
     } catch (err: any) {
       console.error('[AdvancePaymentsTracker] Payment save error:', err);
       alert(err?.message || 'Failed to record payment on server.');
@@ -1039,6 +1054,837 @@ export function AdvancePaymentsTrackerPage() {
           setEditingProforma(inv);
         }}
       />
+    );
+  }
+
+  // ─── FULL PAGE VIEW: COMMERCIAL FOLLOW-UP & PTP WORKSPACE ──────────────────
+  if (activeFollowupRecord) {
+    const isPi = activeFollowupRecord.sourceType === 'PROFORMA_INVOICE';
+    const isGst = activeFollowupRecord.sourceType === 'GST_TAX_INVOICE';
+
+    return (
+      <div className="space-y-6 max-w-[1600px] mx-auto pb-16 animate-in fade-in duration-200">
+        
+        {/* Top Breadcrumb Bar */}
+        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#27272A] pb-4">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setActiveFollowupRecord(null);
+                fetchAllCommercialData();
+              }}
+              className="px-3.5 py-2 bg-[#18181B] hover:bg-[#27272A] text-zinc-300 hover:text-white rounded-xl text-xs font-bold border border-[#27272A] transition-all flex items-center gap-2"
+            >
+              <ArrowLeft size={15} />
+              <span>Back to Receivables Ledger</span>
+            </button>
+            <span className="text-zinc-600">/</span>
+            <span className="text-xs font-mono text-zinc-400">Commercial Follow-up Workspace</span>
+          </div>
+
+          {/* Quick Switch to Payment Clearance */}
+          <button
+            type="button"
+            onClick={() => handleOpenPaymentPage(activeFollowupRecord)}
+            className="px-3.5 py-2 bg-[#8B5CF6]/15 hover:bg-[#8B5CF6] text-purple-300 hover:text-white rounded-xl text-xs font-bold border border-[#8B5CF6]/30 transition-all flex items-center gap-2"
+          >
+            <Landmark size={14} />
+            <span>Switch to Record Payment Clearance</span>
+          </button>
+        </div>
+
+        {/* Executive Header Banner */}
+        <div className="bg-[#18181B] border border-[#27272A] rounded-2xl p-5 shadow-xl space-y-4">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded font-mono ${
+                  isPi ? 'bg-purple-950 text-purple-300 border border-purple-800' : isGst ? 'bg-blue-950 text-blue-300 border border-blue-800' : 'bg-emerald-950 text-emerald-300 border border-emerald-800'
+                }`}>
+                  {isPi ? 'PROFORMA INVOICE' : isGst ? 'GST TAX INVOICE' : 'B2B SALES ORDER'}
+                </span>
+                <span className="text-xs font-mono text-zinc-400">
+                  Ref: {activeFollowupRecord.documentNumber}
+                </span>
+              </div>
+              <h1 className="text-2xl font-black text-white mt-1 flex items-center gap-2.5">
+                <PhoneForwarded className="text-amber-400" size={24} />
+                <span>Commercial Follow-up & Touchpoint Workspace</span>
+              </h1>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 text-xs text-zinc-400">
+                <span>Customer: <strong className="text-white">{activeFollowupRecord.customerName}</strong></span>
+                {activeFollowupRecord.companyName && <span>Company: <strong className="text-white">{activeFollowupRecord.companyName}</strong></span>}
+                {activeFollowupRecord.customerGstin && <span className="font-mono">GSTIN: {activeFollowupRecord.customerGstin}</span>}
+                {activeFollowupRecord.customerPhone && <span>Phone: {activeFollowupRecord.customerPhone}</span>}
+                {activeFollowupRecord.customerEmail && <span>Email: {activeFollowupRecord.customerEmail}</span>}
+              </div>
+            </div>
+
+            {/* SLA Status Chip */}
+            <div className="text-right space-y-1">
+              {activeFollowupRecord.balanceDue === 0 ? (
+                <span className="inline-flex items-center gap-1 text-xs font-bold px-3 py-1 rounded-full bg-purple-500/10 text-purple-300 border border-purple-500/30">
+                  <CheckCircle2 size={13} /> Fully Settled
+                </span>
+              ) : activeFollowupRecord.isOverdue ? (
+                <span className="inline-flex items-center gap-1.5 text-xs font-black px-3 py-1 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/40 animate-pulse">
+                  <AlertTriangle size={13} /> Overdue by {Math.abs(activeFollowupRecord.daysRemaining)} Days
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                  <Clock size={13} /> Due in {activeFollowupRecord.daysRemaining} Days
+                </span>
+              )}
+              <div className="text-[11px] text-zinc-400 font-mono">
+                Issued: {new Date(activeFollowupRecord.issueDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })} • {activeFollowupRecord.daysElapsed}d Elapsed
+              </div>
+            </div>
+          </div>
+
+          {/* 4-Stat Financial Summary Grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3 border-t border-[#27272A] text-xs">
+            <div className="bg-[#09090B] p-3 rounded-xl border border-[#27272A]">
+              <span className="text-zinc-500 block text-[11px]">Total Invoiced</span>
+              <span className="font-mono font-black text-white text-base">
+                ₹{activeFollowupRecord.grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              </span>
+            </div>
+
+            <div className="bg-[#09090B] p-3 rounded-xl border border-[#27272A]">
+              <span className="text-zinc-500 block text-[11px]">Advance Required</span>
+              <span className="font-mono font-bold text-amber-300 text-base">
+                ₹{activeFollowupRecord.advancePayable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              </span>
+            </div>
+
+            <div className="bg-[#09090B] p-3 rounded-xl border border-[#27272A]">
+              <span className="text-zinc-500 block text-[11px]">Payments Cleared</span>
+              <span className="font-mono font-bold text-purple-300 text-base">
+                ₹{activeFollowupRecord.totalPaid.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              </span>
+            </div>
+
+            <div className="bg-[#09090B] p-3 rounded-xl border border-[#27272A]">
+              <span className="text-zinc-500 block text-[11px]">Outstanding Balance Due</span>
+              <span className={`font-mono font-black text-base ${activeFollowupRecord.balanceDue > 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                ₹{activeFollowupRecord.balanceDue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* 2-Column Responsive Operational Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          
+          {/* Left Column: Communications & Follow-up Logger (7 Cols) */}
+          <div className="lg:col-span-7 space-y-6">
+            
+            {/* 1-Click Communications Strip */}
+            <div className="bg-[#18181B] border border-[#27272A] rounded-2xl p-4 shadow-xl space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                  <Send size={14} className="text-emerald-400" /> 1-Click Direct Communications Suite
+                </span>
+                <span className="text-[11px] text-zinc-400">Instant customer outreach</span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => handleSendWhatsApp(activeFollowupRecord)}
+                  className="px-3.5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 shadow-md"
+                >
+                  <MessageSquare size={15} />
+                  <span>Send WhatsApp Alert</span>
+                </button>
+
+                {activeFollowupRecord.customerEmail ? (
+                  <a
+                    href={generateEmailReminder(activeFollowupRecord)}
+                    className="px-3.5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 shadow-md"
+                  >
+                    <Mail size={15} />
+                    <span>Send Email Notice</span>
+                  </a>
+                ) : (
+                  <button disabled className="px-3.5 py-2.5 bg-zinc-800 text-zinc-500 rounded-xl text-xs font-bold flex items-center justify-center gap-2 opacity-50 cursor-not-allowed">
+                    <Mail size={15} />
+                    <span>No Email Found</span>
+                  </button>
+                )}
+
+                {activeFollowupRecord.customerPhone ? (
+                  <a
+                    href={`tel:${activeFollowupRecord.customerPhone}`}
+                    className="px-3.5 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2"
+                  >
+                    <Phone size={15} />
+                    <span>Direct Call</span>
+                  </a>
+                ) : (
+                  <button disabled className="px-3.5 py-2.5 bg-zinc-800 text-zinc-500 rounded-xl text-xs font-bold flex items-center justify-center gap-2 opacity-50 cursor-not-allowed">
+                    <Phone size={15} />
+                    <span>No Phone Found</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Follow-up Touchpoint Logger Form Card */}
+            <div className="bg-[#18181B] border border-[#27272A] rounded-2xl p-6 shadow-xl space-y-4">
+              <div className="flex items-center justify-between border-b border-[#27272A] pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400">
+                    <PhoneForwarded size={18} />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-bold text-white">Log Commercial Follow-up Touchpoint</h2>
+                    <p className="text-xs text-zinc-400">Record call remarks, negotiation outcomes, and Promise to Pay dates</p>
+                  </div>
+                </div>
+              </div>
+
+              {followupSuccessMsg && (
+                <div className="p-3.5 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-xs text-emerald-400 flex items-center gap-2 animate-in fade-in">
+                  <CheckCircle2 size={16} />
+                  <span>{followupSuccessMsg}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleSubmitFollowup} className="space-y-4 text-xs">
+                {/* Channel & Stage */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  <div>
+                    <label className="block text-zinc-300 font-bold mb-1.5">Communication Channel</label>
+                    <select
+                      value={followupChannel}
+                      onChange={(e) => setFollowupChannel(e.target.value as any)}
+                      className="w-full px-3.5 py-2.5 bg-[#09090B] border border-[#27272A] focus:border-[#8B5CF6] rounded-xl text-white focus:outline-none font-bold"
+                    >
+                      <option value="PHONE">📞 Phone Call (Accounts / Procurement)</option>
+                      <option value="WHATSAPP">💬 WhatsApp Commercial Notice</option>
+                      <option value="EMAIL">✉️ Email Formal Reminder</option>
+                      <option value="IN_PERSON">🏢 Site / In-Person Commercial Visit</option>
+                      <option value="LEGAL_NOTICE">⚠️ Legal / Formal Demand Notice</option>
+                      <option value="OTHER">Other Touchpoint</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-zinc-300 font-bold mb-1.5">Follow-up Stage & Escalation</label>
+                    <select
+                      value={followupStage}
+                      onChange={(e) => setFollowupStage(e.target.value as any)}
+                      className="w-full px-3.5 py-2.5 bg-[#09090B] border border-[#27272A] focus:border-[#8B5CF6] rounded-xl text-white focus:outline-none font-bold"
+                    >
+                      <option value="COURTESY_REMINDER">🟢 Courtesy Commercial Reminder</option>
+                      <option value="DUE_WARNING">🟡 Upcoming Due Date Warning</option>
+                      <option value="OVERDUE_ALERT">🔴 Overdue Payment Notice (&gt;30 Days)</option>
+                      <option value="PROMISE_TO_PAY">🤝 Promise to Pay (PTP Agreed)</option>
+                      <option value="ESCALATED">🚨 Escalated to Head of Sales / Director</option>
+                      <option value="DISPUTED">⚠️ Query / Rate Dispute Under Review</option>
+                      <option value="OTHER">Other Stage</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Contact Person Details */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-zinc-300 font-bold mb-1">Contacted Person</label>
+                    <input
+                      type="text"
+                      value={followupContactPerson}
+                      onChange={(e) => setFollowupContactPerson(e.target.value)}
+                      placeholder="e.g. Accounts Officer / Mr. Sharma"
+                      className="w-full px-3 py-2 bg-[#09090B] border border-[#27272A] focus:border-[#8B5CF6] rounded-xl text-white focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-zinc-300 font-bold mb-1">Phone Number</label>
+                    <input
+                      type="text"
+                      value={followupContactPhone}
+                      onChange={(e) => setFollowupContactPhone(e.target.value)}
+                      placeholder="+91 98765 43210"
+                      className="w-full px-3 py-2 bg-[#09090B] border border-[#27272A] focus:border-[#8B5CF6] rounded-xl text-white font-mono focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-zinc-300 font-bold mb-1">Email Address</label>
+                    <input
+                      type="email"
+                      value={followupContactEmail}
+                      onChange={(e) => setFollowupContactEmail(e.target.value)}
+                      placeholder="accounts@buyer.com"
+                      className="w-full px-3 py-2 bg-[#09090B] border border-[#27272A] focus:border-[#8B5CF6] rounded-xl text-white focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                {/* Promise to Pay (PTP) Commitment Card */}
+                <div className="p-4 bg-[#09090B] border border-emerald-900/50 rounded-xl space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
+                      <Clock size={14} /> Promise to Pay (PTP) Commitment (Optional):
+                    </span>
+                    <span className="text-[11px] text-zinc-400">Customer commitment for bank transfer</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-zinc-400 text-[11px] mb-1">Promised Remittance Date</label>
+                      <input
+                        type="date"
+                        value={followupPtpDate}
+                        onChange={(e) => setFollowupPtpDate(e.target.value)}
+                        className="w-full px-3 py-2 bg-[#18181B] border border-[#27272A] focus:border-emerald-500 rounded-xl text-white focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-zinc-400 text-[11px] mb-1">Promised Amount (INR)</label>
+                      <input
+                        type="number"
+                        value={followupPtpAmount || ''}
+                        onChange={(e) => setFollowupPtpAmount(Number(e.target.value))}
+                        placeholder="e.g. 50000"
+                        className="w-full px-3 py-2 bg-[#18181B] border border-[#27272A] focus:border-emerald-500 rounded-xl text-white font-mono focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Discussion & Call Remarks */}
+                <div>
+                  <label className="block text-zinc-300 font-bold mb-1.5">
+                    Follow-up Discussion Notes & Customer Response <span className="text-rose-500">*</span>
+                  </label>
+                  <textarea
+                    rows={4}
+                    value={followupNotes}
+                    onChange={(e) => setFollowupNotes(e.target.value)}
+                    placeholder="e.g. Spoke with Finance Head Mr. Rakesh. Confirmed invoice received and cleared internally for RTGS remittance. Cheque is lined up for Thursday batch."
+                    className="w-full px-3.5 py-2.5 bg-[#09090B] border border-[#27272A] focus:border-[#8B5CF6] rounded-xl text-white resize-none focus:outline-none leading-relaxed"
+                    required
+                  />
+                </div>
+
+                {/* Next Follow-up Reminder Date */}
+                <div>
+                  <label className="block text-zinc-300 font-bold mb-1.5">Next Scheduled Follow-up Due Date</label>
+                  <input
+                    type="date"
+                    value={followupNextDate}
+                    onChange={(e) => setFollowupNextDate(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-[#09090B] border border-[#27272A] focus:border-[#8B5CF6] rounded-xl text-white focus:outline-none"
+                  />
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex items-center justify-end gap-3 pt-3 border-t border-[#27272A]">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveFollowupRecord(null);
+                      fetchAllCommercialData();
+                    }}
+                    className="px-4 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl font-bold transition-colors"
+                  >
+                    Cancel / Back
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={savingFollowup}
+                    className="px-6 py-2.5 bg-amber-500 hover:bg-amber-400 text-black font-black rounded-xl flex items-center gap-2 shadow-lg disabled:opacity-50 transition-all text-xs"
+                  >
+                    {savingFollowup ? <RefreshCw size={15} className="animate-spin" /> : <PhoneForwarded size={15} />}
+                    <span>Save Commercial Follow-up Touchpoint</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+
+          </div>
+
+          {/* Right Column: Follow-up & Audit Timeline Dossier (5 Cols) */}
+          <div className="lg:col-span-5 space-y-4">
+            <div className="bg-[#18181B] border border-[#27272A] rounded-2xl p-5 shadow-xl space-y-4 max-h-[85vh] flex flex-col">
+              <div className="flex items-center justify-between border-b border-[#27272A] pb-3 shrink-0">
+                <div className="flex items-center gap-2">
+                  <History className="text-[#8B5CF6]" size={18} />
+                  <h3 className="text-sm font-bold text-white">Chronological Follow-up Dossier</h3>
+                </div>
+                <span className="text-[11px] text-zinc-400 font-mono">
+                  {activeFollowupRecord.history?.length || 0} event{activeFollowupRecord.history?.length !== 1 ? 's' : ''}
+                </span>
+              </div>
+
+              {/* Scrollable Timeline */}
+              <div className="overflow-y-auto space-y-3 pr-1 flex-1 text-xs">
+                {activeFollowupRecord.history && activeFollowupRecord.history.length > 0 ? (
+                  activeFollowupRecord.history.map((h: any, idx: number) => {
+                    const isFollowup = h.action === 'FOLLOW_UP_LOGGED' || (h.details && h.details.toLowerCase().includes('follow-up'));
+                    const isPayment = h.action === 'PAYMENT_RECORDED' || h.action === 'PAYMENT_SUBMITTED';
+
+                    return (
+                      <div
+                        key={h.id || idx}
+                        className={`p-3.5 rounded-xl border space-y-1.5 ${
+                          isFollowup
+                            ? 'bg-amber-950/15 border-amber-800/40'
+                            : isPayment
+                            ? 'bg-purple-950/20 border-purple-800/40'
+                            : 'bg-[#09090B] border-[#27272A]'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded font-mono ${
+                              isFollowup
+                                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                                : isPayment
+                                ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40'
+                                : 'bg-zinc-800 text-zinc-300 border border-zinc-700'
+                            }`}>
+                              {isFollowup ? 'Follow-up' : isPayment ? 'Payment' : h.action}
+                            </span>
+                            <span className="font-bold text-white">{h.performedBy || 'Commercial Desk'}</span>
+                          </div>
+                          <span className="text-[10px] text-zinc-500 font-mono">
+                            {new Date(h.createdAt || Date.now()).toLocaleString('en-IN', {
+                              day: '2-digit',
+                              month: 'short',
+                              year: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </span>
+                        </div>
+
+                        <p className="text-zinc-300 text-xs leading-relaxed">{h.details}</p>
+
+                        {h.metadata && (
+                          <div className="flex flex-wrap items-center gap-2 pt-1 text-[10.5px] text-zinc-400 font-mono">
+                            {h.metadata.channel && (
+                              <span className="px-1.5 py-0.5 bg-black/40 rounded border border-zinc-800">
+                                Channel: {h.metadata.channel}
+                              </span>
+                            )}
+                            {h.metadata.stage && (
+                              <span className="px-1.5 py-0.5 bg-black/40 rounded border border-zinc-800">
+                                Stage: {h.metadata.stage}
+                              </span>
+                            )}
+                            {h.metadata.ptpDate && (
+                              <span className="px-1.5 py-0.5 bg-emerald-950/60 text-emerald-300 rounded border border-emerald-800 font-bold">
+                                PTP: {h.metadata.ptpDate}
+                              </span>
+                            )}
+                            {h.metadata.nextFollowupDate && (
+                              <span className="px-1.5 py-0.5 bg-amber-950/60 text-amber-300 rounded border border-amber-800">
+                                Next Due: {h.metadata.nextFollowupDate}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="py-16 text-center space-y-2 text-zinc-500">
+                    <History size={32} className="mx-auto text-zinc-600" />
+                    <div className="font-bold text-zinc-400">No previous touchpoints logged</div>
+                    <p className="text-xs text-zinc-600">Use the form on the left to record the first client discussion.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+    );
+  }
+
+  // ─── FULL PAGE VIEW: PAYMENT CLEARANCE & RECONCILIATION WORKSPACE ───────────
+  if (activePaymentRecord) {
+    const isPi = activePaymentRecord.sourceType === 'PROFORMA_INVOICE';
+    const isGst = activePaymentRecord.sourceType === 'GST_TAX_INVOICE';
+
+    return (
+      <div className="space-y-6 max-w-[1600px] mx-auto pb-16 animate-in fade-in duration-200">
+        
+        {/* Top Breadcrumb Bar */}
+        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#27272A] pb-4">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setActivePaymentRecord(null);
+                fetchAllCommercialData();
+              }}
+              className="px-3.5 py-2 bg-[#18181B] hover:bg-[#27272A] text-zinc-300 hover:text-white rounded-xl text-xs font-bold border border-[#27272A] transition-all flex items-center gap-2"
+            >
+              <ArrowLeft size={15} />
+              <span>Back to Receivables Ledger</span>
+            </button>
+            <span className="text-zinc-600">/</span>
+            <span className="text-xs font-mono text-zinc-400">Payment Clearance & Reconciliation</span>
+          </div>
+
+          {/* Quick Switch to Follow-up */}
+          <button
+            type="button"
+            onClick={() => handleOpenFollowupPage(activePaymentRecord)}
+            className="px-3.5 py-2 bg-amber-500/15 hover:bg-amber-500 text-amber-300 hover:text-black rounded-xl text-xs font-bold border border-amber-500/30 transition-all flex items-center gap-2"
+          >
+            <PhoneForwarded size={14} />
+            <span>Switch to Commercial Follow-up</span>
+          </button>
+        </div>
+
+        {/* Executive Header Banner */}
+        <div className="bg-[#18181B] border border-[#27272A] rounded-2xl p-5 shadow-xl space-y-4">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded font-mono ${
+                  isPi ? 'bg-purple-950 text-purple-300 border border-purple-800' : isGst ? 'bg-blue-950 text-blue-300 border border-blue-800' : 'bg-emerald-950 text-emerald-300 border border-emerald-800'
+                }`}>
+                  {isPi ? 'PROFORMA INVOICE' : isGst ? 'GST TAX INVOICE' : 'B2B SALES ORDER'}
+                </span>
+                <span className="text-xs font-mono text-zinc-400">
+                  Doc: {activePaymentRecord.documentNumber}
+                </span>
+              </div>
+              <h1 className="text-2xl font-black text-white mt-1 flex items-center gap-2.5">
+                <Landmark className="text-[#8B5CF6]" size={24} />
+                <span>Record & Reconcile Commercial Payment</span>
+              </h1>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 text-xs text-zinc-400">
+                <span>Customer: <strong className="text-white">{activePaymentRecord.customerName}</strong></span>
+                {activePaymentRecord.companyName && <span>Company: <strong className="text-white">{activePaymentRecord.companyName}</strong></span>}
+                {activePaymentRecord.customerGstin && <span className="font-mono">GSTIN: {activePaymentRecord.customerGstin}</span>}
+                {activePaymentRecord.placeOfSupply && <span>State: {activePaymentRecord.placeOfSupply}</span>}
+              </div>
+            </div>
+
+            <div className="text-right space-y-1">
+              <span className={`inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-full ${
+                activePaymentRecord.balanceDue === 0
+                  ? 'bg-purple-500/10 text-purple-300 border border-purple-500/30'
+                  : activePaymentRecord.isOverdue
+                  ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40 animate-pulse'
+                  : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+              }`}>
+                {activePaymentRecord.balanceDue === 0 ? 'Fully Cleared' : activePaymentRecord.isOverdue ? `Overdue by ${Math.abs(activePaymentRecord.daysRemaining)}d` : `Due in ${activePaymentRecord.daysRemaining}d`}
+              </span>
+              <div className="text-[11px] text-zinc-400 font-mono">
+                Issued: {new Date(activePaymentRecord.issueDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+              </div>
+            </div>
+          </div>
+
+          {/* Financial Summary */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3 border-t border-[#27272A] text-xs">
+            <div className="bg-[#09090B] p-3 rounded-xl border border-[#27272A]">
+              <span className="text-zinc-500 block text-[11px]">Grand Total</span>
+              <span className="font-mono font-black text-white text-base">
+                ₹{activePaymentRecord.grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              </span>
+            </div>
+
+            <div className="bg-[#09090B] p-3 rounded-xl border border-[#27272A]">
+              <span className="text-zinc-500 block text-[11px]">Advance Booking Terms</span>
+              <span className="font-mono font-bold text-amber-300 text-base">
+                ₹{activePaymentRecord.advancePayable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              </span>
+            </div>
+
+            <div className="bg-[#09090B] p-3 rounded-xl border border-[#27272A]">
+              <span className="text-zinc-500 block text-[11px]">Total Cleared So Far</span>
+              <span className="font-mono font-bold text-purple-300 text-base">
+                ₹{activePaymentRecord.totalPaid.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              </span>
+            </div>
+
+            <div className="bg-[#09090B] p-3 rounded-xl border border-[#27272A]">
+              <span className="text-zinc-500 block text-[11px]">Outstanding Due</span>
+              <span className={`font-mono font-black text-base ${activePaymentRecord.balanceDue > 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                ₹{activePaymentRecord.balanceDue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* 2-Column Responsive Layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          
+          {/* Left Column: Payment Clearance Form (7 Cols) */}
+          <div className="lg:col-span-7 space-y-4">
+            <div className="bg-[#18181B] border border-[#27272A] rounded-2xl p-6 shadow-xl space-y-4">
+              <div className="flex items-center justify-between border-b border-[#27272A] pb-3">
+                <div className="flex items-center gap-2">
+                  <Landmark className="text-[#8B5CF6]" size={18} />
+                  <h2 className="text-base font-bold text-white">Bank Remittance & Ledger Reconciliation</h2>
+                </div>
+              </div>
+
+              {paymentSuccessMsg && (
+                <div className="p-3.5 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-xs text-emerald-400 flex items-center gap-2 animate-in fade-in">
+                  <CheckCircle2 size={16} />
+                  <span>{paymentSuccessMsg}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleSubmitPayment} className="space-y-4 text-xs">
+                
+                {/* Amount Received with Quick 1-Click Chips */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-zinc-300 font-bold">
+                      Amount Received & Cleared (₹) <span className="text-rose-500">*</span>
+                    </label>
+                    <div className="flex items-center gap-1.5">
+                      {activePaymentRecord.advancePayable > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setPaymentAmount(activePaymentRecord.advancePayable)}
+                          className="px-2 py-0.5 bg-amber-950/60 text-amber-300 border border-amber-800/60 rounded text-[10.5px] font-mono hover:bg-amber-900 transition-colors"
+                        >
+                          Fill Advance ₹{activePaymentRecord.advancePayable.toLocaleString('en-IN')}
+                        </button>
+                      )}
+                      {activePaymentRecord.balanceDue > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setPaymentAmount(activePaymentRecord.balanceDue)}
+                          className="px-2 py-0.5 bg-purple-950/60 text-purple-300 border border-purple-800/60 rounded text-[10.5px] font-mono hover:bg-purple-900 transition-colors"
+                        >
+                          Fill Balance ₹{activePaymentRecord.balanceDue.toLocaleString('en-IN')}
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setPaymentAmount(activePaymentRecord.grandTotal)}
+                        className="px-2 py-0.5 bg-zinc-800 text-zinc-300 border border-zinc-700 rounded text-[10.5px] font-mono hover:bg-zinc-700 transition-colors"
+                      >
+                        Fill Full ₹{activePaymentRecord.grandTotal.toLocaleString('en-IN')}
+                      </button>
+                    </div>
+                  </div>
+
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={paymentAmount}
+                    onChange={(e) => setPaymentAmount(parseFloat(e.target.value) || 0)}
+                    className="w-full px-3.5 py-2.5 bg-[#09090B] border border-[#27272A] focus:border-[#8B5CF6] rounded-xl text-white font-mono text-base font-bold focus:outline-none"
+                    required
+                  />
+                </div>
+
+                {/* Payment Type & Bank Account */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  <div>
+                    <label className="block text-zinc-300 font-bold mb-1.5">Payment Type</label>
+                    <select
+                      value={paymentType}
+                      onChange={(e) => setPaymentType(e.target.value)}
+                      className="w-full px-3.5 py-2.5 bg-[#09090B] border border-[#27272A] focus:border-[#8B5CF6] rounded-xl text-white focus:outline-none font-bold"
+                    >
+                      <option value="ADVANCE_DEPOSIT">Advance Booking Deposit</option>
+                      <option value="BALANCE_PAYMENT">Balance Before Dispatch</option>
+                      <option value="FULL_SETTLEMENT">Full Invoice Settlement</option>
+                      <option value="PART_PAYMENT">Part / Installment Payment</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-zinc-300 font-bold mb-1.5">Credited Bank Account</label>
+                    <select
+                      value={bankAccountCredited}
+                      onChange={(e) => setBankAccountCredited(e.target.value)}
+                      className="w-full px-3.5 py-2.5 bg-[#09090B] border border-[#27272A] focus:border-[#8B5CF6] rounded-xl text-white focus:outline-none font-bold"
+                    >
+                      <option value="HDFC Bank - Current A/C (Mandoli Branch)">HDFC Bank - Current A/C</option>
+                      <option value="ICICI Commercial Bank A/C">ICICI Commercial Bank A/C</option>
+                      <option value="State Bank of India Corporate">SBI Corporate A/C</option>
+                      <option value="Cash / Cheque Register">Cash / Cheque Register</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Payment Mode & Date */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  <div>
+                    <label className="block text-zinc-300 font-bold mb-1.5">Payment Mode</label>
+                    <select
+                      value={paymentMode}
+                      onChange={(e) => setPaymentMode(e.target.value)}
+                      className="w-full px-3.5 py-2.5 bg-[#09090B] border border-[#27272A] focus:border-[#8B5CF6] rounded-xl text-white focus:outline-none font-bold"
+                    >
+                      <option value="RTGS">RTGS Bank Transfer</option>
+                      <option value="NEFT">NEFT Bank Transfer</option>
+                      <option value="IMPS">IMPS Instant Transfer</option>
+                      <option value="UPI">UPI / VPA Transfer</option>
+                      <option value="CHEQUE">Bank Cheque</option>
+                      <option value="CASH">Cash Deposit</option>
+                      <option value="OTHER">Other Settlement</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-zinc-300 font-bold mb-1.5">Transaction Date</label>
+                    <input
+                      type="date"
+                      value={paymentDate}
+                      onChange={(e) => setPaymentDate(e.target.value)}
+                      className="w-full px-3.5 py-2.5 bg-[#09090B] border border-[#27272A] focus:border-[#8B5CF6] rounded-xl text-white focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                {/* Bank UTR Reference */}
+                <div>
+                  <label className="block text-zinc-300 font-bold mb-1.5">
+                    Bank UTR / Transaction Reference Number <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={paymentUtr}
+                    onChange={(e) => setPaymentUtr(e.target.value)}
+                    placeholder="e.g. HDFC240902123456 or CMS/RTGS/987654"
+                    className="w-full px-3.5 py-2.5 bg-[#09090B] border border-[#27272A] focus:border-[#8B5CF6] rounded-xl text-white font-mono text-sm focus:outline-none"
+                    required
+                  />
+                </div>
+
+                {/* Clearance Notes */}
+                <div>
+                  <label className="block text-zinc-300 font-bold mb-1.5">Internal Accounts Clearance Notes (Optional)</label>
+                  <textarea
+                    rows={3}
+                    value={paymentNotes}
+                    onChange={(e) => setPaymentNotes(e.target.value)}
+                    placeholder="e.g. Verified in HDFC Mandoli current account statement. Document cleared for immediate factory dispatch."
+                    className="w-full px-3.5 py-2.5 bg-[#09090B] border border-[#27272A] focus:border-[#8B5CF6] rounded-xl text-white resize-none focus:outline-none leading-relaxed"
+                  />
+                </div>
+
+                {/* Form Buttons */}
+                <div className="flex items-center justify-end gap-3 pt-3 border-t border-[#27272A]">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActivePaymentRecord(null);
+                      fetchAllCommercialData();
+                    }}
+                    className="px-4 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl font-bold transition-colors"
+                  >
+                    Cancel / Back
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={savingPayment}
+                    className="px-6 py-2.5 bg-[#8B5CF6] hover:bg-[#7C3AED] text-white font-bold rounded-xl flex items-center gap-2 shadow-lg disabled:opacity-50 transition-all text-xs"
+                  >
+                    {savingPayment ? <RefreshCw size={15} className="animate-spin" /> : <Check size={15} />}
+                    <span>Confirm Payment Clearance & Reconcile</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          {/* Right Column: Payment Proof Inspection / Document Preview (5 Cols) */}
+          <div className="lg:col-span-5 space-y-4">
+            <div className="bg-[#18181B] border border-[#27272A] rounded-2xl p-5 shadow-xl space-y-4">
+              <div className="flex items-center justify-between border-b border-[#27272A] pb-3">
+                <div className="flex items-center gap-2">
+                  <Paperclip className="text-cyan-400" size={18} />
+                  <h3 className="text-sm font-bold text-white">Payment Confirmation Proof</h3>
+                </div>
+                {activePaymentRecord.receiptUrl && (
+                  <a
+                    href={activePaymentRecord.receiptUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[11px] rounded-lg border border-zinc-700 flex items-center gap-1 font-bold transition-colors"
+                  >
+                    <ExternalLink size={12} /> Open Full Size
+                  </a>
+                )}
+              </div>
+
+              {activePaymentRecord.receiptUrl ? (
+                <div className="space-y-3">
+                  <div className="overflow-hidden rounded-xl border border-zinc-800 max-h-[450px] bg-black/40 flex items-center justify-center p-2">
+                    {activePaymentRecord.receiptUrl.toLowerCase().endsWith('.pdf') || activePaymentRecord.receiptUrl.includes('.pdf') ? (
+                      <div className="p-8 text-center space-y-3">
+                        <FileText size={48} className="text-purple-400 mx-auto" />
+                        <div className="text-sm font-bold text-white">Payment Receipt Document (PDF)</div>
+                        <a
+                          href={activePaymentRecord.receiptUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 px-4 py-2 bg-[#8B5CF6] hover:bg-[#7C3AED] text-white font-bold rounded-xl text-xs shadow-md"
+                        >
+                          <Download size={14} /> Download PDF Receipt
+                        </a>
+                      </div>
+                    ) : (
+                      <img
+                        src={activePaymentRecord.receiptUrl}
+                        alt="Payment Proof Preview"
+                        className="max-w-full max-h-[420px] object-contain rounded-lg"
+                      />
+                    )}
+                  </div>
+                  {activePaymentRecord.transactionRef && (
+                    <div className="p-3 bg-purple-950/60 border border-purple-800/60 rounded-xl text-xs text-purple-200 font-mono">
+                      Customer Submitted UTR: <strong>{activePaymentRecord.transactionRef}</strong>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="py-16 text-center space-y-2 text-zinc-500">
+                  <Paperclip size={32} className="mx-auto text-zinc-600" />
+                  <div className="font-bold text-zinc-400">No receipt file attached</div>
+                  <p className="text-xs text-zinc-600">The customer has not uploaded a digital receipt. You can manually enter the bank UTR reference on the left to reconcile.</p>
+                </div>
+              )}
+
+              {/* Document Actions */}
+              {isPi && (
+                <div className="pt-3 border-t border-[#27272A] flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedProforma(activePaymentRecord.rawDoc)}
+                    className="flex-1 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-xl text-xs font-bold border border-zinc-700 transition-colors flex items-center justify-center gap-1.5"
+                  >
+                    <Eye size={13} />
+                    <span>View Proforma Invoice</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => proformaService.downloadProformaPdf(activePaymentRecord.rawDoc.id, activePaymentRecord.rawDoc.piNumber)}
+                    className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-xl text-xs font-bold border border-zinc-700 transition-colors flex items-center justify-center gap-1.5"
+                    title="Download PI PDF"
+                  >
+                    <Download size={13} />
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+        </div>
+
+      </div>
     );
   }
 

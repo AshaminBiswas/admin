@@ -36,7 +36,7 @@ export const PROFORMA_FACILITIES: Record<string, ProformaFacility> = {
   DELHI_WORKS: {
     id: 'fac-delhi-01',
     code: 'DELHI_WORKS',
-    name: 'PRC Hardware (Pacific Products & Solutions)',
+    name: 'PRC Hardware',
     tagline: 'Main Corporate Works & Central Logistics Hub',
     address: 'H-3, J.R. Complex, Gate No 4, Mela Ram Farm, Mandoli',
     city: 'Delhi',
@@ -180,9 +180,37 @@ export interface ProformaInvoice {
   signedBy?: string;
   signedAt?: string;
 
+  // Reminder & Follow-up Metrics
+  reminderCount?: number;
+  emailReminderCount?: number;
+  whatsappReminderCount?: number;
+  lastReminderAt?: string;
+  lastWhatsappAt?: string;
+  lastEmailAt?: string;
+
   createdAt: string;
   updatedAt: string;
   emailedAt?: string;
+}
+
+export interface SendReminderPayload {
+  channel: 'WHATSAPP' | 'EMAIL' | 'BOTH';
+  recipient?: string;
+  customMessage?: string;
+  includeBankDetails?: boolean;
+  includePortalLink?: boolean;
+  subject?: string;
+  cc?: string[];
+}
+
+export interface InvoiceLedgerResponse {
+  invoice: any;
+  bankDetails: any;
+  portalUrl: string;
+  verifyUrl: string;
+  pdfDownloadUrl: string;
+  whatsappText: string;
+  whatsappUrl: string;
 }
 
 export interface CreateProformaInvoicePayload {

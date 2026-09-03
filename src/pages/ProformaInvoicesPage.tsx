@@ -3,7 +3,7 @@ import {
   FileCheck, Plus, Search, Filter, RefreshCw, Printer, Download,
   Eye, Building2, MapPin, CheckCircle2, Clock, AlertCircle,
   FileText, ArrowRight, ShieldCheck, ChevronRight, Layers, Trash2, QrCode,
-  Landmark, Send, Edit3, Paperclip
+  Landmark, Send, Edit3, Paperclip, MessageCircle, Mail, Bell
 } from 'lucide-react';
 import { ProformaInvoice } from '../types/proforma';
 import { useAdminAuth } from '../context/AdminAuthContext';
@@ -11,6 +11,8 @@ import { proformaService } from '../api/proformaService';
 import { ProformaInvoiceCreateView } from './proforma/ProformaInvoiceCreateView';
 import { ProformaInvoiceDetailView } from './proforma/ProformaInvoiceDetailView';
 import { printProformaInvoice } from '../utils/proformaPdfGenerator';
+import { WhatsAppLedgerModal } from '../components/proforma/WhatsAppLedgerModal';
+import { EmailReminderModal } from '../components/proforma/EmailReminderModal';
 
 type SubView = 'list' | 'create' | 'detail' | 'edit';
 
@@ -18,6 +20,8 @@ export function ProformaInvoicesPage() {
   const [subView, setSubView] = useState<SubView>('list');
   const [invoices, setInvoices] = useState<ProformaInvoice[]>([]);
   const [selectedInvoice, setSelectedInvoice] = useState<ProformaInvoice | null>(null);
+  const [whatsappModalInvoice, setWhatsappModalInvoice] = useState<ProformaInvoice | null>(null);
+  const [emailModalInvoice, setEmailModalInvoice] = useState<ProformaInvoice | null>(null);
   const [loading, setLoading] = useState(true);
   const { adminUser, setCurrentView } = useAdminAuth();
   const isSuperAdmin = Boolean(
@@ -379,6 +383,7 @@ export function ProformaInvoicesPage() {
                   <th className="p-3.5 text-right">Grand Total (₹)</th>
                   <th className="p-3.5 text-right">Advance Required</th>
                   <th className="p-3.5 text-center">Status</th>
+                  <th className="p-3.5 text-center">Follow-up & Reminders</th>
                   <th className="p-3.5">Issue Date</th>
                   <th className="p-3.5 text-right">Actions</th>
                 </tr>
@@ -430,7 +435,10 @@ export function ProformaInvoicesPage() {
 
                     <td className="p-3.5">
                       <span className="text-xs font-bold text-zinc-300 block">
-                        {inv.facility?.name || (inv.facilityCode === 'DELHI_WORKS' ? 'Delhi HQ Works' : 'Western Depot')}
+                        {(inv.facility?.name || (inv.facilityCode === 'DELHI_WORKS' ? 'Delhi HQ Works' : 'Western Depot'))
+                          .replace(/\s*\((?:Pacific Products(?:\s*&|\s*and)?\s*Solutions)?\)/gi, '')
+                          .replace(/\s*-\s*Pacific Products(?:\s*&|\s*and)?\s*Solutions/gi, '')
+                          .trim()}
                       </span>
                       <span className="text-[10px] text-zinc-500 font-mono">
                         State: {inv.facility?.stateCode || '07'}
@@ -460,6 +468,45 @@ export function ProformaInvoicesPage() {
                       })()}
                     </td>
 
+                    {/* Follow-up & Reminder Metrics Cell */}
+                    <td className="p-3.5 text-center">
+                      <div className="flex flex-col items-center gap-1.5">
+                        {inv.reminderCount && inv.reminderCount > 0 ? (
+                          <span
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[10px] font-bold"
+                            title={`Total: ${inv.reminderCount} (WhatsApp: ${inv.whatsappReminderCount || 0}, Email: ${inv.emailReminderCount || 0})${inv.lastReminderAt ? ` • Last: ${new Date(inv.lastReminderAt).toLocaleDateString('en-IN')}` : ''}`}
+                          >
+                            <Bell size={10} className="text-amber-400" />
+                            <span>{inv.reminderCount} Sent</span>
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-zinc-500 font-medium">
+                            No follow-up
+                          </span>
+                        )}
+
+                        {/* 1-Click Dispatch Buttons */}
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setWhatsappModalInvoice(inv)}
+                            className="px-2 py-0.5 rounded-md bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 hover:text-emerald-300 border border-emerald-500/30 text-[10px] font-bold flex items-center gap-1 transition-all"
+                            title="Send WhatsApp Ledger with Remaining Balance"
+                          >
+                            <MessageCircle size={10} /> WA {inv.whatsappReminderCount ? `(${inv.whatsappReminderCount})` : ''}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEmailModalInvoice(inv)}
+                            className="px-2 py-0.5 rounded-md bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 hover:text-purple-200 border border-purple-500/30 text-[10px] font-bold flex items-center gap-1 transition-all"
+                            title="Send Email Reminder with Attached PDF"
+                          >
+                            <Mail size={10} /> Mail {inv.emailReminderCount ? `(${inv.emailReminderCount})` : ''}
+                          </button>
+                        </div>
+                      </div>
+                    </td>
+
                     <td className="p-3.5 text-zinc-400 text-[11px]">
                       {new Date(inv.issueDate || inv.createdAt).toLocaleDateString('en-IN', {
                         day: '2-digit',
@@ -481,6 +528,25 @@ export function ProformaInvoicesPage() {
                         >
                           <Eye size={14} />
                         </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setWhatsappModalInvoice(inv)}
+                          className="p-1.5 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 hover:text-white border border-emerald-500/30 rounded-lg transition-all"
+                          title="Send WhatsApp Ledger Statement"
+                        >
+                          <MessageCircle size={14} />
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setEmailModalInvoice(inv)}
+                          className="p-1.5 bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 hover:text-white border border-purple-500/30 rounded-lg transition-all"
+                          title="Send Email Reminder & PDF"
+                        >
+                          <Mail size={14} />
+                        </button>
+
                         <button
                           type="button"
                           onClick={() => {
@@ -521,6 +587,30 @@ export function ProformaInvoicesPage() {
         )}
 
       </div>
+
+      {/* WhatsApp Ledger Modal */}
+      {whatsappModalInvoice && (
+        <WhatsAppLedgerModal
+          isOpen={Boolean(whatsappModalInvoice)}
+          invoice={whatsappModalInvoice}
+          onClose={() => setWhatsappModalInvoice(null)}
+          onSuccess={() => {
+            loadInvoices();
+          }}
+        />
+      )}
+
+      {/* Email Reminder Modal */}
+      {emailModalInvoice && (
+        <EmailReminderModal
+          isOpen={Boolean(emailModalInvoice)}
+          invoice={emailModalInvoice}
+          onClose={() => setEmailModalInvoice(null)}
+          onSuccess={() => {
+            loadInvoices();
+          }}
+        />
+      )}
 
     </div>
   );

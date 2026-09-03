@@ -120,13 +120,21 @@ export function transformBackendInvoiceToPI(inv: any): ProformaInvoice {
     grandTotal,
     advancePercentage,
     advancePayable: advanceAmount,
+    advanceAmount,
     balancePayable: balanceDue,
+    balanceDue,
     verificationToken: inv.verificationToken || inv.id,
     verificationId: inv.verificationId || inv.piNumber,
     qrCodeDataUrl: inv.qrCodeDataUrl,
     digitalSignature: inv.digitalSignature,
     signedBy: inv.signedBy || 'Executive Desk',
     signedAt: inv.signedAt,
+    reminderCount: Number(inv.reminderCount || 0),
+    emailReminderCount: Number(inv.emailReminderCount || 0),
+    whatsappReminderCount: Number(inv.whatsappReminderCount || 0),
+    lastReminderAt: inv.lastReminderAt,
+    lastWhatsappAt: inv.lastWhatsappAt,
+    lastEmailAt: inv.lastEmailAt,
     notes: inv.notes || '',
     termsAndConditions: inv.termsAndConditions || '',
     history: Array.isArray(inv.history)
@@ -775,6 +783,48 @@ export const proformaService = {
       return transformBackendInvoiceToPI(data);
     } catch (err: any) {
       console.error('[proformaService] logFollowUp error:', err);
+      throw err;
+    }
+  },
+
+  /**
+   * Admin: Fetch Commercial Ledger Statement & preformatted WhatsApp text/links
+   */
+  async getInvoiceLedger(id: string): Promise<any> {
+    try {
+      const res = await fetchAdminApi<any>(`/proforma-invoices/${encodeURIComponent(id)}/ledger`, {
+        method: 'GET',
+      });
+      return res?.data || res;
+    } catch (err: any) {
+      console.error('[proformaService] getInvoiceLedger error:', err);
+      throw err;
+    }
+  },
+
+  /**
+   * Admin: Send WhatsApp / Email Payment Reminder & Ledger Statement with PDF attachment
+   */
+  async sendReminder(
+    id: string,
+    payload: {
+      channel: 'WHATSAPP' | 'EMAIL' | 'BOTH';
+      recipient?: string;
+      customMessage?: string;
+      includeBankDetails?: boolean;
+      includePortalLink?: boolean;
+      subject?: string;
+      cc?: string[];
+    }
+  ): Promise<any> {
+    try {
+      const res = await fetchAdminApi<any>(`/proforma-invoices/${encodeURIComponent(id)}/reminder`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      return res?.data || res;
+    } catch (err: any) {
+      console.error('[proformaService] sendReminder error:', err);
       throw err;
     }
   },

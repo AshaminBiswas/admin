@@ -4,12 +4,14 @@ import {
   Building2, MapPin, Phone, CreditCard, ShieldCheck,
   Calendar, FileText, Send, Copy, RefreshCw, AlertCircle, X, Trash2,
   Landmark, MessageSquare, History, UserCheck, Check, Sparkles, Clock,
-  ExternalLink, Eye, Edit3
+  ExternalLink, Eye, Edit3, MessageCircle, Bell, DollarSign
 } from 'lucide-react';
 import { ProformaInvoice, ProformaInvoiceHistory } from '../../types/proforma';
 import { proformaService } from '../../api/proformaService';
 import { useAdminAuth } from '../../context/AdminAuthContext';
 import { printProformaInvoice } from '../../utils/proformaPdfGenerator';
+import { WhatsAppLedgerModal } from '../../components/proforma/WhatsAppLedgerModal';
+import { EmailReminderModal } from '../../components/proforma/EmailReminderModal';
 
 interface Props {
   invoice: ProformaInvoice;
@@ -21,8 +23,6 @@ export function ProformaInvoiceDetailView({ invoice: initialInvoice, onBack, onE
   const [invoice, setInvoice] = useState<ProformaInvoice>(initialInvoice);
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [emailing, setEmailing] = useState(false);
-  const [emailSent, setEmailSent] = useState(false);
   const [selectedReceiptUrl, setSelectedReceiptUrl] = useState<string | null>(null);
   const { adminUser } = useAdminAuth();
   const isSuperAdmin = Boolean(
@@ -78,12 +78,10 @@ export function ProformaInvoiceDetailView({ invoice: initialInvoice, onBack, onE
       setDeleting(false);
     }
   };
-  const [emailError, setEmailError] = useState('');
-  
-  // Email Modal State
+
+  // Modals State
+  const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
   const [showEmailModal, setShowEmailModal] = useState(false);
-  const [targetEmail, setTargetEmail] = useState(invoice.customerEmail || '');
-  const [emailNotes, setEmailNotes] = useState('');
 
   const isInterState = invoice.igstTotal > 0;
   const facility = invoice.facility;
@@ -92,30 +90,6 @@ export function ProformaInvoiceDetailView({ invoice: initialInvoice, onBack, onE
     navigator.clipboard.writeText(invoice.piNumber);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-  };
-
-  const handleSendEmail = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (!targetEmail.trim()) {
-      setEmailError('Please provide a valid recipient email address.');
-      return;
-    }
-
-    setEmailing(true);
-    setEmailError('');
-
-    try {
-      await proformaService.sendProformaInvoiceEmail(invoice, targetEmail.trim(), emailNotes.trim());
-      setEmailSent(true);
-      setShowEmailModal(false);
-      await fetchFreshDetails();
-      setTimeout(() => setEmailSent(false), 5000);
-    } catch (err: any) {
-      console.error('[ProformaInvoiceDetailView] Email error:', err);
-      setEmailError(err?.message || 'Failed to dispatch email. Please verify SMTP/Resend credentials.');
-    } finally {
-      setEmailing(false);
-    }
   };
 
   // Find customer feedback in history
@@ -209,44 +183,33 @@ export function ProformaInvoiceDetailView({ invoice: initialInvoice, onBack, onE
 
           <button
             type="button"
-            onClick={() => {
-              setTargetEmail(invoice.customerEmail || '');
-              setEmailError('');
-              setShowEmailModal(true);
-            }}
-            disabled={emailing}
-            className="px-4 py-2 bg-[#8B5CF6] hover:bg-[#7C3AED] disabled:opacity-50 text-white text-xs font-bold rounded-xl flex items-center gap-2 transition-all shadow-md shadow-purple-900/20"
+            onClick={() => setShowWhatsAppModal(true)}
+            className="px-4 py-2 bg-emerald-600/15 hover:bg-emerald-600/25 text-emerald-400 hover:text-white text-xs font-bold rounded-xl border border-emerald-500/40 flex items-center gap-2 transition-all shadow-xs"
+            title="Send formatted Ledger Statement via WhatsApp"
           >
-            {emailing ? (
-              <>
-                <RefreshCw size={14} className="animate-spin" /> Dispatching...
-              </>
-            ) : emailSent ? (
-              <>
-                <CheckCircle2 size={14} className="text-emerald-300" /> Dispatched Successfully
-              </>
-            ) : (
-              <>
-                <Send size={14} /> Email PI to Client
-              </>
-            )}
+            <MessageCircle size={14} /> Send WhatsApp Ledger
+            {invoice.whatsappReminderCount ? (
+              <span className="px-1.5 py-0.2 rounded-full bg-emerald-950/80 text-emerald-200 text-[10px] font-mono border border-emerald-400/30">
+                {invoice.whatsappReminderCount}
+              </span>
+            ) : null}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setShowEmailModal(true)}
+            className="px-4 py-2 bg-[#8B5CF6] hover:bg-[#7C3AED] text-white text-xs font-bold rounded-xl flex items-center gap-2 transition-all shadow-md shadow-purple-900/20"
+            title="Send Email Reminder with Attached PDF"
+          >
+            <Mail size={14} /> Send Email Reminder
+            {invoice.emailReminderCount ? (
+              <span className="px-1.5 py-0.2 rounded-full bg-purple-950/80 text-purple-200 text-[10px] font-mono border border-purple-400/30">
+                {invoice.emailReminderCount}
+              </span>
+            ) : null}
           </button>
         </div>
       </div>
-
-      {emailSent && (
-        <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl text-xs text-emerald-400 flex items-center gap-2.5 animate-in fade-in">
-          <CheckCircle2 size={16} className="shrink-0" />
-          <span>Official Proforma Invoice PDF & Commercial Terms successfully dispatched to <strong>{targetEmail}</strong></span>
-        </div>
-      )}
-
-      {emailError && (
-        <div className="p-4 bg-rose-500/10 border border-rose-500/30 rounded-2xl text-xs text-rose-400 flex items-center gap-2.5 animate-in fade-in">
-          <AlertCircle size={16} className="shrink-0" />
-          <span>{emailError}</span>
-        </div>
-      )}
 
       {/* ─── CUSTOMER ACCEPTANCE & REMITTANCE CONFIRMATION DOSSIER ────────── */}
       {isCustomerAccepted && (
@@ -405,95 +368,121 @@ export function ProformaInvoiceDetailView({ invoice: initialInvoice, onBack, onE
         </div>
       )}
 
-      {/* ─── EMAIL DISPATCH MODAL ────────────────────────────────────────── */}
-      {showEmailModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs animate-in fade-in duration-150">
-          <div className="bg-[#18181B] border border-[#27272A] rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b border-[#27272A] pb-3">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-[#8B5CF6]/20 border border-[#8B5CF6]/40 flex items-center justify-center text-[#A78BFA]">
-                  <Mail size={16} />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-white">Email Proforma Invoice</h3>
-                  <p className="text-[11px] text-zinc-400">Dispatch PI #{invoice.piNumber} directly to client</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowEmailModal(false)}
-                className="text-zinc-500 hover:text-zinc-300 p-1"
-              >
-                <X size={16} />
-              </button>
+      {/* ─── COMMERCIAL PAYMENT LEDGER & FOLLOW-UP TRACKING CARD ────────── */}
+      <div className="bg-[#18181B] border-2 border-purple-500/40 rounded-3xl p-6 shadow-xl space-y-5">
+        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#27272A] pb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-purple-400">
+              <DollarSign size={20} />
             </div>
-
-            <form onSubmit={handleSendEmail} className="space-y-3.5 text-xs">
-              <div className="space-y-1">
-                <label className="text-zinc-300 font-bold">Recipient Email Address *</label>
-                <input
-                  type="email"
-                  required
-                  value={targetEmail}
-                  onChange={(e) => setTargetEmail(e.target.value)}
-                  placeholder="e.g. procurement@company.com"
-                  className="w-full px-3 py-2 bg-[#27272A]/60 border border-[#27272A] focus:border-[#8B5CF6] rounded-xl text-white focus:outline-none"
-                />
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] uppercase font-black tracking-widest text-purple-400 bg-purple-950/80 px-2 py-0.5 rounded border border-purple-800/60">
+                  ACCOUNT RECEIVABLES & LEDGER
+                </span>
+                {invoice.lastReminderAt && (
+                  <span className="text-[11px] text-zinc-400 flex items-center gap-1 font-mono">
+                    <Clock size={11} className="text-zinc-500" /> Last Contacted: {new Date(invoice.lastReminderAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                  </span>
+                )}
               </div>
+              <h3 className="text-base font-bold text-white mt-0.5">
+                Payment Follow-up & Commercial Ledger Summary
+              </h3>
+            </div>
+          </div>
 
-              <div className="space-y-1">
-                <label className="text-zinc-400">Subject Preview</label>
-                <input
-                  type="text"
-                  disabled
-                  value={`Commercial Proforma Invoice #${invoice.piNumber} - PRC Hardware`}
-                  className="w-full px-3 py-2 bg-[#27272A]/30 border border-[#27272A] rounded-xl text-zinc-400 font-mono text-[11px]"
-                />
-              </div>
+          {/* Quick Action Trigger Buttons */}
+          <div className="flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => setShowWhatsAppModal(true)}
+              className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white text-xs font-extrabold rounded-xl shadow-lg shadow-emerald-950/30 flex items-center gap-2 transition-all cursor-pointer"
+            >
+              <MessageCircle size={15} /> Send WhatsApp Ledger
+              {invoice.whatsappReminderCount ? (
+                <span className="px-1.5 py-0.2 rounded-full bg-emerald-950/80 text-emerald-200 text-[10px] font-mono border border-emerald-400/40">
+                  {invoice.whatsappReminderCount}
+                </span>
+              ) : null}
+            </button>
 
-              <div className="space-y-1">
-                <label className="text-zinc-300 font-bold">Special Notes / Payment Remarks (Optional)</label>
-                <textarea
-                  rows={3}
-                  value={emailNotes}
-                  onChange={(e) => setEmailNotes(e.target.value)}
-                  placeholder="e.g. Please process 30% advance deposit to initiate production scheduling..."
-                  className="w-full px-3 py-2 bg-[#27272A]/60 border border-[#27272A] focus:border-[#8B5CF6] rounded-xl text-white focus:outline-none resize-none"
-                />
-              </div>
-
-              <div className="p-3 bg-purple-950/30 border border-purple-900/40 rounded-xl text-[11px] text-purple-300 space-y-1">
-                <div>• Customer: <strong>{invoice.companyName || invoice.customerName}</strong></div>
-                <div>• Total Amount: <strong>₹{invoice.grandTotal.toLocaleString('en-IN')}</strong> ({invoice.advancePercentage}% Advance: ₹{invoice.advancePayable.toLocaleString('en-IN')})</div>
-                <div>• Includes official PRC Hardware bank RTGS/NEFT payment instructions</div>
-              </div>
-
-              {emailError && (
-                <div className="p-2.5 bg-rose-500/10 border border-rose-500/30 rounded-xl text-[11px] text-rose-400">
-                  {emailError}
-                </div>
-              )}
-
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#27272A]">
-                <button
-                  type="button"
-                  onClick={() => setShowEmailModal(false)}
-                  className="px-3.5 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl font-bold"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={emailing}
-                  className="px-4 py-1.5 bg-[#8B5CF6] hover:bg-[#7C3AED] text-white font-bold rounded-xl flex items-center gap-1.5 disabled:opacity-50"
-                >
-                  {emailing ? <RefreshCw size={13} className="animate-spin" /> : <Send size={13} />}
-                  Send Email Now
-                </button>
-              </div>
-            </form>
+            <button
+              type="button"
+              onClick={() => setShowEmailModal(true)}
+              className="px-4 py-2 bg-gradient-to-r from-[#8B5CF6] to-[#7C3AED] hover:from-[#7C3AED] hover:to-[#6D28D9] text-white text-xs font-extrabold rounded-xl shadow-lg shadow-purple-950/30 flex items-center gap-2 transition-all cursor-pointer"
+            >
+              <Mail size={15} /> Send Email Reminder with PDF
+              {invoice.emailReminderCount ? (
+                <span className="px-1.5 py-0.2 rounded-full bg-purple-950/80 text-purple-200 text-[10px] font-mono border border-purple-400/40">
+                  {invoice.emailReminderCount}
+                </span>
+              ) : null}
+            </button>
           </div>
         </div>
+
+        {/* Financial Breakdown & Follow-up Metrics */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
+          <div className="bg-[#09090B] p-4 rounded-2xl border border-[#27272A] space-y-1">
+            <span className="text-[10.5px] uppercase font-bold text-zinc-400 block">Gross Order Value</span>
+            <div className="text-lg font-extrabold font-mono text-white">
+              ₹{Number(invoice.grandTotal || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            </div>
+            <span className="text-[10px] text-zinc-500 block">Total commercial quote</span>
+          </div>
+
+          <div className="bg-[#09090B] p-4 rounded-2xl border border-[#27272A] space-y-1">
+            <span className="text-[10.5px] uppercase font-bold text-zinc-400 block">Advance Required</span>
+            <div className="text-lg font-extrabold font-mono text-emerald-400">
+              ₹{Number(invoice.advanceAmount ?? invoice.advancePayable ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            </div>
+            <span className="text-[10px] text-zinc-500 block">{invoice.advancePercentage}% deposit before dispatch</span>
+          </div>
+
+          <div className="bg-red-950/20 p-4 rounded-2xl border border-red-500/40 space-y-1">
+            <span className="text-[10.5px] uppercase font-black text-red-400 block">Remaining Balance Due</span>
+            <div className="text-lg font-black font-mono text-red-400">
+              ₹{Number(invoice.balanceDue ?? (Number(invoice.grandTotal || 0) - Number(invoice.advanceAmount ?? invoice.advancePayable ?? 0))).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            </div>
+            <span className="text-[10px] text-red-400/70 block">Outstanding receivable</span>
+          </div>
+
+          <div className="bg-[#09090B] p-4 rounded-2xl border border-[#27272A] space-y-1">
+            <span className="text-[10.5px] uppercase font-bold text-zinc-400 block">Follow-up Dispatches</span>
+            <div className="text-lg font-extrabold font-mono text-amber-400 flex items-center gap-1.5">
+              <Bell size={16} className="text-amber-400" />
+              <span>{Number(invoice.reminderCount || 0)} Total</span>
+            </div>
+            <span className="text-[10px] text-zinc-400 block">
+              {Number(invoice.whatsappReminderCount || 0)} WhatsApp • {Number(invoice.emailReminderCount || 0)} Email
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* WhatsApp Ledger Modal */}
+      {showWhatsAppModal && (
+        <WhatsAppLedgerModal
+          isOpen={showWhatsAppModal}
+          invoice={invoice}
+          onClose={() => setShowWhatsAppModal(false)}
+          onSuccess={(updated) => {
+            fetchFreshDetails();
+          }}
+        />
+      )}
+
+      {/* Email Reminder Modal */}
+      {showEmailModal && (
+        <EmailReminderModal
+          isOpen={showEmailModal}
+          invoice={invoice}
+          onClose={() => setShowEmailModal(false)}
+          onSuccess={(updated) => {
+            fetchFreshDetails();
+          }}
+        />
       )}
 
       {/* ─── OFFICIAL PRINTABLE PREVIEW CONTAINER ────────────────────────── */}
