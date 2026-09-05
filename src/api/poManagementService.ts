@@ -7,6 +7,7 @@ import {
   PoStatus,
   PoSubmissionDetail,
   PoSubmissionItem,
+  AiPoDetectionResult,
 } from '../types/poManagement';
 
 export interface GetPoSubmissionsParams {
@@ -209,3 +210,41 @@ export async function replyToPoSubmission(id: string, formData: FormData): Promi
   }
   return res.data;
 }
+
+export async function aiDetectPo(id: string): Promise<{
+  po: PoSubmissionDetail;
+  aiDetectionResult: AiPoDetectionResult;
+}> {
+  const res = await fetchAdminApi<{
+    po: PoSubmissionDetail;
+    aiDetectionResult: AiPoDetectionResult;
+  }>(`/po-management/${id}/ai-detect`, {
+    method: 'POST',
+  });
+  if (!res.success || !res.data) {
+    throw new Error(res.error?.message || 'Failed to run AI PO detection');
+  }
+  return res.data;
+}
+
+export async function aiDetectBatch(ids: string[]): Promise<{
+  success: boolean;
+  processedCount: number;
+  detectedCount: number;
+  updatedItems: PoSubmissionItem[];
+}> {
+  const res = await fetchAdminApi<{
+    success: boolean;
+    processedCount: number;
+    detectedCount: number;
+    updatedItems: PoSubmissionItem[];
+  }>('/po-management/ai-detect-batch', {
+    method: 'POST',
+    body: JSON.stringify({ ids }),
+  });
+  if (!res.success || !res.data) {
+    throw new Error(res.error?.message || 'Failed to run batch AI PO detection');
+  }
+  return res.data;
+}
+

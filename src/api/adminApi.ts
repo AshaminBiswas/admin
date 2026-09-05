@@ -721,6 +721,13 @@ export const notificationsApi = {
     fetchAdminApi<any>(`/notifications/${id}`, {
       method: 'DELETE',
     }),
+
+  /** POST /notifications/bulk-delete — bulk delete up to 50 notifications */
+  bulkDelete: (ids: string[]) =>
+    fetchAdminApi<{ deletedCount: number; ids: string[] }>('/notifications/bulk-delete', {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    }),
 };
 
 /* ─── Enterprise Audit & Admin 360° API ──────────────────────────────────────── */

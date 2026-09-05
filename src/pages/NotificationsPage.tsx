@@ -133,6 +133,21 @@ export function NotificationsPage() {
   // Modal: Payload Inspector
   const [inspectingNotif, setInspectingNotif] = useState<AdminNotificationItem | null>(null);
 
+  // Modal: Full Notification Detail Viewer
+  const [activeDetailNotif, setActiveDetailNotif] = useState<AdminNotificationItem | null>(null);
+
+  // Bulk Selection & Deletion State (Max 50)
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const [selectionNotice, setSelectionNotice] = useState<string | null>(null);
+
+  const showNotice = (msg: string) => {
+    setSelectionNotice(msg);
+    setTimeout(() => {
+      setSelectionNotice((current) => (current === msg ? null : current));
+    }, 4000);
+  };
+
   // Helper for relative timestamps
   const getRelativeTime = (dateString: string) => {
     try {
@@ -289,10 +304,14 @@ export function NotificationsPage() {
     if (e) e.stopPropagation();
     try {
       await notificationsApi.markAsRead(id);
+      const readAt = new Date().toISOString();
       setNotifications((prev) =>
         prev.map((n) =>
-          n.id === id ? { ...n, isRead: true, readAt: new Date().toISOString() } : n
+          n.id === id ? { ...n, isRead: true, readAt } : n
         )
+      );
+      setActiveDetailNotif((prev) =>
+        prev && prev.id === id ? { ...prev, isRead: true, readAt } : prev
       );
       setUnreadCount((prev) => Math.max(0, prev - 1));
     } catch (err: any) {
@@ -300,12 +319,24 @@ export function NotificationsPage() {
     }
   };
 
+  // Open Full Notification Details & Auto-Mark As Read
+  const handleOpenNotificationDetail = (notif: AdminNotificationItem) => {
+    setActiveDetailNotif(notif);
+    if (!notif.isRead) {
+      handleMarkAsRead(notif.id);
+    }
+  };
+
   // Mark All Read
   const handleMarkAllRead = async () => {
     try {
       await notificationsApi.markAllAsRead();
+      const readAt = new Date().toISOString();
       setNotifications((prev) =>
-        prev.map((n) => ({ ...n, isRead: true, readAt: new Date().toISOString() }))
+        prev.map((n) => ({ ...n, isRead: true, readAt }))
+      );
+      setActiveDetailNotif((prev) =>
+        prev ? { ...prev, isRead: true, readAt } : null
       );
       setUnreadCount(0);
     } catch (err: any) {
@@ -313,20 +344,109 @@ export function NotificationsPage() {
     }
   };
 
-  // Delete Notification
-  const handleDeleteNotification = async (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
+  // Delete Single Notification
+  const handleDeleteNotification = async (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
     if (!window.confirm("Permanently remove this notification entry?")) return;
 
     try {
       await notificationsApi.delete(id);
       setNotifications((prev) => prev.filter((n) => n.id !== id));
+      setSelectedIds((prev) => prev.filter((item) => item !== id));
+      setActiveDetailNotif((prev) => (prev && prev.id === id ? null : prev));
       setUnreadCount((prev) => {
         const notif = notifications.find((n) => n.id === id);
         return notif && !notif.isRead ? Math.max(0, prev - 1) : prev;
       });
     } catch (err: any) {
       alert(err.message || "Failed to delete notification");
+    }
+  };
+
+  // Toggle selection for a single notification (Strict Max 50 cap)
+  const handleToggleSelect = (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setSelectedIds((prev) => {
+      if (prev.includes(id)) {
+        return prev.filter((item) => item !== id);
+      } else {
+        if (prev.length >= 50) {
+          showNotice("Maximum 50 notifications can be selected for bulk deletion at a time.");
+          return prev;
+        }
+        return [...prev, id];
+      }
+    });
+  };
+
+  // Toggle select all visible (capped at 50)
+  const handleToggleSelectAll = () => {
+    const visibleIds = filteredNotifications.map((n) => n.id);
+    if (visibleIds.length === 0) return;
+
+    const visibleUpTo50 = visibleIds.slice(0, 50);
+    const areAllVisibleSelected =
+      visibleUpTo50.length > 0 &&
+      visibleUpTo50.every((id) => selectedIds.includes(id));
+
+    if (areAllVisibleSelected) {
+      setSelectedIds((prev) => prev.filter((id) => !visibleIds.includes(id)));
+    } else {
+      const combined = Array.from(new Set([...selectedIds, ...visibleUpTo50])).slice(0, 50);
+      if (filteredNotifications.length > 50 && combined.length === 50) {
+        showNotice("Selected the maximum limit of 50 notifications for bulk deletion.");
+      }
+      setSelectedIds(combined);
+    }
+  };
+
+  const handleSelectFirst50 = () => {
+    const first50 = filteredNotifications.map((n) => n.id).slice(0, 50);
+    setSelectedIds(first50);
+    if (filteredNotifications.length > 50) {
+      showNotice("Selected the maximum allowed limit of 50 notifications.");
+    }
+  };
+
+  const handleClearSelection = () => {
+    setSelectedIds([]);
+  };
+
+  // Bulk Delete Execution (Max 50)
+  const handleBulkDelete = async () => {
+    if (selectedIds.length === 0) return;
+    if (selectedIds.length > 50) {
+      alert("Maximum 50 notifications can be deleted at a time.");
+      return;
+    }
+
+    const count = selectedIds.length;
+    const confirmed = window.confirm(
+      `Permanently delete ${count} selected notification${count > 1 ? "s" : ""}? This action cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    setIsBulkDeleting(true);
+    try {
+      await notificationsApi.bulkDelete(selectedIds);
+
+      const deletedSet = new Set(selectedIds);
+      const removedUnreadCount = notifications.filter(
+        (n) => deletedSet.has(n.id) && !n.isRead
+      ).length;
+
+      setNotifications((prev) => prev.filter((n) => !deletedSet.has(n.id)));
+      setUnreadCount((prev) => Math.max(0, prev - removedUnreadCount));
+      setSelectedIds([]);
+
+      if (activeDetailNotif && deletedSet.has(activeDetailNotif.id)) {
+        setActiveDetailNotif(null);
+      }
+    } catch (err: any) {
+      console.error("[Bulk Delete Error]:", err);
+      alert(err.message || "Failed to bulk delete notifications.");
+    } finally {
+      setIsBulkDeleting(false);
     }
   };
 
@@ -617,6 +737,105 @@ export function NotificationsPage() {
         </div>
       </div>
 
+      {/* ─── Selection Notice Feedback ─── */}
+      {selectionNotice && (
+        <div className="p-3.5 rounded-2xl bg-amber-950/60 border border-amber-500/40 text-amber-300 text-xs font-bold flex items-center gap-2.5 animate-in fade-in duration-150">
+          <AlertTriangle size={16} className="text-amber-400 flex-shrink-0" />
+          <span>{selectionNotice}</span>
+        </div>
+      )}
+
+      {/* ─── Sticky Bulk Actions Floating Bar (Max 50) ─── */}
+      {selectedIds.length > 0 && (
+        <div className="sticky top-4 z-30 p-3.5 sm:p-4 rounded-2xl bg-[#18181B]/95 backdrop-blur-md border border-[#8B5CF6]/60 shadow-2xl shadow-[#8B5CF6]/20 flex flex-wrap items-center justify-between gap-3 animate-in slide-in-from-top-2 duration-150">
+          <div className="flex items-center gap-3">
+            <span className="w-2.5 h-2.5 rounded-full bg-[#8B5CF6] animate-pulse" />
+            <div className="text-xs sm:text-sm font-bold text-[#FAFAFA] flex items-center gap-1.5">
+              <span>Selected for deletion:</span>
+              <span className="font-mono text-[#8B5CF6] font-black text-sm sm:text-base">
+                {selectedIds.length}
+              </span>
+              <span className="text-[#71717A]">/ 50 max</span>
+            </div>
+            {selectedIds.length >= 50 && (
+              <span className="text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-400">
+                Max Limit (50) reached
+              </span>
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {selectedIds.length < 50 && filteredNotifications.length > selectedIds.length && (
+              <button
+                type="button"
+                onClick={handleSelectFirst50}
+                className="px-3 py-1.5 rounded-xl bg-[#27272A] hover:bg-[#3F3F46] text-[#FAFAFA] text-xs font-bold transition-colors"
+              >
+                Select 50 Max
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={handleClearSelection}
+              className="px-3 py-1.5 rounded-xl bg-[#27272A] hover:bg-[#3F3F46] text-[#A1A1AA] hover:text-[#FAFAFA] text-xs font-bold transition-colors"
+            >
+              Clear Selection
+            </button>
+            <button
+              type="button"
+              disabled={isBulkDeleting}
+              onClick={handleBulkDelete}
+              className="px-4 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-black transition-all shadow-md shadow-rose-600/25 flex items-center gap-1.5 disabled:opacity-50"
+            >
+              {isBulkDeleting ? (
+                <>
+                  <RefreshCw size={13} className="animate-spin" />
+                  <span>Deleting Batch...</span>
+                </>
+              ) : (
+                <>
+                  <Trash2 size={13} />
+                  <span>Delete Selected ({selectedIds.length})</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Sub-bar: Bulk selection toggle when items exist ─── */}
+      {filteredNotifications.length > 0 && (
+        <div className="px-2 flex items-center justify-between text-xs text-[#A1A1AA]">
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={
+                filteredNotifications.length > 0 &&
+                filteredNotifications
+                  .slice(0, 50)
+                  .every((n) => selectedIds.includes(n.id))
+              }
+              onChange={handleToggleSelectAll}
+              className="w-4 h-4 rounded bg-[#09090B] border-[#3F3F46] text-[#8B5CF6] focus:ring-[#8B5CF6] cursor-pointer accent-[#8B5CF6]"
+            />
+            <span className="font-bold text-[#FAFAFA]">
+              Select Visible (Max 50)
+            </span>
+            {filteredNotifications.length > 50 && (
+              <span className="text-[11px] text-[#71717A]">
+                (first 50 of {filteredNotifications.length})
+              </span>
+            )}
+          </label>
+
+          {selectedIds.length > 0 && (
+            <span className="text-[11px] font-mono text-[#8B5CF6] font-bold">
+              {selectedIds.length} item{selectedIds.length > 1 ? "s" : ""} selected
+            </span>
+          )}
+        </div>
+      )}
+
       {/* ─── Notifications Feed ─── */}
       {filteredNotifications.length === 0 ? (
         <div className="p-12 sm:p-16 rounded-3xl bg-[#18181B] border border-[#27272A] text-center space-y-4">
@@ -643,21 +862,36 @@ export function NotificationsPage() {
         <div className="space-y-3">
           {filteredNotifications.map((notif) => {
             const style = getTypeStyle(notif.type);
+            const isSelected = selectedIds.includes(notif.id);
 
             return (
               <div
                 key={notif.id}
-                onClick={() => {
-                  if (!notif.isRead) handleMarkAsRead(notif.id);
-                }}
+                onClick={() => handleOpenNotificationDetail(notif)}
                 className={`p-4 sm:p-5 rounded-2xl border transition-all cursor-pointer relative group flex flex-col sm:flex-row items-start justify-between gap-4 ${
-                  notif.isRead
+                  isSelected
+                    ? "bg-[#1f1635] border-[#8B5CF6] shadow-md shadow-[#8B5CF6]/15"
+                    : notif.isRead
                     ? "bg-[#18181B] border-[#27272A] hover:border-[#3F3F46]"
                     : "bg-[#18181B] border-[#8B5CF6]/40 shadow-sm shadow-[#8B5CF6]/5 hover:border-[#8B5CF6]"
                 }`}
               >
-                {/* Left: Icon & Message Details */}
+                {/* Left: Checkbox + Icon & Message Details */}
                 <div className="flex items-start gap-3.5 flex-1 min-w-0">
+                  {/* Selection Checkbox */}
+                  <div
+                    className="pt-1 flex-shrink-0"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={(e) => handleToggleSelect(notif.id, e as any)}
+                      className="w-4 h-4 rounded bg-[#09090B] border-[#3F3F46] text-[#8B5CF6] focus:ring-[#8B5CF6] cursor-pointer accent-[#8B5CF6]"
+                      title="Select for bulk delete (max 50)"
+                    />
+                  </div>
+
                   <div
                     className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 border ${style.iconBg}`}
                   >
@@ -685,7 +919,7 @@ export function NotificationsPage() {
                       {notif.title}
                     </h4>
 
-                    <p className="text-xs text-[#A1A1AA] leading-relaxed">
+                    <p className="text-xs text-[#A1A1AA] leading-relaxed line-clamp-2">
                       {notif.message}
                     </p>
 
@@ -707,6 +941,11 @@ export function NotificationsPage() {
                             Stock: {notif.data.currentStock} Units
                           </span>
                         )}
+                        {notif.data.quoteNumber && (
+                          <span className="text-[10px] font-mono px-2 py-0.5 rounded-lg bg-[#27272A] text-purple-400 border border-[#3F3F46]">
+                            Quote #{notif.data.quoteNumber}
+                          </span>
+                        )}
                       </div>
                     )}
                   </div>
@@ -717,17 +956,15 @@ export function NotificationsPage() {
                   className="flex items-center gap-2 self-end sm:self-center flex-shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-[#27272A] w-full sm:w-auto justify-end"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  {notif.data && (
-                    <button
-                      type="button"
-                      onClick={() => setInspectingNotif(notif)}
-                      className="px-2.5 py-1.5 bg-[#27272A] hover:bg-[#3F3F46] text-[#FAFAFA] rounded-xl text-xs font-bold transition-colors flex items-center gap-1"
-                      title="Inspect payload"
-                    >
-                      <Eye size={13} />
-                      <span>Data</span>
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => handleOpenNotificationDetail(notif)}
+                    className="px-2.5 py-1.5 bg-[#27272A] hover:bg-[#3F3F46] text-[#FAFAFA] rounded-xl text-xs font-bold transition-colors flex items-center gap-1"
+                    title="Open details"
+                  >
+                    <Eye size={13} />
+                    <span>Open</span>
+                  </button>
 
                   {!notif.isRead ? (
                     <button
@@ -940,6 +1177,216 @@ export function NotificationsPage() {
           </div>
         </div>
       )}
+
+      {/* ─── MODAL: FULL NOTIFICATION DETAIL DRAWER / MODAL ─── */}
+      {activeDetailNotif && (() => {
+        const style = getTypeStyle(activeDetailNotif.type);
+        const data = activeDetailNotif.data;
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
+            <div className="bg-[#18181B] border border-[#27272A] rounded-3xl max-w-2xl w-full shadow-2xl overflow-hidden flex flex-col font-sans max-h-[90vh]">
+              {/* Modal Header */}
+              <div className="p-5 bg-[#09090B] border-b border-[#27272A] flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 border ${style.iconBg}`}>
+                    {style.icon}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border ${style.badgeColor}`}>
+                        {style.label}
+                      </span>
+                      {activeDetailNotif.isRead ? (
+                        <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-2 py-0.5 rounded-full flex items-center gap-1">
+                          <Check size={11} />
+                          Read
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-bold text-[#8B5CF6] bg-[#8B5CF6]/15 border border-[#8B5CF6]/30 px-2 py-0.5 rounded-full">
+                          Unread
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-[11px] text-[#71717A] mt-1 flex items-center gap-1 font-mono">
+                      <Clock size={12} />
+                      {new Date(activeDetailNotif.createdAt).toLocaleString("en-IN", {
+                        dateStyle: "medium",
+                        timeStyle: "short",
+                      })}
+                      {" "}• {getRelativeTime(activeDetailNotif.createdAt)}
+                    </span>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveDetailNotif(null)}
+                  className="p-2 text-[#71717A] hover:text-[#FAFAFA] rounded-xl hover:bg-[#27272A] transition-colors flex-shrink-0"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <div className="p-6 space-y-5 overflow-y-auto max-h-[60vh] scrollbar-thin">
+                {/* Title */}
+                <div>
+                  <h3 className="text-lg font-bold text-[#FAFAFA] leading-snug">
+                    {activeDetailNotif.title}
+                  </h3>
+                </div>
+
+                {/* Message Body */}
+                <div className="p-4 rounded-2xl bg-[#09090B] border border-[#27272A]">
+                  <p className="text-xs sm:text-sm text-[#D4D4D8] leading-relaxed whitespace-pre-wrap">
+                    {activeDetailNotif.message}
+                  </p>
+                </div>
+
+                {/* Contextual Info & Direct Navigation */}
+                {data && Object.keys(data).length > 0 && (
+                  <div className="space-y-3">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-[#A1A1AA] flex items-center gap-1.5">
+                      <Info size={13} className="text-[#8B5CF6]" />
+                      <span>Linked Entities & Quick Navigation</span>
+                    </h4>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {(data.orderNumber || data.orderId) && (
+                        <div className="p-3.5 rounded-xl bg-[#09090B] border border-[#27272A] flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <span className="text-[10px] text-[#71717A] uppercase font-bold block">Linked Order</span>
+                            <span className="text-xs font-mono font-bold text-emerald-400">
+                              #{data.orderNumber || data.orderId}
+                            </span>
+                            {data.orderStatus && (
+                              <span className="text-[10px] text-[#A1A1AA] block mt-0.5">Status: {data.orderStatus}</span>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveDetailNotif(null);
+                              setCurrentView("orders");
+                            }}
+                            className="px-3 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30 text-xs font-bold flex items-center gap-1 transition-colors flex-shrink-0"
+                          >
+                            <ShoppingBag size={12} />
+                            <span>View Order</span>
+                          </button>
+                        </div>
+                      )}
+
+                      {(data.quoteNumber || data.quoteId) && (
+                        <div className="p-3.5 rounded-xl bg-[#09090B] border border-[#27272A] flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <span className="text-[10px] text-[#71717A] uppercase font-bold block">Linked Quotation</span>
+                            <span className="text-xs font-mono font-bold text-purple-400">
+                              #{data.quoteNumber || data.quoteId}
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveDetailNotif(null);
+                              setCurrentView("quotes");
+                            }}
+                            className="px-3 py-1.5 rounded-lg bg-purple-500/15 hover:bg-purple-500/25 text-purple-400 border border-purple-500/30 text-xs font-bold flex items-center gap-1 transition-colors flex-shrink-0"
+                          >
+                            <FileText size={12} />
+                            <span>View Quote</span>
+                          </button>
+                        </div>
+                      )}
+
+                      {(data.sku || data.productId) && (
+                        <div className="p-3.5 rounded-xl bg-[#09090B] border border-[#27272A] flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <span className="text-[10px] text-[#71717A] uppercase font-bold block">Inventory Item</span>
+                            <span className="text-xs font-mono font-bold text-rose-400">
+                              SKU: {data.sku || data.productId}
+                            </span>
+                            {data.currentStock !== undefined && (
+                              <span className="text-[10px] text-amber-400 block mt-0.5 font-mono">Stock: {data.currentStock} Units</span>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveDetailNotif(null);
+                              setCurrentView("products");
+                            }}
+                            className="px-3 py-1.5 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-400 border border-rose-500/30 text-xs font-bold flex items-center gap-1 transition-colors flex-shrink-0"
+                          >
+                            <AlertTriangle size={12} />
+                            <span>View Product</span>
+                          </button>
+                        </div>
+                      )}
+
+                      {data.userId && (
+                        <div className="p-3.5 rounded-xl bg-[#09090B] border border-[#27272A] flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <span className="text-[10px] text-[#71717A] uppercase font-bold block">Customer ID</span>
+                            <span className="text-xs font-mono font-bold text-[#FAFAFA] truncate block max-w-[140px]">
+                              {data.userId}
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveDetailNotif(null);
+                              setCurrentView("users" as any);
+                            }}
+                            className="px-3 py-1.5 rounded-lg bg-[#27272A] hover:bg-[#3F3F46] text-[#FAFAFA] text-xs font-bold flex items-center gap-1 transition-colors flex-shrink-0"
+                          >
+                            <Users size={12} />
+                            <span>View User</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Collapsible raw metadata */}
+                    <details className="group p-3 rounded-xl bg-[#09090B] border border-[#27272A] text-xs">
+                      <summary className="font-bold text-[#A1A1AA] cursor-pointer hover:text-white flex items-center justify-between">
+                        <span>View Raw Payload JSON</span>
+                        <ChevronRight size={14} className="group-open:rotate-90 transition-transform" />
+                      </summary>
+                      <pre className="mt-2 text-emerald-400 font-mono text-[11px] overflow-x-auto p-2 bg-[#18181B] rounded-lg border border-[#27272A]">
+                        {JSON.stringify(data, null, 2)}
+                      </pre>
+                    </details>
+                  </div>
+                )}
+              </div>
+
+              {/* Modal Footer */}
+              <div className="p-4 bg-[#09090B] border-t border-[#27272A] flex items-center justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={() => handleDeleteNotification(activeDetailNotif.id)}
+                  className="px-3.5 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 text-xs font-bold transition-colors flex items-center gap-1.5"
+                >
+                  <Trash2 size={14} />
+                  <span>Delete Notification</span>
+                </button>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setActiveDetailNotif(null)}
+                    className="px-4 py-2 rounded-xl bg-[#27272A] hover:bg-[#3F3F46] text-[#FAFAFA] font-bold text-xs transition-colors"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ─── MODAL: PAYLOAD INSPECTOR ─── */}
       {inspectingNotif && (

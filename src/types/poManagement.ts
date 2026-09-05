@@ -142,3 +142,20 @@ export interface GetPoSubmissionsResponse {
   };
   metrics: PoManagementMetrics;
 }
+
+export interface AiPoDetectionResult {
+  isPurchaseOrder: boolean;
+  classification: PoClassification;
+  confidenceScore: number;
+  customerPoNumber?: string | null;
+  companyName?: string | null;
+  customerName?: string | null;
+  customerPhone?: string | null;
+  estimatedOrderValue?: number | null;
+  suggestedPriority: PoPriority;
+  reasoning: string;
+  lineItemsSummary?: string | null;
+  detectionEngine: 'AI_LLM' | 'HEURISTIC_FALLBACK';
+  detectedAt?: string;
+}
+

@@ -26,6 +26,8 @@ import {
   CheckSquare,
   Square,
   Tag,
+  Sparkles,
+  Loader2,
 } from 'lucide-react';
 import {
   PoClassification,
@@ -40,6 +42,8 @@ import {
   syncInboundEmails,
   deletePoSubmission,
   bulkDeletePoSubmissions,
+  aiDetectPo,
+  aiDetectBatch,
 } from '../api/poManagementService';
 import { PODossierModal } from '../components/po-management/PODossierModal';
 import { API_BASE_URL, getAdminToken } from '../api/adminApi';
@@ -71,6 +75,90 @@ export function POManagementPage({ onViewPo }: POManagementPageProps = {}) {
   // ─── Bulk Selection State ──────────────────────────────────────────────────
   const [selectedRowIds, setSelectedRowIds] = useState<string[]>([]);
   const [bulkDeleting, setBulkDeleting] = useState(false);
+
+  // ─── AI Detection State ────────────────────────────────────────────────────
+  const [scanningRowId, setScanningRowId] = useState<string | null>(null);
+  const [batchAiScanning, setBatchAiScanning] = useState(false);
+  const [autoClassifying, setAutoClassifying] = useState(false);
+
+  const loadMetrics = async () => {
+    try {
+      const m = await getPoMetrics();
+      if (m) setMetrics(m);
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleSingleAiDetect = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    try {
+      setScanningRowId(id);
+      const res = await aiDetectPo(id);
+      const updatedPo = res.po;
+      setItems((prev) => prev.map((item) => (item.id === id ? { ...item, ...updatedPo } : item)));
+      if (res.aiDetectionResult?.isPurchaseOrder) {
+        alert(
+          `AI PO Detection Complete: "${updatedPo.subject}" is confirmed as PO DETECTED (${Math.round(
+            res.aiDetectionResult.confidenceScore * 100
+          )}% confidence)!\nCustomer PO: ${res.aiDetectionResult.customerPoNumber || 'Extracted'}\nAssigned Reference: ${updatedPo.poSubmissionId || 'Generated'}`
+        );
+      } else {
+        alert(
+          `AI Analysis Complete: "${updatedPo.subject}" classified as ${res.aiDetectionResult.classification} (${Math.round(
+            res.aiDetectionResult.confidenceScore * 100
+          )}% confidence).\nReasoning: ${res.aiDetectionResult.reasoning}`
+        );
+      }
+      loadMetrics();
+    } catch (err: any) {
+      alert(err.message || 'Failed to run AI detection');
+    } finally {
+      setScanningRowId(null);
+    }
+  };
+
+  const handleBatchAiDetect = async () => {
+    if (selectedRowIds.length === 0) return;
+    try {
+      setBatchAiScanning(true);
+      const res = await aiDetectBatch(selectedRowIds);
+      const updatedMap = new Map(res.updatedItems.map((it) => [it.id, it]));
+      setItems((prev) => prev.map((item) => updatedMap.get(item.id) || item));
+      alert(`Batch AI Scan Complete: Analyzed ${res.processedCount} submission(s), ${res.detectedCount} classified as PO DETECTED.`);
+      setSelectedRowIds([]);
+      loadMetrics();
+    } catch (err: any) {
+      alert(err.message || 'Failed to run batch AI detection');
+    } finally {
+      setBatchAiScanning(false);
+    }
+  };
+
+  const handleAutoClassifyPending = async () => {
+    // Find unclassified or non-PO items visible on current page
+    const pendingItems = items.filter(
+      (it) => it.classification === 'POSSIBLE_PO' || it.classification === 'GENERAL_EMAIL'
+    );
+    if (pendingItems.length === 0) {
+      alert('All items on the current page are already classified as PO DETECTED.');
+      return;
+    }
+
+    const idsToScan = pendingItems.slice(0, 15).map((it) => it.id);
+    try {
+      setAutoClassifying(true);
+      const res = await aiDetectBatch(idsToScan);
+      const updatedMap = new Map(res.updatedItems.map((it) => [it.id, it]));
+      setItems((prev) => prev.map((item) => updatedMap.get(item.id) || item));
+      alert(`AI Auto-Classification Complete: Scanned ${res.processedCount} pending submission(s). ${res.detectedCount} new Purchase Order(s) detected!`);
+      loadMetrics();
+    } catch (err: any) {
+      alert(err.message || 'Failed to auto-classify pending submissions');
+    } finally {
+      setAutoClassifying(false);
+    }
+  };
 
   // ─── Silent Background Queue ───────────────────────────────────────────────
   // New items from background sync silently accumulate here without triggering
@@ -321,11 +409,26 @@ export function POManagementPage({ onViewPo }: POManagementPageProps = {}) {
         </div>
 
         {/* Action Controls */}
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <button
+            type="button"
+            onClick={handleAutoClassifyPending}
+            disabled={autoClassifying || syncing}
+            title="Scan pending non-PO emails on this page with AI"
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white text-xs font-bold transition-all shadow-xs disabled:opacity-50"
+          >
+            {autoClassifying ? (
+              <Loader2 size={14} className="animate-spin text-white" />
+            ) : (
+              <Sparkles size={14} className="text-amber-300" />
+            )}
+            <span>{autoClassifying ? 'AI Scanning...' : 'AI Auto-Classify Pending'}</span>
+          </button>
+
           <button
             type="button"
             onClick={handleSyncEmails}
-            disabled={syncing}
+            disabled={syncing || autoClassifying}
             className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] text-xs font-bold text-slate-800 dark:text-[#FAFAFA] hover:border-[#8B5CF6] transition-all shadow-xs disabled:opacity-50"
           >
             <RefreshCw size={14} className={syncing ? 'animate-spin text-[#8B5CF6]' : 'text-[#8B5CF6]'} />
@@ -611,8 +714,22 @@ export function POManagementPage({ onViewPo }: POManagementPageProps = {}) {
           <div className="flex items-center gap-2">
             <button
               type="button"
+              onClick={handleBatchAiDetect}
+              disabled={batchAiScanning || bulkDeleting}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold shadow-xs transition-colors disabled:opacity-50"
+            >
+              {batchAiScanning ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <Sparkles size={14} className="text-amber-300" />
+              )}
+              <span>{batchAiScanning ? 'AI Scanning...' : `AI Detect Selected (${selectedRowIds.length})`}</span>
+            </button>
+
+            <button
+              type="button"
               onClick={handleBulkDelete}
-              disabled={bulkDeleting}
+              disabled={bulkDeleting || batchAiScanning}
               className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-xs transition-colors disabled:opacity-50"
             >
               <Trash2 size={14} className={bulkDeleting ? 'animate-spin' : ''} />
@@ -799,9 +916,22 @@ export function POManagementPage({ onViewPo }: POManagementPageProps = {}) {
                           <span className="text-[10px] text-slate-400">{new Date(item.receivedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                         </td>
 
-                        {/* Actions: View Icon & Delete Icon */}
+                        {/* Actions: AI Scan, View Icon & Delete Icon */}
                         <td className="py-3.5 px-4 text-right">
                           <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              type="button"
+                              onClick={(e) => handleSingleAiDetect(e, item.id)}
+                              disabled={scanningRowId === item.id}
+                              title="Run AI PO Detection on this email"
+                              className="p-1.5 rounded-lg bg-violet-50 dark:bg-violet-950/40 text-violet-600 dark:text-violet-400 hover:bg-violet-600 hover:text-white transition-colors disabled:opacity-40"
+                            >
+                              {scanningRowId === item.id ? (
+                                <Loader2 size={15} className="animate-spin" />
+                              ) : (
+                                <Sparkles size={15} />
+                              )}
+                            </button>
                             <button
                               type="button"
                               onClick={(e) => {
@@ -875,6 +1005,19 @@ export function POManagementPage({ onViewPo }: POManagementPageProps = {}) {
                         >
                           {item.status}
                         </span>
+                        <button
+                          type="button"
+                          onClick={(e) => handleSingleAiDetect(e, item.id)}
+                          disabled={scanningRowId === item.id}
+                          title="Run AI PO Detection"
+                          className="p-1 rounded text-violet-600 dark:text-violet-400 hover:text-violet-700 transition-colors disabled:opacity-40"
+                        >
+                          {scanningRowId === item.id ? (
+                            <Loader2 size={15} className="animate-spin" />
+                          ) : (
+                            <Sparkles size={15} />
+                          )}
+                        </button>
                         <button
                           type="button"
                           onClick={(e) => {

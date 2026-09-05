@@ -46,6 +46,7 @@ import {
   addInternalNote,
   deletePoSubmission,
   replyToPoSubmission,
+  aiDetectPo,
 } from '../api/poManagementService';
 import { fetchAdminApi, API_BASE_URL } from '../api/adminApi';
 import { draftPoReply } from '../api/aiAgentService';
@@ -177,6 +178,34 @@ export function PODetailPage({ poId, onBack }: PODetailPageProps) {
       setAiDraftError(err.message || 'Failed to generate draft with PRC PILOT');
     } finally {
       setIsAiDrafting(false);
+    }
+  };
+
+  const [isScanningAi, setIsScanningAi] = useState(false);
+
+  const handleRunAiDetection = async () => {
+    if (!po?.id) return;
+    setIsScanningAi(true);
+    try {
+      const res = await aiDetectPo(po.id);
+      setPo(res.po);
+      if (res.aiDetectionResult?.isPurchaseOrder) {
+        alert(
+          `AI PO Detection Complete: Successfully classified as PO DETECTED with ${Math.round(
+            res.aiDetectionResult.confidenceScore * 100
+          )}% confidence!\nCustomer PO Number: ${res.aiDetectionResult.customerPoNumber || 'Extracted'}\nAssigned Reference: ${res.po.poSubmissionId || 'Generated'}`
+        );
+      } else {
+        alert(
+          `AI Analysis Complete: Classified as ${res.aiDetectionResult.classification} (${Math.round(
+            res.aiDetectionResult.confidenceScore * 100
+          )}% confidence).\nReasoning: ${res.aiDetectionResult.reasoning}`
+        );
+      }
+    } catch (err: any) {
+      alert(err.message || 'Failed to execute AI detection');
+    } finally {
+      setIsScanningAi(false);
     }
   };
 
@@ -436,8 +465,23 @@ export function PODetailPage({ poId, onBack }: PODetailPageProps) {
           </div>
         </div>
 
-        {/* Quick Action Status Selector & Delete Button */}
-        <div className="flex items-center gap-2.5">
+        {/* Quick Action Status Selector, AI Detection Button & Delete Button */}
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <button
+            type="button"
+            onClick={handleRunAiDetection}
+            disabled={isScanningAi}
+            title="Scan this email and attachments using PRC PILOT AI"
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white text-xs font-bold shadow-xs transition-all disabled:opacity-50"
+          >
+            {isScanningAi ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : (
+              <Sparkles size={14} className="text-amber-300" />
+            )}
+            <span>{isScanningAi ? 'AI Scanning...' : 'AI Scan & Detect PO'}</span>
+          </button>
+
           <span className="text-xs font-bold text-slate-500 dark:text-[#A1A1AA] hidden sm:inline">Status:</span>
           <select
             value={po.status}
@@ -607,6 +651,77 @@ export function PODetailPage({ poId, onBack }: PODetailPageProps) {
           </div>
         </div>
       </div>
+
+      {/* AI PO Detection Insights Card */}
+      {po.metadata?.aiDetection && (
+        <div className="p-5 rounded-2xl bg-gradient-to-br from-violet-500/10 via-indigo-500/5 to-purple-500/10 border border-violet-500/25 shadow-xs space-y-3.5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-violet-600 text-white shadow-sm flex items-center justify-center">
+                <Sparkles size={18} />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="text-sm font-extrabold text-slate-900 dark:text-white">
+                    PRC PILOT AI Procurement Audit
+                  </h3>
+                  <span
+                    className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-extrabold uppercase ${
+                      po.classification === 'PO_DETECTED'
+                        ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
+                        : po.classification === 'POSSIBLE_PO'
+                        ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30'
+                        : 'bg-slate-500/20 text-slate-600 dark:text-slate-400'
+                    }`}
+                  >
+                    {po.classification.replace('_', ' ')}
+                  </span>
+                  <span className="px-2 py-0.5 rounded-md bg-violet-600/15 text-violet-700 dark:text-violet-300 text-[10px] font-mono font-bold border border-violet-500/20">
+                    {po.metadata.aiDetection.detectionEngine === 'AI_LLM' ? '🤖 LLM NEURAL MODEL' : '⚡ HEURISTIC ENGINE'}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-500 dark:text-[#A1A1AA] pt-0.5">
+                  {po.metadata.aiDetection.detectedAt
+                    ? `Scanned on ${new Date(po.metadata.aiDetection.detectedAt).toLocaleString('en-IN')}`
+                    : 'Classified automatically during ingestion'}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-4">
+              <div className="text-right">
+                <span className="text-[10px] uppercase font-bold text-slate-400 block">Confidence Score</span>
+                <span className="text-base font-black text-slate-900 dark:text-white font-mono">
+                  {Math.round(Number(po.metadata.aiDetection.confidenceScore || po.confidenceScore || 0) * 100)}%
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={handleRunAiDetection}
+                disabled={isScanningAi}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white dark:bg-[#27272A] border border-violet-200 dark:border-violet-800 text-violet-700 dark:text-violet-300 text-xs font-bold hover:bg-violet-50 dark:hover:bg-violet-950/40 transition-colors disabled:opacity-50 shadow-xs"
+              >
+                {isScanningAi ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+                <span>Re-Analyze</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="p-4 rounded-xl bg-white/80 dark:bg-[#18181B]/90 border border-violet-100 dark:border-violet-900/30 text-xs text-slate-700 dark:text-[#E4E4E7] space-y-2.5">
+            <div className="flex items-start gap-2">
+              <span className="font-extrabold text-violet-600 dark:text-violet-400 shrink-0">AI Intent & Reasoning:</span>
+              <p className="leading-relaxed font-medium">{po.metadata.aiDetection.reasoning}</p>
+            </div>
+
+            {po.metadata.aiDetection.lineItemsSummary && (
+              <div className="flex items-start gap-2 pt-2 border-t border-slate-100 dark:border-zinc-800">
+                <span className="font-extrabold text-emerald-600 dark:text-emerald-400 shrink-0">Detected Line Items:</span>
+                <p className="text-slate-600 dark:text-slate-300 font-medium">{po.metadata.aiDetection.lineItemsSummary}</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Main Workspace Tabs */}
       <div className="rounded-2xl bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] shadow-xs overflow-hidden">
