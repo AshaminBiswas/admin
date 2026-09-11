@@ -94,6 +94,7 @@ export function AdminHeader({ isCollapsed, onToggleCollapse, onToggleMobile }: A
       case "appointments": return "Installation & Repair Service Appointments";
       case "enquiries": return "Customer Enquiries & Ticket Management";
       case "audit": return "System Security & Audit Activity Logs";
+      case "installer-payments": return "Cubicle Installer Payment Tracking";
       case "settings": return "Security & Two-Factor Authentication (2FA)";
       default: return "PRC Admin Console";
     }

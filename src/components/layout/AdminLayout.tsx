@@ -51,6 +51,7 @@ const PODetailPage = lazyWithRetry(() => import("../../pages/PODetailPage").then
 const ProformaInvoicesPage = lazyWithRetry(() => import("../../pages/ProformaInvoicesPage").then((m) => ({ default: m.ProformaInvoicesPage })));
 const AdvancePaymentsTrackerPage = lazyWithRetry(() => import("../../pages/proforma/AdvancePaymentsTrackerPage").then((m) => ({ default: m.AdvancePaymentsTrackerPage })));
 const QRDocumentValidatorPage = lazyWithRetry(() => import("../../pages/QRDocumentValidatorPage").then((m) => ({ default: m.QRDocumentValidatorPage })));
+const InstallerPaymentsPage = lazyWithRetry(() => import("../../pages/InstallerPaymentsPage").then((m) => ({ default: m.InstallerPaymentsPage })));
 import { AICopilot } from "../ai/AICopilot";
 
 function ViewLoadingSkeleton() {
@@ -212,6 +213,8 @@ export function AdminLayout() {
       case "proforma-create":
       case "proforma-detail":
         return <ProformaInvoicesPage />;
+      case "installer-payments":
+        return <InstallerPaymentsPage />;
       case "advance-payments":
       case "payment-tracking":
         return <AdvancePaymentsTrackerPage />;

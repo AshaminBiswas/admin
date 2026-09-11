@@ -309,10 +309,12 @@ export type AdminView =
   | 'advance-payments'
   | 'payment-tracking'
   | 'qr-validator'
-  | 'document-validator';
+  | 'document-validator'
+  | 'installer-payments';
 
 export * from './poManagement';
 export * from './proforma';
+export * from './installerPayment';
 
 /* ─── Admin 360° Profile & Audit Dossier Types ────────────────────────────── */
 
