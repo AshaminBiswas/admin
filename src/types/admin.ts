@@ -310,7 +310,9 @@ export type AdminView =
   | 'payment-tracking'
   | 'qr-validator'
   | 'document-validator'
-  | 'installer-payments';
+  | 'installer-payments'
+  | 'create-installer-bill'
+  | 'installer-bill-create';
 
 export * from './poManagement';
 export * from './proforma';

@@ -26,6 +26,8 @@ import {
   ArrowUpDown,
   FileText,
   User,
+  Users,
+  Phone,
   ChevronRight,
 } from 'lucide-react';
 import { useAdminAuth } from '../context/AdminAuthContext';
@@ -33,6 +35,7 @@ import { installerPaymentsService } from '../api/installerPaymentsService';
 import type {
   InstallerBill,
   CubicleModel,
+  CubicleInstaller,
   InstallerPaymentKpis,
   CreateInstallerBillPayload,
   RecordPaymentPayload,
@@ -40,7 +43,11 @@ import type {
   UpdateCubicleModelPayload,
 } from '../types/installerPayment';
 
-export function InstallerPaymentsPage() {
+export interface InstallerPaymentsPageProps {
+  onNewBill?: () => void;
+}
+
+export function InstallerPaymentsPage({ onNewBill }: InstallerPaymentsPageProps = {}) {
   const { adminUser } = useAdminAuth();
   const rawRole = adminUser?.role as any;
   const roleSlug =
@@ -49,8 +56,8 @@ export function InstallerPaymentsPage() {
       : rawRole ?? 'admin';
   const isSuperAdmin = (roleSlug || '').toLowerCase().includes('super');
 
-  // Navigation tabs: 'bills' | 'models' | 'export'
-  const [activeTab, setActiveTab] = useState<'bills' | 'models' | 'export'>('bills');
+  // Navigation tabs: 'bills' | 'installers' | 'models' | 'export'
+  const [activeTab, setActiveTab] = useState<'bills' | 'installers' | 'models' | 'export'>('bills');
 
   // Data states
   const [bills, setBills] = useState<InstallerBill[]>([]);
@@ -84,6 +91,17 @@ export function InstallerPaymentsPage() {
   const [showModelModal, setShowModelModal] = useState<boolean>(false);
   const [editingModel, setEditingModel] = useState<CubicleModel | null>(null);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+
+  // Installers Master State (Super Admin)
+  const [installers, setInstallers] = useState<CubicleInstaller[]>([]);
+  const [showInstallerModal, setShowInstallerModal] = useState<boolean>(false);
+  const [editingInstaller, setEditingInstaller] = useState<CubicleInstaller | null>(null);
+  const [installerFormData, setInstallerFormData] = useState<{
+    name: string;
+    email: string;
+    phone: string;
+    isActive: boolean;
+  }>({ name: '', email: '', phone: '', isActive: true });
 
   // Export filters
   const [exportMonth, setExportMonth] = useState<number | ''>('');
@@ -127,6 +145,61 @@ export function InstallerPaymentsPage() {
     }
   };
 
+  // Load Installers (Super Admin & bill form)
+  const loadInstallers = async () => {
+    try {
+      const res = await installerPaymentsService.listInstallers(true);
+      setInstallers(res || []);
+    } catch (err: any) {
+      console.error('Failed to load installers:', err);
+    }
+  };
+
+  const handleSaveInstaller = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!installerFormData.name.trim() || !installerFormData.email.trim()) {
+      setActionNotice({ type: 'error', message: 'Name and Email are required for installer.' });
+      return;
+    }
+    try {
+      setIsSubmitting(true);
+      if (editingInstaller) {
+        await installerPaymentsService.updateInstaller(editingInstaller.id, {
+          name: installerFormData.name.trim(),
+          email: installerFormData.email.trim().toLowerCase(),
+          phone: installerFormData.phone.trim() || undefined,
+          isActive: installerFormData.isActive,
+        });
+        setActionNotice({ type: 'success', message: 'Installer updated successfully!' });
+      } else {
+        await installerPaymentsService.createInstaller({
+          name: installerFormData.name.trim(),
+          email: installerFormData.email.trim().toLowerCase(),
+          phone: installerFormData.phone.trim() || undefined,
+          isActive: installerFormData.isActive,
+        });
+        setActionNotice({ type: 'success', message: 'Installer registered successfully!' });
+      }
+      setShowInstallerModal(false);
+      await loadInstallers();
+    } catch (err: any) {
+      setActionNotice({ type: 'error', message: err?.message || 'Failed to save installer' });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDeactivateInstaller = async (id: string) => {
+    if (!confirm('Are you sure you want to deactivate this installer?')) return;
+    try {
+      await installerPaymentsService.deactivateInstaller(id);
+      setActionNotice({ type: 'success', message: 'Installer deactivated.' });
+      await loadInstallers();
+    } catch (err: any) {
+      setActionNotice({ type: 'error', message: err?.message || 'Failed to deactivate installer' });
+    }
+  };
+
   // Load Bills
   const loadBills = async (page = currentPage) => {
     try {
@@ -157,6 +230,7 @@ export function InstallerPaymentsPage() {
   useEffect(() => {
     loadModels();
     loadBills(1);
+    loadInstallers();
   }, []);
 
   // Reload bills when filters change
@@ -254,7 +328,13 @@ export function InstallerPaymentsPage() {
           </button>
 
           <button
-            onClick={() => setShowCreateModal(true)}
+            onClick={() => {
+              if (onNewBill) {
+                onNewBill();
+              } else {
+                setShowCreateModal(true);
+              }
+            }}
             className="flex items-center gap-2 px-4 py-2.5 bg-violet-600 hover:bg-violet-700 text-white rounded-xl text-sm font-medium shadow-sm transition-colors"
           >
             <Plus size={18} />
@@ -283,10 +363,10 @@ export function InstallerPaymentsPage() {
       )}
 
       {/* Hub Mode Tabs */}
-      <div className="flex items-center gap-2 border-b border-slate-200 dark:border-[#27272A] pb-1">
+      <div className="flex items-center gap-2 border-b border-slate-200 dark:border-[#27272A] pb-1 overflow-x-auto">
         <button
           onClick={() => setActiveTab('bills')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium text-sm transition-all ${
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium text-sm whitespace-nowrap transition-all ${
             activeTab === 'bills'
               ? 'bg-violet-600 text-white shadow-sm'
               : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-[#27272A]'
@@ -299,10 +379,32 @@ export function InstallerPaymentsPage() {
           </span>
         </button>
 
-        {/* Tab 2: Cubicle Model Master (Super Admin Only) */}
+        {/* Tab 2: Installers Directory (Super Admin Only) */}
+        <button
+          onClick={() => setActiveTab('installers')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium text-sm whitespace-nowrap transition-all ${
+            activeTab === 'installers'
+              ? 'bg-violet-600 text-white shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-[#27272A]'
+          }`}
+        >
+          <Users size={17} />
+          <span>Installers Directory</span>
+          {isSuperAdmin ? (
+            <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400 font-semibold flex items-center gap-1">
+              <ShieldCheck size={12} /> Super Admin
+            </span>
+          ) : (
+            <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-500 font-semibold flex items-center gap-1">
+              <ShieldAlert size={12} /> Locked
+            </span>
+          )}
+        </button>
+
+        {/* Tab 3: Cubicle Model Master (Super Admin Only) */}
         <button
           onClick={() => setActiveTab('models')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium text-sm transition-all ${
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium text-sm whitespace-nowrap transition-all ${
             activeTab === 'models'
               ? 'bg-violet-600 text-white shadow-sm'
               : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-[#27272A]'
@@ -321,10 +423,10 @@ export function InstallerPaymentsPage() {
           )}
         </button>
 
-        {/* Tab 3: History Export (Super Admin Only) */}
+        {/* Tab 4: History Export (Super Admin Only) */}
         <button
           onClick={() => setActiveTab('export')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium text-sm transition-all ${
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium text-sm whitespace-nowrap transition-all ${
             activeTab === 'export'
               ? 'bg-violet-600 text-white shadow-sm'
               : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-[#27272A]'
@@ -762,7 +864,143 @@ export function InstallerPaymentsPage() {
       )}
 
       {/* ─────────────────────────────────────────────────────────────────────────
-          TAB 2: CUBICLE MODEL MASTER (SUPER ADMIN ONLY)
+          TAB 2: INSTALLERS DIRECTORY (SUPER ADMIN ONLY)
+      ────────────────────────────────────────────────────────────────────────── */}
+      {activeTab === 'installers' && (
+        <div className="space-y-6">
+          {!isSuperAdmin ? (
+            <div className="bg-white dark:bg-[#18181B] p-12 text-center rounded-2xl border border-slate-200 dark:border-[#27272A] space-y-4">
+              <div className="w-12 h-12 rounded-2xl bg-amber-500/10 text-amber-600 flex items-center justify-center mx-auto">
+                <ShieldAlert size={26} />
+              </div>
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white">
+                Super Admin Access Required
+              </h3>
+              <p className="text-sm text-slate-500 max-w-md mx-auto">
+                Managing registered installer credentials (names, emails, contact details) is restricted exclusively to
+                Super Administrators. Standard Admins can select registered installers when generating new bills to auto-populate their details.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    <Users className="text-violet-600 dark:text-violet-400" size={19} />
+                    Registered Cubicle Installers Directory
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    Registered installers automatically appear in the installer selector dropdown on the New Installer Bill page for instant details auto-fetch.
+                  </p>
+                </div>
+
+                <button
+                  onClick={() => {
+                    setEditingInstaller(null);
+                    setInstallerFormData({ name: '', email: '', phone: '', isActive: true });
+                    setShowInstallerModal(true);
+                  }}
+                  className="flex items-center gap-2 px-3.5 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-xl text-xs font-semibold shadow-sm transition-colors"
+                >
+                  <Plus size={16} />
+                  <span>Add New Installer</span>
+                </button>
+              </div>
+
+              <div className="bg-white dark:bg-[#18181B] rounded-2xl border border-slate-200 dark:border-[#27272A] overflow-hidden shadow-sm">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-slate-200 dark:border-[#27272A] bg-slate-50 dark:bg-[#202024] text-slate-600 dark:text-slate-300 font-semibold">
+                      <th className="py-3 px-4">Installer Name</th>
+                      <th className="py-3 px-4">Email Address</th>
+                      <th className="py-3 px-4">Phone Number</th>
+                      <th className="py-3 px-4 text-center">Status</th>
+                      <th className="py-3 px-4 text-center">Linked Bills</th>
+                      <th className="py-3 px-4">Registered Date</th>
+                      <th className="py-3 px-4 text-center">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-[#27272A]">
+                    {installers.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="py-12 text-center text-slate-400">
+                          No installers registered yet. Click &quot;Add New Installer&quot; to register your first technician.
+                        </td>
+                      </tr>
+                    ) : (
+                      installers.map((inst) => (
+                        <tr key={inst.id} className="hover:bg-slate-50/50 dark:hover:bg-[#202024]/50">
+                          <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white">
+                            <div className="flex items-center gap-2">
+                              <div className="w-7 h-7 rounded-full bg-violet-100 dark:bg-violet-950/50 text-violet-600 dark:text-violet-400 flex items-center justify-center font-bold text-xs">
+                                {inst.name.charAt(0).toUpperCase()}
+                              </div>
+                              <span>{inst.name}</span>
+                            </div>
+                          </td>
+                          <td className="py-3.5 px-4 text-slate-700 dark:text-slate-300 font-medium">
+                            {inst.email}
+                          </td>
+                          <td className="py-3.5 px-4 text-slate-600 dark:text-slate-400">
+                            {inst.phone || '—'}
+                          </td>
+                          <td className="py-3.5 px-4 text-center">
+                            <span
+                              className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold ${
+                                inst.isActive
+                                  ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20'
+                                  : 'bg-slate-200 dark:bg-slate-800 text-slate-500'
+                              }`}
+                            >
+                              {inst.isActive ? 'Active (Live)' : 'Deactivated'}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-4 text-center text-slate-500 font-semibold">
+                            {inst._count?.bills || 0} bill(s)
+                          </td>
+                          <td className="py-3.5 px-4 text-slate-500">{formatDate(inst.createdAt)}</td>
+                          <td className="py-3.5 px-4 text-center">
+                            <div className="flex items-center justify-center gap-2">
+                              <button
+                                onClick={() => {
+                                  setEditingInstaller(inst);
+                                  setInstallerFormData({
+                                    name: inst.name,
+                                    email: inst.email,
+                                    phone: inst.phone || '',
+                                    isActive: inst.isActive,
+                                  });
+                                  setShowInstallerModal(true);
+                                }}
+                                className="p-1.5 text-slate-500 hover:text-violet-600 rounded-lg hover:bg-slate-100 dark:hover:bg-[#27272A]"
+                                title="Edit Installer"
+                              >
+                                <Edit2 size={15} />
+                              </button>
+                              {inst.isActive && (
+                                <button
+                                  onClick={() => handleDeactivateInstaller(inst.id)}
+                                  className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40"
+                                  title="Deactivate Installer"
+                                >
+                                  <Trash2 size={15} />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────────────────
+          TAB 3: CUBICLE MODEL MASTER (SUPER ADMIN ONLY)
       ────────────────────────────────────────────────────────────────────────── */}
       {activeTab === 'models' && (
         <div className="space-y-6">
@@ -1071,6 +1309,24 @@ export function InstallerPaymentsPage() {
           }}
         />
       )}
+
+      {/* ─────────────────────────────────────────────────────────────────────────
+          MODAL 4: CUBICLE INSTALLER MASTER ADD/EDIT MODAL
+      ────────────────────────────────────────────────────────────────────────── */}
+      {showInstallerModal && (
+        <CubicleInstallerModal
+          installer={editingInstaller}
+          onClose={() => setShowInstallerModal(false)}
+          onSuccess={() => {
+            setShowInstallerModal(false);
+            loadInstallers();
+            setActionNotice({
+              type: 'success',
+              message: editingInstaller ? 'Installer updated successfully.' : 'New installer registered.',
+            });
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -1162,6 +1418,9 @@ function CreateBillModal({ activeModels, onClose, onSuccess }: CreateBillModalPr
     if (!isNcr && (travelExpenses === undefined || travelExpenses < 0)) {
       return setErrorMsg('Travel expenses are required for outstation installation jobs (NCR = No).');
     }
+    if (!notes.trim()) {
+      return setErrorMsg('Internal Notes are mandatory.');
+    }
 
     try {
       setIsSubmitting(true);
@@ -1177,7 +1436,7 @@ function CreateBillModal({ activeModels, onClose, onSuccess }: CreateBillModalPr
         initialAmountPaid: Number(initialAmountPaid || 0),
         paymentDate: initialAmountPaid > 0 ? paymentDate : undefined,
         paymentMode: initialAmountPaid > 0 ? paymentMode : undefined,
-        notes: notes.trim() || undefined,
+        notes: notes.trim(),
       };
 
       await installerPaymentsService.createBill(payload);
@@ -2097,3 +2356,150 @@ function CubicleModelModal({ model, onClose, onSuccess }: CubicleModelModalProps
     </div>
   );
 }
+
+// ─── SUB-COMPONENT: CUBICLE INSTALLER MASTER MODAL ───────────────────────────
+
+interface CubicleInstallerModalProps {
+  installer: CubicleInstaller | null;
+  onClose: () => void;
+  onSuccess: () => void;
+}
+
+function CubicleInstallerModal({ installer, onClose, onSuccess }: CubicleInstallerModalProps) {
+  const [name, setName] = useState(installer?.name || '');
+  const [email, setEmail] = useState(installer?.email || '');
+  const [phone, setPhone] = useState(installer?.phone || '');
+  const [isActive, setIsActive] = useState<boolean>(installer ? installer.isActive : true);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) return setErrorMsg('Installer name is required.');
+    if (!email.trim() || !email.includes('@')) return setErrorMsg('A valid installer email is required.');
+
+    try {
+      setIsSubmitting(true);
+      if (installer) {
+        await installerPaymentsService.updateInstaller(installer.id, {
+          name: name.trim(),
+          email: email.trim().toLowerCase(),
+          phone: phone.trim() || undefined,
+          isActive,
+        });
+      } else {
+        await installerPaymentsService.createInstaller({
+          name: name.trim(),
+          email: email.trim().toLowerCase(),
+          phone: phone.trim() || undefined,
+          isActive,
+        });
+      }
+      onSuccess();
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Failed to save installer');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+      <div className="bg-white dark:bg-[#18181B] w-full max-w-md rounded-2xl border border-slate-200 dark:border-[#27272A] shadow-xl overflow-hidden text-xs">
+        <div className="p-4 border-b border-slate-200 dark:border-[#27272A] flex items-center justify-between">
+          <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+            <Users size={16} className="text-violet-600" />
+            {installer ? 'Edit Installer Credentials' : 'Register New Installer'}
+          </h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-white">
+            <X size={18} />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+          {errorMsg && (
+            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-700">
+              {errorMsg}
+            </div>
+          )}
+
+          <div>
+            <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              Installer Full Name *
+            </label>
+            <input
+              type="text"
+              required
+              placeholder="e.g. Rajesh Sharma"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full p-2.5 bg-slate-50 dark:bg-[#27272A] border border-slate-200 dark:border-[#323238] rounded-xl font-medium text-slate-900 dark:text-white"
+            />
+          </div>
+
+          <div>
+            <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              Installer Email Address *
+            </label>
+            <input
+              type="email"
+              required
+              placeholder="e.g. rajesh.sharma@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full p-2.5 bg-slate-50 dark:bg-[#27272A] border border-slate-200 dark:border-[#323238] rounded-xl font-medium text-slate-900 dark:text-white"
+            />
+            <p className="text-[11px] text-slate-400 mt-1">
+              Bills and auto-clearance PDFs will be dispatched to this email address.
+            </p>
+          </div>
+
+          <div>
+            <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              Contact Phone Number (Optional)
+            </label>
+            <input
+              type="text"
+              placeholder="e.g. +91 98765 43210"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              className="w-full p-2.5 bg-slate-50 dark:bg-[#27272A] border border-slate-200 dark:border-[#323238] rounded-xl font-medium text-slate-900 dark:text-white"
+            />
+          </div>
+
+          <div className="flex items-center gap-2 pt-1">
+            <input
+              type="checkbox"
+              id="installerActiveToggle"
+              checked={isActive}
+              onChange={(e) => setIsActive(e.target.checked)}
+              className="rounded border-slate-300 text-violet-600 focus:ring-violet-500"
+            />
+            <label htmlFor="installerActiveToggle" className="text-slate-700 dark:text-slate-300 font-medium">
+              Active (Available in Bill Creator auto-fetch selector)
+            </label>
+          </div>
+
+          <div className="pt-3 border-t border-slate-100 dark:border-[#27272A] flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-[#27272A] rounded-xl font-medium"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="px-5 py-2.5 bg-violet-600 hover:bg-violet-700 text-white rounded-xl font-bold flex items-center gap-2 disabled:opacity-50"
+            >
+              {isSubmitting && <RefreshCw size={14} className="animate-spin" />}
+              <span>{installer ? 'Save Changes' : 'Register Installer'}</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+

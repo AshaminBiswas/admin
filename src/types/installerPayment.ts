@@ -36,9 +36,37 @@ export interface InstallerBillPayment {
 
 export type InstallerPaymentStatus = 'PARTIAL' | 'CLEARED';
 
+export interface CubicleInstaller {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  _count?: {
+    bills: number;
+  };
+}
+
+export interface CreateCubicleInstallerPayload {
+  name: string;
+  email: string;
+  phone?: string;
+  isActive?: boolean;
+}
+
+export interface UpdateCubicleInstallerPayload {
+  name?: string;
+  email?: string;
+  phone?: string;
+  isActive?: boolean;
+}
+
 export interface InstallerBill {
   id: string;
   billNo: string;
+  installerId?: string | null;
   installerName: string;
   installerEmail: string;
   installDate: string;
@@ -60,6 +88,7 @@ export interface InstallerBill {
   createdById?: string | null;
   createdAt: string;
   updatedAt: string;
+  installer?: CubicleInstaller | null;
   items: InstallerBillItem[];
   payments?: InstallerBillPayment[];
   createdBy?: {
@@ -89,6 +118,7 @@ export interface ListInstallerBillsResponse {
 }
 
 export interface CreateInstallerBillPayload {
+  installerId?: string;
   installerName: string;
   installerEmail: string;
   installDate: string;
@@ -103,7 +133,7 @@ export interface CreateInstallerBillPayload {
   initialAmountPaid?: number;
   paymentDate?: string;
   paymentMode?: string;
-  notes?: string;
+  notes: string;
 }
 
 export interface UpdateInstallerBillPayload {

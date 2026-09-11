@@ -2,12 +2,15 @@ import { fetchAdminApi, API_BASE_URL, getAdminToken } from './adminApi';
 import type {
   InstallerBill,
   CubicleModel,
+  CubicleInstaller,
   ListInstallerBillsResponse,
   CreateInstallerBillPayload,
   UpdateInstallerBillPayload,
   RecordPaymentPayload,
   CreateCubicleModelPayload,
   UpdateCubicleModelPayload,
+  CreateCubicleInstallerPayload,
+  UpdateCubicleInstallerPayload,
   InstallerBillsFilter,
   InstallerExportFilter,
 } from '../types/installerPayment';
@@ -125,6 +128,36 @@ export const installerPaymentsService = {
 
   async deactivateModel(id: string): Promise<CubicleModel> {
     const res = await fetchAdminApi<any>(`/installer-payments/models/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    });
+    return res?.data || res;
+  },
+
+  // ─── Installers Directory (Master) ────────────────────────────────────────
+
+  async listInstallers(includeInactive = false): Promise<CubicleInstaller[]> {
+    const res = await fetchAdminApi<any>(`/installer-payments/installers${includeInactive ? '?includeInactive=true' : ''}`);
+    return res?.data || res || [];
+  },
+
+  async createInstaller(payload: CreateCubicleInstallerPayload): Promise<CubicleInstaller> {
+    const res = await fetchAdminApi<any>('/installer-payments/installers', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    return res?.data || res;
+  },
+
+  async updateInstaller(id: string, payload: UpdateCubicleInstallerPayload): Promise<CubicleInstaller> {
+    const res = await fetchAdminApi<any>(`/installer-payments/installers/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+    return res?.data || res;
+  },
+
+  async deactivateInstaller(id: string): Promise<CubicleInstaller> {
+    const res = await fetchAdminApi<any>(`/installer-payments/installers/${encodeURIComponent(id)}`, {
       method: 'DELETE',
     });
     return res?.data || res;

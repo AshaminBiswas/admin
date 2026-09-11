@@ -52,6 +52,7 @@ const ProformaInvoicesPage = lazyWithRetry(() => import("../../pages/ProformaInv
 const AdvancePaymentsTrackerPage = lazyWithRetry(() => import("../../pages/proforma/AdvancePaymentsTrackerPage").then((m) => ({ default: m.AdvancePaymentsTrackerPage })));
 const QRDocumentValidatorPage = lazyWithRetry(() => import("../../pages/QRDocumentValidatorPage").then((m) => ({ default: m.QRDocumentValidatorPage })));
 const InstallerPaymentsPage = lazyWithRetry(() => import("../../pages/InstallerPaymentsPage").then((m) => ({ default: m.InstallerPaymentsPage })));
+const CreateInstallerBillPage = lazyWithRetry(() => import("../../pages/CreateInstallerBillPage").then((m) => ({ default: m.CreateInstallerBillPage })));
 import { AICopilot } from "../ai/AICopilot";
 
 function ViewLoadingSkeleton() {
@@ -214,7 +215,10 @@ export function AdminLayout() {
       case "proforma-detail":
         return <ProformaInvoicesPage />;
       case "installer-payments":
-        return <InstallerPaymentsPage />;
+        return <InstallerPaymentsPage onNewBill={() => setCurrentView("create-installer-bill")} />;
+      case "create-installer-bill":
+      case "installer-bill-create":
+        return <CreateInstallerBillPage onBack={() => setCurrentView("installer-payments")} />;
       case "advance-payments":
       case "payment-tracking":
         return <AdvancePaymentsTrackerPage />;
