@@ -32,6 +32,7 @@ import {
 } from 'lucide-react';
 import { useAdminAuth } from '../context/AdminAuthContext';
 import { installerPaymentsService } from '../api/installerPaymentsService';
+import { isNcrPinCode } from '../utils/ncrPincodes';
 import type {
   InstallerBill,
   CubicleModel,
@@ -113,17 +114,25 @@ export function InstallerPaymentsPage({ onNewBill }: InstallerPaymentsPageProps 
 
   // ─── Formatters ─────────────────────────────────────────────────────────────
   const formatINR = (val: number | string | null | undefined): string => {
-    const num = Number(val || 0);
-    return `₹${num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const num = Number(val ?? 0);
+    return isNaN(num)
+      ? '₹0.00'
+      : `₹${num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
   const formatDate = (date: string | null | undefined): string => {
     if (!date) return 'N/A';
-    return new Date(date).toLocaleDateString('en-IN', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-    });
+    try {
+      const d = new Date(date);
+      if (isNaN(d.getTime())) return 'N/A';
+      return d.toLocaleDateString('en-IN', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+      });
+    } catch {
+      return 'N/A';
+    }
   };
 
   // Auto-dismiss notices after 5 seconds
@@ -138,10 +147,13 @@ export function InstallerPaymentsPage({ onNewBill }: InstallerPaymentsPageProps 
   const loadModels = async () => {
     try {
       const all = await installerPaymentsService.listModels(false);
-      setModels(all);
-      setActiveModels(all.filter((m) => m.isActive));
+      const safe = Array.isArray(all) ? all : [];
+      setModels(safe);
+      setActiveModels(safe.filter((m) => m && m.isActive));
     } catch (err: any) {
       console.error('Failed to load cubicle models:', err);
+      setModels([]);
+      setActiveModels([]);
     }
   };
 
@@ -149,9 +161,11 @@ export function InstallerPaymentsPage({ onNewBill }: InstallerPaymentsPageProps 
   const loadInstallers = async () => {
     try {
       const res = await installerPaymentsService.listInstallers(true);
-      setInstallers(res || []);
+      const safe = Array.isArray(res) ? res : [];
+      setInstallers(safe);
     } catch (err: any) {
       console.error('Failed to load installers:', err);
+      setInstallers([]);
     }
   };
 
@@ -214,12 +228,13 @@ export function InstallerPaymentsPage({ onNewBill }: InstallerPaymentsPageProps 
         endDate: endDate || undefined,
       });
 
-      setBills(res.bills || []);
-      setKpis(res.kpis || kpis);
-      setTotalPages(res.totalPages || 1);
-      setCurrentPage(res.page || 1);
+      setBills(Array.isArray(res?.bills) ? res.bills : []);
+      setKpis(res?.kpis || kpis);
+      setTotalPages(res?.totalPages || 1);
+      setCurrentPage(res?.page || 1);
     } catch (err: any) {
       setActionNotice({ type: 'error', message: err.message || 'Failed to load installer bills' });
+      setBills([]);
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -593,7 +608,7 @@ export function InstallerPaymentsPage({ onNewBill }: InstallerPaymentsPageProps 
               <RefreshCw size={24} className="animate-spin mx-auto mb-2 text-violet-500" />
               <p className="text-sm">Loading installer payment records...</p>
             </div>
-          ) : bills.length === 0 ? (
+          ) : !Array.isArray(bills) || bills.length === 0 ? (
             <div className="py-20 text-center text-slate-500 dark:text-slate-400 bg-white dark:bg-[#18181B] rounded-2xl border border-slate-200 dark:border-[#27272A] space-y-3">
               <Receipt size={36} className="mx-auto text-slate-400" />
               <p className="text-base font-semibold text-slate-700 dark:text-slate-300">
@@ -921,7 +936,7 @@ export function InstallerPaymentsPage({ onNewBill }: InstallerPaymentsPageProps 
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-[#27272A]">
-                    {installers.length === 0 ? (
+                    {!Array.isArray(installers) || installers.length === 0 ? (
                       <tr>
                         <td colSpan={7} className="py-12 text-center text-slate-400">
                           No installers registered yet. Click &quot;Add New Installer&quot; to register your first technician.
@@ -1054,8 +1069,15 @@ export function InstallerPaymentsPage({ onNewBill }: InstallerPaymentsPageProps 
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-[#27272A]">
-                    {models.map((model) => (
-                      <tr key={model.id} className="hover:bg-slate-50/50 dark:hover:bg-[#202024]/50">
+                    {!Array.isArray(models) || models.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="py-12 text-center text-slate-400">
+                          No cubicle models registered yet. Click &quot;Add New Model&quot; to register your first cubicle model.
+                        </td>
+                      </tr>
+                    ) : (
+                      models.map((model) => (
+                        <tr key={model.id} className="hover:bg-slate-50/50 dark:hover:bg-[#202024]/50">
                         <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white">
                           {model.modelName}
                         </td>
@@ -1119,7 +1141,8 @@ export function InstallerPaymentsPage({ onNewBill }: InstallerPaymentsPageProps 
                           </div>
                         </td>
                       </tr>
-                    ))}
+                    ))
+                  )}
                   </tbody>
                 </table>
               </div>
@@ -1399,6 +1422,20 @@ function CreateBillModal({ activeModels, onClose, onSuccess }: CreateBillModalPr
     setLineItems(updated);
   };
 
+  const handlePinChange = (raw: string) => {
+    const cleaned = raw.replace(/\D/g, '').slice(0, 6);
+    setSitePin(cleaned);
+    if (cleaned.length === 6) {
+      const match = isNcrPinCode(cleaned);
+      if (match) {
+        setIsNcr(true);
+        setTravelExpenses(0);
+      } else {
+        setIsNcr(false);
+      }
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
@@ -1536,16 +1573,29 @@ function CreateBillModal({ activeModels, onClose, onSuccess }: CreateBillModalPr
             </div>
 
             <div>
-              <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                Site Postal PIN * (6-Digit)
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block font-semibold text-slate-700 dark:text-slate-300">
+                  Site Postal PIN * (6-Digit)
+                </label>
+                {sitePin.length === 6 && (
+                  <span
+                    className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                      isNcrPinCode(sitePin)
+                        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400'
+                        : 'bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-400'
+                    }`}
+                  >
+                    {isNcrPinCode(sitePin) ? 'Inside NCR' : 'Outstation'}
+                  </span>
+                )}
+              </div>
               <input
                 type="text"
                 required
                 maxLength={6}
                 placeholder="110001"
                 value={sitePin}
-                onChange={(e) => setSitePin(e.target.value.replace(/\D/g, ''))}
+                onChange={(e) => handlePinChange(e.target.value)}
                 className="w-full p-2.5 bg-slate-50 dark:bg-[#27272A] border border-slate-200 dark:border-[#323238] rounded-xl text-slate-900 dark:text-white font-mono"
               />
             </div>

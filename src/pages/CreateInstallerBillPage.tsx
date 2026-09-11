@@ -19,6 +19,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { installerPaymentsService } from '../api/installerPaymentsService';
+import { isNcrPinCode } from '../utils/ncrPincodes';
 import type {
   CubicleModel,
   CubicleInstaller,
@@ -81,23 +82,27 @@ export function CreateInstallerBillPage({ onBack }: CreateInstallerBillPageProps
           installerPaymentsService.listInstallers(false),
         ]);
         if (isMounted) {
-          setModels(modelsRes || []);
-          setInstallers(installersRes || []);
+          const safeModels = Array.isArray(modelsRes) ? modelsRes : [];
+          const safeInstallers = Array.isArray(installersRes) ? installersRes : [];
+          setModels(safeModels);
+          setInstallers(safeInstallers);
 
           // Auto-select first model if available
-          if (modelsRes && modelsRes.length > 0) {
+          if (safeModels.length > 0) {
             setLineItems([
               {
                 id: 'item-1',
-                modelId: modelsRes[0].id,
+                modelId: safeModels[0].id,
                 quantity: 1,
-                unitPrice: Number(modelsRes[0].installationPrice),
+                unitPrice: Number(safeModels[0].installationPrice || 0),
               },
             ]);
           }
         }
       } catch (err: any) {
         if (isMounted) {
+          setModels([]);
+          setInstallers([]);
           setFeedback({
             type: 'error',
             message: `Failed to load models or installers: ${err?.message || err}`,
@@ -132,6 +137,22 @@ export function CreateInstallerBillPage({ onBack }: CreateInstallerBillPageProps
       setInstallerEmail(found.email);
       setInstallerPhone(found.phone || '');
       setIsAutoPopulated(true);
+    }
+  };
+
+  // Handle site PIN input & automated NCR classification
+  const handlePinChange = (raw: string) => {
+    const cleaned = raw.replace(/\D/g, '').slice(0, 6);
+    setSitePin(cleaned);
+
+    if (cleaned.length === 6) {
+      const matched = isNcrPinCode(cleaned);
+      if (matched) {
+        setIsNcr(true);
+        setTravelExpenses(0);
+      } else {
+        setIsNcr(false);
+      }
     }
   };
 
@@ -352,7 +373,7 @@ export function CreateInstallerBillPage({ onBack }: CreateInstallerBillPageProps
                   className="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-[#27272A]/50 border border-gray-300 dark:border-[#3F3F46] rounded-xl text-sm text-gray-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-violet-500 transition-colors"
                 >
                   <option value="">-- Choose from Registered Installers or type custom below --</option>
-                  {installers.map((inst) => (
+                  {(Array.isArray(installers) ? installers : []).map((inst) => (
                     <option key={inst.id} value={inst.id}>
                       {inst.name} ({inst.email}) {inst.phone ? `• ${inst.phone}` : ''}
                     </option>
@@ -440,18 +461,54 @@ export function CreateInstallerBillPage({ onBack }: CreateInstallerBillPageProps
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Site Postal PIN Code <span className="text-rose-500">*</span>
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300">
+                      Site Postal PIN Code <span className="text-rose-500">*</span>
+                    </label>
+                    {sitePin.length === 6 && (
+                      <span
+                        className={`text-[11px] font-semibold px-2 py-0.5 rounded-full inline-flex items-center gap-1 ${
+                          isNcrPinCode(sitePin)
+                            ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800'
+                            : 'bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400 border border-blue-300 dark:border-blue-800'
+                        }`}
+                      >
+                        {isNcrPinCode(sitePin) ? (
+                          <>
+                            <CheckCircle2 size={12} /> NCR Territory Matched
+                          </>
+                        ) : (
+                          <>
+                            <MapPin size={12} /> Outstation Territory
+                          </>
+                        )}
+                      </span>
+                    )}
+                  </div>
                   <input
                     type="text"
                     required
                     maxLength={6}
                     value={sitePin}
-                    onChange={(e) => setSitePin(e.target.value.replace(/\D/g, ''))}
+                    onChange={(e) => handlePinChange(e.target.value)}
                     placeholder="e.g. 110001"
-                    className="w-full px-3 py-2 bg-white dark:bg-[#18181B] border border-gray-300 dark:border-[#27272A] rounded-xl text-sm text-gray-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-violet-500"
+                    className="w-full px-3 py-2 bg-white dark:bg-[#18181B] border border-gray-300 dark:border-[#27272A] rounded-xl text-sm font-mono text-gray-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-violet-500"
                   />
+                  {sitePin.length === 6 && (
+                    <p className="text-[11px] mt-1">
+                      {isNcrPinCode(sitePin) ? (
+                        <span className="text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1">
+                          <CheckCircle2 size={12} />
+                          PIN <strong>{sitePin}</strong> is recognized in the NCR master list. Inside NCR auto-selected (Travel ₹0.00).
+                        </span>
+                      ) : (
+                        <span className="text-blue-600 dark:text-blue-400 font-medium flex items-center gap-1">
+                          <MapPin size={12} />
+                          PIN <strong>{sitePin}</strong> is outside NCR. Outstation auto-selected (Travel expenses enabled).
+                        </span>
+                      )}
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -478,7 +535,7 @@ export function CreateInstallerBillPage({ onBack }: CreateInstallerBillPageProps
                       NCR Location Job (National Capital Region)?
                     </label>
                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                      Toggle YES if site is within Delhi NCR (Delhi, Gurugram, Noida, Faridabad, Ghaziabad). Travel expenses are strictly waived/locked to ₹0.00.
+                      Auto-detected from Postal PIN. Delhi-NCR sites waive travel expenses to ₹0.00. Non-NCR requires travel reimbursement.
                     </p>
                   </div>
 
@@ -512,10 +569,10 @@ export function CreateInstallerBillPage({ onBack }: CreateInstallerBillPageProps
                 </div>
 
                 {isNcr ? (
-                  <div className="flex items-center gap-2 p-2.5 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/40 rounded-lg text-xs text-amber-800 dark:text-amber-300">
-                    <ShieldCheck size={14} className="text-amber-600 flex-shrink-0" />
+                  <div className="flex items-center gap-2 p-2.5 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/40 rounded-lg text-xs text-emerald-800 dark:text-emerald-300">
+                    <ShieldCheck size={14} className="text-emerald-600 flex-shrink-0" />
                     <span>
-                      <strong>NCR Job:</strong> Travel Expenses field is locked to <strong>₹0.00</strong> as installation occurred within standard local radius.
+                      <strong>NCR Job:</strong> Travel Expenses locked to <strong>₹0.00</strong> (Installation site is within NCR radius).
                     </span>
                   </div>
                 ) : (
@@ -583,7 +640,7 @@ export function CreateInstallerBillPage({ onBack }: CreateInstallerBillPageProps
                           className="w-full px-3 py-1.5 bg-white dark:bg-[#18181B] border border-gray-300 dark:border-[#3F3F46] rounded-lg text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-violet-500"
                         >
                           <option value="" disabled>-- Select Model --</option>
-                          {models.map((m) => (
+                          {(Array.isArray(models) ? models : []).map((m) => (
                             <option key={m.id} value={m.id}>
                               {m.modelName} (₹{Number(m.installationPrice).toLocaleString('en-IN')})
                             </option>
