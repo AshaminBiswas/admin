@@ -28,6 +28,7 @@ import {
   X,
   Check,
   Percent,
+  RotateCcw,
 } from 'lucide-react';
 import { employeeService } from '../api/employeeService';
 import { useAdminAuth } from '../context/AdminAuthContext';
@@ -585,6 +586,18 @@ export function EmployeeManagementPage() {
       fetchPayroll();
     } catch (err: any) {
       showFeedback('error', err?.message || 'Failed to finalize payroll');
+    }
+  };
+
+  const handleRevertPayrollToDraft = async (runId: string) => {
+    if (!confirm('Are you sure you want to revert this payroll run back to DRAFT? Any recovered advances and applied deductions will be reopened.')) return;
+    try {
+      await employeeService.revertPayrollToDraft(runId);
+      showFeedback('success', 'Payroll run reverted to DRAFT');
+      fetchPayroll();
+      fetchAdvancesAndDeductions();
+    } catch (err: any) {
+      showFeedback('error', err?.message || 'Failed to revert payroll run to draft');
     }
   };
 
@@ -1584,6 +1597,18 @@ export function EmployeeManagementPage() {
                               className="px-2.5 py-1 bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 border border-blue-500/30 text-xs font-semibold rounded-lg transition"
                             >
                               Finalize
+                            </button>
+                          )}
+
+                          {/* Super Admin Revert to Draft */}
+                          {isSuperAdmin && (run.status === 'FINALIZED' || run.status === 'PAID') && (
+                            <button
+                              onClick={() => handleRevertPayrollToDraft(run.id)}
+                              className="px-2.5 py-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 text-xs font-semibold rounded-lg transition inline-flex items-center gap-1"
+                              title="Revert to Draft (Super Admin only)"
+                            >
+                              <RotateCcw size={12} />
+                              <span>Make Draft</span>
                             </button>
                           )}
 

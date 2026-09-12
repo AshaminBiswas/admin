@@ -230,6 +230,13 @@ export const employeeService = {
     return res?.data || res;
   },
 
+  async revertPayrollToDraft(id: string): Promise<EmployeePayrollRun> {
+    const res = await fetchAdminApi<any>(`/employees/payroll/${encodeURIComponent(id)}/revert-draft`, {
+      method: 'POST',
+    });
+    return res?.data || res;
+  },
+
   async markPayrollPaid(id: string, payload: MarkPayrollPaidPayload): Promise<EmployeePayrollRun> {
     const res = await fetchAdminApi<any>(`/employees/payroll/${encodeURIComponent(id)}/mark-paid`, {
       method: 'POST',
