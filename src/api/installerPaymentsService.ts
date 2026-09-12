@@ -13,6 +13,7 @@ import type {
   UpdateCubicleInstallerPayload,
   InstallerBillsFilter,
   InstallerExportFilter,
+  InstallerLedgerResponse,
 } from '../types/installerPayment';
 
 export const installerPaymentsService = {
@@ -23,6 +24,8 @@ export const installerPaymentsService = {
     if (params.page) query.append('page', params.page.toString());
     if (params.limit) query.append('limit', params.limit.toString());
     if (params.search) query.append('search', params.search);
+    if (params.installerId) query.append('installerId', params.installerId);
+    if (params.installerEmail) query.append('installerEmail', params.installerEmail);
     if (params.status && params.status !== 'ALL') query.append('status', params.status);
     if (params.isNcr && params.isNcr !== 'all') query.append('isNcr', params.isNcr);
     if (params.startDate) query.append('startDate', params.startDate);
@@ -192,10 +195,11 @@ export const installerPaymentsService = {
     return res?.data || res;
   },
 
-  // ─── Full History Export (Super Admin Only) ────────────────────────────────
+  // ─── Full History & Installer Export (Super Admin Only) ─────────────────────
 
-  async exportExcel(filters: InstallerExportFilter = {}): Promise<void> {
+  async exportExcel(filters: InstallerExportFilter = {}, filename?: string): Promise<void> {
     const query = new URLSearchParams();
+    if (filters.installerId) query.append('installerId', filters.installerId);
     if (filters.month) query.append('month', filters.month.toString());
     if (filters.year) query.append('year', filters.year.toString());
     if (filters.startDate) query.append('startDate', filters.startDate);
@@ -212,7 +216,7 @@ export const installerPaymentsService = {
 
     if (!response.ok) {
       if (response.status === 403) {
-        throw new Error('Access denied: Super Admin privileges required to export full payment history.');
+        throw new Error('Access denied: Super Admin privileges required to export payment history.');
       }
       throw new Error(`Export failed with HTTP status ${response.status}`);
     }
@@ -222,10 +226,17 @@ export const installerPaymentsService = {
     const a = document.createElement('a');
     a.href = url;
     const dateStamp = new Date().toISOString().slice(0, 10);
-    a.download = `Installer-Payments-History-${dateStamp}.xlsx`;
+    a.download = filename || `Installer-Payments-History-${dateStamp}.xlsx`;
     document.body.appendChild(a);
     a.click();
     a.remove();
     window.URL.revokeObjectURL(url);
+  },
+
+  // ─── Installer-Wise Ledger & Payment Statement ─────────────────────────────
+
+  async getInstallerLedger(installerId: string): Promise<InstallerLedgerResponse> {
+    const res = await fetchAdminApi<any>(`/installer-payments/installers/${encodeURIComponent(installerId)}/ledger`);
+    return res?.data || res;
   },
 };

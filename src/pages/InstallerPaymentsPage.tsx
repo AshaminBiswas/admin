@@ -42,6 +42,7 @@ import type {
   RecordPaymentPayload,
   CreateCubicleModelPayload,
   UpdateCubicleModelPayload,
+  InstallerLedgerResponse,
 } from '../types/installerPayment';
 
 export interface InstallerPaymentsPageProps {
@@ -57,8 +58,8 @@ export function InstallerPaymentsPage({ onNewBill }: InstallerPaymentsPageProps 
       : rawRole ?? 'admin';
   const isSuperAdmin = (roleSlug || '').toLowerCase().includes('super');
 
-  // Navigation tabs: 'bills' | 'installers' | 'models' | 'export'
-  const [activeTab, setActiveTab] = useState<'bills' | 'installers' | 'models' | 'export'>('bills');
+  // Navigation tabs: 'bills' | 'installers' | 'models' | 'export' | 'ledger'
+  const [activeTab, setActiveTab] = useState<'bills' | 'installers' | 'models' | 'export' | 'ledger'>('bills');
 
   // Data states
   const [bills, setBills] = useState<InstallerBill[]>([]);
@@ -76,8 +77,9 @@ export function InstallerPaymentsPage({ onNewBill }: InstallerPaymentsPageProps 
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [actionNotice, setActionNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
-  // Filters state
+  // Filters state (Tab 1)
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [installerFilter, setInstallerFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'PARTIAL' | 'CLEARED'>('ALL');
   const [ncrFilter, setNcrFilter] = useState<'all' | 'true' | 'false'>('all');
   const [startDate, setStartDate] = useState<string>('');
@@ -104,6 +106,12 @@ export function InstallerPaymentsPage({ onNewBill }: InstallerPaymentsPageProps 
     phone: string;
     isActive: boolean;
   }>({ name: '', email: '', phone: '', isActive: true });
+
+  // Installer-Wise Ledger & Payment Statement State (Tab 5)
+  const [selectedLedgerInstallerId, setSelectedLedgerInstallerId] = useState<string>('');
+  const [ledgerData, setLedgerData] = useState<InstallerLedgerResponse | null>(null);
+  const [isLoadingLedger, setIsLoadingLedger] = useState<boolean>(false);
+  const [isExportingLedger, setIsExportingLedger] = useState<boolean>(false);
 
   // Export filters
   const [exportMonth, setExportMonth] = useState<number | ''>('');
@@ -232,6 +240,7 @@ export function InstallerPaymentsPage({ onNewBill }: InstallerPaymentsPageProps 
         page,
         limit: 20,
         search: searchQuery,
+        installerId: installerFilter !== 'all' ? installerFilter : undefined,
         status: statusFilter,
         isNcr: ncrFilter,
         startDate: startDate || undefined,
@@ -264,13 +273,60 @@ export function InstallerPaymentsPage({ onNewBill }: InstallerPaymentsPageProps 
       loadBills(1);
     }, 300);
     return () => clearTimeout(timeout);
-  }, [searchQuery, statusFilter, ncrFilter, startDate, endDate]);
+  }, [searchQuery, installerFilter, statusFilter, ncrFilter, startDate, endDate]);
+
+  // Load Installer Ledger Statement (Tab 5)
+  const loadInstallerLedger = async (installerId: string) => {
+    if (!installerId) {
+      setLedgerData(null);
+      return;
+    }
+    try {
+      setIsLoadingLedger(true);
+      const res = await installerPaymentsService.getInstallerLedger(installerId);
+      setLedgerData(res);
+    } catch (err: any) {
+      setActionNotice({ type: 'error', message: err.message || 'Failed to load installer ledger' });
+      setLedgerData(null);
+    } finally {
+      setIsLoadingLedger(false);
+    }
+  };
+
+  // Auto load ledger when tab becomes 'ledger' or when selected installer changes
+  useEffect(() => {
+    if (activeTab === 'ledger') {
+      if (!selectedLedgerInstallerId && installers.length > 0) {
+        setSelectedLedgerInstallerId(installers[0].id);
+      } else if (selectedLedgerInstallerId) {
+        loadInstallerLedger(selectedLedgerInstallerId);
+      }
+    }
+  }, [activeTab, selectedLedgerInstallerId, installers]);
+
+  // Export Installer Ledger Statement to Excel
+  const handleExportLedgerExcel = async (installerId: string, installerName: string) => {
+    try {
+      setIsExportingLedger(true);
+      const cleanName = (installerName || 'Installer').replace(/[^a-zA-Z0-9_-]/g, '_');
+      const filename = `${cleanName}_Payment_Statement.xlsx`;
+      await installerPaymentsService.exportExcel({ installerId }, filename);
+      setActionNotice({ type: 'success', message: `Statement for ${installerName} downloaded successfully.` });
+    } catch (err: any) {
+      setActionNotice({ type: 'error', message: err.message || 'Failed to export installer statement' });
+    } finally {
+      setIsExportingLedger(false);
+    }
+  };
 
   // Handle Refresh
   const handleRefresh = () => {
     setIsRefreshing(true);
     loadModels();
     loadBills(currentPage);
+    if (activeTab === 'ledger' && selectedLedgerInstallerId) {
+      loadInstallerLedger(selectedLedgerInstallerId);
+    }
   };
 
   // ─── PDF Download Handler ──────────────────────────────────────────────────
@@ -508,6 +564,24 @@ export function InstallerPaymentsPage({ onNewBill }: InstallerPaymentsPageProps 
             </span>
           )}
         </button>
+
+        {/* Tab 5: Installer Ledgers & Payment History */}
+        <button
+          onClick={() => {
+            setActiveTab('ledger');
+            if (!selectedLedgerInstallerId && installers.length > 0) {
+              setSelectedLedgerInstallerId(installers[0].id);
+            }
+          }}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium text-sm whitespace-nowrap transition-all ${
+            activeTab === 'ledger'
+              ? 'bg-violet-600 text-white shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-[#27272A]'
+          }`}
+        >
+          <Clock size={17} />
+          <span>Installer Ledgers & History</span>
+        </button>
       </div>
 
       {/* ─────────────────────────────────────────────────────────────────────────
@@ -617,6 +691,23 @@ export function InstallerPaymentsPage({ onNewBill }: InstallerPaymentsPageProps 
                   <option value="false">Outstation (With Travel)</option>
                 </select>
               </div>
+
+              {/* Installer Filter */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">Installer:</span>
+                <select
+                  value={installerFilter}
+                  onChange={(e) => setInstallerFilter(e.target.value)}
+                  className="text-xs py-1.5 px-3 bg-slate-50 dark:bg-[#27272A] border border-slate-200 dark:border-[#323238] rounded-lg text-slate-800 dark:text-slate-200 max-w-[180px] truncate"
+                >
+                  <option value="all">All Installers</option>
+                  {installers.map((inst) => (
+                    <option key={inst.id} value={inst.id}>
+                      {inst.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             {/* Date Range Sub-row */}
@@ -638,10 +729,11 @@ export function InstallerPaymentsPage({ onNewBill }: InstallerPaymentsPageProps 
                 />
               </div>
 
-              {(startDate || endDate || searchQuery || statusFilter !== 'ALL' || ncrFilter !== 'all') && (
+              {(startDate || endDate || searchQuery || installerFilter !== 'all' || statusFilter !== 'ALL' || ncrFilter !== 'all') && (
                 <button
                   onClick={() => {
                     setSearchQuery('');
+                    setInstallerFilter('all');
                     setStatusFilter('ALL');
                     setNcrFilter('all');
                     setStartDate('');
@@ -810,8 +902,16 @@ export function InstallerPaymentsPage({ onNewBill }: InstallerPaymentsPageProps 
                               <span className="text-slate-400 font-mono">-</span>
                             )}
                           </td>
-                          <td className="py-3.5 px-4 text-right font-bold text-slate-900 dark:text-white whitespace-nowrap">
-                            {formatINR(bill.total)}
+                          <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                            <div className="font-bold text-slate-900 dark:text-white">{formatINR(bill.total)}</div>
+                            {Number(bill.deductionAmount || 0) > 0 && (
+                              <div
+                                className="text-[10px] text-rose-500 font-semibold flex items-center justify-end gap-0.5 mt-0.5"
+                                title={`Deduction: -₹${Number(bill.deductionAmount).toLocaleString('en-IN')}${bill.deductionReason ? ` (${bill.deductionReason})` : ''}`}
+                              >
+                                <span>-₹{Number(bill.deductionAmount).toLocaleString('en-IN')} ded.</span>
+                              </div>
+                            )}
                           </td>
                           <td className="py-3.5 px-4 text-right font-semibold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
                             {formatINR(bill.amountPaid)}
@@ -1183,6 +1283,16 @@ export function InstallerPaymentsPage({ onNewBill }: InstallerPaymentsPageProps 
                             <div className="flex items-center justify-center gap-2">
                               <button
                                 onClick={() => {
+                                  setSelectedLedgerInstallerId(inst.id);
+                                  setActiveTab('ledger');
+                                }}
+                                className="p-1.5 text-slate-500 hover:text-emerald-600 rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+                                title="View Payment Ledger & History"
+                              >
+                                <Receipt size={15} />
+                              </button>
+                              <button
+                                onClick={() => {
                                   setEditingInstaller(inst);
                                   setInstallerFormData({
                                     name: inst.name,
@@ -1544,6 +1654,347 @@ export function InstallerPaymentsPage({ onNewBill }: InstallerPaymentsPageProps 
       )}
 
       {/* ─────────────────────────────────────────────────────────────────────────
+          TAB 5: INSTALLER LEDGERS & PAYMENT HISTORY
+      ────────────────────────────────────────────────────────────────────────── */}
+      {activeTab === 'ledger' && (
+        <div className="space-y-6">
+          {/* Top Control Bar: Installer Picker + Excel Statement Export */}
+          <div className="bg-white dark:bg-[#18181B] p-5 rounded-2xl border border-slate-200 dark:border-[#27272A] shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+              <div className="flex items-center gap-2">
+                <User className="text-violet-600" size={20} />
+                <span className="text-sm font-bold text-slate-900 dark:text-white">
+                  Select Installer:
+                </span>
+              </div>
+              <select
+                value={selectedLedgerInstallerId}
+                onChange={(e) => setSelectedLedgerInstallerId(e.target.value)}
+                className="px-3.5 py-2 text-sm bg-slate-50 dark:bg-[#27272A] border border-slate-200 dark:border-[#323238] rounded-xl text-slate-900 dark:text-white font-medium focus:ring-2 focus:ring-violet-500 min-w-[260px]"
+              >
+                {installers.length === 0 && <option value="">No registered installers</option>}
+                {installers.map((inst) => (
+                  <option key={inst.id} value={inst.id}>
+                    {inst.name} ({inst.email})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {ledgerData && (
+              <div className="flex items-center gap-2 self-start sm:self-auto">
+                <button
+                  onClick={() => handleExportLedgerExcel(ledgerData.installer.id, ledgerData.installer.name)}
+                  disabled={isExportingLedger}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-sm transition-colors disabled:opacity-50"
+                  title="Export complete chronological statement for this technician as Excel (.xlsx)"
+                >
+                  {isExportingLedger ? <RefreshCw size={14} className="animate-spin" /> : <Download size={14} />}
+                  <span>Download Statement (.xlsx)</span>
+                </button>
+              </div>
+            )}
+          </div>
+
+          {isLoadingLedger ? (
+            <div className="py-20 text-center text-slate-500 dark:text-slate-400 bg-white dark:bg-[#18181B] rounded-2xl border border-slate-200 dark:border-[#27272A]">
+              <RefreshCw size={24} className="animate-spin mx-auto mb-2 text-violet-500" />
+              <p className="text-sm">Loading technician ledger statement & lifetime metrics...</p>
+            </div>
+          ) : !ledgerData ? (
+            <div className="py-16 text-center text-slate-500 dark:text-slate-400 bg-white dark:bg-[#18181B] rounded-2xl border border-slate-200 dark:border-[#27272A] space-y-2">
+              <Receipt size={36} className="mx-auto text-slate-400" />
+              <p className="text-base font-semibold text-slate-700 dark:text-slate-300">
+                Please select an installer to view their payment history & ledger.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {/* Installer Overview Profile Card */}
+              <div className="bg-gradient-to-r from-violet-500/10 via-purple-500/5 to-transparent p-5 rounded-2xl border border-violet-200 dark:border-violet-900/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-3.5">
+                  <div className="w-12 h-12 rounded-2xl bg-violet-600 text-white flex items-center justify-center font-bold text-lg shadow-sm">
+                    {ledgerData.installer.name.charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+                        {ledgerData.installer.name}
+                      </h2>
+                      <span
+                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                          ledgerData.installer.isActive
+                            ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20'
+                            : 'bg-slate-200 dark:bg-slate-800 text-slate-500'
+                        }`}
+                      >
+                        {ledgerData.installer.isActive ? 'Active Technician' : 'Inactive'}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 mt-1">
+                      <span className="flex items-center gap-1">
+                        <Mail size={12} /> {ledgerData.installer.email}
+                      </span>
+                      {ledgerData.installer.phone && (
+                        <span className="flex items-center gap-1">
+                          <Phone size={12} /> {ledgerData.installer.phone}
+                        </span>
+                      )}
+                      <span>
+                        Registered: {formatDate(ledgerData.installer.createdAt)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 bg-white dark:bg-[#18181B] px-4 py-2.5 rounded-xl border border-slate-200 dark:border-[#27272A] text-xs">
+                  <div>
+                    <span className="text-slate-400 block text-[10px]">Settlement Status</span>
+                    <span className="font-bold text-emerald-600">
+                      {ledgerData.kpis.clearedCount} Cleared
+                    </span>{' '}
+                    •{' '}
+                    <span className="font-bold text-amber-600">
+                      {ledgerData.kpis.partialCount} Pending
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Lifetime KPI Metrics Grid */}
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3.5">
+                {/* Total Jobs */}
+                <div className="bg-white dark:bg-[#18181B] p-4 rounded-2xl border border-slate-200 dark:border-[#27272A] shadow-xs">
+                  <span className="text-[11px] font-semibold text-slate-400 block mb-1">
+                    Completed Jobs
+                  </span>
+                  <div className="text-xl font-bold text-slate-900 dark:text-white">
+                    {ledgerData.kpis.totalBills}
+                  </div>
+                  <span className="text-[10px] text-slate-400 mt-0.5 block">Total Bills Issued</span>
+                </div>
+
+                {/* Units Installed */}
+                <div className="bg-white dark:bg-[#18181B] p-4 rounded-2xl border border-slate-200 dark:border-[#27272A] shadow-xs">
+                  <span className="text-[11px] font-semibold text-slate-400 block mb-1">
+                    Units Installed
+                  </span>
+                  <div className="text-xl font-bold text-violet-600 dark:text-violet-400">
+                    {ledgerData.kpis.totalUnits}
+                  </div>
+                  <span className="text-[10px] text-slate-400 mt-0.5 block truncate">
+                    {ledgerData.kpis.totalCubicleUnits} Cub • {ledgerData.kpis.totalUmpUnits} UMP • {ledgerData.kpis.totalLockerUnits} Lkr
+                  </span>
+                </div>
+
+                {/* Gross Subtotal & Travel */}
+                <div className="bg-white dark:bg-[#18181B] p-4 rounded-2xl border border-slate-200 dark:border-[#27272A] shadow-xs">
+                  <span className="text-[11px] font-semibold text-slate-400 block mb-1">
+                    Gross Earnings
+                  </span>
+                  <div className="text-xl font-bold text-slate-900 dark:text-white">
+                    {formatINR(ledgerData.kpis.grossSubtotal)}
+                  </div>
+                  <span className="text-[10px] text-slate-400 mt-0.5 block">
+                    + {formatINR(ledgerData.kpis.totalTravel)} Travel
+                  </span>
+                </div>
+
+                {/* Total Deductions */}
+                <div className="bg-white dark:bg-[#18181B] p-4 rounded-2xl border border-slate-200 dark:border-[#27272A] shadow-xs">
+                  <span className="text-[11px] font-semibold text-rose-500 block mb-1">
+                    Total Deductions
+                  </span>
+                  <div className="text-xl font-bold text-rose-600">
+                    -{formatINR(ledgerData.kpis.totalDeductions)}
+                  </div>
+                  <span className="text-[10px] text-slate-400 mt-0.5 block">Penalties / Deductions</span>
+                </div>
+
+                {/* Total Disbursed */}
+                <div className="bg-white dark:bg-[#18181B] p-4 rounded-2xl border border-slate-200 dark:border-[#27272A] shadow-xs">
+                  <span className="text-[11px] font-semibold text-emerald-600 block mb-1">
+                    Total Disbursed
+                  </span>
+                  <div className="text-xl font-bold text-emerald-600">
+                    {formatINR(ledgerData.kpis.totalPaid)}
+                  </div>
+                  <span className="text-[10px] text-slate-400 mt-0.5 block">
+                    of {formatINR(ledgerData.kpis.netPayable)} Net
+                  </span>
+                </div>
+
+                {/* Balance Due */}
+                <div className="bg-white dark:bg-[#18181B] p-4 rounded-2xl border border-slate-200 dark:border-[#27272A] shadow-xs">
+                  <span className="text-[11px] font-semibold text-amber-600 block mb-1">
+                    Balance Due
+                  </span>
+                  <div className={`text-xl font-bold ${ledgerData.kpis.balanceDue > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                    {formatINR(ledgerData.kpis.balanceDue)}
+                  </div>
+                  <span className="text-[10px] text-slate-400 mt-0.5 block">
+                    {ledgerData.kpis.balanceDue > 0 ? 'Outstanding payable' : 'Fully Settled'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Chronological Statement Table */}
+              <div className="bg-white dark:bg-[#18181B] rounded-2xl border border-slate-200 dark:border-[#27272A] shadow-sm overflow-hidden">
+                <div className="p-4 border-b border-slate-200 dark:border-[#27272A] flex items-center justify-between">
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    <Receipt size={16} className="text-violet-600" />
+                    Chronological Jobs & Payment Ledger
+                  </h3>
+                  <span className="text-xs text-slate-400">
+                    {ledgerData.bills.length} historical job(s)
+                  </span>
+                </div>
+
+                {ledgerData.bills.length === 0 ? (
+                  <div className="p-12 text-center text-slate-400">
+                    No bills or payments found for this installer.
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-slate-50 dark:bg-[#202024] text-slate-500 uppercase tracking-wider font-semibold border-b border-slate-200 dark:border-[#27272A]">
+                        <tr>
+                          <th className="py-3 px-4">Bill No</th>
+                          <th className="py-3 px-4">Date</th>
+                          <th className="py-3 px-4">Site Location</th>
+                          <th className="py-3 px-4 text-center">Units Installed</th>
+                          <th className="py-3 px-4 text-right">Subtotal</th>
+                          <th className="py-3 px-4 text-right">Travel</th>
+                          <th className="py-3 px-4 text-right">Deductions</th>
+                          <th className="py-3 px-4 text-right">Net Total</th>
+                          <th className="py-3 px-4 text-right">Disbursed</th>
+                          <th className="py-3 px-4 text-right">Balance</th>
+                          <th className="py-3 px-4 text-center">Status</th>
+                          <th className="py-3 px-4 text-center">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-[#27272A] text-slate-800 dark:text-slate-200">
+                        {ledgerData.bills.map((b) => {
+                          const cUnits = b.cubicleQuantity || (b.items || []).filter((i) => (i.category || 'CUBICLE') === 'CUBICLE').reduce((acc, i) => acc + i.quantity, 0);
+                          const uUnits = b.umpQuantity || (b.items || []).filter((i) => i.category === 'UMP').reduce((acc, i) => acc + i.quantity, 0);
+                          const lUnits = b.lockerQuantity || (b.items || []).filter((i) => i.category === 'LOCKER').reduce((acc, i) => acc + i.quantity, 0);
+                          const isCleared = b.paymentStatus === 'CLEARED';
+
+                          return (
+                            <tr key={b.id} className="hover:bg-slate-50/70 dark:hover:bg-[#202024]/60 transition-colors">
+                              <td className="py-3.5 px-4 font-bold text-violet-600 dark:text-violet-400 whitespace-nowrap">
+                                {b.billNo}
+                              </td>
+                              <td className="py-3.5 px-4 whitespace-nowrap text-slate-600 dark:text-slate-400">
+                                {formatDate(b.installDate)}
+                              </td>
+                              <td className="py-3.5 px-4 max-w-[200px]">
+                                <div className="truncate text-slate-700 dark:text-slate-300 font-medium">
+                                  {b.siteAddress}
+                                </div>
+                                <div className="text-[11px] text-slate-400 flex items-center gap-1.5 mt-0.5">
+                                  <span>PIN: {b.sitePin}</span>
+                                  {b.isNcr ? (
+                                    <span className="text-[10px] text-emerald-600 bg-emerald-500/10 px-1 rounded">NCR</span>
+                                  ) : (
+                                    <span className="text-[10px] text-blue-600 bg-blue-500/10 px-1 rounded">Outstation</span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="py-3.5 px-4 text-center whitespace-nowrap">
+                                <span className="font-semibold text-slate-900 dark:text-white">
+                                  {cUnits + uUnits + lUnits} units
+                                </span>
+                                <div className="text-[10px] text-slate-400">
+                                  {cUnits} Cub • {uUnits} UMP • {lUnits} Lkr
+                                </div>
+                              </td>
+                              <td className="py-3.5 px-4 text-right font-medium whitespace-nowrap">
+                                {formatINR(b.subtotal)}
+                              </td>
+                              <td className="py-3.5 px-4 text-right font-medium whitespace-nowrap">
+                                {b.isNcr ? <span className="text-slate-400">₹0</span> : formatINR(b.travelExpenses)}
+                              </td>
+                              <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                                {Number(b.deductionAmount || 0) > 0 ? (
+                                  <div>
+                                    <span className="font-semibold text-rose-600">
+                                      -{formatINR(b.deductionAmount)}
+                                    </span>
+                                    {b.deductionReason && (
+                                      <div className="text-[10px] text-slate-400 max-w-[120px] truncate ml-auto" title={b.deductionReason}>
+                                        {b.deductionReason}
+                                      </div>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <span className="text-slate-400">-</span>
+                                )}
+                              </td>
+                              <td className="py-3.5 px-4 text-right font-bold text-slate-900 dark:text-white whitespace-nowrap">
+                                {formatINR(b.total)}
+                              </td>
+                              <td className="py-3.5 px-4 text-right font-semibold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
+                                {formatINR(b.amountPaid)}
+                              </td>
+                              <td className="py-3.5 px-4 text-right font-bold whitespace-nowrap">
+                                <span className={b.balanceDue > 0 ? 'text-amber-600' : 'text-emerald-600'}>
+                                  {formatINR(b.balanceDue)}
+                                </span>
+                              </td>
+                              <td className="py-3.5 px-4 text-center whitespace-nowrap">
+                                <span
+                                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                                    isCleared
+                                      ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20'
+                                      : 'bg-amber-500/10 text-amber-600 border border-amber-500/20'
+                                  }`}
+                                >
+                                  {isCleared ? <CheckCircle2 size={11} /> : <Clock size={11} />}
+                                  {isCleared ? 'Cleared' : 'Partial'}
+                                </span>
+                              </td>
+                              <td className="py-3.5 px-4 text-center whitespace-nowrap">
+                                <div className="flex items-center justify-center gap-1.5">
+                                  <button
+                                    onClick={() => handleDownloadPdf(b)}
+                                    className="p-1.5 text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-950/40 rounded-lg"
+                                    title="Download Payment Voucher PDF"
+                                  >
+                                    <Download size={14} />
+                                  </button>
+                                  <button
+                                    onClick={() => setSelectedBillForDetails(b)}
+                                    className="p-1.5 text-slate-500 hover:bg-slate-100 dark:hover:bg-[#27272A] rounded-lg"
+                                    title="View Audit Dossier"
+                                  >
+                                    <FileText size={14} />
+                                  </button>
+                                  {b.balanceDue > 0 && (
+                                    <button
+                                      onClick={() => setBillForPayment(b)}
+                                      className="px-2 py-1 bg-emerald-600 text-white rounded-lg text-[10px] font-bold"
+                                      title="Record Payment Installment"
+                                    >
+                                      Pay Due
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────────────────
           MODAL 1: NEW INSTALLER BILL MODAL
       ────────────────────────────────────────────────────────────────────────── */}
       {showCreateModal && (
@@ -1673,6 +2124,8 @@ function CreateBillModal({ activeModels, onClose, onSuccess }: CreateBillModalPr
   const [travelExpenses, setTravelExpenses] = useState<number>(0);
   const [siteAddress, setSiteAddress] = useState('');
   const [sitePin, setSitePin] = useState('');
+  const [deductionAmount, setDeductionAmount] = useState<number>(0);
+  const [deductionReason, setDeductionReason] = useState<string>('');
 
   // Line Items Builder: starts at 0 with no model pre-selected; admin must actively select
   const [lineItems, setLineItems] = useState<Array<{ modelId: string; quantity: number }>>([
@@ -1705,7 +2158,8 @@ function CreateBillModal({ activeModels, onClose, onSuccess }: CreateBillModalPr
 
   // Actual travel expenses: forced to 0 if NCR = Yes
   const effectiveTravel = isNcr ? 0 : Number(travelExpenses || 0);
-  const grandTotal = subtotal + effectiveTravel;
+  const effectiveDeduction = Math.max(0, Number(deductionAmount || 0));
+  const grandTotal = Math.max(0, subtotal + effectiveTravel - effectiveDeduction);
   const balanceDue = Math.max(0, grandTotal - Number(initialAmountPaid || 0));
   const isCleared = Number(initialAmountPaid || 0) >= grandTotal && grandTotal > 0;
 
@@ -1754,6 +2208,9 @@ function CreateBillModal({ activeModels, onClose, onSuccess }: CreateBillModalPr
     if (!/^\d{6}$/.test(sitePin.trim())) {
       return setErrorMsg('Site PIN must be a valid 6-digit Indian postal code.');
     }
+    if (effectiveDeduction > 0 && !deductionReason.trim()) {
+      return setErrorMsg('A deduction reason is required when a deduction amount is specified.');
+    }
     const validItems = lineItems.filter((i) => i.modelId && i.quantity > 0);
     if (validItems.length === 0) {
       return setErrorMsg('Please select at least one installation model with a quantity greater than 0.');
@@ -1783,6 +2240,8 @@ function CreateBillModal({ activeModels, onClose, onSuccess }: CreateBillModalPr
         installDate,
         isNcr,
         travelExpenses: isNcr ? 0 : Number(travelExpenses || 0),
+        deductionAmount: effectiveDeduction,
+        deductionReason: effectiveDeduction > 0 ? deductionReason.trim() : undefined,
         siteAddress: siteAddress.trim(),
         sitePin: sitePin.trim(),
         items: validItems.map((item) => {
@@ -2071,6 +2530,43 @@ function CreateBillModal({ activeModels, onClose, onSuccess }: CreateBillModalPr
             })}
           </div>
 
+          {/* Section: Deductions & Penalties (Optional) */}
+          <div className="p-3.5 bg-slate-50 dark:bg-[#202024] rounded-xl border border-slate-200 dark:border-[#27272A] space-y-2">
+            <span className="font-bold text-slate-900 dark:text-white block text-xs">
+              Deductions & Adjustments (Optional)
+            </span>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Deduction (₹)
+                </label>
+                <div className="relative">
+                  <span className="absolute left-2.5 top-1.5 text-xs font-bold text-rose-500">-₹</span>
+                  <input
+                    type="number"
+                    min={0}
+                    value={deductionAmount || ''}
+                    onChange={(e) => setDeductionAmount(Math.max(0, Number(e.target.value)))}
+                    placeholder="0"
+                    className="w-full pl-8 pr-2.5 py-1.5 bg-white dark:bg-[#27272A] border border-slate-200 dark:border-[#323238] rounded-lg text-xs font-bold text-rose-600"
+                  />
+                </div>
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Reason {deductionAmount > 0 && <span className="text-rose-500">*</span>}
+                </label>
+                <input
+                  type="text"
+                  value={deductionReason}
+                  onChange={(e) => setDeductionReason(e.target.value)}
+                  placeholder="e.g. Broken hardware penalty, incomplete sealing deduction"
+                  className="w-full px-2.5 py-1.5 bg-white dark:bg-[#27272A] border border-slate-200 dark:border-[#323238] rounded-lg text-xs text-slate-900 dark:text-white"
+                />
+              </div>
+            </div>
+          </div>
+
           {/* Section 5: Live Auto-Calculated Financial Summary Banner */}
           <div className="p-4 rounded-xl bg-violet-50 dark:bg-violet-950/20 border border-violet-200 dark:border-violet-800 space-y-2">
             <div className="flex justify-between items-center text-xs">
@@ -2081,8 +2577,14 @@ function CreateBillModal({ activeModels, onClose, onSuccess }: CreateBillModalPr
               <span className="text-slate-600 dark:text-slate-400">Travel Expenses:</span>
               <span className="font-bold">{isNcr ? '₹0.00 (NCR Waived)' : `₹${effectiveTravel.toFixed(2)}`}</span>
             </div>
+            {effectiveDeduction > 0 && (
+              <div className="flex justify-between items-center text-xs text-rose-600 dark:text-rose-400 font-medium">
+                <span>Deductions ({deductionReason || 'Penalty'}):</span>
+                <span>-₹{effectiveDeduction.toFixed(2)}</span>
+              </div>
+            )}
             <div className="flex justify-between items-center text-sm font-bold text-slate-900 dark:text-white border-t border-violet-200 dark:border-violet-800 pt-2">
-              <span>Total Calculated:</span>
+              <span>Net Disbursement Due:</span>
               <span className="text-base text-violet-700 dark:text-violet-300">₹{grandTotal.toFixed(2)}</span>
             </div>
           </div>
@@ -2638,8 +3140,16 @@ function BillDetailsDrawer({
                 {bill.isNcr ? '₹0.00 (NCR)' : `₹${Number(bill.travelExpenses).toFixed(2)}`}
               </span>
             </div>
+            {Number(bill.deductionAmount || 0) > 0 && (
+              <div className="flex justify-between text-rose-600 dark:text-rose-400 font-semibold">
+                <span>
+                  Deductions / Penalty {bill.deductionReason ? `(${bill.deductionReason})` : ''}:
+                </span>
+                <span>-₹{Number(bill.deductionAmount).toFixed(2)}</span>
+              </div>
+            )}
             <div className="flex justify-between text-sm font-bold text-slate-900 dark:text-white border-t border-slate-200 dark:border-[#27272A] pt-2">
-              <span>Total Bill:</span>
+              <span>Net Disbursement Due:</span>
               <span>₹{Number(bill.total).toFixed(2)}</span>
             </div>
             <div className="flex justify-between text-emerald-600 font-semibold">

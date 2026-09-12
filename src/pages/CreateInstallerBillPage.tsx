@@ -73,6 +73,10 @@ export function CreateInstallerBillPage({ onBack }: CreateInstallerBillPageProps
     { id: 'locker-1', category: 'LOCKER', modelId: '', quantity: 0, unitPrice: 0 },
   ]);
 
+  // Deduction details
+  const [deductionAmount, setDeductionAmount] = useState<number>(0);
+  const [deductionReason, setDeductionReason] = useState<string>('');
+
   // Payment details
   const [initialAmountPaid, setInitialAmountPaid] = useState<number>(0);
   const [paymentDate, setPaymentDate] = useState<string>(
@@ -296,7 +300,9 @@ export function CreateInstallerBillPage({ onBack }: CreateInstallerBillPageProps
 
   const subtotal = cubicleModelsSubtotal + umpSubtotal + lockerSubtotal;
   const effectiveTravelExpenses = isNcr ? 0 : Number(travelExpenses || 0);
-  const totalAmount = subtotal + effectiveTravelExpenses;
+  const effectiveDeductionAmount = Math.max(0, Number(deductionAmount || 0));
+  const rawTotal = subtotal + effectiveTravelExpenses - effectiveDeductionAmount;
+  const totalAmount = Math.max(0, rawTotal);
   const balanceDue = Math.max(0, totalAmount - Number(initialAmountPaid || 0));
   const willBeCleared = totalAmount > 0 && initialAmountPaid >= totalAmount;
 
@@ -325,6 +331,15 @@ export function CreateInstallerBillPage({ onBack }: CreateInstallerBillPageProps
     }
     if (!sitePin.trim() || !/^\d{6}$/.test(sitePin.trim())) {
       setFeedback({ type: 'error', message: 'Site Postal PIN must be a valid 6-digit code.' });
+      return;
+    }
+
+    // Deduction validation
+    if (effectiveDeductionAmount > 0 && !deductionReason.trim()) {
+      setFeedback({
+        type: 'error',
+        message: 'A deduction reason is required when specifying a deduction amount.',
+      });
       return;
     }
 
@@ -360,6 +375,8 @@ export function CreateInstallerBillPage({ onBack }: CreateInstallerBillPageProps
         installDate,
         isNcr,
         travelExpenses: effectiveTravelExpenses,
+        deductionAmount: effectiveDeductionAmount,
+        deductionReason: effectiveDeductionAmount > 0 ? deductionReason.trim() : undefined,
         siteAddress: siteAddress.trim(),
         sitePin: sitePin.trim(),
         items: allValidItems.map((item) => ({
@@ -1023,12 +1040,59 @@ export function CreateInstallerBillPage({ onBack }: CreateInstallerBillPageProps
               </div>
             </div>
 
-            {/* 6. Payment Details & Mandatory Internal Notes */}
+            {/* 6. Deductions & Adjustments (Optional) */}
+            <div className="bg-white dark:bg-[#18181B] p-6 rounded-2xl border border-gray-200 dark:border-[#27272A] shadow-xs space-y-4">
+              <div className="flex items-center gap-2 border-b border-gray-100 dark:border-[#27272A] pb-3">
+                <AlertCircle className="text-rose-600 dark:text-rose-400" size={18} />
+                <div>
+                  <h2 className="text-base font-semibold text-gray-900 dark:text-white">
+                    6. Deductions & Penalties (Optional)
+                  </h2>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Record damage deduction, unfinished scope penalty, or site delay adjustment (deducted from bill).
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-4">
+                <div className="sm:col-span-4">
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Deduction Amount (₹)
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-2 text-sm font-bold text-rose-500">-₹</span>
+                    <input
+                      type="number"
+                      min={0}
+                      value={deductionAmount || ''}
+                      onChange={(e) => setDeductionAmount(Math.max(0, Number(e.target.value)))}
+                      placeholder="0"
+                      className="w-full pl-9 pr-3 py-2 bg-white dark:bg-[#18181B] border border-gray-300 dark:border-[#27272A] rounded-xl text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-rose-500 font-bold"
+                    />
+                  </div>
+                </div>
+
+                <div className="sm:col-span-8">
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Deduction Reason {deductionAmount > 0 && <span className="text-rose-500">*</span>}
+                  </label>
+                  <input
+                    type="text"
+                    value={deductionReason}
+                    onChange={(e) => setDeductionReason(e.target.value)}
+                    placeholder="e.g. Damage to restroom hardware, unfinished silicon work, client complaint penalty"
+                    className="w-full px-3 py-2 bg-white dark:bg-[#18181B] border border-gray-300 dark:border-[#27272A] rounded-xl text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-rose-500"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* 7. Payment Details & Mandatory Internal Notes */}
             <div className="bg-white dark:bg-[#18181B] p-6 rounded-2xl border border-gray-200 dark:border-[#27272A] shadow-xs space-y-4">
               <div className="flex items-center gap-2 border-b border-gray-100 dark:border-[#27272A] pb-3">
                 <CreditCard className="text-violet-600 dark:text-violet-400" size={18} />
                 <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-                  6. Payment Settlement & Audit Notes
+                  7. Payment Settlement & Audit Notes
                 </h2>
               </div>
 
@@ -1217,8 +1281,24 @@ export function CreateInstallerBillPage({ onBack }: CreateInstallerBillPageProps
                   </span>
                 </div>
 
+                {effectiveDeductionAmount > 0 && (
+                  <div className="flex justify-between text-rose-600 dark:text-rose-400 font-medium">
+                    <span className="flex items-center gap-1">
+                      Deductions / Penalty:
+                      {deductionReason && (
+                        <span className="text-[10px] bg-rose-50 dark:bg-rose-950/50 px-1.5 py-0.5 rounded-sm truncate max-w-[120px]" title={deductionReason}>
+                          {deductionReason}
+                        </span>
+                      )}
+                    </span>
+                    <span className="font-semibold">
+                      -₹{effectiveDeductionAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                )}
+
                 <div className="pt-2 border-t border-gray-200 dark:border-[#27272A] flex justify-between items-baseline">
-                  <span className="text-base font-bold text-gray-900 dark:text-white">Grand Total:</span>
+                  <span className="text-base font-bold text-gray-900 dark:text-white">Net Disbursement Due:</span>
                   <span className="text-xl font-extrabold text-violet-600 dark:text-violet-400">
                     ₹{totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                   </span>

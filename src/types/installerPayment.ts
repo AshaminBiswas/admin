@@ -85,6 +85,8 @@ export interface InstallerBill {
   umpTotal?: number;
   lockerQuantity?: number;
   lockerTotal?: number;
+  deductionAmount?: number;
+  deductionReason?: string | null;
   subtotal: number;
   total: number;
   amountPaid: number;
@@ -144,6 +146,8 @@ export interface CreateInstallerBillPayload {
   }>;
   umpQuantity?: number;
   umpRate?: number;
+  deductionAmount?: number;
+  deductionReason?: string;
   initialAmountPaid?: number;
   paymentDate?: string;
   paymentMode?: string;
@@ -157,6 +161,8 @@ export interface UpdateInstallerBillPayload {
   installDate?: string;
   isNcr?: boolean;
   travelExpenses?: number;
+  deductionAmount?: number;
+  deductionReason?: string;
   umpQuantity?: number;
   umpRate?: number;
   siteAddress?: string;
@@ -187,6 +193,8 @@ export interface UpdateCubicleModelPayload {
 
 export interface InstallerBillsFilter {
   search?: string;
+  installerId?: string;
+  installerEmail?: string;
   status?: 'ALL' | 'PARTIAL' | 'CLEARED';
   isNcr?: 'all' | 'true' | 'false';
   startDate?: string;
@@ -198,7 +206,31 @@ export interface InstallerBillsFilter {
 export interface InstallerExportFilter {
   month?: number;
   year?: number;
+  installerId?: string;
   startDate?: string;
   endDate?: string;
   status?: 'ALL' | 'PARTIAL' | 'CLEARED';
 }
+
+export interface InstallerLedgerKpis {
+  totalBills: number;
+  totalCubicleUnits: number;
+  totalUmpUnits: number;
+  totalLockerUnits: number;
+  totalUnits: number;
+  grossSubtotal: number;
+  totalTravel: number;
+  totalDeductions: number;
+  netPayable: number;
+  totalPaid: number;
+  balanceDue: number;
+  clearedCount: number;
+  partialCount: number;
+}
+
+export interface InstallerLedgerResponse {
+  installer: CubicleInstaller;
+  kpis: InstallerLedgerKpis;
+  bills: InstallerBill[];
+}
+
