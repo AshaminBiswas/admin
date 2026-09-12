@@ -17,6 +17,8 @@ import {
   Send,
   Building2,
   Sparkles,
+  Layers,
+  Package,
 } from 'lucide-react';
 import { installerPaymentsService } from '../api/installerPaymentsService';
 import { isNcrPinCode } from '../utils/ncrPincodes';
@@ -32,6 +34,7 @@ interface CreateInstallerBillPageProps {
 
 interface LineItemRow {
   id: string;
+  category: 'CUBICLE' | 'UMP' | 'LOCKER';
   modelId: string;
   quantity: number;
   unitPrice: number;
@@ -59,8 +62,15 @@ export function CreateInstallerBillPage({ onBack }: CreateInstallerBillPageProps
   const [siteAddress, setSiteAddress] = useState<string>('');
   const [sitePin, setSitePin] = useState<string>('');
 
-  const [lineItems, setLineItems] = useState<LineItemRow[]>([
-    { id: 'item-1', modelId: '', quantity: 1, unitPrice: 0 },
+  // 3 Dynamic Item Categories - By default all values start at 0!
+  const [cubicleItems, setCubicleItems] = useState<LineItemRow[]>([
+    { id: 'cubicle-1', category: 'CUBICLE', modelId: '', quantity: 0, unitPrice: 0 },
+  ]);
+  const [umpItems, setUmpItems] = useState<LineItemRow[]>([
+    { id: 'ump-1', category: 'UMP', modelId: '', quantity: 0, unitPrice: 0 },
+  ]);
+  const [lockerItems, setLockerItems] = useState<LineItemRow[]>([
+    { id: 'locker-1', category: 'LOCKER', modelId: '', quantity: 0, unitPrice: 0 },
   ]);
 
   // Payment details
@@ -87,18 +97,7 @@ export function CreateInstallerBillPage({ onBack }: CreateInstallerBillPageProps
           const safeInstallers = Array.isArray(installersRes) ? installersRes : [];
           setModels(safeModels);
           setInstallers(safeInstallers);
-
-          // Auto-select first model if available
-          if (safeModels.length > 0) {
-            setLineItems([
-              {
-                id: 'item-1',
-                modelId: safeModels[0].id,
-                quantity: 1,
-                unitPrice: Number(safeModels[0].installationPrice || 0),
-              },
-            ]);
-          }
+          // By default, all values stay at 0 and unselected! Admin actively selects models and enters quantities.
         }
       } catch (err: any) {
         if (isMounted) {
@@ -157,42 +156,145 @@ export function CreateInstallerBillPage({ onBack }: CreateInstallerBillPageProps
     }
   };
 
-  // Line Items Operations
-  const handleModelChange = (itemId: string, newModelId: string) => {
+  // ─── Cubicle Line Items Operations ─────────────────────────────────────────
+  const handleCubicleModelChange = (itemId: string, newModelId: string) => {
     const selected = models.find((m) => m.id === newModelId);
     const unitPrice = selected ? Number(selected.installationPrice) : 0;
-    setLineItems((prev) =>
+    setCubicleItems((prev) =>
       prev.map((row) =>
         row.id === itemId ? { ...row, modelId: newModelId, unitPrice } : row
       )
     );
   };
 
-  const handleQuantityChange = (itemId: string, qty: number) => {
-    const validQty = Math.max(1, qty);
-    setLineItems((prev) =>
+  const handleCubicleQuantityChange = (itemId: string, qty: number) => {
+    const validQty = Math.max(0, qty);
+    setCubicleItems((prev) =>
       prev.map((row) => (row.id === itemId ? { ...row, quantity: validQty } : row))
     );
   };
 
-  const addLineItem = () => {
-    const defaultModel = models[0];
-    const newRow: LineItemRow = {
-      id: `item-${Date.now()}`,
-      modelId: defaultModel ? defaultModel.id : '',
-      quantity: 1,
-      unitPrice: defaultModel ? Number(defaultModel.installationPrice) : 0,
-    };
-    setLineItems((prev) => [...prev, newRow]);
+  const addCubicleItem = () => {
+    setCubicleItems((prev) => [
+      ...prev,
+      { id: `cubicle-${Date.now()}`, category: 'CUBICLE', modelId: '', quantity: 0, unitPrice: 0 },
+    ]);
   };
 
-  const removeLineItem = (itemId: string) => {
-    if (lineItems.length <= 1) return;
-    setLineItems((prev) => prev.filter((row) => row.id !== itemId));
+  const removeCubicleItem = (itemId: string) => {
+    setCubicleItems((prev) =>
+      prev.length > 1
+        ? prev.filter((row) => row.id !== itemId)
+        : [{ id: `cubicle-${Date.now()}`, category: 'CUBICLE', modelId: '', quantity: 0, unitPrice: 0 }]
+    );
   };
 
-  // Auto-calculated totals
-  const subtotal = lineItems.reduce((acc, row) => acc + row.quantity * row.unitPrice, 0);
+  // ─── UMP Line Items Operations ─────────────────────────────────────────────
+  const handleUmpModelChange = (itemId: string, newModelId: string) => {
+    const selected = models.find((m) => m.id === newModelId);
+    const unitPrice = selected ? Number(selected.installationPrice) : 0;
+    setUmpItems((prev) =>
+      prev.map((row) =>
+        row.id === itemId ? { ...row, modelId: newModelId, unitPrice } : row
+      )
+    );
+  };
+
+  const handleUmpQuantityChange = (itemId: string, qty: number) => {
+    const validQty = Math.max(0, qty);
+    setUmpItems((prev) =>
+      prev.map((row) => (row.id === itemId ? { ...row, quantity: validQty } : row))
+    );
+  };
+
+  const addUmpItem = () => {
+    setUmpItems((prev) => [
+      ...prev,
+      { id: `ump-${Date.now()}`, category: 'UMP', modelId: '', quantity: 0, unitPrice: 0 },
+    ]);
+  };
+
+  const removeUmpItem = (itemId: string) => {
+    setUmpItems((prev) =>
+      prev.length > 1
+        ? prev.filter((row) => row.id !== itemId)
+        : [{ id: `ump-${Date.now()}`, category: 'UMP', modelId: '', quantity: 0, unitPrice: 0 }]
+    );
+  };
+
+  // ─── Locker Line Items Operations ──────────────────────────────────────────
+  const handleLockerModelChange = (itemId: string, newModelId: string) => {
+    const selected = models.find((m) => m.id === newModelId);
+    const unitPrice = selected ? Number(selected.installationPrice) : 0;
+    setLockerItems((prev) =>
+      prev.map((row) =>
+        row.id === itemId ? { ...row, modelId: newModelId, unitPrice } : row
+      )
+    );
+  };
+
+  const handleLockerQuantityChange = (itemId: string, qty: number) => {
+    const validQty = Math.max(0, qty);
+    setLockerItems((prev) =>
+      prev.map((row) => (row.id === itemId ? { ...row, quantity: validQty } : row))
+    );
+  };
+
+  const addLockerItem = () => {
+    setLockerItems((prev) => [
+      ...prev,
+      { id: `locker-${Date.now()}`, category: 'LOCKER', modelId: '', quantity: 0, unitPrice: 0 },
+    ]);
+  };
+
+  const removeLockerItem = (itemId: string) => {
+    setLockerItems((prev) =>
+      prev.length > 1
+        ? prev.filter((row) => row.id !== itemId)
+        : [{ id: `locker-${Date.now()}`, category: 'LOCKER', modelId: '', quantity: 0, unitPrice: 0 }]
+    );
+  };
+
+  // Category-specific model options from Master
+  const cubicleModels = (Array.isArray(models) ? models : []).filter(
+    (m) => (m.category || 'CUBICLE') === 'CUBICLE'
+  );
+  const umpModels = (Array.isArray(models) ? models : []).filter(
+    (m) => m.category === 'UMP'
+  );
+  const lockerModels = (Array.isArray(models) ? models : []).filter(
+    (m) => m.category === 'LOCKER'
+  );
+
+  // Auto-calculated scope totals
+  const cubicleModelsSubtotal = cubicleItems.reduce(
+    (acc, row) => acc + (row.modelId ? row.quantity * row.unitPrice : 0),
+    0
+  );
+  const totalCubicleQty = cubicleItems.reduce(
+    (acc, row) => acc + (row.modelId ? row.quantity : 0),
+    0
+  );
+
+  const umpSubtotal = umpItems.reduce(
+    (acc, row) => acc + (row.modelId ? row.quantity * row.unitPrice : 0),
+    0
+  );
+  const totalUmpQty = umpItems.reduce(
+    (acc, row) => acc + (row.modelId ? row.quantity : 0),
+    0
+  );
+
+  const lockerSubtotal = lockerItems.reduce(
+    (acc, row) => acc + (row.modelId ? row.quantity * row.unitPrice : 0),
+    0
+  );
+  const totalLockerQty = lockerItems.reduce(
+    (acc, row) => acc + (row.modelId ? row.quantity : 0),
+    0
+  );
+
+  const subtotal = cubicleModelsSubtotal + umpSubtotal + lockerSubtotal;
   const effectiveTravelExpenses = isNcr ? 0 : Number(travelExpenses || 0);
   const totalAmount = subtotal + effectiveTravelExpenses;
   const balanceDue = Math.max(0, totalAmount - Number(initialAmountPaid || 0));
@@ -225,10 +327,21 @@ export function CreateInstallerBillPage({ onBack }: CreateInstallerBillPageProps
       setFeedback({ type: 'error', message: 'Site Postal PIN must be a valid 6-digit code.' });
       return;
     }
-    if (lineItems.some((i) => !i.modelId || i.quantity <= 0)) {
-      setFeedback({ type: 'error', message: 'Please select a cubicle model and valid quantity for all line items.' });
+
+    // Collect all valid line items where model is selected and quantity > 0
+    const validCubicles = cubicleItems.filter((i) => i.modelId && i.quantity > 0);
+    const validUmps = umpItems.filter((i) => i.modelId && i.quantity > 0);
+    const validLockers = lockerItems.filter((i) => i.modelId && i.quantity > 0);
+    const allValidItems = [...validCubicles, ...validUmps, ...validLockers];
+
+    if (allValidItems.length === 0) {
+      setFeedback({
+        type: 'error',
+        message: 'Please select at least one Cubicle, UMP, or Locker model with a quantity greater than 0.',
+      });
       return;
     }
+
     // Mandatory Internal Notes Validation!
     if (!internalNotes.trim()) {
       setFeedback({
@@ -249,10 +362,13 @@ export function CreateInstallerBillPage({ onBack }: CreateInstallerBillPageProps
         travelExpenses: effectiveTravelExpenses,
         siteAddress: siteAddress.trim(),
         sitePin: sitePin.trim(),
-        items: lineItems.map((item) => ({
+        items: allValidItems.map((item) => ({
           modelId: item.modelId,
+          category: item.category,
           quantity: item.quantity,
         })),
+        umpQuantity: totalUmpQty,
+        umpRate: totalUmpQty > 0 ? umpSubtotal / totalUmpQty : 0,
         initialAmountPaid: Number(initialAmountPaid || 0),
         paymentDate: initialAmountPaid > 0 ? paymentDate : undefined,
         paymentMode: initialAmountPaid > 0 ? paymentMode : undefined,
@@ -607,29 +723,32 @@ export function CreateInstallerBillPage({ onBack }: CreateInstallerBillPageProps
               </div>
             </div>
 
-            {/* 3. Cubicle Models Line Items */}
+            {/* 3. Cubicle Models Installed */}
             <div className="bg-white dark:bg-[#18181B] p-6 rounded-2xl border border-gray-200 dark:border-[#27272A] shadow-xs space-y-4">
               <div className="flex items-center justify-between border-b border-gray-100 dark:border-[#27272A] pb-3">
-                <div>
-                  <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-                    3. Cubicle Models Installed
-                  </h2>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    Select cubicle models installed and quantities. Rates are fetched live from the Cubicle Model Master.
-                  </p>
+                <div className="flex items-center gap-2">
+                  <Building2 className="text-violet-600 dark:text-violet-400" size={18} />
+                  <div>
+                    <h2 className="text-base font-semibold text-gray-900 dark:text-white">
+                      3. Restroom Cubicle Models Installed
+                    </h2>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      Select cubicle models and specify units installed. Standard rates are populated from Model Master.
+                    </p>
+                  </div>
                 </div>
                 <button
                   type="button"
-                  onClick={addLineItem}
+                  onClick={addCubicleItem}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-violet-700 dark:text-violet-300 bg-violet-50 dark:bg-violet-950/40 hover:bg-violet-100 rounded-lg transition-colors"
                 >
                   <Plus size={14} />
-                  Add Model
+                  Add Cubicle Model
                 </button>
               </div>
 
               <div className="space-y-3">
-                {lineItems.map((item, idx) => {
+                {cubicleItems.map((item) => {
                   const lineTotal = item.quantity * item.unitPrice;
                   return (
                     <div
@@ -638,17 +757,17 @@ export function CreateInstallerBillPage({ onBack }: CreateInstallerBillPageProps
                     >
                       <div className="col-span-12 sm:col-span-5">
                         <label className="block text-[11px] font-medium text-gray-500 dark:text-gray-400 mb-1">
-                          Model Name
+                          Cubicle Model
                         </label>
                         <select
                           value={item.modelId}
-                          onChange={(e) => handleModelChange(item.id, e.target.value)}
-                          className="w-full px-3 py-1.5 bg-white dark:bg-[#18181B] border border-gray-300 dark:border-[#3F3F46] rounded-lg text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-violet-500"
+                          onChange={(e) => handleCubicleModelChange(item.id, e.target.value)}
+                          className="w-full px-3 py-1.5 bg-white dark:bg-[#18181B] border border-gray-300 dark:border-[#3F3F46] rounded-lg text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-violet-500 font-medium"
                         >
-                          <option value="" disabled>-- Select Model --</option>
-                          {(Array.isArray(models) ? models : []).map((m) => (
+                          <option value="">-- Select Cubicle Model --</option>
+                          {cubicleModels.map((m) => (
                             <option key={m.id} value={m.id}>
-                              {m.modelName} (₹{Number(m.installationPrice).toLocaleString('en-IN')})
+                              {m.modelName} (Rate: ₹{Number(m.installationPrice).toLocaleString('en-IN')})
                             </option>
                           ))}
                         </select>
@@ -660,10 +779,11 @@ export function CreateInstallerBillPage({ onBack }: CreateInstallerBillPageProps
                         </label>
                         <input
                           type="number"
-                          min={1}
-                          value={item.quantity}
-                          onChange={(e) => handleQuantityChange(item.id, parseInt(e.target.value) || 1)}
-                          className="w-full px-2.5 py-1.5 bg-white dark:bg-[#18181B] border border-gray-300 dark:border-[#3F3F46] rounded-lg text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-violet-500"
+                          min={0}
+                          value={item.quantity === 0 ? '' : item.quantity}
+                          placeholder="0"
+                          onChange={(e) => handleCubicleQuantityChange(item.id, parseInt(e.target.value) || 0)}
+                          className="w-full px-2.5 py-1.5 bg-white dark:bg-[#18181B] border border-gray-300 dark:border-[#3F3F46] rounded-lg text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-violet-500 text-center font-bold"
                         />
                       </div>
 
@@ -686,10 +806,10 @@ export function CreateInstallerBillPage({ onBack }: CreateInstallerBillPageProps
                       </div>
 
                       <div className="col-span-2 sm:col-span-1 flex justify-end pt-4 sm:pt-0">
-                        {lineItems.length > 1 && (
+                        {cubicleItems.length > 1 && (
                           <button
                             type="button"
-                            onClick={() => removeLineItem(item.id)}
+                            onClick={() => removeCubicleItem(item.id)}
                             className="p-1.5 text-gray-400 hover:text-rose-600 dark:hover:text-rose-400 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors"
                             title="Remove Model"
                           >
@@ -703,12 +823,212 @@ export function CreateInstallerBillPage({ onBack }: CreateInstallerBillPageProps
               </div>
             </div>
 
-            {/* 4. Payment Details & Mandatory Internal Notes */}
+            {/* 4. UMP Models Installed (Dynamic) */}
+            <div className="bg-white dark:bg-[#18181B] p-6 rounded-2xl border border-gray-200 dark:border-[#27272A] shadow-xs space-y-4">
+              <div className="flex items-center justify-between border-b border-gray-100 dark:border-[#27272A] pb-3">
+                <div className="flex items-center gap-2">
+                  <Layers className="text-violet-600 dark:text-violet-400" size={18} />
+                  <div>
+                    <h2 className="text-base font-semibold text-gray-900 dark:text-white">
+                      4. Urinal Modesty Panel (UMP) Models Installed
+                    </h2>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      Dynamic UMP divider models. Select model and enter quantities (starts at 0).
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={addUmpItem}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-violet-700 dark:text-violet-300 bg-violet-50 dark:bg-violet-950/40 hover:bg-violet-100 rounded-lg transition-colors"
+                >
+                  <Plus size={14} />
+                  Add UMP Model
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                {umpItems.map((item) => {
+                  const lineTotal = item.quantity * item.unitPrice;
+                  return (
+                    <div
+                      key={item.id}
+                      className="p-3 bg-gray-50 dark:bg-[#27272A]/40 rounded-xl border border-gray-200 dark:border-[#27272A] grid grid-cols-12 gap-3 items-center"
+                    >
+                      <div className="col-span-12 sm:col-span-5">
+                        <label className="block text-[11px] font-medium text-gray-500 dark:text-gray-400 mb-1">
+                          UMP Model
+                        </label>
+                        <select
+                          value={item.modelId}
+                          onChange={(e) => handleUmpModelChange(item.id, e.target.value)}
+                          className="w-full px-3 py-1.5 bg-white dark:bg-[#18181B] border border-gray-300 dark:border-[#3F3F46] rounded-lg text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-violet-500 font-medium"
+                        >
+                          <option value="">-- Select UMP Model (Default: None) --</option>
+                          {umpModels.map((m) => (
+                            <option key={m.id} value={m.id}>
+                              {m.modelName} (Rate: ₹{Number(m.installationPrice).toLocaleString('en-IN')})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="col-span-6 sm:col-span-2">
+                        <label className="block text-[11px] font-medium text-gray-500 dark:text-gray-400 mb-1">
+                          Qty (Panels)
+                        </label>
+                        <input
+                          type="number"
+                          min={0}
+                          value={item.quantity === 0 ? '' : item.quantity}
+                          placeholder="0"
+                          onChange={(e) => handleUmpQuantityChange(item.id, parseInt(e.target.value) || 0)}
+                          className="w-full px-2.5 py-1.5 bg-white dark:bg-[#18181B] border border-gray-300 dark:border-[#3F3F46] rounded-lg text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-violet-500 text-center font-bold"
+                        />
+                      </div>
+
+                      <div className="col-span-6 sm:col-span-2">
+                        <label className="block text-[11px] font-medium text-gray-500 dark:text-gray-400 mb-1">
+                          Rate / Panel
+                        </label>
+                        <div className="text-sm font-semibold text-gray-900 dark:text-white py-1.5">
+                          ₹{item.unitPrice.toLocaleString('en-IN')}
+                        </div>
+                      </div>
+
+                      <div className="col-span-10 sm:col-span-2">
+                        <label className="block text-[11px] font-medium text-gray-500 dark:text-gray-400 mb-1">
+                          Line Total
+                        </label>
+                        <div className="text-sm font-bold text-violet-600 dark:text-violet-400 py-1.5">
+                          ₹{lineTotal.toLocaleString('en-IN')}
+                        </div>
+                      </div>
+
+                      <div className="col-span-2 sm:col-span-1 flex justify-end pt-4 sm:pt-0">
+                        {umpItems.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeUmpItem(item.id)}
+                            className="p-1.5 text-gray-400 hover:text-rose-600 dark:hover:text-rose-400 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors"
+                            title="Remove UMP Model"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 5. Locker Models Installed (Dynamic) */}
+            <div className="bg-white dark:bg-[#18181B] p-6 rounded-2xl border border-gray-200 dark:border-[#27272A] shadow-xs space-y-4">
+              <div className="flex items-center justify-between border-b border-gray-100 dark:border-[#27272A] pb-3">
+                <div className="flex items-center gap-2">
+                  <Package className="text-blue-600 dark:text-blue-400" size={18} />
+                  <div>
+                    <h2 className="text-base font-semibold text-gray-900 dark:text-white">
+                      5. Locker Models Installed
+                    </h2>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      Dynamic Locker installation models. Select model and enter quantities (starts at 0).
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={addLockerItem}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40 hover:bg-blue-100 rounded-lg transition-colors"
+                >
+                  <Plus size={14} />
+                  Add Locker Model
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                {lockerItems.map((item) => {
+                  const lineTotal = item.quantity * item.unitPrice;
+                  return (
+                    <div
+                      key={item.id}
+                      className="p-3 bg-gray-50 dark:bg-[#27272A]/40 rounded-xl border border-gray-200 dark:border-[#27272A] grid grid-cols-12 gap-3 items-center"
+                    >
+                      <div className="col-span-12 sm:col-span-5">
+                        <label className="block text-[11px] font-medium text-gray-500 dark:text-gray-400 mb-1">
+                          Locker Model
+                        </label>
+                        <select
+                          value={item.modelId}
+                          onChange={(e) => handleLockerModelChange(item.id, e.target.value)}
+                          className="w-full px-3 py-1.5 bg-white dark:bg-[#18181B] border border-gray-300 dark:border-[#3F3F46] rounded-lg text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 font-medium"
+                        >
+                          <option value="">-- Select Locker Model (Default: None) --</option>
+                          {lockerModels.map((m) => (
+                            <option key={m.id} value={m.id}>
+                              {m.modelName} (Rate: ₹{Number(m.installationPrice).toLocaleString('en-IN')})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="col-span-6 sm:col-span-2">
+                        <label className="block text-[11px] font-medium text-gray-500 dark:text-gray-400 mb-1">
+                          Qty (Lockers)
+                        </label>
+                        <input
+                          type="number"
+                          min={0}
+                          value={item.quantity === 0 ? '' : item.quantity}
+                          placeholder="0"
+                          onChange={(e) => handleLockerQuantityChange(item.id, parseInt(e.target.value) || 0)}
+                          className="w-full px-2.5 py-1.5 bg-white dark:bg-[#18181B] border border-gray-300 dark:border-[#3F3F46] rounded-lg text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 text-center font-bold"
+                        />
+                      </div>
+
+                      <div className="col-span-6 sm:col-span-2">
+                        <label className="block text-[11px] font-medium text-gray-500 dark:text-gray-400 mb-1">
+                          Rate / Unit
+                        </label>
+                        <div className="text-sm font-semibold text-gray-900 dark:text-white py-1.5">
+                          ₹{item.unitPrice.toLocaleString('en-IN')}
+                        </div>
+                      </div>
+
+                      <div className="col-span-10 sm:col-span-2">
+                        <label className="block text-[11px] font-medium text-gray-500 dark:text-gray-400 mb-1">
+                          Line Total
+                        </label>
+                        <div className="text-sm font-bold text-blue-600 dark:text-blue-400 py-1.5">
+                          ₹{lineTotal.toLocaleString('en-IN')}
+                        </div>
+                      </div>
+
+                      <div className="col-span-2 sm:col-span-1 flex justify-end pt-4 sm:pt-0">
+                        {lockerItems.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeLockerItem(item.id)}
+                            className="p-1.5 text-gray-400 hover:text-rose-600 dark:hover:text-rose-400 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors"
+                            title="Remove Locker Model"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 6. Payment Details & Mandatory Internal Notes */}
             <div className="bg-white dark:bg-[#18181B] p-6 rounded-2xl border border-gray-200 dark:border-[#27272A] shadow-xs space-y-4">
               <div className="flex items-center gap-2 border-b border-gray-100 dark:border-[#27272A] pb-3">
                 <CreditCard className="text-violet-600 dark:text-violet-400" size={18} />
                 <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-                  4. Payment Settlement & Audit Notes
+                  6. Payment Settlement & Audit Notes
                 </h2>
               </div>
 
@@ -798,7 +1118,7 @@ export function CreateInstallerBillPage({ onBack }: CreateInstallerBillPageProps
                 </p>
               </div>
 
-              {/* 5. Dispatch Voucher Option */}
+              {/* Dispatch Voucher Option */}
               <div className="pt-2 border-t border-gray-100 dark:border-[#27272A]">
                 <label className="flex items-start gap-3 p-3.5 bg-violet-50/70 dark:bg-violet-950/20 border border-violet-200/80 dark:border-violet-800/40 rounded-xl cursor-pointer select-none">
                   <input
@@ -835,8 +1155,50 @@ export function CreateInstallerBillPage({ onBack }: CreateInstallerBillPageProps
 
               <div className="space-y-3 text-sm">
                 <div className="flex justify-between text-gray-600 dark:text-gray-400">
-                  <span>Models Subtotal:</span>
+                  <span className="flex items-center gap-1">
+                    Cubicle Models:
+                    {totalCubicleQty > 0 && (
+                      <span className="text-[10px] text-violet-600 font-bold bg-violet-50 dark:bg-violet-950/50 px-1.5 py-0.5 rounded-sm">
+                        {totalCubicleQty} unit(s)
+                      </span>
+                    )}
+                  </span>
                   <span className="font-semibold text-gray-900 dark:text-white">
+                    ₹{cubicleModelsSubtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+
+                <div className="flex justify-between text-gray-600 dark:text-gray-400">
+                  <span className="flex items-center gap-1">
+                    UMP Installation:
+                    {totalUmpQty > 0 && (
+                      <span className="text-[10px] text-emerald-600 font-bold bg-emerald-50 dark:bg-emerald-950/50 px-1.5 py-0.5 rounded-sm">
+                        {totalUmpQty} panel(s)
+                      </span>
+                    )}
+                  </span>
+                  <span className="font-semibold text-gray-900 dark:text-white">
+                    ₹{umpSubtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+
+                <div className="flex justify-between text-gray-600 dark:text-gray-400">
+                  <span className="flex items-center gap-1">
+                    Locker Models:
+                    {totalLockerQty > 0 && (
+                      <span className="text-[10px] text-blue-600 font-bold bg-blue-50 dark:bg-blue-950/50 px-1.5 py-0.5 rounded-sm">
+                        {totalLockerQty} unit(s)
+                      </span>
+                    )}
+                  </span>
+                  <span className="font-semibold text-gray-900 dark:text-white">
+                    ₹{lockerSubtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+
+                <div className="flex justify-between text-gray-700 dark:text-gray-300 font-medium pt-1 border-t border-dashed border-gray-100 dark:border-[#27272A]">
+                  <span>Installation Subtotal:</span>
+                  <span className="font-bold text-gray-900 dark:text-white">
                     ₹{subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                   </span>
                 </div>
@@ -845,7 +1207,7 @@ export function CreateInstallerBillPage({ onBack }: CreateInstallerBillPageProps
                   <span className="flex items-center gap-1">
                     Travel Expenses:
                     {isNcr && (
-                      <span className="text-[10px] text-amber-600 font-bold bg-amber-50 dark:bg-amber-950/50 px-1.5 py-0.5 rounded-sm">
+                      <span className="text-[10px] text-emerald-600 font-bold bg-emerald-50 dark:bg-emerald-950/50 px-1.5 py-0.5 rounded-sm">
                         NCR ₹0
                       </span>
                     )}

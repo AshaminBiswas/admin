@@ -1,5 +1,8 @@
+export type InstallationCategory = 'CUBICLE' | 'UMP' | 'LOCKER';
+
 export interface CubicleModel {
   id: string;
+  category?: InstallationCategory;
   modelName: string;
   installationPrice: number;
   isActive: boolean;
@@ -13,6 +16,7 @@ export interface CubicleModel {
 export interface InstallerBillItem {
   id: string;
   billId: string;
+  category?: InstallationCategory;
   modelId: string;
   modelName: string;
   quantity: number;
@@ -74,6 +78,13 @@ export interface InstallerBill {
   travelExpenses: number;
   siteAddress: string;
   sitePin: string;
+  cubicleQuantity?: number;
+  cubicleTotal?: number;
+  umpQuantity?: number;
+  umpRate?: number;
+  umpTotal?: number;
+  lockerQuantity?: number;
+  lockerTotal?: number;
   subtotal: number;
   total: number;
   amountPaid: number;
@@ -128,8 +139,11 @@ export interface CreateInstallerBillPayload {
   sitePin: string;
   items: Array<{
     modelId: string;
+    category?: InstallationCategory;
     quantity: number;
   }>;
+  umpQuantity?: number;
+  umpRate?: number;
   initialAmountPaid?: number;
   paymentDate?: string;
   paymentMode?: string;
@@ -143,6 +157,8 @@ export interface UpdateInstallerBillPayload {
   installDate?: string;
   isNcr?: boolean;
   travelExpenses?: number;
+  umpQuantity?: number;
+  umpRate?: number;
   siteAddress?: string;
   sitePin?: string;
   notes?: string;
@@ -156,12 +172,14 @@ export interface RecordPaymentPayload {
 }
 
 export interface CreateCubicleModelPayload {
+  category?: InstallationCategory;
   modelName: string;
   installationPrice: number;
   isActive?: boolean;
 }
 
 export interface UpdateCubicleModelPayload {
+  category?: InstallationCategory;
   modelName?: string;
   installationPrice?: number;
   isActive?: boolean;

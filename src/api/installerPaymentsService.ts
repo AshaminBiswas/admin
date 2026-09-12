@@ -118,49 +118,18 @@ export const installerPaymentsService = {
 
   // ─── Cubicle Model Master (Super Admin Only) ───────────────────────────────
 
-  async listModels(activeOnly = false): Promise<CubicleModel[]> {
+  async listModels(activeOnly = false, category?: string): Promise<CubicleModel[]> {
     try {
-      const query = activeOnly ? '?activeOnly=true' : '';
-      const res = await fetchAdminApi<any>(`/installer-payments/models${query}`);
+      const query = new URLSearchParams();
+      if (activeOnly) query.append('activeOnly', 'true');
+      if (category && category !== 'ALL') query.append('category', category);
+      const qStr = query.toString();
+      const res = await fetchAdminApi<any>(`/installer-payments/models${qStr ? `?${qStr}` : ''}`);
       if (Array.isArray(res?.data)) return res.data;
       if (Array.isArray(res)) return res;
-      return [
-        {
-          id: 'cmod-001',
-          modelName: 'Delight',
-          installationPrice: 900,
-          isActive: true,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        },
-        {
-          id: 'cmod-002',
-          modelName: 'Sky Light',
-          installationPrice: 1000,
-          isActive: true,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        },
-      ] as any;
+      return [];
     } catch {
-      return [
-        {
-          id: 'cmod-001',
-          modelName: 'Delight',
-          installationPrice: 900,
-          isActive: true,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        },
-        {
-          id: 'cmod-002',
-          modelName: 'Sky Light',
-          installationPrice: 1000,
-          isActive: true,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        },
-      ] as any;
+      return [];
     }
   },
 

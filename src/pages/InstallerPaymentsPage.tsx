@@ -92,6 +92,7 @@ export function InstallerPaymentsPage({ onNewBill }: InstallerPaymentsPageProps 
   const [showModelModal, setShowModelModal] = useState<boolean>(false);
   const [editingModel, setEditingModel] = useState<CubicleModel | null>(null);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [modelCategoryFilter, setModelCategoryFilter] = useState<'ALL' | 'CUBICLE' | 'UMP' | 'LOCKER'>('ALL');
 
   // Installers Master State (Super Admin)
   const [installers, setInstallers] = useState<CubicleInstaller[]>([]);
@@ -683,7 +684,9 @@ export function InstallerPaymentsPage({ onNewBill }: InstallerPaymentsPageProps 
                       <th className="py-3 px-4">Install Date</th>
                       <th className="py-3 px-4">Installer</th>
                       <th className="py-3 px-4">Site & Region</th>
-                      <th className="py-3 px-4">Models & Units</th>
+                      <th className="py-3 px-4">Cubicles</th>
+                      <th className="py-3 px-4">UMP</th>
+                      <th className="py-3 px-4">Lockers</th>
                       <th className="py-3 px-4 text-right">Total Due</th>
                       <th className="py-3 px-4 text-right">Amount Paid</th>
                       <th className="py-3 px-4 text-right">Balance Due</th>
@@ -695,7 +698,24 @@ export function InstallerPaymentsPage({ onNewBill }: InstallerPaymentsPageProps 
                   <tbody className="divide-y divide-slate-100 dark:divide-[#27272A] text-slate-800 dark:text-slate-200">
                     {bills.map((bill) => {
                       const isCleared = bill.paymentStatus === 'CLEARED';
-                      const totalUnits = bill.items.reduce((acc, i) => acc + i.quantity, 0);
+                      const cubicleItems = (bill.items || []).filter(
+                        (i) => (i.category || 'CUBICLE') === 'CUBICLE'
+                      );
+                      const umpItems = (bill.items || []).filter((i) => i.category === 'UMP');
+                      const lockerItems = (bill.items || []).filter((i) => i.category === 'LOCKER');
+
+                      const cubicleUnits =
+                        bill.cubicleQuantity !== undefined && bill.cubicleQuantity !== null
+                          ? Number(bill.cubicleQuantity)
+                          : cubicleItems.reduce((acc, i) => acc + i.quantity, 0);
+                      const umpUnits =
+                        bill.umpQuantity !== undefined && bill.umpQuantity !== null
+                          ? Number(bill.umpQuantity)
+                          : umpItems.reduce((acc, i) => acc + i.quantity, 0);
+                      const lockerUnits =
+                        bill.lockerQuantity !== undefined && bill.lockerQuantity !== null
+                          ? Number(bill.lockerQuantity)
+                          : lockerItems.reduce((acc, i) => acc + i.quantity, 0);
 
                       return (
                         <tr
@@ -733,11 +753,62 @@ export function InstallerPaymentsPage({ onNewBill }: InstallerPaymentsPageProps 
                               )}
                             </div>
                           </td>
-                          <td className="py-3.5 px-4">
-                            <div className="font-medium">
-                              {bill.items.map((i) => `${i.modelName} (×${i.quantity})`).join(', ')}
-                            </div>
-                            <div className="text-[11px] text-slate-400">Total: {totalUnits} unit(s)</div>
+                          {/* Cubicles Column */}
+                          <td className="py-3.5 px-4 min-w-[130px]">
+                            {cubicleItems.length > 0 ? (
+                              <div>
+                                <div className="font-medium text-slate-900 dark:text-white">
+                                  {cubicleItems.map((i) => `${i.modelName} (×${i.quantity})`).join(', ')}
+                                </div>
+                                <div className="text-[11px] text-slate-400 mt-0.5">
+                                  Total: {cubicleUnits} unit(s)
+                                </div>
+                              </div>
+                            ) : cubicleUnits > 0 ? (
+                              <span className="font-medium text-slate-700 dark:text-slate-300">
+                                {cubicleUnits} unit(s)
+                              </span>
+                            ) : (
+                              <span className="text-slate-400 font-mono">-</span>
+                            )}
+                          </td>
+                          {/* UMP Column */}
+                          <td className="py-3.5 px-4 min-w-[120px]">
+                            {umpItems.length > 0 ? (
+                              <div>
+                                <div className="font-medium text-emerald-700 dark:text-emerald-300">
+                                  {umpItems.map((i) => `${i.modelName} (×${i.quantity})`).join(', ')}
+                                </div>
+                                <div className="text-[11px] text-slate-400 mt-0.5">
+                                  Total: {umpUnits} UMP
+                                </div>
+                              </div>
+                            ) : umpUnits > 0 ? (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/40">
+                                {umpUnits} UMP
+                              </span>
+                            ) : (
+                              <span className="text-slate-400 font-mono">-</span>
+                            )}
+                          </td>
+                          {/* Lockers Column */}
+                          <td className="py-3.5 px-4 min-w-[120px]">
+                            {lockerItems.length > 0 ? (
+                              <div>
+                                <div className="font-medium text-blue-700 dark:text-blue-300">
+                                  {lockerItems.map((i) => `${i.modelName} (×${i.quantity})`).join(', ')}
+                                </div>
+                                <div className="text-[11px] text-slate-400 mt-0.5">
+                                  Total: {lockerUnits} unit(s)
+                                </div>
+                              </div>
+                            ) : lockerUnits > 0 ? (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-100 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/40">
+                                {lockerUnits} Locker(s)
+                              </span>
+                            ) : (
+                              <span className="text-slate-400 font-mono">-</span>
+                            )}
                           </td>
                           <td className="py-3.5 px-4 text-right font-bold text-slate-900 dark:text-white whitespace-nowrap">
                             {formatINR(bill.total)}
@@ -871,9 +942,54 @@ export function InstallerPaymentsPage({ onNewBill }: InstallerPaymentsPageProps 
                         <div className="text-xs text-slate-500">{bill.installerEmail}</div>
                       </div>
 
-                      <div className="text-xs text-slate-600 dark:text-slate-300">
-                        {bill.items.map((i) => `${i.modelName} (×${i.quantity})`).join(', ')}
-                      </div>
+                      {(() => {
+                        const cItems = (bill.items || []).filter((i) => (i.category || 'CUBICLE') === 'CUBICLE');
+                        const uItems = (bill.items || []).filter((i) => i.category === 'UMP');
+                        const lItems = (bill.items || []).filter((i) => i.category === 'LOCKER');
+                        const cQty = bill.cubicleQuantity ?? cItems.reduce((acc, i) => acc + i.quantity, 0);
+                        const uQty = bill.umpQuantity ?? uItems.reduce((acc, i) => acc + i.quantity, 0);
+                        const lQty = bill.lockerQuantity ?? lItems.reduce((acc, i) => acc + i.quantity, 0);
+
+                        return (
+                          <div className="text-xs space-y-1 bg-slate-50 dark:bg-[#202024] p-2.5 rounded-xl border border-slate-100 dark:border-[#27272A]">
+                            {cItems.length > 0 ? (
+                              <div className="text-slate-700 dark:text-slate-300">
+                                <span className="font-semibold text-violet-600 dark:text-violet-400">Cubicle: </span>
+                                {cItems.map((i) => `${i.modelName} (×${i.quantity})`).join(', ')}
+                              </div>
+                            ) : cQty > 0 ? (
+                              <div className="text-slate-700 dark:text-slate-300">
+                                <span className="font-semibold text-violet-600 dark:text-violet-400">Cubicle: </span>
+                                {cQty} unit(s)
+                              </div>
+                            ) : null}
+
+                            {uItems.length > 0 ? (
+                              <div className="text-slate-700 dark:text-slate-300">
+                                <span className="font-semibold text-emerald-600 dark:text-emerald-400">UMP: </span>
+                                {uItems.map((i) => `${i.modelName} (×${i.quantity})`).join(', ')}
+                              </div>
+                            ) : uQty > 0 ? (
+                              <div className="text-slate-700 dark:text-slate-300">
+                                <span className="font-semibold text-emerald-600 dark:text-emerald-400">UMP: </span>
+                                {uQty} unit(s)
+                              </div>
+                            ) : null}
+
+                            {lItems.length > 0 ? (
+                              <div className="text-slate-700 dark:text-slate-300">
+                                <span className="font-semibold text-blue-600 dark:text-blue-400">Lockers: </span>
+                                {lItems.map((i) => `${i.modelName} (×${i.quantity})`).join(', ')}
+                              </div>
+                            ) : lQty > 0 ? (
+                              <div className="text-slate-700 dark:text-slate-300">
+                                <span className="font-semibold text-blue-600 dark:text-blue-400">Lockers: </span>
+                                {lQty} unit(s)
+                              </div>
+                            ) : null}
+                          </div>
+                        );
+                      })()}
 
                       <div className="grid grid-cols-3 gap-2 py-2 border-y border-slate-100 dark:border-[#27272A] text-xs">
                         <div>
@@ -1123,13 +1239,13 @@ export function InstallerPaymentsPage({ onNewBill }: InstallerPaymentsPageProps 
             </div>
           ) : (
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                   <h2 className="text-base font-bold text-slate-900 dark:text-white">
-                    Cubicle Model Catalog & Standard Rates
+                    Installation Model Master & Rates (Cubicles, UMP, Lockers)
                   </h2>
                   <p className="text-xs text-slate-500">
-                    Active models directly populate the model selector dropdown in installer bill creation
+                    Dynamic model catalog for Cubicles, UMP, and Lockers. Active models populate bill creation selectors.
                   </p>
                 </div>
 
@@ -1138,17 +1254,58 @@ export function InstallerPaymentsPage({ onNewBill }: InstallerPaymentsPageProps 
                     setEditingModel(null);
                     setShowModelModal(true);
                   }}
-                  className="flex items-center gap-2 px-3.5 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-xl text-xs font-semibold shadow-sm transition-colors"
+                  className="flex items-center gap-2 px-3.5 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-xl text-xs font-semibold shadow-sm transition-colors self-start sm:self-auto"
                 >
                   <Plus size={16} />
                   <span>Add New Model</span>
                 </button>
               </div>
 
+              {/* Category Filter Pills */}
+              <div className="flex items-center gap-2 flex-wrap">
+                {(
+                  [
+                    { id: 'ALL', label: 'All Models' },
+                    { id: 'CUBICLE', label: 'Restroom Cubicles' },
+                    { id: 'UMP', label: 'Urinal Modesty Panels (UMP)' },
+                    { id: 'LOCKER', label: 'Lockers' },
+                  ] as const
+                ).map((cat) => {
+                  const count =
+                    cat.id === 'ALL'
+                      ? models.length
+                      : models.filter((m) => (m.category || 'CUBICLE') === cat.id).length;
+                  return (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => setModelCategoryFilter(cat.id)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 ${
+                        modelCategoryFilter === cat.id
+                          ? 'bg-violet-600 text-white shadow-xs'
+                          : 'bg-white dark:bg-[#18181B] text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-[#27272A] hover:bg-slate-50 dark:hover:bg-[#202024]'
+                      }`}
+                    >
+                      <span>{cat.label}</span>
+                      <span
+                        className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+                          modelCategoryFilter === cat.id
+                            ? 'bg-white/20 text-white'
+                            : 'bg-slate-100 dark:bg-[#27272A] text-slate-500'
+                        }`}
+                      >
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
               <div className="bg-white dark:bg-[#18181B] rounded-2xl border border-slate-200 dark:border-[#27272A] overflow-hidden shadow-sm">
                 <table className="w-full text-left border-collapse text-xs">
                   <thead>
                     <tr className="border-b border-slate-200 dark:border-[#27272A] bg-slate-50 dark:bg-[#202024] text-slate-600 dark:text-slate-300 font-semibold">
+                      <th className="py-3 px-4">Category</th>
                       <th className="py-3 px-4">Model Name</th>
                       <th className="py-3 px-4 text-right">Standard Installation Price</th>
                       <th className="py-3 px-4 text-center">Active Status</th>
@@ -1158,80 +1315,108 @@ export function InstallerPaymentsPage({ onNewBill }: InstallerPaymentsPageProps 
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-[#27272A]">
-                    {!Array.isArray(models) || models.length === 0 ? (
+                    {models
+                      .filter((m) => {
+                        if (modelCategoryFilter === 'ALL') return true;
+                        return (m.category || 'CUBICLE') === modelCategoryFilter;
+                      })
+                      .length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="py-12 text-center text-slate-400">
-                          No cubicle models registered yet. Click &quot;Add New Model&quot; to register your first cubicle model.
+                        <td colSpan={7} className="py-12 text-center text-slate-400">
+                          No models found in this category. Click &quot;Add New Model&quot; to configure a model and rate.
                         </td>
                       </tr>
                     ) : (
-                      models.map((model) => (
-                        <tr key={model.id} className="hover:bg-slate-50/50 dark:hover:bg-[#202024]/50">
-                        <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white">
-                          {model.modelName}
-                        </td>
-                        <td className="py-3.5 px-4 text-right font-bold text-emerald-600 dark:text-emerald-400">
-                          {formatINR(model.installationPrice)}
-                        </td>
-                        <td className="py-3.5 px-4 text-center">
-                          <span
-                            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold ${
-                              model.isActive
-                                ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20'
-                                : 'bg-slate-200 dark:bg-slate-800 text-slate-500'
-                            }`}
-                          >
-                            {model.isActive ? 'Active (Live)' : 'Deactivated'}
-                          </span>
-                        </td>
-                        <td className="py-3.5 px-4 text-center text-slate-500">
-                          {model._count?.billItems || 0} bill(s)
-                        </td>
-                        <td className="py-3.5 px-4 text-slate-500">{formatDate(model.createdAt)}</td>
-                        <td className="py-3.5 px-4 text-center">
-                          <div className="flex items-center justify-center gap-2">
-                            <button
-                              onClick={() => {
-                                setEditingModel(model);
-                                setShowModelModal(true);
-                              }}
-                              className="p-1.5 text-slate-500 hover:text-violet-600 rounded-lg hover:bg-slate-100 dark:hover:bg-[#27272A]"
-                              title="Edit Price or Name"
-                            >
-                              <Edit2 size={14} />
-                            </button>
+                      models
+                        .filter((m) => {
+                          if (modelCategoryFilter === 'ALL') return true;
+                          return (m.category || 'CUBICLE') === modelCategoryFilter;
+                        })
+                        .map((model) => {
+                          const category = model.category || 'CUBICLE';
+                          return (
+                            <tr key={model.id} className="hover:bg-slate-50/50 dark:hover:bg-[#202024]/50">
+                              <td className="py-3.5 px-4 whitespace-nowrap">
+                                {category === 'CUBICLE' ? (
+                                  <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-violet-100 dark:bg-violet-950/50 text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-800/40">
+                                    Cubicle
+                                  </span>
+                                ) : category === 'UMP' ? (
+                                  <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/40">
+                                    UMP Panel
+                                  </span>
+                                ) : (
+                                  <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-blue-100 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/40">
+                                    Locker
+                                  </span>
+                                )}
+                              </td>
+                              <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white">
+                                {model.modelName}
+                              </td>
+                              <td className="py-3.5 px-4 text-right font-bold text-emerald-600 dark:text-emerald-400">
+                                {formatINR(model.installationPrice)}
+                              </td>
+                              <td className="py-3.5 px-4 text-center">
+                                <span
+                                  className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold ${
+                                    model.isActive
+                                      ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20'
+                                      : 'bg-slate-200 dark:bg-slate-800 text-slate-500'
+                                  }`}
+                                >
+                                  {model.isActive ? 'Active (Live)' : 'Deactivated'}
+                                </span>
+                              </td>
+                              <td className="py-3.5 px-4 text-center text-slate-500">
+                                {model._count?.billItems || 0} bill(s)
+                              </td>
+                              <td className="py-3.5 px-4 text-slate-500">{formatDate(model.createdAt)}</td>
+                              <td className="py-3.5 px-4 text-center">
+                                <div className="flex items-center justify-center gap-2">
+                                  <button
+                                    onClick={() => {
+                                      setEditingModel(model);
+                                      setShowModelModal(true);
+                                    }}
+                                    className="p-1.5 text-slate-500 hover:text-violet-600 rounded-lg hover:bg-slate-100 dark:hover:bg-[#27272A]"
+                                    title="Edit Price, Category, or Name"
+                                  >
+                                    <Edit2 size={14} />
+                                  </button>
 
-                            {model.isActive ? (
-                              <button
-                                onClick={async () => {
-                                  if (confirm(`Deactivate "${model.modelName}"? It will no longer appear in new bill dropdowns, but historical records will remain intact.`)) {
-                                    await installerPaymentsService.deactivateModel(model.id);
-                                    loadModels();
-                                    setActionNotice({ type: 'success', message: `Model "${model.modelName}" deactivated.` });
-                                  }
-                                }}
-                                className="p-1.5 text-amber-600 hover:text-amber-700 rounded-lg hover:bg-amber-50 dark:hover:bg-amber-950/20"
-                                title="Deactivate Model (Soft Delete)"
-                              >
-                                <Trash2 size={14} />
-                              </button>
-                            ) : (
-                              <button
-                                onClick={async () => {
-                                  await installerPaymentsService.updateModel(model.id, { isActive: true });
-                                  loadModels();
-                                  setActionNotice({ type: 'success', message: `Model "${model.modelName}" reactivated.` });
-                                }}
-                                className="text-xs text-emerald-600 hover:underline font-semibold"
-                              >
-                                Reactivate
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  )}
+                                  {model.isActive ? (
+                                    <button
+                                      onClick={async () => {
+                                        if (confirm(`Deactivate "${model.modelName}"? It will no longer appear in new bill dropdowns, but historical records will remain intact.`)) {
+                                          await installerPaymentsService.deactivateModel(model.id);
+                                          loadModels();
+                                          setActionNotice({ type: 'success', message: `Model "${model.modelName}" deactivated.` });
+                                        }
+                                      }}
+                                      className="p-1.5 text-amber-600 hover:text-amber-700 rounded-lg hover:bg-amber-50 dark:hover:bg-amber-950/20"
+                                      title="Deactivate Model (Soft Delete)"
+                                    >
+                                      <Trash2 size={14} />
+                                    </button>
+                                  ) : (
+                                    <button
+                                      onClick={async () => {
+                                        await installerPaymentsService.updateModel(model.id, { isActive: true });
+                                        loadModels();
+                                        setActionNotice({ type: 'success', message: `Model "${model.modelName}" reactivated.` });
+                                      }}
+                                      className="text-xs text-emerald-600 hover:underline font-semibold"
+                                    >
+                                      Reactivate
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -1412,13 +1597,14 @@ export function InstallerPaymentsPage({ onNewBill }: InstallerPaymentsPageProps 
       {showModelModal && (
         <CubicleModelModal
           model={editingModel}
+          initialCategory={modelCategoryFilter !== 'ALL' ? modelCategoryFilter : 'CUBICLE'}
           onClose={() => setShowModelModal(false)}
           onSuccess={() => {
             setShowModelModal(false);
             loadModels();
             setActionNotice({
               type: 'success',
-              message: editingModel ? 'Cubicle model updated successfully.' : 'New cubicle model created.',
+              message: editingModel ? 'Installation model updated successfully.' : 'New installation model created.',
             });
           }}
         />
@@ -1488,9 +1674,9 @@ function CreateBillModal({ activeModels, onClose, onSuccess }: CreateBillModalPr
   const [siteAddress, setSiteAddress] = useState('');
   const [sitePin, setSitePin] = useState('');
 
-  // Line Items Builder: supports 1 model by default, expandable to multi-model visits
+  // Line Items Builder: starts at 0 with no model pre-selected; admin must actively select
   const [lineItems, setLineItems] = useState<Array<{ modelId: string; quantity: number }>>([
-    { modelId: activeModels[0]?.id || '', quantity: 1 },
+    { modelId: '', quantity: 0 },
   ]);
 
   const [initialAmountPaid, setInitialAmountPaid] = useState<number>(0);
@@ -1508,12 +1694,12 @@ function CreateBillModal({ activeModels, onClose, onSuccess }: CreateBillModalPr
     return map;
   }, [activeModels]);
 
-  // Subtotal calculation live
+  // Subtotal calculation live across all dynamic models
   const subtotal = useMemo(() => {
     return lineItems.reduce((acc, item) => {
       const model = modelMap.get(item.modelId);
       const price = model ? Number(model.installationPrice) : 0;
-      return acc + item.quantity * price;
+      return acc + (item.quantity || 0) * price;
     }, 0);
   }, [lineItems, modelMap]);
 
@@ -1524,18 +1710,20 @@ function CreateBillModal({ activeModels, onClose, onSuccess }: CreateBillModalPr
   const isCleared = Number(initialAmountPaid || 0) >= grandTotal && grandTotal > 0;
 
   const handleAddLineItem = () => {
-    if (activeModels.length === 0) return;
-    setLineItems([...lineItems, { modelId: activeModels[0].id, quantity: 1 }]);
+    setLineItems([...lineItems, { modelId: '', quantity: 0 }]);
   };
 
   const handleRemoveLineItem = (index: number) => {
-    if (lineItems.length <= 1) return;
+    if (lineItems.length <= 1) {
+      setLineItems([{ modelId: '', quantity: 0 }]);
+      return;
+    }
     setLineItems(lineItems.filter((_, i) => i !== index));
   };
 
   const handleUpdateLineItem = (index: number, modelId: string, quantity: number) => {
     const updated = [...lineItems];
-    updated[index] = { modelId, quantity: Math.max(1, quantity) };
+    updated[index] = { modelId, quantity: Math.max(0, quantity) };
     setLineItems(updated);
   };
 
@@ -1566,8 +1754,9 @@ function CreateBillModal({ activeModels, onClose, onSuccess }: CreateBillModalPr
     if (!/^\d{6}$/.test(sitePin.trim())) {
       return setErrorMsg('Site PIN must be a valid 6-digit Indian postal code.');
     }
-    if (lineItems.some((i) => !i.modelId || i.quantity < 1)) {
-      return setErrorMsg('Each line item must have a selected cubicle model and minimum quantity of 1.');
+    const validItems = lineItems.filter((i) => i.modelId && i.quantity > 0);
+    if (validItems.length === 0) {
+      return setErrorMsg('Please select at least one installation model with a quantity greater than 0.');
     }
     if (!isNcr && (travelExpenses === undefined || travelExpenses < 0)) {
       return setErrorMsg('Travel expenses are required for outstation installation jobs (NCR = No).');
@@ -1578,6 +1767,16 @@ function CreateBillModal({ activeModels, onClose, onSuccess }: CreateBillModalPr
 
     try {
       setIsSubmitting(true);
+      const umpItems = validItems.filter((i) => {
+        const m = modelMap.get(i.modelId);
+        return m?.category === 'UMP';
+      });
+      const totalUmpQty = umpItems.reduce((acc, i) => acc + i.quantity, 0);
+      const totalUmpAmt = umpItems.reduce((acc, i) => {
+        const m = modelMap.get(i.modelId);
+        return acc + (i.quantity * (m ? Number(m.installationPrice) : 0));
+      }, 0);
+
       const payload: CreateInstallerBillPayload = {
         installerName: installerName.trim(),
         installerEmail: installerEmail.trim().toLowerCase(),
@@ -1586,7 +1785,16 @@ function CreateBillModal({ activeModels, onClose, onSuccess }: CreateBillModalPr
         travelExpenses: isNcr ? 0 : Number(travelExpenses || 0),
         siteAddress: siteAddress.trim(),
         sitePin: sitePin.trim(),
-        items: lineItems,
+        items: validItems.map((item) => {
+          const m = modelMap.get(item.modelId);
+          return {
+            modelId: item.modelId,
+            category: m?.category || 'CUBICLE',
+            quantity: item.quantity,
+          };
+        }),
+        umpQuantity: totalUmpQty,
+        umpRate: totalUmpQty > 0 ? totalUmpAmt / totalUmpQty : 0,
         initialAmountPaid: Number(initialAmountPaid || 0),
         paymentDate: initialAmountPaid > 0 ? paymentDate : undefined,
         paymentMode: initialAmountPaid > 0 ? paymentMode : undefined,
@@ -1811,9 +2019,10 @@ function CreateBillModal({ activeModels, onClose, onSuccess }: CreateBillModalPr
                       onChange={(e) => handleUpdateLineItem(idx, e.target.value, item.quantity)}
                       className="w-full p-2 bg-white dark:bg-[#27272A] border border-slate-200 dark:border-[#323238] rounded-lg font-semibold"
                     >
+                      <option value="">-- Select Model --</option>
                       {activeModels.map((m) => (
                         <option key={m.id} value={m.id}>
-                          {m.modelName} (Rate: ₹{Number(m.installationPrice).toFixed(2)})
+                          [{m.category || 'CUBICLE'}] {m.modelName} (Rate: ₹{Number(m.installationPrice).toFixed(2)})
                         </option>
                       ))}
                     </select>
@@ -1824,9 +2033,9 @@ function CreateBillModal({ activeModels, onClose, onSuccess }: CreateBillModalPr
                     <label className="block text-[10px] text-slate-400 mb-0.5">Quantity</label>
                     <input
                       type="number"
-                      min={1}
+                      min={0}
                       value={item.quantity}
-                      onChange={(e) => handleUpdateLineItem(idx, item.modelId, parseInt(e.target.value, 10) || 1)}
+                      onChange={(e) => handleUpdateLineItem(idx, item.modelId, parseInt(e.target.value, 10) || 0)}
                       className="w-full p-2 bg-white dark:bg-[#27272A] border border-slate-200 dark:border-[#323238] rounded-lg font-bold text-center"
                     />
                   </div>
@@ -2257,31 +2466,169 @@ function BillDetailsDrawer({
             </div>
           </div>
 
-          {/* Itemized Cubicle Scope */}
-          <div>
-            <span className="font-bold text-slate-900 dark:text-white block mb-2">
-              Cubicle Models Installed
-            </span>
-            <div className="divide-y divide-slate-100 dark:divide-[#27272A] border border-slate-200 dark:border-[#27272A] rounded-xl overflow-hidden">
-              {bill.items.map((item, i) => (
-                <div key={i} className="p-3 flex justify-between items-center bg-white dark:bg-[#18181B]">
+          {/* Categorized Itemized Scopes */}
+          {(() => {
+            const cubicleItems = (bill.items || []).filter(
+              (i) => (i.category || 'CUBICLE') === 'CUBICLE'
+            );
+            const umpItems = (bill.items || []).filter((i) => i.category === 'UMP');
+            const lockerItems = (bill.items || []).filter((i) => i.category === 'LOCKER');
+
+            return (
+              <div className="space-y-4">
+                {/* Cubicles Section */}
+                {cubicleItems.length > 0 && (
                   <div>
-                    <span className="font-semibold block">{item.modelName}</span>
-                    <span className="text-slate-400 text-[11px]">
-                      {item.quantity} unit(s) @ ₹{Number(item.installationPrice).toFixed(2)}
+                    <span className="font-bold text-slate-900 dark:text-white mb-2 flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-violet-600"></span>
+                      Cubicle Models Installed
                     </span>
+                    <div className="divide-y divide-slate-100 dark:divide-[#27272A] border border-slate-200 dark:border-[#27272A] rounded-xl overflow-hidden">
+                      {cubicleItems.map((item, i) => (
+                        <div key={i} className="p-3 flex justify-between items-center bg-white dark:bg-[#18181B]">
+                          <div>
+                            <span className="font-semibold block">{item.modelName}</span>
+                            <span className="text-slate-400 text-[11px]">
+                              {item.quantity} unit(s) @ ₹{Number(item.installationPrice).toFixed(2)}
+                            </span>
+                          </div>
+                          <span className="font-bold text-slate-900 dark:text-white">
+                            ₹{Number(item.lineTotal).toFixed(2)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  <span className="font-bold text-slate-900 dark:text-white">
-                    ₹{Number(item.lineTotal).toFixed(2)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
+                )}
+
+                {/* UMP Section */}
+                {umpItems.length > 0 ? (
+                  <div>
+                    <span className="font-bold text-slate-900 dark:text-white mb-2 flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-emerald-600"></span>
+                      Urinal Modesty Panels (UMP)
+                    </span>
+                    <div className="divide-y divide-slate-100 dark:divide-[#27272A] border border-slate-200 dark:border-[#27272A] rounded-xl overflow-hidden">
+                      {umpItems.map((item, i) => (
+                        <div key={i} className="p-3 flex justify-between items-center bg-white dark:bg-[#18181B]">
+                          <div>
+                            <span className="font-semibold block text-emerald-700 dark:text-emerald-300">
+                              {item.modelName}
+                            </span>
+                            <span className="text-slate-400 text-[11px]">
+                              {item.quantity} unit(s) @ ₹{Number(item.installationPrice).toFixed(2)}
+                            </span>
+                          </div>
+                          <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                            ₹{Number(item.lineTotal).toFixed(2)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : bill.umpQuantity && Number(bill.umpQuantity) > 0 ? (
+                  <div>
+                    <span className="font-bold text-slate-900 dark:text-white mb-2 flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-emerald-600"></span>
+                      UMP Installation
+                    </span>
+                    <div className="border border-slate-200 dark:border-[#27272A] rounded-xl overflow-hidden p-3 bg-white dark:bg-[#18181B] flex justify-between items-center">
+                      <div>
+                        <span className="font-semibold block text-slate-900 dark:text-white">
+                          Urinal Modesty Panel (UMP)
+                        </span>
+                        <span className="text-slate-400 text-[11px]">
+                          {bill.umpQuantity} unit(s) @ ₹{Number(bill.umpRate || 0).toFixed(2)}
+                        </span>
+                      </div>
+                      <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                        ₹{Number(bill.umpTotal || 0).toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                ) : null}
+
+                {/* Lockers Section */}
+                {lockerItems.length > 0 ? (
+                  <div>
+                    <span className="font-bold text-slate-900 dark:text-white mb-2 flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-blue-600"></span>
+                      Locker Units Installed
+                    </span>
+                    <div className="divide-y divide-slate-100 dark:divide-[#27272A] border border-slate-200 dark:border-[#27272A] rounded-xl overflow-hidden">
+                      {lockerItems.map((item, i) => (
+                        <div key={i} className="p-3 flex justify-between items-center bg-white dark:bg-[#18181B]">
+                          <div>
+                            <span className="font-semibold block text-blue-700 dark:text-blue-300">
+                              {item.modelName}
+                            </span>
+                            <span className="text-slate-400 text-[11px]">
+                              {item.quantity} unit(s) @ ₹{Number(item.installationPrice).toFixed(2)}
+                            </span>
+                          </div>
+                          <span className="font-bold text-blue-600 dark:text-blue-400">
+                            ₹{Number(item.lineTotal).toFixed(2)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : bill.lockerQuantity && Number(bill.lockerQuantity) > 0 ? (
+                  <div>
+                    <span className="font-bold text-slate-900 dark:text-white mb-2 flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-blue-600"></span>
+                      Locker Units
+                    </span>
+                    <div className="border border-slate-200 dark:border-[#27272A] rounded-xl overflow-hidden p-3 bg-white dark:bg-[#18181B] flex justify-between items-center">
+                      <div>
+                        <span className="font-semibold block text-slate-900 dark:text-white">
+                          Locker Installation
+                        </span>
+                        <span className="text-slate-400 text-[11px]">
+                          {bill.lockerQuantity} unit(s)
+                        </span>
+                      </div>
+                      <span className="font-bold text-blue-600 dark:text-blue-400">
+                        ₹{Number(bill.lockerTotal || 0).toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            );
+          })()}
 
           {/* Financial Breakdown */}
           <div className="p-4 bg-slate-50 dark:bg-[#202024] rounded-2xl space-y-2 text-xs">
-            <div className="flex justify-between">
+            {bill.cubicleTotal !== undefined && bill.cubicleTotal !== null && Number(bill.cubicleTotal) > 0 && (
+              <div className="flex justify-between">
+                <span className="text-slate-500">Cubicle Installation:</span>
+                <span className="font-semibold text-slate-900 dark:text-white">
+                  ₹{Number(bill.cubicleTotal).toFixed(2)}
+                </span>
+              </div>
+            )}
+            {((bill.umpTotal && Number(bill.umpTotal) > 0) || (bill.umpQuantity && Number(bill.umpQuantity) > 0)) && (
+              <div className="flex justify-between">
+                <span className="text-slate-500">
+                  UMP Installation {bill.umpQuantity ? `(${bill.umpQuantity} units)` : ''}:
+                </span>
+                <span className="font-semibold text-emerald-600">
+                  ₹{Number(bill.umpTotal || 0).toFixed(2)}
+                </span>
+              </div>
+            )}
+            {bill.lockerTotal !== undefined && bill.lockerTotal !== null && Number(bill.lockerTotal) > 0 && (
+              <div className="flex justify-between">
+                <span className="text-slate-500">
+                  Locker Installation {bill.lockerQuantity ? `(${bill.lockerQuantity} units)` : ''}:
+                </span>
+                <span className="font-semibold text-blue-600">
+                  ₹{Number(bill.lockerTotal).toFixed(2)}
+                </span>
+              </div>
+            )}
+            <div className="flex justify-between border-t border-slate-200 dark:border-[#27272A] pt-1">
               <span className="text-slate-500">Installation Subtotal:</span>
               <span className="font-semibold">₹{Number(bill.subtotal).toFixed(2)}</span>
             </div>
@@ -2406,23 +2753,43 @@ function BillDetailsDrawer({
 
 interface CubicleModelModalProps {
   model: CubicleModel | null;
+  initialCategory?: 'CUBICLE' | 'UMP' | 'LOCKER';
   onClose: () => void;
   onSuccess: () => void;
 }
 
-function CubicleModelModal({ model, onClose, onSuccess }: CubicleModelModalProps) {
+function CubicleModelModal({ model, initialCategory, onClose, onSuccess }: CubicleModelModalProps) {
   const [modelName, setModelName] = useState(model?.modelName || '');
-  const [installationPrice, setInstallationPrice] = useState<number>(
-    model ? Number(model.installationPrice) : 900
+  const [category, setCategory] = useState<'CUBICLE' | 'UMP' | 'LOCKER'>(
+    model?.category || initialCategory || 'CUBICLE'
+  );
+  const [installationPrice, setInstallationPrice] = useState<number | ''>(
+    model ? Number(model.installationPrice) : ''
   );
   const [isActive, setIsActive] = useState<boolean>(model ? model.isActive : true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  useEffect(() => {
+    if (model) {
+      setModelName(model.modelName);
+      setCategory(model.category || initialCategory || 'CUBICLE');
+      setInstallationPrice(Number(model.installationPrice));
+      setIsActive(model.isActive);
+    } else {
+      setModelName('');
+      setCategory(initialCategory || 'CUBICLE');
+      setInstallationPrice('');
+      setIsActive(true);
+    }
+    setErrorMsg(null);
+  }, [model, initialCategory]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!modelName.trim()) return setErrorMsg('Model name is required.');
-    if (!installationPrice || installationPrice <= 0) {
+    const numericPrice = Number(installationPrice);
+    if (!numericPrice || numericPrice <= 0) {
       return setErrorMsg('Installation price must be greater than 0.');
     }
 
@@ -2431,13 +2798,15 @@ function CubicleModelModal({ model, onClose, onSuccess }: CubicleModelModalProps
       if (model) {
         await installerPaymentsService.updateModel(model.id, {
           modelName: modelName.trim(),
-          installationPrice,
+          installationPrice: numericPrice,
+          category,
           isActive,
         });
       } else {
         await installerPaymentsService.createModel({
           modelName: modelName.trim(),
-          installationPrice,
+          installationPrice: numericPrice,
+          category,
           isActive,
         });
       }
@@ -2455,7 +2824,7 @@ function CubicleModelModal({ model, onClose, onSuccess }: CubicleModelModalProps
         <div className="p-4 border-b border-slate-200 dark:border-[#27272A] flex items-center justify-between">
           <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
             <Building2 size={16} className="text-violet-600" />
-            {model ? 'Edit Cubicle Model' : 'Register New Cubicle Model'}
+            {model ? 'Edit Installation Model' : 'Register New Installation Model'}
           </h3>
           <button onClick={onClose} className="text-slate-400 hover:text-white">
             <X size={18} />
@@ -2471,12 +2840,27 @@ function CubicleModelModal({ model, onClose, onSuccess }: CubicleModelModalProps
 
           <div>
             <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              Category *
+            </label>
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value as 'CUBICLE' | 'UMP' | 'LOCKER')}
+              className="w-full p-2.5 bg-slate-50 dark:bg-[#27272A] border border-slate-200 dark:border-[#323238] rounded-xl font-semibold text-slate-900 dark:text-white"
+            >
+              <option value="CUBICLE">Restroom Cubicle</option>
+              <option value="UMP">Urinal Modesty Panel (UMP)</option>
+              <option value="LOCKER">Locker System</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
               Model Name *
             </label>
             <input
               type="text"
               required
-              placeholder="e.g. Delight, Sky Light, Horizon..."
+              placeholder="Enter model name..."
               value={modelName}
               onChange={(e) => setModelName(e.target.value)}
               className="w-full p-2.5 bg-slate-50 dark:bg-[#27272A] border border-slate-200 dark:border-[#323238] rounded-xl font-medium text-slate-900 dark:text-white"
@@ -2492,9 +2876,9 @@ function CubicleModelModal({ model, onClose, onSuccess }: CubicleModelModalProps
               min={1}
               step="any"
               required
-              placeholder="900"
+              placeholder="e.g. 500.00"
               value={installationPrice}
-              onChange={(e) => setInstallationPrice(Number(e.target.value))}
+              onChange={(e) => setInstallationPrice(e.target.value === '' ? '' : Number(e.target.value))}
               className="w-full p-2.5 bg-slate-50 dark:bg-[#27272A] border border-slate-200 dark:border-[#323238] rounded-xl font-bold text-slate-900 dark:text-white text-sm"
             />
           </div>
