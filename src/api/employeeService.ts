@@ -11,7 +11,9 @@ import type {
   RecordAttendancePayload,
   BatchAttendancePayload,
   CreateAdvancePayload,
+  UpdateAdvancePayload,
   CreateDeductionPayload,
+  UpdateDeductionPayload,
   CalculatePayrollPayload,
   MarkPayrollPaidPayload,
   ListEmployeesResponse,
@@ -145,7 +147,7 @@ export const employeeService = {
     return res?.data || res;
   },
 
-  async updateAdvance(id: string, payload: Partial<CreateAdvancePayload> & { isRecovered?: boolean }): Promise<EmployeeAdvance> {
+  async updateAdvance(id: string, payload: UpdateAdvancePayload): Promise<EmployeeAdvance> {
     const res = await fetchAdminApi<any>(`/employees/advances/${encodeURIComponent(id)}`, {
       method: 'PUT',
       body: JSON.stringify(payload),
@@ -186,7 +188,7 @@ export const employeeService = {
     return res?.data || res;
   },
 
-  async updateDeduction(id: string, payload: Partial<CreateDeductionPayload> & { isApplied?: boolean }): Promise<EmployeeDeduction> {
+  async updateDeduction(id: string, payload: UpdateDeductionPayload): Promise<EmployeeDeduction> {
     const res = await fetchAdminApi<any>(`/employees/deductions/${encodeURIComponent(id)}`, {
       method: 'PUT',
       body: JSON.stringify(payload),

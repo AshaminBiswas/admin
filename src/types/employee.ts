@@ -70,6 +70,7 @@ export interface EmployeeAdvance {
   employeeId: string;
   amount: number | string;
   reason: string;
+  advanceDate?: string;
   recoveryMonth: number;
   recoveryYear: number;
   isRecovered: boolean;
@@ -193,8 +194,13 @@ export interface CreateAdvancePayload {
   employeeId: string;
   amount: number;
   reason: string;
+  advanceDate?: string;
   recoveryMonth: number;
   recoveryYear: number;
+}
+
+export interface UpdateAdvancePayload extends Partial<CreateAdvancePayload> {
+  isRecovered?: boolean;
 }
 
 export interface CreateDeductionPayload {
@@ -203,6 +209,10 @@ export interface CreateDeductionPayload {
   reason: string;
   applyMonth: number;
   applyYear: number;
+}
+
+export interface UpdateDeductionPayload extends Partial<CreateDeductionPayload> {
+  isApplied?: boolean;
 }
 
 export interface CalculatePayrollPayload {

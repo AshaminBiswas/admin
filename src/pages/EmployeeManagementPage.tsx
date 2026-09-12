@@ -41,6 +41,8 @@ import type {
   AttendanceStatus,
   GovernmentIdType,
   EmployeeStatus,
+  UpdateAdvancePayload,
+  UpdateDeductionPayload,
 } from '../types/employee';
 
 // ─── Constants & Helpers ──────────────────────────────────────────────────────
@@ -132,6 +134,16 @@ export function EmployeeManagementPage() {
   const [isAddDeductionModalOpen, setIsAddDeductionModalOpen] = useState(false);
   const [isMarkPaidModalOpen, setIsMarkPaidModalOpen] = useState(false);
   const [selectedPayrollForPaid, setSelectedPayrollForPaid] = useState<EmployeePayrollRun | null>(null);
+
+  // Edit Modals State
+  const [editingAttendance, setEditingAttendance] = useState<{
+    employee: Employee;
+    record?: EmployeeAttendance;
+    day: number;
+    dateStr: string;
+  } | null>(null);
+  const [editingAdvance, setEditingAdvance] = useState<EmployeeAdvance | null>(null);
+  const [editingDeduction, setEditingDeduction] = useState<EmployeeDeduction | null>(null);
 
   // Toast / Feedback State
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
@@ -276,38 +288,122 @@ export function EmployeeManagementPage() {
     }
   };
 
-  const handleToggleSundayOverride = async (record: EmployeeAttendance) => {
-    try {
-      await employeeService.recordAttendance({
+  const handleToggleSundayOverride = (record: EmployeeAttendance) => {
+    const newOverride = !record.isSundayOverride;
+    const dateStr = new Date(record.date).toISOString().slice(0, 10);
+
+    // Optimistic instant state update
+    setAttendanceRecords((prev) =>
+      prev.map((r) => (r.id === record.id ? { ...r, isSundayOverride: newOverride } : r))
+    );
+
+    employeeService
+      .recordAttendance({
         employeeId: record.employeeId,
-        date: new Date(record.date).toISOString().slice(0, 10),
+        date: dateStr,
         status: record.status,
-        isSundayOverride: !record.isSundayOverride,
+        isSundayOverride: newOverride,
         overtimeHours: Number(record.overtimeHours || 0),
         notes: record.notes || undefined,
+      })
+      .then(() => {
+        showFeedback('success', `Sunday work status updated: ${newOverride ? 'Approved (Paid)' : 'Off'}`);
+      })
+      .catch((err: any) => {
+        showFeedback('error', err?.message || 'Failed to update Sunday status');
+        fetchAttendance();
       });
-      showFeedback('success', 'Sunday work status updated');
-      fetchAttendance();
-    } catch (err: any) {
-      showFeedback('error', err?.message || 'Failed to update Sunday status');
-    }
   };
 
-  const handleQuickStatusChange = async (employeeId: string, day: number, status: AttendanceStatus) => {
+  const handleQuickStatusChange = (employeeId: string, day: number, status: AttendanceStatus) => {
     const padDay = String(day).padStart(2, '0');
     const padMonth = String(selectedMonth).padStart(2, '0');
     const dateStr = `${selectedYear}-${padMonth}-${padDay}`;
+    const isSunday = new Date(selectedYear, selectedMonth - 1, day).getDay() === 0;
 
-    try {
-      await employeeService.recordAttendance({
+    // 1. Optimistic 0ms UI update
+    setAttendanceRecords((prev) => {
+      const existingIndex = prev.findIndex(
+        (r) => r.employeeId === employeeId && new Date(r.date).toISOString().slice(0, 10) === dateStr
+      );
+      if (existingIndex >= 0) {
+        const next = [...prev];
+        next[existingIndex] = { ...next[existingIndex], status };
+        return next;
+      }
+      return [
+        ...prev,
+        {
+          id: 'temp-' + Date.now(),
+          employeeId,
+          date: dateStr,
+          status,
+          isSunday,
+          isSundayOverride: false,
+          overtimeHours: 0,
+        },
+      ];
+    });
+
+    // 2. Silent background network call without blocking or refetching
+    employeeService
+      .recordAttendance({
         employeeId,
         date: dateStr,
         status,
+      })
+      .catch((err: any) => {
+        showFeedback('error', err?.message || 'Failed to update status');
+        fetchAttendance();
       });
-      fetchAttendance();
-    } catch (err: any) {
-      showFeedback('error', err?.message || 'Failed to update status');
-    }
+  };
+
+  const handleOvertimeChange = (employeeId: string, day: number, hours: number) => {
+    const padDay = String(day).padStart(2, '0');
+    const padMonth = String(selectedMonth).padStart(2, '0');
+    const dateStr = `${selectedYear}-${padMonth}-${padDay}`;
+    const isSunday = new Date(selectedYear, selectedMonth - 1, day).getDay() === 0;
+
+    setAttendanceRecords((prev) => {
+      const existingIndex = prev.findIndex(
+        (r) => r.employeeId === employeeId && new Date(r.date).toISOString().slice(0, 10) === dateStr
+      );
+      if (existingIndex >= 0) {
+        const next = [...prev];
+        next[existingIndex] = { ...next[existingIndex], overtimeHours: hours };
+        return next;
+      }
+      return [
+        ...prev,
+        {
+          id: 'temp-' + Date.now(),
+          employeeId,
+          date: dateStr,
+          status: 'PRESENT',
+          isSunday,
+          isSundayOverride: false,
+          overtimeHours: hours,
+        },
+      ];
+    });
+
+    const record = attendanceRecords.find(
+      (r) => r.employeeId === employeeId && new Date(r.date).toISOString().slice(0, 10) === dateStr
+    );
+
+    employeeService
+      .recordAttendance({
+        employeeId,
+        date: dateStr,
+        status: record?.status || 'PRESENT',
+        overtimeHours: hours,
+        isSundayOverride: record?.isSundayOverride || false,
+        notes: record?.notes || undefined,
+      })
+      .catch((err: any) => {
+        showFeedback('error', err?.message || 'Failed to update overtime hours');
+        fetchAttendance();
+      });
   };
 
   const handleMarkAllPresentForDay = async (day: number) => {
@@ -315,9 +411,37 @@ export function EmployeeManagementPage() {
     const padMonth = String(selectedMonth).padStart(2, '0');
     const dateStr = `${selectedYear}-${padMonth}-${padDay}`;
     const activeStaff = employees.filter((e) => e.status === 'ACTIVE');
+    const isSunday = new Date(selectedYear, selectedMonth - 1, day).getDay() === 0;
 
     if (!confirm(`Mark all ${activeStaff.length} active employees as PRESENT for ${dateStr}?`)) return;
 
+    // 1. Optimistic 0ms UI update for all active staff
+    setAttendanceRecords((prev) => {
+      const copy = [...prev];
+      activeStaff.forEach((emp) => {
+        const idx = copy.findIndex(
+          (r) => r.employeeId === emp.id && new Date(r.date).toISOString().slice(0, 10) === dateStr
+        );
+        if (idx >= 0) {
+          copy[idx] = { ...copy[idx], status: 'PRESENT' };
+        } else {
+          copy.push({
+            id: 'temp-' + emp.id + '-' + Date.now(),
+            employeeId: emp.id,
+            date: dateStr,
+            status: 'PRESENT',
+            isSunday,
+            isSundayOverride: false,
+            overtimeHours: 0,
+          });
+        }
+      });
+      return copy;
+    });
+
+    showFeedback('success', `Marked all ${activeStaff.length} active employees as PRESENT`);
+
+    // 2. Parallelized background batch update
     try {
       await employeeService.batchRecordAttendance({
         date: dateStr,
@@ -326,10 +450,93 @@ export function EmployeeManagementPage() {
           status: 'PRESENT',
         })),
       });
-      showFeedback('success', `Marked all active employees as PRESENT for ${dateStr}`);
-      fetchAttendance();
     } catch (err: any) {
       showFeedback('error', err?.message || 'Failed to batch mark attendance');
+      fetchAttendance();
+    }
+  };
+
+  const handleSaveEditedAttendance = async (formData: {
+    status: AttendanceStatus;
+    overtimeHours: number;
+    isSundayOverride: boolean;
+    notes?: string;
+  }) => {
+    if (!editingAttendance) return;
+    const { employee, dateStr, day } = editingAttendance;
+    const isSunday = new Date(selectedYear, selectedMonth - 1, day).getDay() === 0;
+
+    // Optimistic state update
+    setAttendanceRecords((prev) => {
+      const idx = prev.findIndex(
+        (r) => r.employeeId === employee.id && new Date(r.date).toISOString().slice(0, 10) === dateStr
+      );
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = {
+          ...next[idx],
+          status: formData.status,
+          overtimeHours: formData.overtimeHours,
+          isSundayOverride: formData.isSundayOverride,
+          notes: formData.notes || null,
+        };
+        return next;
+      }
+      return [
+        ...prev,
+        {
+          id: 'temp-' + Date.now(),
+          employeeId: employee.id,
+          date: dateStr,
+          status: formData.status,
+          isSunday,
+          isSundayOverride: formData.isSundayOverride,
+          overtimeHours: formData.overtimeHours,
+          notes: formData.notes || null,
+        },
+      ];
+    });
+
+    const targetEmpName = employee.name;
+    setEditingAttendance(null);
+    showFeedback('success', `Attendance updated for ${targetEmpName}`);
+
+    try {
+      await employeeService.recordAttendance({
+        employeeId: employee.id,
+        date: dateStr,
+        status: formData.status,
+        overtimeHours: formData.overtimeHours,
+        isSundayOverride: formData.isSundayOverride,
+        notes: formData.notes,
+      });
+    } catch (err: any) {
+      showFeedback('error', err?.message || 'Failed to save attendance record');
+      fetchAttendance();
+    }
+  };
+
+  const handleSaveEditedAdvance = async (formData: UpdateAdvancePayload) => {
+    if (!editingAdvance) return;
+    try {
+      await employeeService.updateAdvance(editingAdvance.id, formData);
+      showFeedback('success', 'Advance record updated successfully');
+      setEditingAdvance(null);
+      fetchAdvancesAndDeductions();
+    } catch (err: any) {
+      showFeedback('error', err?.message || 'Failed to update advance');
+    }
+  };
+
+  const handleSaveEditedDeduction = async (formData: UpdateDeductionPayload) => {
+    if (!editingDeduction) return;
+    try {
+      await employeeService.updateDeduction(editingDeduction.id, formData);
+      showFeedback('success', 'Deduction record updated successfully');
+      setEditingDeduction(null);
+      fetchAdvancesAndDeductions();
+    } catch (err: any) {
+      showFeedback('error', err?.message || 'Failed to update deduction');
     }
   };
 
@@ -758,6 +965,7 @@ export function EmployeeManagementPage() {
                     <th className="px-4 py-3.5">Mark Attendance</th>
                     <th className="px-4 py-3.5">Overtime (Hrs)</th>
                     <th className="px-4 py-3.5">Sunday Shift Override</th>
+                    <th className="px-4 py-3.5 text-right">Edit</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#27272A]">
@@ -785,13 +993,20 @@ export function EmployeeManagementPage() {
                           <td className="px-4 py-3.5 text-xs text-[#A1A1AA]">{emp.department}</td>
                           <td className="px-4 py-3.5">
                             {record ? (
-                              <span
-                                className={`px-2.5 py-1 rounded-full text-xs font-medium border ${
-                                  ATTENDANCE_STATUS_LABELS[record.status]?.bg || 'bg-zinc-800 text-zinc-300'
-                                }`}
-                              >
-                                {ATTENDANCE_STATUS_LABELS[record.status]?.label || record.status}
-                              </span>
+                              <div>
+                                <span
+                                  className={`px-2.5 py-1 rounded-full text-xs font-medium border inline-block ${
+                                    ATTENDANCE_STATUS_LABELS[record.status]?.bg || 'bg-zinc-800 text-zinc-300'
+                                  }`}
+                                >
+                                  {ATTENDANCE_STATUS_LABELS[record.status]?.label || record.status}
+                                </span>
+                                {record.notes && (
+                                  <div className="text-[11px] text-[#71717A] italic mt-1 max-w-[150px] truncate" title={record.notes}>
+                                    Note: {record.notes}
+                                  </div>
+                                )}
+                              </div>
                             ) : (
                               <span className="text-xs text-[#71717A] italic">Not Recorded</span>
                             )}
@@ -820,14 +1035,12 @@ export function EmployeeManagementPage() {
                               max="24"
                               step="0.5"
                               defaultValue={record ? Number(record.overtimeHours) : 0}
+                              key={`${emp.id}-${targetDateStr}-${record?.overtimeHours || 0}`}
                               onBlur={(e) => {
                                 const val = Number(e.target.value || 0);
-                                employeeService.recordAttendance({
-                                  employeeId: emp.id,
-                                  date: targetDateStr,
-                                  status: record?.status || 'PRESENT',
-                                  overtimeHours: val,
-                                });
+                                if (Number(record?.overtimeHours || 0) !== val) {
+                                  handleOvertimeChange(emp.id, selectedAttendanceDay, val);
+                                }
                               }}
                               className="w-20 px-2 py-1 bg-[#09090B] border border-[#27272A] rounded-lg text-xs text-[#FAFAFA] focus:outline-none focus:border-amber-500 font-mono"
                             />
@@ -847,6 +1060,23 @@ export function EmployeeManagementPage() {
                             ) : (
                               <span className="text-xs text-[#71717A]">— Weekday —</span>
                             )}
+                          </td>
+                          <td className="px-4 py-3.5 text-right">
+                            <button
+                              onClick={() =>
+                                setEditingAttendance({
+                                  employee: emp,
+                                  record,
+                                  day: selectedAttendanceDay,
+                                  dateStr: targetDateStr,
+                                })
+                              }
+                              className="p-1.5 text-[#A1A1AA] hover:text-amber-400 hover:bg-[#27272A] rounded-lg transition inline-flex items-center gap-1"
+                              title="Edit Details & Notes"
+                            >
+                              <Edit2 size={13} />
+                              <span className="text-xs">Edit</span>
+                            </button>
                           </td>
                         </tr>
                       );
@@ -1051,6 +1281,7 @@ export function EmployeeManagementPage() {
                     <tr>
                       <th className="px-4 py-3.5">Employee</th>
                       <th className="px-4 py-3.5">Amount</th>
+                      <th className="px-4 py-3.5">Advance Date</th>
                       <th className="px-4 py-3.5">Reason</th>
                       <th className="px-4 py-3.5">Recovery Scheduled</th>
                       <th className="px-4 py-3.5">Status</th>
@@ -1060,13 +1291,13 @@ export function EmployeeManagementPage() {
                   <tbody className="divide-y divide-[#27272A]">
                     {isLoadingAdvances ? (
                       <tr>
-                        <td colSpan={6} className="px-4 py-8 text-center text-[#71717A]">
+                        <td colSpan={7} className="px-4 py-8 text-center text-[#71717A]">
                           Loading advances...
                         </td>
                       </tr>
                     ) : advancesList.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="px-4 py-8 text-center text-[#71717A]">
+                        <td colSpan={7} className="px-4 py-8 text-center text-[#71717A]">
                           No advances scheduled for {MONTHS[selectedMonth - 1]?.label} {selectedYear}.
                         </td>
                       </tr>
@@ -1078,6 +1309,13 @@ export function EmployeeManagementPage() {
                             <div className="text-xs font-mono text-amber-400">{adv.employee?.employeeId}</div>
                           </td>
                           <td className="px-4 py-3.5 font-bold text-[#FAFAFA]">{formatINR(adv.amount)}</td>
+                          <td className="px-4 py-3.5 text-xs text-[#FAFAFA]">
+                            {adv.advanceDate
+                              ? new Date(adv.advanceDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+                              : adv.createdAt
+                              ? new Date(adv.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+                              : '—'}
+                          </td>
                           <td className="px-4 py-3.5 text-xs text-[#A1A1AA]">{adv.reason}</td>
                           <td className="px-4 py-3.5 text-xs text-[#FAFAFA]">
                             {MONTHS[adv.recoveryMonth - 1]?.label} {adv.recoveryYear}
@@ -1093,7 +1331,14 @@ export function EmployeeManagementPage() {
                               {adv.isRecovered ? 'Recovered' : 'Pending Recovery'}
                             </span>
                           </td>
-                          <td className="px-4 py-3.5 text-right">
+                          <td className="px-4 py-3.5 text-right space-x-1">
+                            <button
+                              onClick={() => setEditingAdvance(adv)}
+                              className="p-1.5 text-[#A1A1AA] hover:text-amber-400 hover:bg-[#27272A] rounded-lg transition"
+                              title="Edit Advance"
+                            >
+                              <Edit2 size={14} />
+                            </button>
                             {!adv.isRecovered && (
                               <button
                                 onClick={async () => {
@@ -1101,10 +1346,10 @@ export function EmployeeManagementPage() {
                                   await employeeService.deleteAdvance(adv.id);
                                   fetchAdvancesAndDeductions();
                                 }}
-                                className="p-1 text-[#71717A] hover:text-rose-400 transition"
+                                className="p-1.5 text-[#71717A] hover:text-rose-400 hover:bg-[#27272A] rounded-lg transition"
                                 title="Delete Advance"
                               >
-                                <Trash2 size={15} />
+                                <Trash2 size={14} />
                               </button>
                             )}
                           </td>
@@ -1166,7 +1411,14 @@ export function EmployeeManagementPage() {
                               {ded.isApplied ? 'Applied' : 'Pending'}
                             </span>
                           </td>
-                          <td className="px-4 py-3.5 text-right">
+                          <td className="px-4 py-3.5 text-right space-x-1">
+                            <button
+                              onClick={() => setEditingDeduction(ded)}
+                              className="p-1.5 text-[#A1A1AA] hover:text-amber-400 hover:bg-[#27272A] rounded-lg transition"
+                              title="Edit Deduction"
+                            >
+                              <Edit2 size={14} />
+                            </button>
                             {!ded.isApplied && (
                               <button
                                 onClick={async () => {
@@ -1174,10 +1426,10 @@ export function EmployeeManagementPage() {
                                   await employeeService.deleteDeduction(ded.id);
                                   fetchAdvancesAndDeductions();
                                 }}
-                                className="p-1 text-[#71717A] hover:text-rose-400 transition"
+                                className="p-1.5 text-[#71717A] hover:text-rose-400 hover:bg-[#27272A] rounded-lg transition"
                                 title="Delete Deduction"
                               >
-                                <Trash2 size={15} />
+                                <Trash2 size={14} />
                               </button>
                             )}
                           </td>
@@ -1744,6 +1996,7 @@ export function EmployeeManagementPage() {
                 const payload = {
                   employeeId: formData.get('employeeId') as string,
                   amount: Number(formData.get('amount')),
+                  advanceDate: (formData.get('advanceDate') as string) || new Date().toISOString().slice(0, 10),
                   reason: formData.get('reason') as string,
                   recoveryMonth: Number(formData.get('recoveryMonth')),
                   recoveryYear: Number(formData.get('recoveryYear')),
@@ -1779,16 +2032,28 @@ export function EmployeeManagementPage() {
                 </select>
               </div>
 
-              <div>
-                <label className="block text-xs text-[#A1A1AA] mb-1">Advance Amount (₹) *</label>
-                <input
-                  type="number"
-                  name="amount"
-                  required
-                  min="1"
-                  placeholder="e.g. 5000"
-                  className="w-full px-3 py-2 bg-[#09090B] border border-[#27272A] rounded-xl text-[#FAFAFA] font-mono text-xs"
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-[#A1A1AA] mb-1">Advance Taken Date *</label>
+                  <input
+                    type="date"
+                    name="advanceDate"
+                    required
+                    defaultValue={new Date().toISOString().slice(0, 10)}
+                    className="w-full px-3 py-2 bg-[#09090B] border border-[#27272A] rounded-xl text-[#FAFAFA] text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-[#A1A1AA] mb-1">Advance Amount (₹) *</label>
+                  <input
+                    type="number"
+                    name="amount"
+                    required
+                    min="1"
+                    placeholder="e.g. 5000"
+                    className="w-full px-3 py-2 bg-[#09090B] border border-[#27272A] rounded-xl text-[#FAFAFA] font-mono text-xs"
+                  />
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -2056,6 +2321,354 @@ export function EmployeeManagementPage() {
                   className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs rounded-xl shadow transition"
                 >
                   Confirm & Auto-Email Payslip
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════════════════════════════════════════════════════════════════ */}
+      {/* MODAL: EDIT ATTENDANCE RECORD                                         */}
+      {/* ═══════════════════════════════════════════════════════════════════════ */}
+      {editingAttendance && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-[#18181B] border border-[#27272A] rounded-2xl w-full max-w-md p-6 space-y-4">
+            <div>
+              <h3 className="text-base font-bold text-[#FAFAFA]">Edit Attendance Record</h3>
+              <p className="text-xs text-[#A1A1AA] mt-1">
+                Editing attendance for <strong className="text-amber-400">{editingAttendance.employee.name}</strong> on{' '}
+                <span className="font-mono text-[#FAFAFA]">{editingAttendance.dateStr}</span> (Day {editingAttendance.day})
+              </p>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const form = e.target as HTMLFormElement;
+                const formData = new FormData(form);
+                handleSaveEditedAttendance({
+                  status: formData.get('status') as AttendanceStatus,
+                  overtimeHours: Number(formData.get('overtimeHours') || 0),
+                  isSundayOverride: formData.get('isSundayOverride') === 'true',
+                  notes: (formData.get('notes') as string)?.trim() || undefined,
+                });
+              }}
+              className="space-y-3.5 text-sm"
+            >
+              <div>
+                <label className="block text-xs text-[#A1A1AA] mb-1">Attendance Status *</label>
+                <select
+                  name="status"
+                  defaultValue={editingAttendance.record?.status || 'PRESENT'}
+                  className="w-full px-3 py-2 bg-[#09090B] border border-[#27272A] rounded-xl text-[#FAFAFA] text-xs"
+                >
+                  <option value="PRESENT">Present (Full Day)</option>
+                  <option value="CL">CL (Casual Leave)</option>
+                  <option value="EL">EL (Earned Leave)</option>
+                  <option value="HALF_DAY">Half Day</option>
+                  <option value="UL">UL (Unpaid Leave)</option>
+                  <option value="LEAVE">Leave</option>
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-[#A1A1AA] mb-1">Overtime Hours</label>
+                  <input
+                    type="number"
+                    name="overtimeHours"
+                    min="0"
+                    max="24"
+                    step="0.5"
+                    defaultValue={editingAttendance.record ? Number(editingAttendance.record.overtimeHours) : 0}
+                    className="w-full px-3 py-2 bg-[#09090B] border border-[#27272A] rounded-xl text-[#FAFAFA] font-mono text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-[#A1A1AA] mb-1">Sunday Shift</label>
+                  <select
+                    name="isSundayOverride"
+                    defaultValue={editingAttendance.record?.isSundayOverride ? 'true' : 'false'}
+                    className="w-full px-3 py-2 bg-[#09090B] border border-[#27272A] rounded-xl text-[#FAFAFA] text-xs"
+                  >
+                    <option value="false">Standard / Off</option>
+                    <option value="true">Approved Sunday Work (Paid)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs text-[#A1A1AA] mb-1">Remarks / Reason / Notes</label>
+                <input
+                  type="text"
+                  name="notes"
+                  defaultValue={editingAttendance.record?.notes || ''}
+                  placeholder="e.g. Late reporting by 30 mins, client visit"
+                  className="w-full px-3 py-2 bg-[#09090B] border border-[#27272A] rounded-xl text-[#FAFAFA] text-xs"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#27272A]">
+                <button
+                  type="button"
+                  onClick={() => setEditingAttendance(null)}
+                  className="px-3 py-1.5 text-xs text-[#A1A1AA] hover:text-[#FAFAFA] transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-1.5 bg-amber-600 hover:bg-amber-500 text-white font-semibold text-xs rounded-xl transition"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════════════════════════════════════════════════════════════════ */}
+      {/* MODAL: EDIT SALARY ADVANCE                                            */}
+      {/* ═══════════════════════════════════════════════════════════════════════ */}
+      {editingAdvance && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-[#18181B] border border-[#27272A] rounded-2xl w-full max-w-md p-6 space-y-4">
+            <div>
+              <h3 className="text-base font-bold text-[#FAFAFA]">Edit Salary Advance</h3>
+              <p className="text-xs text-[#A1A1AA] mt-1">
+                Employee: <strong className="text-[#FAFAFA]">{editingAdvance.employee?.name}</strong> ({editingAdvance.employee?.employeeId})
+              </p>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const form = e.target as HTMLFormElement;
+                const formData = new FormData(form);
+                handleSaveEditedAdvance({
+                  amount: Number(formData.get('amount')),
+                  advanceDate: (formData.get('advanceDate') as string) || new Date().toISOString().slice(0, 10),
+                  recoveryMonth: Number(formData.get('recoveryMonth')),
+                  recoveryYear: Number(formData.get('recoveryYear')),
+                  reason: formData.get('reason') as string,
+                  isRecovered: formData.get('isRecovered') === 'true',
+                });
+              }}
+              className="space-y-3 text-sm"
+            >
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-[#A1A1AA] mb-1">Advance Taken Date *</label>
+                  <input
+                    type="date"
+                    name="advanceDate"
+                    required
+                    defaultValue={
+                      editingAdvance.advanceDate
+                        ? new Date(editingAdvance.advanceDate).toISOString().slice(0, 10)
+                        : editingAdvance.createdAt
+                        ? new Date(editingAdvance.createdAt).toISOString().slice(0, 10)
+                        : new Date().toISOString().slice(0, 10)
+                    }
+                    className="w-full px-3 py-2 bg-[#09090B] border border-[#27272A] rounded-xl text-[#FAFAFA] text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-[#A1A1AA] mb-1">Amount (₹) *</label>
+                  <input
+                    type="number"
+                    name="amount"
+                    required
+                    min="1"
+                    defaultValue={Number(editingAdvance.amount)}
+                    className="w-full px-3 py-2 bg-[#09090B] border border-[#27272A] rounded-xl text-[#FAFAFA] font-mono text-xs"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-[#A1A1AA] mb-1">Recovery Month</label>
+                  <select
+                    name="recoveryMonth"
+                    defaultValue={editingAdvance.recoveryMonth}
+                    className="w-full px-3 py-2 bg-[#09090B] border border-[#27272A] rounded-xl text-[#FAFAFA] text-xs"
+                  >
+                    {MONTHS.map((m) => (
+                      <option key={m.value} value={m.value}>
+                        {m.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-[#A1A1AA] mb-1">Recovery Year</label>
+                  <select
+                    name="recoveryYear"
+                    defaultValue={editingAdvance.recoveryYear}
+                    className="w-full px-3 py-2 bg-[#09090B] border border-[#27272A] rounded-xl text-[#FAFAFA] text-xs"
+                  >
+                    {[2025, 2026, 2027].map((y) => (
+                      <option key={y} value={y}>
+                        {y}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs text-[#A1A1AA] mb-1">Reason for Advance *</label>
+                <textarea
+                  name="reason"
+                  required
+                  rows={2}
+                  defaultValue={editingAdvance.reason}
+                  className="w-full px-3 py-2 bg-[#09090B] border border-[#27272A] rounded-xl text-[#FAFAFA] text-xs"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs text-[#A1A1AA] mb-1">Recovery Status</label>
+                <select
+                  name="isRecovered"
+                  defaultValue={editingAdvance.isRecovered ? 'true' : 'false'}
+                  className="w-full px-3 py-2 bg-[#09090B] border border-[#27272A] rounded-xl text-[#FAFAFA] text-xs"
+                >
+                  <option value="false">Pending Recovery</option>
+                  <option value="true">Recovered (Deducted from salary)</option>
+                </select>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#27272A]">
+                <button
+                  type="button"
+                  onClick={() => setEditingAdvance(null)}
+                  className="px-3 py-1.5 text-xs text-[#A1A1AA] hover:text-[#FAFAFA] transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-1.5 bg-amber-600 hover:bg-amber-500 text-white font-semibold text-xs rounded-xl transition"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════════════════════════════════════════════════════════════════ */}
+      {/* MODAL: EDIT DEDUCTION / PENALTY                                       */}
+      {/* ═══════════════════════════════════════════════════════════════════════ */}
+      {editingDeduction && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-[#18181B] border border-[#27272A] rounded-2xl w-full max-w-md p-6 space-y-4">
+            <div>
+              <h3 className="text-base font-bold text-[#FAFAFA]">Edit Deduction</h3>
+              <p className="text-xs text-[#A1A1AA] mt-1">
+                Employee: <strong className="text-[#FAFAFA]">{editingDeduction.employee?.name}</strong> ({editingDeduction.employee?.employeeId})
+              </p>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const form = e.target as HTMLFormElement;
+                const formData = new FormData(form);
+                handleSaveEditedDeduction({
+                  amount: Number(formData.get('amount')),
+                  applyMonth: Number(formData.get('applyMonth')),
+                  applyYear: Number(formData.get('applyYear')),
+                  reason: formData.get('reason') as string,
+                  isApplied: formData.get('isApplied') === 'true',
+                });
+              }}
+              className="space-y-3 text-sm"
+            >
+              <div>
+                <label className="block text-xs text-[#A1A1AA] mb-1">Amount (₹) *</label>
+                <input
+                  type="number"
+                  name="amount"
+                  required
+                  min="1"
+                  defaultValue={Number(editingDeduction.amount)}
+                  className="w-full px-3 py-2 bg-[#09090B] border border-[#27272A] rounded-xl text-[#FAFAFA] font-mono text-xs"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-[#A1A1AA] mb-1">Apply Month</label>
+                  <select
+                    name="applyMonth"
+                    defaultValue={editingDeduction.applyMonth}
+                    className="w-full px-3 py-2 bg-[#09090B] border border-[#27272A] rounded-xl text-[#FAFAFA] text-xs"
+                  >
+                    {MONTHS.map((m) => (
+                      <option key={m.value} value={m.value}>
+                        {m.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-[#A1A1AA] mb-1">Apply Year</label>
+                  <select
+                    name="applyYear"
+                    defaultValue={editingDeduction.applyYear}
+                    className="w-full px-3 py-2 bg-[#09090B] border border-[#27272A] rounded-xl text-[#FAFAFA] text-xs"
+                  >
+                    {[2025, 2026, 2027].map((y) => (
+                      <option key={y} value={y}>
+                        {y}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs text-[#A1A1AA] mb-1">Reason *</label>
+                <textarea
+                  name="reason"
+                  required
+                  rows={2}
+                  defaultValue={editingDeduction.reason}
+                  className="w-full px-3 py-2 bg-[#09090B] border border-[#27272A] rounded-xl text-[#FAFAFA] text-xs"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs text-[#A1A1AA] mb-1">Deduction Status</label>
+                <select
+                  name="isApplied"
+                  defaultValue={editingDeduction.isApplied ? 'true' : 'false'}
+                  className="w-full px-3 py-2 bg-[#09090B] border border-[#27272A] rounded-xl text-[#FAFAFA] text-xs"
+                >
+                  <option value="false">Pending</option>
+                  <option value="true">Applied (Deducted from salary)</option>
+                </select>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#27272A]">
+                <button
+                  type="button"
+                  onClick={() => setEditingDeduction(null)}
+                  className="px-3 py-1.5 text-xs text-[#A1A1AA] hover:text-[#FAFAFA] transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-1.5 bg-rose-600 hover:bg-rose-500 text-white font-semibold text-xs rounded-xl transition"
+                >
+                  Save Changes
                 </button>
               </div>
             </form>
