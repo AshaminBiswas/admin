@@ -95,10 +95,24 @@ export const installerPaymentsService = {
     window.URL.revokeObjectURL(url);
   },
 
-  async resendClearanceEmail(id: string): Promise<{ success: boolean; message?: string }> {
+  async resendClearanceEmail(id: string, recipientEmail?: string): Promise<{ success: boolean; message?: string }> {
     const res = await fetchAdminApi<any>(`/installer-payments/${encodeURIComponent(id)}/resend-email`, {
       method: 'POST',
+      body: JSON.stringify(recipientEmail ? { recipientEmail } : {}),
     });
+    if (res && res.success === false) {
+      throw new Error(res.message || 'Failed to dispatch email');
+    }
+    return res?.data || res;
+  },
+
+  async deleteBill(id: string): Promise<{ success: boolean; message?: string }> {
+    const res = await fetchAdminApi<any>(`/installer-payments/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    });
+    if (res && res.success === false) {
+      throw new Error(res.message || 'Failed to delete installer bill');
+    }
     return res?.data || res;
   },
 

@@ -134,6 +134,7 @@ export interface CreateInstallerBillPayload {
   paymentDate?: string;
   paymentMode?: string;
   notes: string;
+  sendEmailToInstaller?: boolean;
 }
 
 export interface UpdateInstallerBillPayload {

@@ -70,6 +70,7 @@ export function CreateInstallerBillPage({ onBack }: CreateInstallerBillPageProps
   );
   const [paymentMode, setPaymentMode] = useState<string>('BANK_TRANSFER');
   const [internalNotes, setInternalNotes] = useState<string>('');
+  const [sendEmailImmediately, setSendEmailImmediately] = useState<boolean>(true);
 
   // Fetch registered models & installers on mount
   useEffect(() => {
@@ -256,13 +257,18 @@ export function CreateInstallerBillPage({ onBack }: CreateInstallerBillPageProps
         paymentDate: initialAmountPaid > 0 ? paymentDate : undefined,
         paymentMode: initialAmountPaid > 0 ? paymentMode : undefined,
         notes: internalNotes.trim(), // Mandatory!
+        sendEmailToInstaller: sendEmailImmediately,
       };
 
       const createdBill = await installerPaymentsService.createBill(payload);
       setFeedback({
         type: 'success',
         message: `Installer Bill ${createdBill.billNo} generated successfully! ${
-          willBeCleared ? 'Status is CLEARED — PDF invoice has been auto-dispatched to installer.' : ''
+          sendEmailImmediately
+            ? `Official PDF payment voucher dispatched to ${installerEmail.trim()}.`
+            : willBeCleared
+            ? 'Status is CLEARED.'
+            : ''
         }`,
       });
 
@@ -790,6 +796,31 @@ export function CreateInstallerBillPage({ onBack }: CreateInstallerBillPageProps
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                   Required: Internal notes are logged into the permanent bill audit ledger for tracking and accountability.
                 </p>
+              </div>
+
+              {/* 5. Dispatch Voucher Option */}
+              <div className="pt-2 border-t border-gray-100 dark:border-[#27272A]">
+                <label className="flex items-start gap-3 p-3.5 bg-violet-50/70 dark:bg-violet-950/20 border border-violet-200/80 dark:border-violet-800/40 rounded-xl cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={sendEmailImmediately}
+                    onChange={(e) => setSendEmailImmediately(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded border-gray-300 text-violet-600 focus:ring-violet-500"
+                  />
+                  <div className="text-xs">
+                    <span className="font-semibold text-gray-900 dark:text-white flex items-center gap-1.5">
+                      <Send size={13} className="text-violet-600 dark:text-violet-400" />
+                      Send Bill & PDF Payment Voucher to Installer Email
+                    </span>
+                    <span className="text-gray-500 dark:text-gray-400 block mt-0.5">
+                      Automatically sends the payment advice and attached PDF statement directly to{' '}
+                      <strong className="text-gray-800 dark:text-gray-200">
+                        {installerEmail.trim() || "the installer's email address"}
+                      </strong>{' '}
+                      upon bill generation.
+                    </span>
+                  </div>
+                </label>
               </div>
             </div>
           </div>

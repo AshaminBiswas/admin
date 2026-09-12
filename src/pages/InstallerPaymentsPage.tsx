@@ -112,6 +112,15 @@ export function InstallerPaymentsPage({ onNewBill }: InstallerPaymentsPageProps 
   const [exportStatus, setExportStatus] = useState<'ALL' | 'PARTIAL' | 'CLEARED'>('ALL');
   const [isExporting, setIsExporting] = useState<boolean>(false);
 
+  // Super Admin Delete Bill State
+  const [billToDelete, setBillToDelete] = useState<InstallerBill | null>(null);
+  const [isDeletingBill, setIsDeletingBill] = useState<boolean>(false);
+
+  // Dedicated Installer Email Modal State
+  const [billForEmail, setBillForEmail] = useState<InstallerBill | null>(null);
+  const [emailRecipientInput, setEmailRecipientInput] = useState<string>('');
+  const [isSendingEmail, setIsSendingEmail] = useState<boolean>(false);
+
   // ─── Formatters ─────────────────────────────────────────────────────────────
   const formatINR = (val: number | string | null | undefined): string => {
     const num = Number(val ?? 0);
@@ -274,19 +283,62 @@ export function InstallerPaymentsPage({ onNewBill }: InstallerPaymentsPageProps 
     }
   };
 
-  // ─── Email Resend Handler ──────────────────────────────────────────────────
-  const handleResendEmail = async (bill: InstallerBill) => {
+  // ─── Email Modal & Send Handler ───────────────────────────────────────────
+  const handleOpenSendEmailModal = (bill: InstallerBill) => {
+    setBillForEmail(bill);
+    setEmailRecipientInput(bill.installerEmail || '');
+  };
+
+  const handleSendBillEmail = async () => {
+    if (!billForEmail) return;
+    const targetEmail = (emailRecipientInput || billForEmail.installerEmail || '').trim();
+    if (!targetEmail || !targetEmail.includes('@')) {
+      setActionNotice({ type: 'error', message: 'Please enter a valid installer email address.' });
+      return;
+    }
+
     try {
-      setActionNotice({ type: 'success', message: `Dispatching clearance email to ${bill.installerEmail}...` });
-      await installerPaymentsService.resendClearanceEmail(bill.id);
-      setActionNotice({ type: 'success', message: `Clearance email dispatched to ${bill.installerEmail}!` });
+      setIsSendingEmail(true);
+      setActionNotice({ type: 'success', message: `Dispatching payment voucher to ${targetEmail}...` });
+      await installerPaymentsService.resendClearanceEmail(billForEmail.id, targetEmail);
+      setActionNotice({ type: 'success', message: `Payment voucher successfully dispatched to ${targetEmail}!` });
+      setBillForEmail(null);
       loadBills(currentPage);
-      if (selectedBillForDetails?.id === bill.id) {
-        const updated = await installerPaymentsService.getBill(bill.id);
+      if (selectedBillForDetails?.id === billForEmail.id) {
+        const updated = await installerPaymentsService.getBill(billForEmail.id);
         setSelectedBillForDetails(updated);
       }
     } catch (err: any) {
       setActionNotice({ type: 'error', message: err.message || 'Failed to dispatch email' });
+    } finally {
+      setIsSendingEmail(false);
+    }
+  };
+
+  // ─── Super Admin Delete Bill Handler ───────────────────────────────────────
+  const handleDeleteBill = async () => {
+    if (!billToDelete) return;
+    if (!isSuperAdmin) {
+      setActionNotice({ type: 'error', message: 'Access denied: Only Super Admin can delete installer bills.' });
+      return;
+    }
+
+    try {
+      setIsDeletingBill(true);
+      await installerPaymentsService.deleteBill(billToDelete.id);
+      setActionNotice({
+        type: 'success',
+        message: `Bill #${billToDelete.billNo} has been deleted successfully.`,
+      });
+      if (selectedBillForDetails?.id === billToDelete.id) {
+        setSelectedBillForDetails(null);
+      }
+      setBillToDelete(null);
+      await loadBills(currentPage);
+    } catch (err: any) {
+      setActionNotice({ type: 'error', message: err.message || 'Failed to delete installer bill' });
+    } finally {
+      setIsDeletingBill(false);
     }
   };
 
@@ -712,29 +764,37 @@ export function InstallerPaymentsPage({ onNewBill }: InstallerPaymentsPageProps 
                           </td>
                           <td className="py-3.5 px-4 text-center whitespace-nowrap">
                             {bill.emailStatus === 'SENT' ? (
-                              <span
-                                className="inline-flex items-center gap-1 text-emerald-600 text-[11px] font-medium"
-                                title={`Dispatched on ${formatDate(bill.emailSentAt)}`}
-                              >
-                                <CheckCircle2 size={13} /> Sent
-                              </span>
+                              <div className="inline-flex items-center justify-center gap-1.5">
+                                <span
+                                  className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 text-[11px] font-medium"
+                                  title={`Dispatched to ${bill.installerEmail} on ${formatDate(bill.emailSentAt)}`}
+                                >
+                                  <CheckCircle2 size={13} /> Sent
+                                </span>
+                                <button
+                                  onClick={() => handleOpenSendEmailModal(bill)}
+                                  className="text-slate-400 hover:text-violet-600 dark:hover:text-violet-400 text-[10px] font-medium underline transition-colors"
+                                  title={`Resend payment advice & PDF voucher to ${bill.installerEmail}`}
+                                >
+                                  Resend
+                                </button>
+                              </div>
                             ) : bill.emailStatus === 'FAILED' ? (
                               <button
-                                onClick={() => handleResendEmail(bill)}
+                                onClick={() => handleOpenSendEmailModal(bill)}
                                 className="inline-flex items-center gap-1 text-rose-600 hover:text-rose-700 text-[11px] font-medium underline"
-                                title={`Failed: ${bill.emailError || 'Unknown error'}. Click to retry.`}
+                                title={`Failed: ${bill.emailError || 'Unknown error'}. Click to verify email & retry.`}
                               >
                                 <AlertCircle size={13} /> Retry
                               </button>
-                            ) : isCleared ? (
+                            ) : (
                               <button
-                                onClick={() => handleResendEmail(bill)}
-                                className="inline-flex items-center gap-1 text-violet-600 hover:text-violet-700 text-[11px] font-medium underline"
+                                onClick={() => handleOpenSendEmailModal(bill)}
+                                className="inline-flex items-center gap-1 text-violet-600 hover:text-violet-700 dark:text-violet-400 text-[11px] font-medium underline"
+                                title={`Send payment advice & PDF voucher to ${bill.installerEmail}`}
                               >
                                 <Send size={12} /> Send Email
                               </button>
-                            ) : (
-                              <span className="text-slate-400 text-[11px]">On Clearance</span>
                             )}
                           </td>
                           <td className="py-3.5 px-4 text-center whitespace-nowrap">
@@ -767,6 +827,17 @@ export function InstallerPaymentsPage({ onNewBill }: InstallerPaymentsPageProps 
                               >
                                 <ChevronRight size={15} />
                               </button>
+
+                              {/* Super Admin Delete Action */}
+                              {isSuperAdmin && (
+                                <button
+                                  onClick={() => setBillToDelete(bill)}
+                                  className="p-1.5 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
+                                  title="Delete Bill (Super Admin only)"
+                                >
+                                  <Trash2 size={15} />
+                                </button>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -820,14 +891,23 @@ export function InstallerPaymentsPage({ onNewBill }: InstallerPaymentsPageProps 
                       </div>
 
                       <div className="flex items-center justify-between pt-1">
-                        <button
-                          onClick={() => handleDownloadPdf(bill)}
-                          className="flex items-center gap-1 text-xs text-violet-600 font-medium"
-                        >
-                          <Download size={14} /> PDF Bill
-                        </button>
+                        <div className="flex items-center gap-2.5">
+                          <button
+                            onClick={() => handleDownloadPdf(bill)}
+                            className="flex items-center gap-1 text-xs text-violet-600 dark:text-violet-400 font-medium"
+                          >
+                            <Download size={13} /> PDF
+                          </button>
+                          <button
+                            onClick={() => handleOpenSendEmailModal(bill)}
+                            className="flex items-center gap-1 text-xs text-slate-600 dark:text-slate-300 hover:text-violet-600 font-medium"
+                            title={`Dispatch to ${bill.installerEmail}`}
+                          >
+                            <Mail size={13} /> {bill.emailStatus === 'SENT' ? 'Resend' : 'Send'}
+                          </button>
+                        </div>
 
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5">
                           {bill.balanceDue > 0 && (
                             <button
                               onClick={() => setBillForPayment(bill)}
@@ -842,6 +922,15 @@ export function InstallerPaymentsPage({ onNewBill }: InstallerPaymentsPageProps 
                           >
                             Dossier
                           </button>
+                          {isSuperAdmin && (
+                            <button
+                              onClick={() => setBillToDelete(bill)}
+                              className="p-1 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 rounded-lg"
+                              title="Delete Bill (Super Admin only)"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1305,13 +1394,15 @@ export function InstallerPaymentsPage({ onNewBill }: InstallerPaymentsPageProps 
       {selectedBillForDetails && (
         <BillDetailsDrawer
           bill={selectedBillForDetails}
+          isSuperAdmin={isSuperAdmin}
           onClose={() => setSelectedBillForDetails(null)}
           onDownloadPdf={() => handleDownloadPdf(selectedBillForDetails)}
-          onResendEmail={() => handleResendEmail(selectedBillForDetails)}
+          onResendEmail={() => handleOpenSendEmailModal(selectedBillForDetails)}
           onRecordPayment={() => {
             setBillForPayment(selectedBillForDetails);
             setSelectedBillForDetails(null);
           }}
+          onDeleteBill={() => setBillToDelete(selectedBillForDetails)}
         />
       )}
 
@@ -1348,6 +1439,32 @@ export function InstallerPaymentsPage({ onNewBill }: InstallerPaymentsPageProps 
               message: editingInstaller ? 'Installer updated successfully.' : 'New installer registered.',
             });
           }}
+        />
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────────────────
+          MODAL 5: SUPER ADMIN DELETE BILL MODAL
+      ────────────────────────────────────────────────────────────────────────── */}
+      {billToDelete && (
+        <DeleteBillConfirmationModal
+          bill={billToDelete}
+          isDeleting={isDeletingBill}
+          onConfirm={handleDeleteBill}
+          onClose={() => setBillToDelete(null)}
+        />
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────────────────
+          MODAL 6: DEDICATED INSTALLER EMAIL DISPATCH MODAL
+      ────────────────────────────────────────────────────────────────────────── */}
+      {billForEmail && (
+        <SendBillEmailModal
+          bill={billForEmail}
+          recipientEmail={emailRecipientInput}
+          onRecipientEmailChange={setEmailRecipientInput}
+          isSending={isSendingEmail}
+          onSend={handleSendBillEmail}
+          onClose={() => setBillForEmail(null)}
         />
       )}
     </div>
@@ -2064,18 +2181,22 @@ function RecordPaymentModal({ bill, onClose, onSuccess }: RecordPaymentModalProp
 
 interface BillDetailsDrawerProps {
   bill: InstallerBill;
+  isSuperAdmin?: boolean;
   onClose: () => void;
   onDownloadPdf: () => void;
   onResendEmail: () => void;
   onRecordPayment: () => void;
+  onDeleteBill?: () => void;
 }
 
 function BillDetailsDrawer({
   bill,
+  isSuperAdmin = false,
   onClose,
   onDownloadPdf,
   onResendEmail,
   onRecordPayment,
+  onDeleteBill,
 }: BillDetailsDrawerProps) {
   const isCleared = bill.paymentStatus === 'CLEARED';
 
@@ -2241,14 +2362,12 @@ function BillDetailsDrawer({
                 Error: {bill.emailError}
               </div>
             )}
-            {isCleared && (
-              <button
-                onClick={onResendEmail}
-                className="w-full mt-2 py-1.5 bg-slate-200 dark:bg-[#323238] hover:bg-slate-300 text-slate-800 dark:text-slate-200 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5"
-              >
-                <Send size={13} /> Resend Clearance Email
-              </button>
-            )}
+            <button
+              onClick={onResendEmail}
+              className="w-full mt-2 py-2 bg-violet-50 hover:bg-violet-100 dark:bg-violet-950/30 dark:hover:bg-violet-950/50 text-violet-700 dark:text-violet-300 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
+            >
+              <Send size={13} /> {bill.emailStatus === 'SENT' ? 'Resend Payment Voucher' : 'Send Payment Voucher to Installer'}
+            </button>
           </div>
         </div>
 
@@ -2266,6 +2385,15 @@ function BillDetailsDrawer({
               className="py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold flex items-center gap-1.5"
             >
               + Pay Due
+            </button>
+          )}
+          {isSuperAdmin && onDeleteBill && (
+            <button
+              onClick={onDeleteBill}
+              className="py-2.5 px-3 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/30 dark:hover:bg-rose-950/50 text-rose-600 dark:text-rose-400 rounded-xl font-bold flex items-center gap-1.5 transition-colors"
+              title="Delete Bill (Super Admin only)"
+            >
+              <Trash2 size={15} />
             </button>
           )}
         </div>
@@ -2552,4 +2680,242 @@ function CubicleInstallerModal({ installer, onClose, onSuccess }: CubicleInstall
     </div>
   );
 }
+
+// ─── SUB-COMPONENT: SUPER ADMIN DELETE BILL CONFIRMATION MODAL ───────────────
+
+interface DeleteBillModalProps {
+  bill: InstallerBill;
+  isDeleting: boolean;
+  onConfirm: () => void;
+  onClose: () => void;
+}
+
+function DeleteBillConfirmationModal({
+  bill,
+  isDeleting,
+  onConfirm,
+  onClose,
+}: DeleteBillModalProps) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+      <div className="bg-white dark:bg-[#18181B] w-full max-w-md rounded-2xl border border-rose-200 dark:border-rose-900/60 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+        <div className="p-5 border-b border-rose-100 dark:border-rose-950/50 flex items-center justify-between bg-rose-50/50 dark:bg-rose-950/20">
+          <div className="flex items-center gap-2.5 text-rose-600 dark:text-rose-400">
+            <div className="p-2 rounded-xl bg-rose-100 dark:bg-rose-950/60">
+              <Trash2 size={20} />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-gray-900 dark:text-white">Delete Installer Bill</h3>
+              <p className="text-xs text-rose-600 dark:text-rose-400 font-medium">Super Admin Authorization Required</p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            disabled={isDeleting}
+            className="p-1 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-white"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="p-5 space-y-4 text-xs">
+          <div className="p-3.5 bg-rose-50/70 dark:bg-rose-950/30 border border-rose-200/80 dark:border-rose-800/40 rounded-xl text-rose-800 dark:text-rose-200 leading-relaxed">
+            Are you sure you want to delete Bill <strong>#{bill.billNo}</strong>? This record will be soft-deleted, removed from all financial calculations, and hidden from the bills list.
+          </div>
+
+          <div className="bg-gray-50 dark:bg-[#27272A]/40 p-3.5 rounded-xl border border-gray-200 dark:border-[#3F3F46] space-y-2">
+            <div className="flex justify-between">
+              <span className="text-gray-500 dark:text-gray-400">Bill Number:</span>
+              <span className="font-bold text-violet-600 dark:text-violet-400">{bill.billNo}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-500 dark:text-gray-400">Installer:</span>
+              <span className="font-semibold text-gray-900 dark:text-white">{bill.installerName}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-500 dark:text-gray-400">Installer Email:</span>
+              <span className="text-gray-700 dark:text-gray-300">{bill.installerEmail}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-500 dark:text-gray-400">Site Address:</span>
+              <span className="text-gray-700 dark:text-gray-300 truncate max-w-[200px]">{bill.siteAddress}</span>
+            </div>
+            <div className="flex justify-between pt-1 border-t border-gray-200 dark:border-[#3F3F46]">
+              <span className="text-gray-500 dark:text-gray-400">Total Amount:</span>
+              <span className="font-bold text-gray-900 dark:text-white">
+                ₹{Number(bill.total).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="p-4 bg-gray-50 dark:bg-[#18181B]/80 border-t border-gray-100 dark:border-[#27272A] flex items-center justify-end gap-2.5">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={isDeleting}
+            className="px-4 py-2 text-xs font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-[#27272A] rounded-xl transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={isDeleting}
+            className="px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 disabled:opacity-50 rounded-xl shadow-xs flex items-center gap-1.5 transition-colors"
+          >
+            {isDeleting ? (
+              <>
+                <RefreshCw size={13} className="animate-spin" />
+                Deleting...
+              </>
+            ) : (
+              <>
+                <Trash2 size={13} />
+                Delete Bill
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── SUB-COMPONENT: DEDICATED INSTALLER EMAIL DISPATCH MODAL ─────────────────
+
+interface SendBillEmailModalProps {
+  bill: InstallerBill;
+  recipientEmail: string;
+  onRecipientEmailChange: (email: string) => void;
+  isSending: boolean;
+  onSend: () => void;
+  onClose: () => void;
+}
+
+function SendBillEmailModal({
+  bill,
+  recipientEmail,
+  onRecipientEmailChange,
+  isSending,
+  onSend,
+  onClose,
+}: SendBillEmailModalProps) {
+  const isCleared = bill.paymentStatus === 'CLEARED';
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+      <div className="bg-white dark:bg-[#18181B] w-full max-w-md rounded-2xl border border-violet-200 dark:border-violet-900/60 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+        <div className="p-5 border-b border-violet-100 dark:border-violet-950/50 flex items-center justify-between bg-violet-50/50 dark:bg-violet-950/20">
+          <div className="flex items-center gap-2.5 text-violet-600 dark:text-violet-400">
+            <div className="p-2 rounded-xl bg-violet-100 dark:bg-violet-950/60">
+              <Mail size={20} />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-gray-900 dark:text-white">Send Payment Voucher</h3>
+              <p className="text-xs text-violet-600 dark:text-violet-400 font-medium">Bill #{bill.billNo}</p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            disabled={isSending}
+            className="p-1 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-white"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="p-5 space-y-4 text-xs">
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+              Destination Installer Email <span className="text-rose-500">*</span>
+            </label>
+            <div className="relative">
+              <Mail className="absolute left-3 top-2.5 text-gray-400" size={15} />
+              <input
+                type="email"
+                required
+                value={recipientEmail}
+                onChange={(e) => onRecipientEmailChange(e.target.value)}
+                placeholder="installer@example.com"
+                className="w-full pl-9 pr-3 py-2 bg-white dark:bg-[#27272A]/60 border border-gray-300 dark:border-[#3F3F46] rounded-xl text-xs text-gray-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-violet-500"
+              />
+            </div>
+            <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
+              Confirm or edit the destination email. The official payment advice and PDF voucher will be delivered directly to this address.
+            </p>
+          </div>
+
+          <div className="bg-gray-50 dark:bg-[#27272A]/40 p-3.5 rounded-xl border border-gray-200 dark:border-[#3F3F46] space-y-2">
+            <div className="flex justify-between">
+              <span className="text-gray-500 dark:text-gray-400">Installer Name:</span>
+              <span className="font-semibold text-gray-900 dark:text-white">{bill.installerName}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-500 dark:text-gray-400">Payment Status:</span>
+              <span
+                className={`font-bold px-2 py-0.5 rounded-full text-[10px] ${
+                  isCleared
+                    ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300'
+                    : 'bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300'
+                }`}
+              >
+                {isCleared ? 'Full / Cleared' : 'Partial'}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-500 dark:text-gray-400">Amount Paid:</span>
+              <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                ₹{Number(bill.amountPaid).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              </span>
+            </div>
+            {Number(bill.balanceDue) > 0 && (
+              <div className="flex justify-between">
+                <span className="text-gray-500 dark:text-gray-400">Balance Due:</span>
+                <span className="font-bold text-amber-600 dark:text-amber-400">
+                  ₹{Number(bill.balanceDue).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+            )}
+            <div className="flex items-center gap-2 pt-2 border-t border-gray-200 dark:border-[#3F3F46] text-slate-600 dark:text-slate-300">
+              <FileText size={14} className="text-violet-500 shrink-0" />
+              <span className="truncate font-medium">{bill.billNo}-Payment-Advice.pdf</span>
+              <span className="text-[10px] text-gray-400 ml-auto shrink-0">Attached</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="p-4 bg-gray-50 dark:bg-[#18181B]/80 border-t border-gray-100 dark:border-[#27272A] flex items-center justify-end gap-2.5">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={isSending}
+            className="px-4 py-2 text-xs font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-[#27272A] rounded-xl transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onSend}
+            disabled={isSending || !recipientEmail.trim()}
+            className="px-4 py-2 text-xs font-bold text-white bg-violet-600 hover:bg-violet-700 disabled:opacity-50 rounded-xl shadow-xs flex items-center gap-1.5 transition-colors"
+          >
+            {isSending ? (
+              <>
+                <RefreshCw size={13} className="animate-spin" />
+                Dispatching...
+              </>
+            ) : (
+              <>
+                <Send size={13} />
+                Send to Installer
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 
