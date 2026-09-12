@@ -37,6 +37,16 @@ import {
   Grid,
   ListFilter,
   ExternalLink,
+  Briefcase,
+  Clock,
+  CalendarCheck,
+  IndianRupee,
+  Wrench,
+  Building2,
+  Truck,
+  Bot,
+  FolderKanban,
+  Receipt,
 } from "lucide-react";
 import { rolesApi } from "../api/adminApi";
 import { useAdminAuth } from "../context/AdminAuthContext";
@@ -158,12 +168,53 @@ function getCrudBadge(type: CrudType) {
   }
 }
 
+export function formatModuleName(mod: string): string {
+  if (!mod) return "";
+  const nameMap: Record<string, string> = {
+    cubicle_installers: "Cubicle Installers",
+    cubicle_models: "Cubicle Models",
+    installer_payments: "Installer Payments",
+    proforma_invoices: "Proforma Invoices",
+    po_management: "PO Management & AI Scanner",
+    stock_transfers: "Stock Transfers (Inter-Branch)",
+    b2b_pricing: "B2B Custom Pricing",
+    ai_agent: "AI Copilot Agent",
+    audit_logs: "Audit Logs",
+    "audit-logs": "Audit Logs",
+    employee_management: "Employee Management",
+    employees: "Employees Directory",
+    attendance: "Daily Attendance",
+    leaves: "Leave Ledger & Accrual",
+    advances: "Salary Advances",
+    deductions: "Deductions & Penalties",
+    payroll: "Monthly Payroll",
+    branches: "Multi-Branch Facilities",
+    suppliers: "Suppliers & Vendors",
+    purchases: "Purchases (Stock-In)",
+    materials: "Materials Master",
+    appointments: "Appointments & Service",
+    projects: "Showcase Projects",
+  };
+  const key = mod.toLowerCase();
+  if (nameMap[key]) return nameMap[key];
+  return mod.replace(/[-_]/g, " ").toUpperCase();
+}
+
 function getModuleIcon(module: string) {
   const m = module.toLowerCase();
+  if (m.includes("employee") || m.includes("staff")) return <Briefcase size={14} />;
+  if (m.includes("attendance")) return <Clock size={14} />;
+  if (m.includes("leave")) return <CalendarCheck size={14} />;
+  if (m.includes("payroll") || m.includes("advance") || m.includes("deduction") || m.includes("pricing") || m.includes("finance")) return <IndianRupee size={14} />;
+  if (m.includes("installer") || m.includes("cubicle") || m.includes("material")) return <Wrench size={14} />;
+  if (m.includes("branch") || m.includes("warehouse")) return <Building2 size={14} />;
+  if (m.includes("supplier") || m.includes("purchase") || m.includes("transfer") || m.includes("logistics") || m.includes("shipping")) return <Truck size={14} />;
+  if (m.includes("proforma") || m.includes("invoice") || m.includes("quote") || m.includes("po") || m.includes("order")) return <Receipt size={14} />;
+  if (m.includes("appointment")) return <Calendar size={14} />;
+  if (m.includes("ai")) return <Bot size={14} />;
+  if (m.includes("project")) return <FolderKanban size={14} />;
   if (m.includes("user") || m.includes("auth")) return <Users size={14} />;
   if (m.includes("product") || m.includes("catalog") || m.includes("variant")) return <ShoppingBag size={14} />;
-  if (m.includes("order") || m.includes("quote") || m.includes("po") || m.includes("invoice")) return <FileText size={14} />;
-  if (m.includes("appointment")) return <Calendar size={14} />;
   if (m.includes("enquir")) return <MessageSquare size={14} />;
   if (m.includes("role") || m.includes("permission")) return <ShieldCheck size={14} />;
   if (m.includes("setting") || m.includes("config")) return <Settings size={14} />;
@@ -1392,7 +1443,7 @@ export function RolesPage() {
                               {getModuleIcon(group.module)}
                             </div>
                             <span className="text-xs font-bold uppercase text-[#FAFAFA] tracking-wider">
-                              {group.module}
+                              {formatModuleName(group.module)}
                             </span>
                             <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-purple-500/10 text-[#A855F7] border border-purple-500/20">
                               {checkedCount} / {groupSlugs.length} Granted
@@ -1599,7 +1650,7 @@ export function RolesPage() {
                         : "bg-[#09090B] border-[#27272A] text-[#A1A1AA] hover:border-[#3F3F46]"
                     }`}
                   >
-                    {mod}
+                    {formatModuleName(mod)}
                   </button>
                 ))}
               </div>
@@ -1625,7 +1676,7 @@ export function RolesPage() {
                     <div className="space-y-2">
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-[10px] font-mono uppercase font-bold px-2 py-0.5 rounded-md bg-purple-500/10 text-[#A855F7] border border-purple-500/20">
-                          {perm.module}
+                          {formatModuleName(perm.module)}
                         </span>
                         {getCrudBadge(crud)}
                       </div>
@@ -1791,7 +1842,7 @@ export function RolesPage() {
                             onClick={() => handleToggleCreateAccordion(group.module)}
                           >
                             <span className="text-[11px] font-bold uppercase text-[#FAFAFA]">
-                              {group.module}
+                              {formatModuleName(group.module)}
                             </span>
                             <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-[#27272A] text-[#A1A1AA]">
                               {group.permissions.filter((p) => createPerms.has(p.slug || p.id)).length}/{groupSlugs.length}
