@@ -58,6 +58,20 @@ const DEPARTMENTS = [
   'Engineering & QA',
 ];
 
+const COMMON_DESIGNATIONS = [
+  'Workers',
+  'Hardware Technician',
+  'Cubicle Installer',
+  'Site Supervisor',
+  'Operations Executive',
+  'Senior Hardware Engineer',
+  'Sales & Business Development',
+  'Finance & Accounts',
+  'Administration & HR',
+  'Fabricator / Carpenter',
+  'Helper / Support Staff',
+];
+
 const MONTHS = [
   { value: 1, label: 'January' },
   { value: 2, label: 'February' },
@@ -104,6 +118,7 @@ export function EmployeeManagementPage() {
   const [isLoadingEmployees, setIsLoadingEmployees] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDepartment, setSelectedDepartment] = useState('All Departments');
+  const [selectedDesignation, setSelectedDesignation] = useState('All Designations');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
 
   // Attendance State
@@ -130,6 +145,8 @@ export function EmployeeManagementPage() {
   // Modals State
   const [isAddEmployeeModalOpen, setIsAddEmployeeModalOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
+  const [modalDesignation, setModalDesignation] = useState<string>('Workers');
+  const [customDesignation, setCustomDesignation] = useState<string>('');
   const [isLeaveAdjustModalOpen, setIsLeaveAdjustModalOpen] = useState(false);
   const [isAddAdvanceModalOpen, setIsAddAdvanceModalOpen] = useState(false);
   const [isAddDeductionModalOpen, setIsAddDeductionModalOpen] = useState(false);
@@ -161,6 +178,22 @@ export function EmployeeManagementPage() {
     setTimeout(() => setFeedback(null), 4000);
   };
 
+  // Sync modal designation when adding or editing an employee
+  useEffect(() => {
+    if (editingEmployee) {
+      if (COMMON_DESIGNATIONS.includes(editingEmployee.designation)) {
+        setModalDesignation(editingEmployee.designation);
+        setCustomDesignation('');
+      } else {
+        setModalDesignation('OTHER');
+        setCustomDesignation(editingEmployee.designation);
+      }
+    } else {
+      setModalDesignation('Workers');
+      setCustomDesignation('');
+    }
+  }, [editingEmployee, isAddEmployeeModalOpen]);
+
   // ─── Data Fetching ──────────────────────────────────────────────────────────
   const fetchEmployees = useCallback(async () => {
     setIsLoadingEmployees(true);
@@ -168,6 +201,7 @@ export function EmployeeManagementPage() {
       const res = await employeeService.listEmployees({
         search: searchQuery || undefined,
         department: selectedDepartment !== 'All Departments' ? selectedDepartment : undefined,
+        designation: selectedDesignation !== 'All Designations' ? selectedDesignation : undefined,
         status: statusFilter !== 'ALL' ? statusFilter : undefined,
         limit: 100,
       });
@@ -177,7 +211,7 @@ export function EmployeeManagementPage() {
     } finally {
       setIsLoadingEmployees(false);
     }
-  }, [searchQuery, selectedDepartment, statusFilter]);
+  }, [searchQuery, selectedDepartment, selectedDesignation, statusFilter]);
 
   const fetchAttendance = useCallback(async () => {
     setIsLoadingAttendance(true);
@@ -818,6 +852,19 @@ export function EmployeeManagementPage() {
               </select>
 
               <select
+                value={selectedDesignation}
+                onChange={(e) => setSelectedDesignation(e.target.value)}
+                className="bg-[#09090B] border border-[#27272A] text-sm text-[#FAFAFA] rounded-xl px-3 py-2 focus:outline-none focus:border-amber-500"
+              >
+                <option value="All Designations">All Designations</option>
+                {COMMON_DESIGNATIONS.map((desig) => (
+                  <option key={desig} value={desig}>
+                    {desig}
+                  </option>
+                ))}
+              </select>
+
+              <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value as any)}
                 className="bg-[#09090B] border border-[#27272A] text-sm text-[#FAFAFA] rounded-xl px-3 py-2 focus:outline-none focus:border-amber-500"
@@ -871,7 +918,14 @@ export function EmployeeManagementPage() {
                           <div className="text-xs text-[#71717A]">{emp.email} • {emp.phone}</div>
                         </td>
                         <td className="px-4 py-3.5">
-                          <div className="text-[#FAFAFA]">{emp.designation}</div>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-[#FAFAFA] font-medium">{emp.designation}</span>
+                            {emp.designation.toLowerCase() === 'workers' && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 font-medium">
+                                Worker
+                              </span>
+                            )}
+                          </div>
                           <div className="text-xs text-[#71717A]">{emp.department}</div>
                         </td>
                         <td className="px-4 py-3.5">
@@ -882,13 +936,15 @@ export function EmployeeManagementPage() {
                         <td className="px-4 py-3.5 text-xs text-[#A1A1AA]">
                           {emp.bankName || emp.bankAccountNumber ? (
                             <>
-                              <div>{emp.bankName || 'Bank'}</div>
+                              <div className="font-medium text-[#FAFAFA]">{emp.bankName || 'Disbursement Account'}</div>
                               <div className="font-mono text-[11px] text-[#71717A]">
                                 {emp.bankAccountNumber || '—'} {emp.bankIfsc ? `(${emp.bankIfsc})` : ''}
                               </div>
                             </>
                           ) : (
-                            <span className="text-[#71717A] italic">Not Provided</span>
+                            <span className="inline-flex items-center text-[11px] text-[#71717A] italic px-1.5 py-0.5 rounded bg-zinc-800/40 border border-zinc-700/30">
+                              Optional (Not Provided)
+                            </span>
                           )}
                         </td>
                         <td className="px-4 py-3.5 font-semibold text-[#FAFAFA]">
@@ -1674,6 +1730,9 @@ export function EmployeeManagementPage() {
                 const rawBankName = ((formData.get('bankName') as string) || '').trim();
                 const rawBankHolder = ((formData.get('bankAccountHolder') as string) || '').trim();
 
+                const computedDesignation =
+                  (modalDesignation === 'OTHER' ? customDesignation : modalDesignation).trim() || 'Workers';
+
                 const payload = {
                   name: (formData.get('name') as string).trim(),
                   email: (formData.get('email') as string).trim().toLowerCase(),
@@ -1685,7 +1744,7 @@ export function EmployeeManagementPage() {
                   bankIfsc: rawBankIfsc || undefined,
                   bankName: rawBankName || undefined,
                   bankAccountHolder: rawBankHolder || undefined,
-                  designation: (formData.get('designation') as string).trim(),
+                  designation: computedDesignation,
                   department: (formData.get('department') as string).trim(),
                   responsibilities: ((formData.get('responsibilities') as string) || '').trim() || undefined,
                   monthlyCtc: Number(formData.get('monthlyCtc')),
@@ -1732,14 +1791,58 @@ export function EmployeeManagementPage() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-[#A1A1AA] mb-1">Designation *</label>
-                  <input
-                    name="designation"
-                    required
-                    defaultValue={editingEmployee?.designation || ''}
-                    placeholder="e.g. Senior Hardware Engineer"
-                    className="w-full px-3 py-2 bg-[#09090B] border border-[#27272A] rounded-xl text-[#FAFAFA] focus:outline-none focus:border-amber-500"
-                  />
+                  <label className="block text-xs font-semibold text-[#A1A1AA] mb-1">
+                    Designation * <span className="text-amber-400 font-normal">(Default: Workers)</span>
+                  </label>
+                  <select
+                    value={modalDesignation}
+                    onChange={(e) => {
+                      setModalDesignation(e.target.value);
+                      if (e.target.value !== 'OTHER') {
+                        setCustomDesignation('');
+                      }
+                    }}
+                    className="w-full px-3 py-2 bg-[#09090B] border border-[#27272A] rounded-xl text-[#FAFAFA] focus:outline-none focus:border-amber-500 font-medium text-xs"
+                  >
+                    {COMMON_DESIGNATIONS.map((d) => (
+                      <option key={d} value={d}>
+                        {d}
+                      </option>
+                    ))}
+                    <option value="OTHER">+ Other (Custom Designation)</option>
+                  </select>
+
+                  {modalDesignation === 'OTHER' && (
+                    <input
+                      type="text"
+                      required
+                      placeholder="Enter custom designation (e.g. CNC Operator)"
+                      value={customDesignation}
+                      onChange={(e) => setCustomDesignation(e.target.value)}
+                      className="w-full mt-2 px-3 py-2 bg-[#09090B] border border-amber-500/60 rounded-xl text-[#FAFAFA] text-xs focus:outline-none focus:border-amber-500 placeholder-[#71717A]"
+                    />
+                  )}
+
+                  <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                    <span className="text-[11px] text-[#71717A]">Quick pick:</span>
+                    {['Workers', 'Hardware Technician', 'Cubicle Installer', 'Site Supervisor'].map((role) => (
+                      <button
+                        type="button"
+                        key={role}
+                        onClick={() => {
+                          setModalDesignation(role);
+                          setCustomDesignation('');
+                        }}
+                        className={`text-[11px] px-2 py-0.5 rounded-md border transition ${
+                          modalDesignation === role
+                            ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 font-semibold'
+                            : 'bg-[#27272A]/50 text-[#A1A1AA] border-[#27272A] hover:bg-[#27272A] hover:text-[#FAFAFA]'
+                        }`}
+                      >
+                        {role}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 <div>
@@ -1842,49 +1945,65 @@ export function EmployeeManagementPage() {
                 </div>
               </div>
 
-              {/* Bank Account Section */}
-              <div className="p-3.5 bg-[#09090B] border border-[#27272A] rounded-xl space-y-2">
+              {/* Bank Account Section (Optional) */}
+              <div className="p-3.5 bg-[#09090B] border border-[#27272A] rounded-xl space-y-2.5">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-emerald-400 uppercase tracking-wide">
-                    Bank Disbursement Account
+                  <div className="flex items-center gap-2">
+                    <CreditCard size={14} className="text-emerald-400" />
+                    <span className="text-xs font-bold text-emerald-400 uppercase tracking-wide">
+                      Bank Disbursement Account
+                    </span>
+                  </div>
+                  <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-medium">
+                    Optional / Can be added later
                   </span>
-                  <span className="text-[11px] text-[#71717A] italic font-normal">Optional</span>
                 </div>
+                <p className="text-[11px] text-[#71717A]">
+                  Bank details are entirely optional (e.g. for cash workers or daily wage staff). You can leave all bank fields blank or update them anytime.
+                </p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs text-[#71717A] mb-1">Bank Name</label>
+                    <label className="block text-xs text-[#71717A] mb-1">
+                      Bank Name <span className="text-[#52525B] font-normal">(Optional)</span>
+                    </label>
                     <input
                       name="bankName"
                       defaultValue={editingEmployee?.bankName || ''}
-                      placeholder="e.g. State Bank of India (optional)"
-                      className="w-full px-3 py-2 bg-[#18181B] border border-[#27272A] rounded-xl text-[#FAFAFA] text-xs"
+                      placeholder="e.g. State Bank of India"
+                      className="w-full px-3 py-2 bg-[#18181B] border border-[#27272A] rounded-xl text-[#FAFAFA] text-xs focus:outline-none focus:border-emerald-500/50"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-[#71717A] mb-1">Account Holder Name</label>
+                    <label className="block text-xs text-[#71717A] mb-1">
+                      Account Holder Name <span className="text-[#52525B] font-normal">(Optional)</span>
+                    </label>
                     <input
                       name="bankAccountHolder"
                       defaultValue={editingEmployee?.bankAccountHolder || ''}
-                      placeholder="as per bank passbook (optional)"
-                      className="w-full px-3 py-2 bg-[#18181B] border border-[#27272A] rounded-xl text-[#FAFAFA] text-xs"
+                      placeholder="as per bank passbook"
+                      className="w-full px-3 py-2 bg-[#18181B] border border-[#27272A] rounded-xl text-[#FAFAFA] text-xs focus:outline-none focus:border-emerald-500/50"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-[#71717A] mb-1">Account Number</label>
+                    <label className="block text-xs text-[#71717A] mb-1">
+                      Account Number <span className="text-[#52525B] font-normal">(Optional)</span>
+                    </label>
                     <input
                       name="bankAccountNumber"
                       defaultValue={editingEmployee?.bankAccountNumber || ''}
-                      placeholder="A/C Number (optional)"
-                      className="w-full px-3 py-2 bg-[#18181B] border border-[#27272A] rounded-xl text-[#FAFAFA] text-xs font-mono"
+                      placeholder="e.g. 123456789012"
+                      className="w-full px-3 py-2 bg-[#18181B] border border-[#27272A] rounded-xl text-[#FAFAFA] text-xs font-mono focus:outline-none focus:border-emerald-500/50"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-[#71717A] mb-1">IFSC Code</label>
+                    <label className="block text-xs text-[#71717A] mb-1">
+                      IFSC Code <span className="text-[#52525B] font-normal">(Optional)</span>
+                    </label>
                     <input
                       name="bankIfsc"
                       defaultValue={editingEmployee?.bankIfsc || ''}
-                      placeholder="e.g. SBIN0001234 (optional)"
-                      className="w-full px-3 py-2 bg-[#18181B] border border-[#27272A] rounded-xl text-[#FAFAFA] text-xs font-mono uppercase"
+                      placeholder="e.g. SBIN0001234"
+                      className="w-full px-3 py-2 bg-[#18181B] border border-[#27272A] rounded-xl text-[#FAFAFA] text-xs font-mono uppercase focus:outline-none focus:border-emerald-500/50"
                     />
                   </div>
                 </div>

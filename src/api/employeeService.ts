@@ -25,6 +25,7 @@ export const employeeService = {
   async listEmployees(params: {
     search?: string;
     department?: string;
+    designation?: string;
     status?: string;
     page?: number;
     limit?: number;
@@ -32,6 +33,7 @@ export const employeeService = {
     const query = new URLSearchParams();
     if (params.search) query.append('search', params.search);
     if (params.department) query.append('department', params.department);
+    if (params.designation) query.append('designation', params.designation);
     if (params.status) query.append('status', params.status);
     if (params.page) query.append('page', params.page.toString());
     if (params.limit) query.append('limit', params.limit.toString());
