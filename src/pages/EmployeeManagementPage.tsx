@@ -145,6 +145,13 @@ export function EmployeeManagementPage() {
   const [editingAdvance, setEditingAdvance] = useState<EmployeeAdvance | null>(null);
   const [editingDeduction, setEditingDeduction] = useState<EmployeeDeduction | null>(null);
 
+  // Leave Adjustment Form State
+  const [leaveAdjustEmpId, setLeaveAdjustEmpId] = useState<string>('');
+  const [leaveAdjustType, setLeaveAdjustType] = useState<'CL' | 'EL'>('CL');
+  const [leaveAdjustAction, setLeaveAdjustAction] = useState<'USAGE' | 'ACCRUAL' | 'ADJUSTMENT'>('USAGE');
+  const [leaveAdjustAmount, setLeaveAdjustAmount] = useState<string>('1');
+  const [leaveAdjustReason, setLeaveAdjustReason] = useState<string>('');
+
   // Toast / Feedback State
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
@@ -1111,7 +1118,15 @@ export function EmployeeManagementPage() {
               </button>
 
               <button
-                onClick={() => setIsLeaveAdjustModalOpen(true)}
+                onClick={() => {
+                  const defaultEmp = selectedEmployeeForLeave || employees.find((e) => e.status === 'ACTIVE')?.id || '';
+                  setLeaveAdjustEmpId(defaultEmp);
+                  setLeaveAdjustType('CL');
+                  setLeaveAdjustAction('USAGE');
+                  setLeaveAdjustAmount('1');
+                  setLeaveAdjustReason('');
+                  setIsLeaveAdjustModalOpen(true);
+                }}
                 className="px-4 py-2 bg-[#09090B] hover:bg-[#27272A] text-[#FAFAFA] text-xs font-semibold rounded-xl border border-[#27272A] transition"
               >
                 Manual Leave Adjustment
@@ -1861,125 +1876,257 @@ export function EmployeeManagementPage() {
       {/* ═══════════════════════════════════════════════════════════════════════ */}
       {/* MODAL: MANUAL LEAVE ADJUSTMENT                                        */}
       {/* ═══════════════════════════════════════════════════════════════════════ */}
-      {isLeaveAdjustModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="bg-[#18181B] border border-[#27272A] rounded-2xl w-full max-w-md p-6 space-y-4">
-            <h3 className="text-base font-bold text-[#FAFAFA]">Manual Leave Adjustment</h3>
-            <form
-              onSubmit={async (e) => {
-                e.preventDefault();
-                const form = e.target as HTMLFormElement;
-                const formData = new FormData(form);
-                const empId = formData.get('employeeId') as string;
-                const payload = {
-                  leaveType: formData.get('leaveType') as string,
-                  transactionType: formData.get('transactionType') as string,
-                  amount: Number(formData.get('amount')),
-                  month: selectedMonth,
-                  year: selectedYear,
-                  reason: formData.get('reason') as string,
-                };
-                try {
-                  await employeeService.adjustLeave(empId, payload);
-                  showFeedback('success', 'Leave adjusted successfully');
-                  setIsLeaveAdjustModalOpen(false);
-                  fetchEmployees();
-                  if (selectedEmployeeForLeave === empId) {
-                    employeeService.getLeaveLedger(empId).then((r) => setLeaveHistory(r.history));
-                  }
-                } catch (err: any) {
-                  showFeedback('error', err?.message || 'Adjustment failed');
-                }
-              }}
-              className="space-y-3 text-sm"
-            >
-              <div>
-                <label className="block text-xs text-[#A1A1AA] mb-1">Select Employee</label>
-                <select
-                  name="employeeId"
-                  required
-                  defaultValue={selectedEmployeeForLeave || ''}
-                  className="w-full px-3 py-2 bg-[#09090B] border border-[#27272A] rounded-xl text-[#FAFAFA] text-xs"
-                >
-                  <option value="" disabled>
-                    -- Select Employee --
-                  </option>
-                  {employees
-                    .filter((e) => e.status === 'ACTIVE')
-                    .map((emp) => (
-                      <option key={emp.id} value={emp.id}>
-                        {emp.name} ({emp.employeeId})
-                      </option>
-                    ))}
-                </select>
-              </div>
+      {isLeaveAdjustModalOpen && (() => {
+        const activeStaff = employees.filter((e) => e.status === 'ACTIVE');
+        const selectedEmp =
+          activeStaff.find((e) => e.id === leaveAdjustEmpId) ||
+          activeStaff.find((e) => e.id === selectedEmployeeForLeave) ||
+          activeStaff[0];
 
-              <div className="grid grid-cols-2 gap-3">
+        const currentBal = selectedEmp
+          ? Number(leaveAdjustType === 'CL' ? selectedEmp.clBalance : selectedEmp.elBalance)
+          : 0;
+
+        const numAmount = Math.max(0, Number(leaveAdjustAmount) || 0);
+        const delta =
+          leaveAdjustAction === 'USAGE'
+            ? -numAmount
+            : leaveAdjustAction === 'ACCRUAL'
+            ? numAmount
+            : Number(leaveAdjustAmount) || 0;
+
+        const rawRemaining = currentBal + delta;
+        const remainingBal = Math.max(0, rawRemaining);
+        const isNegativeRemaining = rawRemaining < 0;
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+            <div className="bg-[#18181B] border border-[#27272A] rounded-2xl w-full max-w-md p-6 space-y-4">
+              <div className="flex items-center justify-between">
                 <div>
-                  <label className="block text-xs text-[#A1A1AA] mb-1">Leave Type</label>
-                  <select
-                    name="leaveType"
-                    className="w-full px-3 py-2 bg-[#09090B] border border-[#27272A] rounded-xl text-[#FAFAFA] text-xs"
-                  >
-                    <option value="CL">CL (Casual)</option>
-                    <option value="EL">EL (Earned)</option>
-                  </select>
+                  <h3 className="text-base font-bold text-[#FAFAFA]">Manual Leave Adjustment</h3>
+                  <p className="text-xs text-[#A1A1AA] mt-0.5">
+                    Credit, debit (usage), or adjust employee leave balances
+                  </p>
                 </div>
-                <div>
-                  <label className="block text-xs text-[#A1A1AA] mb-1">Action Type</label>
-                  <select
-                    name="transactionType"
-                    className="w-full px-3 py-2 bg-[#09090B] border border-[#27272A] rounded-xl text-[#FAFAFA] text-xs"
-                  >
-                    <option value="ADJUSTMENT">Adjustment</option>
-                    <option value="ACCRUAL">Credit (Accrual)</option>
-                    <option value="USAGE">Debit (Usage)</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs text-[#A1A1AA] mb-1">Amount (+ for credit, - for debit)</label>
-                <input
-                  type="number"
-                  step="0.25"
-                  name="amount"
-                  required
-                  placeholder="e.g. 1.0 or -1.0"
-                  className="w-full px-3 py-2 bg-[#09090B] border border-[#27272A] rounded-xl text-[#FAFAFA] text-xs font-mono"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs text-[#A1A1AA] mb-1">Reason for Adjustment</label>
-                <input
-                  type="text"
-                  name="reason"
-                  required
-                  placeholder="e.g. Compensatory off granted / Correction"
-                  className="w-full px-3 py-2 bg-[#09090B] border border-[#27272A] rounded-xl text-[#FAFAFA] text-xs"
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#27272A]">
                 <button
                   type="button"
                   onClick={() => setIsLeaveAdjustModalOpen(false)}
-                  className="px-3 py-1.5 text-xs text-[#A1A1AA]"
+                  className="p-1 text-[#71717A] hover:text-[#FAFAFA] rounded-lg transition"
                 >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-1.5 bg-amber-600 hover:bg-amber-500 text-white font-semibold text-xs rounded-xl transition"
-                >
-                  Confirm Adjustment
+                  <X size={16} />
                 </button>
               </div>
-            </form>
+
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (!selectedEmp) {
+                    showFeedback('error', 'Please select an employee');
+                    return;
+                  }
+                  if (numAmount <= 0) {
+                    showFeedback('error', 'Please enter a valid leave amount');
+                    return;
+                  }
+
+                  const payload = {
+                    leaveType: leaveAdjustType,
+                    transactionType: leaveAdjustAction,
+                    amount: numAmount,
+                    month: selectedMonth,
+                    year: selectedYear,
+                    reason: leaveAdjustReason.trim(),
+                  };
+
+                  try {
+                    const res = await employeeService.adjustLeave(selectedEmp.id, payload);
+                    const newBal = res?.currentBalance !== undefined ? Number(res.currentBalance) : remainingBal;
+
+                    // Optimistic update of local employees list
+                    setEmployees((prev) =>
+                      prev.map((emp) =>
+                        emp.id === selectedEmp.id
+                          ? {
+                              ...emp,
+                              clBalance: leaveAdjustType === 'CL' ? newBal : emp.clBalance,
+                              elBalance: leaveAdjustType === 'EL' ? newBal : emp.elBalance,
+                            }
+                          : emp
+                      )
+                    );
+
+                    const actionVerb =
+                      leaveAdjustAction === 'USAGE'
+                        ? 'Deducted'
+                        : leaveAdjustAction === 'ACCRUAL'
+                        ? 'Added'
+                        : 'Adjusted';
+
+                    showFeedback(
+                      'success',
+                      `${actionVerb} ${numAmount} ${leaveAdjustType} for ${selectedEmp.name}. Remaining Balance: ${newBal.toFixed(2)} days.`
+                    );
+
+                    setIsLeaveAdjustModalOpen(false);
+                    fetchEmployees();
+
+                    if (selectedEmployeeForLeave === selectedEmp.id) {
+                      employeeService.getLeaveLedger(selectedEmp.id).then((r) => setLeaveHistory(r.history));
+                    }
+                  } catch (err: any) {
+                    showFeedback('error', err?.message || 'Leave adjustment failed');
+                  }
+                }}
+                className="space-y-3.5 text-sm"
+              >
+                <div>
+                  <label className="block text-xs text-[#A1A1AA] mb-1">Select Employee *</label>
+                  <select
+                    value={selectedEmp?.id || ''}
+                    onChange={(e) => setLeaveAdjustEmpId(e.target.value)}
+                    required
+                    className="w-full px-3 py-2 bg-[#09090B] border border-[#27272A] rounded-xl text-[#FAFAFA] text-xs focus:outline-none focus:border-amber-500"
+                  >
+                    {activeStaff.map((emp) => (
+                      <option key={emp.id} value={emp.id}>
+                        {emp.name} ({emp.employeeId}) • CL: {Number(emp.clBalance).toFixed(2)}, EL: {Number(emp.elBalance).toFixed(2)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs text-[#A1A1AA] mb-1">Leave Type *</label>
+                    <select
+                      value={leaveAdjustType}
+                      onChange={(e) => setLeaveAdjustType(e.target.value as 'CL' | 'EL')}
+                      className="w-full px-3 py-2 bg-[#09090B] border border-[#27272A] rounded-xl text-[#FAFAFA] text-xs focus:outline-none focus:border-amber-500"
+                    >
+                      <option value="CL">Casual Leave (CL)</option>
+                      <option value="EL">Earned Leave (EL)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs text-[#A1A1AA] mb-1">Action Type *</label>
+                    <select
+                      value={leaveAdjustAction}
+                      onChange={(e) => setLeaveAdjustAction(e.target.value as any)}
+                      className="w-full px-3 py-2 bg-[#09090B] border border-[#27272A] rounded-xl text-[#FAFAFA] text-xs focus:outline-none focus:border-amber-500"
+                    >
+                      <option value="USAGE">CL/EL Debit (Used / Deduct)</option>
+                      <option value="ACCRUAL">Credit (Accrual / Add)</option>
+                      <option value="ADJUSTMENT">Custom Adjustment</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs text-[#A1A1AA]">
+                      {leaveAdjustAction === 'USAGE'
+                        ? 'Days to Deduct (Debit) *'
+                        : leaveAdjustAction === 'ACCRUAL'
+                        ? 'Days to Credit (Accrual) *'
+                        : 'Days to Adjust *'}
+                    </label>
+                    <span className="text-[11px] text-[#71717A]">Step: 0.25 / 0.5 / 1.0 day</span>
+                  </div>
+                  <input
+                    type="number"
+                    step="0.25"
+                    min="0.25"
+                    value={leaveAdjustAmount}
+                    onChange={(e) => setLeaveAdjustAmount(e.target.value)}
+                    required
+                    placeholder="e.g. 1.0"
+                    className="w-full px-3 py-2 bg-[#09090B] border border-[#27272A] rounded-xl text-[#FAFAFA] text-xs font-mono focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+
+                {/* ─── Real-Time Balance & Remaining Calculation Card ────────────── */}
+                <div className="p-3.5 bg-[#09090B] border border-[#27272A] rounded-xl space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-[#A1A1AA]">Current {leaveAdjustType} Balance:</span>
+                    <span className="font-mono font-semibold text-[#FAFAFA]">{currentBal.toFixed(2)} days</span>
+                  </div>
+
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-[#A1A1AA]">
+                      {leaveAdjustAction === 'USAGE'
+                        ? `Debit (${leaveAdjustType} Used):`
+                        : leaveAdjustAction === 'ACCRUAL'
+                        ? `Credit (${leaveAdjustType} Added):`
+                        : `Adjustment (${leaveAdjustType}):`}
+                    </span>
+                    <span
+                      className={`font-mono font-bold ${
+                        delta < 0 ? 'text-rose-400' : delta > 0 ? 'text-emerald-400' : 'text-[#71717A]'
+                      }`}
+                    >
+                      {delta < 0 ? `-${Math.abs(delta).toFixed(2)}` : `+${delta.toFixed(2)}`} days
+                    </span>
+                  </div>
+
+                  <div className="pt-2 border-t border-[#27272A] flex items-center justify-between">
+                    <div>
+                      <span className="text-xs font-semibold text-[#FAFAFA]">
+                        Remaining {leaveAdjustType} Balance:
+                      </span>
+                      {isNegativeRemaining && (
+                        <span className="block text-[10px] text-rose-400 font-medium">
+                          Note: Exceeds balance by {Math.abs(rawRemaining).toFixed(2)} days (clamped to 0.00)
+                        </span>
+                      )}
+                    </div>
+                    <span
+                      className={`text-sm font-mono font-bold ${
+                        isNegativeRemaining ? 'text-rose-400' : 'text-amber-400'
+                      }`}
+                    >
+                      {remainingBal.toFixed(2)} days
+                    </span>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs text-[#A1A1AA] mb-1">Reason for Adjustment *</label>
+                  <input
+                    type="text"
+                    value={leaveAdjustReason}
+                    onChange={(e) => setLeaveAdjustReason(e.target.value)}
+                    required
+                    placeholder="e.g. Leave taken on 10th Sep / Compensatory off granted"
+                    className="w-full px-3 py-2 bg-[#09090B] border border-[#27272A] rounded-xl text-[#FAFAFA] text-xs focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#27272A]">
+                  <button
+                    type="button"
+                    onClick={() => setIsLeaveAdjustModalOpen(false)}
+                    className="px-3 py-1.5 text-xs text-[#A1A1AA] hover:text-[#FAFAFA] transition"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className={`px-4 py-1.5 font-semibold text-xs rounded-xl shadow transition text-white ${
+                      leaveAdjustAction === 'USAGE'
+                        ? 'bg-rose-600 hover:bg-rose-500'
+                        : 'bg-amber-600 hover:bg-amber-500'
+                    }`}
+                  >
+                    {leaveAdjustAction === 'USAGE' ? 'Deduct Leave (Debit)' : 'Confirm Adjustment'}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* ═══════════════════════════════════════════════════════════════════════ */}
       {/* MODAL: GIVE SALARY ADVANCE                                            */}
