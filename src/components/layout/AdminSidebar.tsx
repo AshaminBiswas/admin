@@ -40,6 +40,7 @@ import {
   QrCode,
   Landmark,
   Wrench,
+  BadgeCheck,
   X,
 } from "lucide-react";
 import { useAdminAuth } from "../../context/AdminAuthContext";
@@ -100,6 +101,7 @@ export function AdminSidebar({
     { id: "invoice", label: "Invoices & GST", category: "Sales & Fulfillment", icon: <Receipt size={18} />, badge: "GST" },
 
     // Customers & Access
+    { id: "employee-management", label: "Employees & Payroll", category: "Customers & Access", icon: <BadgeCheck size={18} />, badge: "HR" },
     { id: "admins", label: "Admin Users & Staff", category: "Customers & Access", icon: <KeyRound size={18} />, badge: "Admin" },
     { id: "users", label: "Users & Customers", category: "Customers & Access", icon: <UserCheck size={18} /> },
     { id: "b2b-pricing", label: "B2B Custom Pricing", category: "Customers & Access", icon: <Coins size={18} />, badge: "B2B" },

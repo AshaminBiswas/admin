@@ -43,6 +43,8 @@ import type {
   CreateCubicleModelPayload,
   UpdateCubicleModelPayload,
   InstallerLedgerResponse,
+  UpdateInstallerBillPayload,
+  BillAuditLogEntry,
 } from '../types/installerPayment';
 
 export interface InstallerPaymentsPageProps {
@@ -91,6 +93,7 @@ export function InstallerPaymentsPage({ onNewBill }: InstallerPaymentsPageProps 
   const [showCreateModal, setShowCreateModal] = useState<boolean>(false);
   const [selectedBillForDetails, setSelectedBillForDetails] = useState<InstallerBill | null>(null);
   const [billForPayment, setBillForPayment] = useState<InstallerBill | null>(null);
+  const [billForEdit, setBillForEdit] = useState<InstallerBill | null>(null);
   const [showModelModal, setShowModelModal] = useState<boolean>(false);
   const [editingModel, setEditingModel] = useState<CubicleModel | null>(null);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
@@ -999,6 +1002,17 @@ export function InstallerPaymentsPage({ onNewBill }: InstallerPaymentsPageProps 
                                 <ChevronRight size={15} />
                               </button>
 
+                              {/* Super Admin Edit Action */}
+                              {isSuperAdmin && (
+                                <button
+                                  onClick={() => setBillForEdit(bill)}
+                                  className="p-1.5 text-slate-400 hover:text-amber-600 dark:hover:text-amber-400 rounded-lg hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors"
+                                  title="Edit Bill Details (Super Admin only)"
+                                >
+                                  <Edit2 size={15} />
+                                </button>
+                              )}
+
                               {/* Super Admin Delete Action */}
                               {isSuperAdmin && (
                                 <button
@@ -1138,6 +1152,15 @@ export function InstallerPaymentsPage({ onNewBill }: InstallerPaymentsPageProps 
                           >
                             Dossier
                           </button>
+                          {isSuperAdmin && (
+                            <button
+                              onClick={() => setBillForEdit(bill)}
+                              className="p-1 text-slate-400 hover:text-amber-600 dark:hover:text-amber-400 rounded-lg"
+                              title="Edit Bill Details (Super Admin only)"
+                            >
+                              <Edit2 size={14} />
+                            </button>
+                          )}
                           {isSuperAdmin && (
                             <button
                               onClick={() => setBillToDelete(bill)}
@@ -1970,6 +1993,15 @@ export function InstallerPaymentsPage({ onNewBill }: InstallerPaymentsPageProps 
                                   >
                                     <FileText size={14} />
                                   </button>
+                                  {isSuperAdmin && (
+                                    <button
+                                      onClick={() => setBillForEdit(b)}
+                                      className="p-1.5 text-slate-400 hover:text-amber-600 dark:hover:text-amber-400 rounded-lg hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors"
+                                      title="Edit Bill Details (Super Admin only)"
+                                    >
+                                      <Edit2 size={14} />
+                                    </button>
+                                  )}
                                   {b.balanceDue > 0 && (
                                     <button
                                       onClick={() => setBillForPayment(b)}
@@ -2038,7 +2070,32 @@ export function InstallerPaymentsPage({ onNewBill }: InstallerPaymentsPageProps 
             setBillForPayment(selectedBillForDetails);
             setSelectedBillForDetails(null);
           }}
+          onEditBill={() => {
+            setBillForEdit(selectedBillForDetails);
+          }}
           onDeleteBill={() => setBillToDelete(selectedBillForDetails)}
+        />
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────────────────
+          MODAL: SUPER ADMIN EDIT INSTALLER BILL MODAL
+      ────────────────────────────────────────────────────────────────────────── */}
+      {billForEdit && (
+        <EditInstallerBillModal
+          bill={billForEdit}
+          onClose={() => setBillForEdit(null)}
+          onSuccess={(updatedBill) => {
+            setBills((prev) => prev.map((b) => (b.id === updatedBill.id ? updatedBill : b)));
+            if (selectedBillForDetails?.id === updatedBill.id) {
+              setSelectedBillForDetails(updatedBill);
+            }
+            setBillForEdit(null);
+            setActionNotice({
+              type: 'success',
+              message: `Bill ${updatedBill.billNo} updated successfully by Super Admin. Audit log recorded.`,
+            });
+            loadBills(currentPage);
+          }}
         />
       )}
 
@@ -2897,6 +2954,7 @@ interface BillDetailsDrawerProps {
   onDownloadPdf: () => void;
   onResendEmail: () => void;
   onRecordPayment: () => void;
+  onEditBill?: () => void;
   onDeleteBill?: () => void;
 }
 
@@ -2907,9 +2965,36 @@ function BillDetailsDrawer({
   onDownloadPdf,
   onResendEmail,
   onRecordPayment,
+  onEditBill,
   onDeleteBill,
 }: BillDetailsDrawerProps) {
   const isCleared = bill.paymentStatus === 'CLEARED';
+  const [auditLogs, setAuditLogs] = useState<BillAuditLogEntry[]>([]);
+  const [isLoadingAuditLogs, setIsLoadingAuditLogs] = useState<boolean>(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    if (bill?.id) {
+      setIsLoadingAuditLogs(true);
+      installerPaymentsService
+        .getBillAuditLogs(bill.id)
+        .then((logs) => {
+          if (isMounted) {
+            setAuditLogs(Array.isArray(logs) ? logs : []);
+          }
+        })
+        .catch(() => {
+          if (isMounted) setAuditLogs([]);
+        })
+        .finally(() => {
+          if (isMounted) setIsLoadingAuditLogs(false);
+        });
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, [bill?.id, bill?.updatedAt]);
+
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-sm">
@@ -3226,6 +3311,97 @@ function BillDetailsDrawer({
               <Send size={13} /> {bill.emailStatus === 'SENT' ? 'Resend Payment Voucher' : 'Send Payment Voucher to Installer'}
             </button>
           </div>
+
+          {/* Issue & Modification Audit Trail */}
+          <div className="p-4 bg-slate-50 dark:bg-[#202024] rounded-2xl space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                <Clock size={14} className="text-violet-500" /> Issue & Edit History
+              </span>
+              {auditLogs.length > 0 && (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-400">
+                  {auditLogs.length} edit{auditLogs.length > 1 ? 's' : ''}
+                </span>
+              )}
+            </div>
+
+            {/* Issued By Info */}
+            <div className="p-3 bg-white dark:bg-[#18181B] rounded-xl border border-slate-200 dark:border-[#27272A] flex items-center justify-between">
+              <div className="space-y-0.5">
+                <span className="text-[10px] text-slate-400 block font-semibold uppercase tracking-wider">Issued By</span>
+                <div className="font-semibold text-slate-800 dark:text-slate-200">
+                  {bill.createdBy ? `${bill.createdBy.firstName || ''} ${bill.createdBy.lastName || ''}`.trim() || bill.createdBy.email : 'System / Auto'}
+                </div>
+                {bill.createdBy?.email && (
+                  <span className="text-[11px] text-slate-400 block">{bill.createdBy.email}</span>
+                )}
+              </div>
+              <div className="text-right">
+                <span className="text-[10px] text-slate-400 block font-semibold uppercase tracking-wider">Issue Date</span>
+                <span className="text-[11px] text-slate-600 dark:text-slate-400 font-medium">
+                  {new Date(bill.createdAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                </span>
+              </div>
+            </div>
+
+            {/* Edit Logs Timeline */}
+            {isLoadingAuditLogs ? (
+              <div className="flex items-center justify-center py-4 text-slate-400 gap-2">
+                <RefreshCw size={13} className="animate-spin" />
+                <span>Loading edit history...</span>
+              </div>
+            ) : auditLogs.length === 0 ? (
+              <div className="p-3 bg-slate-100/60 dark:bg-[#1C1C20] rounded-xl text-slate-500 dark:text-slate-400 text-[11px] text-center italic">
+                No edits recorded — this bill has not been modified since creation.
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {auditLogs.map((log) => {
+                  const editorName = log.user ? `${log.user.firstName || ''} ${log.user.lastName || ''}`.trim() || log.user.email : 'Super Admin';
+                  const fields = log.changes?.fields || {};
+                  const fieldKeys = Object.keys(fields);
+                  return (
+                    <div key={log.id} className="p-3 bg-white dark:bg-[#18181B] rounded-xl border border-slate-200 dark:border-[#27272A] space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                          <span className="font-semibold text-slate-900 dark:text-white">{editorName}</span>
+                        </div>
+                        <span className="text-[10px] text-slate-400">
+                          {new Date(log.createdAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                      {log.user?.email && (
+                        <span className="text-[10px] text-slate-400 block">{log.user.email}</span>
+                      )}
+                      {fieldKeys.length > 0 && (
+                        <div className="mt-1 pt-1.5 border-t border-slate-100 dark:border-[#27272A] space-y-1">
+                          {fieldKeys.map((fKey) => {
+                            const change = fields[fKey];
+                            const formatVal = (v: any) => {
+                              if (v === null || v === undefined || v === '') return '—';
+                              if (typeof v === 'boolean') return v ? 'YES' : 'NO';
+                              return String(v);
+                            };
+                            return (
+                              <div key={fKey} className="text-[11px] flex items-center justify-between text-slate-600 dark:text-slate-300">
+                                <span className="font-medium capitalize text-slate-500">{fKey.replace(/([A-Z])/g, ' $1')}:</span>
+                                <span className="font-mono text-[10px]">
+                                  <span className="line-through text-rose-500 mr-1">{formatVal(change?.before)}</span>
+                                  →
+                                  <span className="text-emerald-600 font-bold ml-1">{formatVal(change?.after)}</span>
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Footer Actions */}
@@ -3244,6 +3420,16 @@ function BillDetailsDrawer({
               + Pay Due
             </button>
           )}
+          {isSuperAdmin && onEditBill && (
+            <button
+              onClick={onEditBill}
+              className="py-2.5 px-3.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 rounded-xl font-bold flex items-center gap-1.5 transition-colors"
+              title="Edit Bill Details (Super Admin only)"
+            >
+              <Edit2 size={15} />
+              <span>Edit</span>
+            </button>
+          )}
           {isSuperAdmin && onDeleteBill && (
             <button
               onClick={onDeleteBill}
@@ -3258,6 +3444,391 @@ function BillDetailsDrawer({
     </div>
   );
 }
+
+// ─── SUB-COMPONENT: SUPER ADMIN EDIT INSTALLER BILL MODAL ──────────────────
+
+interface EditInstallerBillModalProps {
+  bill: InstallerBill;
+  onClose: () => void;
+  onSuccess: (updatedBill: InstallerBill) => void;
+}
+
+function EditInstallerBillModal({ bill, onClose, onSuccess }: EditInstallerBillModalProps) {
+  const [installerName, setInstallerName] = useState(bill.installerName || '');
+  const [installerEmail, setInstallerEmail] = useState(bill.installerEmail || '');
+  const [installDate, setInstallDate] = useState(
+    bill.installDate ? new Date(bill.installDate).toISOString().slice(0, 10) : ''
+  );
+  const [siteAddress, setSiteAddress] = useState(bill.siteAddress || '');
+  const [sitePin, setSitePin] = useState(bill.sitePin || '');
+  const [isNcr, setIsNcr] = useState<boolean>(bill.isNcr ?? false);
+  const [travelExpenses, setTravelExpenses] = useState<number | ''>(
+    bill.isNcr ? 0 : Number(bill.travelExpenses || 0)
+  );
+  const [umpQuantity, setUmpQuantity] = useState<number | ''>(
+    bill.umpQuantity !== undefined && bill.umpQuantity !== null ? bill.umpQuantity : ''
+  );
+  const [umpRate, setUmpRate] = useState<number | ''>(
+    bill.umpRate !== undefined && bill.umpRate !== null ? Number(bill.umpRate) : ''
+  );
+  const [deductionAmount, setDeductionAmount] = useState<number | ''>(
+    bill.deductionAmount !== undefined && bill.deductionAmount !== null ? Number(bill.deductionAmount) : ''
+  );
+  const [deductionReason, setDeductionReason] = useState(bill.deductionReason || '');
+  const [notes, setNotes] = useState(bill.notes || '');
+
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Handle PIN change and auto-detect NCR
+  const handlePinChange = (pin: string) => {
+    const cleaned = pin.replace(/\D/g, '').slice(0, 6);
+    setSitePin(cleaned);
+    if (cleaned.length === 6) {
+      const isNcrPin = isNcrPinCode(cleaned);
+      setIsNcr(isNcrPin);
+      if (isNcrPin) {
+        setTravelExpenses(0);
+      }
+    }
+  };
+
+  // Live estimated totals
+  const numTravel = isNcr ? 0 : Number(travelExpenses || 0);
+  const numDeduction = Number(deductionAmount || 0);
+  const existingUmpTotal = Number(bill.umpTotal || 0);
+  const modelsSubtotal = Number(bill.subtotal || 0) - existingUmpTotal;
+  const currentUmpQty = umpQuantity !== '' ? Number(umpQuantity) : Number(bill.umpQuantity || 0);
+  const currentUmpRate = umpRate !== '' ? Number(umpRate) : Number(bill.umpRate || 0);
+  const newUmpTotal = currentUmpQty * currentUmpRate;
+  const estimatedSubtotal = modelsSubtotal + newUmpTotal;
+  const estimatedTotal = Math.max(0, estimatedSubtotal + numTravel - numDeduction);
+  const estimatedBalance = Math.max(0, estimatedTotal - Number(bill.amountPaid || 0));
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg(null);
+
+    if (!installerName.trim()) return setErrorMsg('Installer name is required.');
+    if (!installerEmail.trim() || !installerEmail.includes('@')) {
+      return setErrorMsg('A valid installer email is required.');
+    }
+    if (!installDate) return setErrorMsg('Installation date is required.');
+    if (!siteAddress.trim()) return setErrorMsg('Site address is required.');
+    if (!/^\d{6}$/.test(sitePin.trim())) {
+      return setErrorMsg('Site PIN must be exactly 6 digits.');
+    }
+    if (numDeduction > 0 && !deductionReason.trim()) {
+      return setErrorMsg('Please specify a reason for the deduction amount.');
+    }
+
+    try {
+      setIsSubmitting(true);
+      const payload: UpdateInstallerBillPayload = {
+        installerName: installerName.trim(),
+        installerEmail: installerEmail.trim().toLowerCase(),
+        installDate: new Date(installDate).toISOString(),
+        siteAddress: siteAddress.trim(),
+        sitePin: sitePin.trim(),
+        isNcr,
+        travelExpenses: isNcr ? 0 : numTravel,
+        deductionAmount: numDeduction,
+        deductionReason: deductionReason.trim() || undefined,
+        notes: notes.trim() || undefined,
+      };
+
+      if (umpQuantity !== '') {
+        payload.umpQuantity = Number(umpQuantity);
+      }
+      if (umpRate !== '') {
+        payload.umpRate = Number(umpRate);
+      }
+
+      const updated = await installerPaymentsService.updateBill(bill.id, payload);
+      onSuccess(updated);
+    } catch (err: any) {
+      setErrorMsg(err?.message || 'Failed to update installer bill.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+      <div className="w-full max-w-2xl bg-white dark:bg-[#18181B] rounded-2xl shadow-2xl border border-slate-200 dark:border-[#27272A] flex flex-col max-h-[90vh] overflow-hidden">
+        {/* Header */}
+        <div className="p-5 border-b border-slate-200 dark:border-[#27272A] flex items-center justify-between bg-gradient-to-r from-amber-500/10 via-transparent to-transparent">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+              <Edit2 size={20} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                  Edit Bill: {bill.billNo}
+                </h3>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300">
+                  Super Admin Only
+                </span>
+              </div>
+              <p className="text-xs text-slate-400">
+                Issued by {bill.createdBy ? `${bill.createdBy.firstName || ''} ${bill.createdBy.lastName || ''}`.trim() || bill.createdBy.email : 'System'} • Edits are logged to audit trail
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-white rounded-lg transition-colors"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Scrollable Form Body */}
+        <form onSubmit={handleSubmit} className="overflow-y-auto p-5 space-y-5 flex-1 text-xs">
+          {errorMsg && (
+            <div className="p-3 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/40 rounded-xl text-rose-600 dark:text-rose-400 flex items-center gap-2">
+              <AlertCircle size={15} className="shrink-0" />
+              <span>{errorMsg}</span>
+            </div>
+          )}
+
+          {/* Section 1: Technician & Date */}
+          <div className="p-4 bg-slate-50 dark:bg-[#202024] rounded-xl space-y-3">
+            <span className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5 text-xs">
+              <User size={13} className="text-violet-500" /> Technician Information & Date
+            </span>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-slate-500 text-[11px] mb-1 font-medium">Installer Name *</label>
+                <input
+                  type="text"
+                  value={installerName}
+                  onChange={(e) => setInstallerName(e.target.value)}
+                  className="w-full px-3 py-2 bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] rounded-lg text-xs text-slate-900 dark:text-white focus:outline-none focus:border-amber-500"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-slate-500 text-[11px] mb-1 font-medium">Installer Email *</label>
+                <input
+                  type="email"
+                  value={installerEmail}
+                  onChange={(e) => setInstallerEmail(e.target.value)}
+                  className="w-full px-3 py-2 bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] rounded-lg text-xs text-slate-900 dark:text-white focus:outline-none focus:border-amber-500"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-slate-500 text-[11px] mb-1 font-medium">Install Date *</label>
+                <input
+                  type="date"
+                  value={installDate}
+                  onChange={(e) => setInstallDate(e.target.value)}
+                  className="w-full px-3 py-2 bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] rounded-lg text-xs text-slate-900 dark:text-white focus:outline-none focus:border-amber-500"
+                  required
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Section 2: Site & Region Logistics */}
+          <div className="p-4 bg-slate-50 dark:bg-[#202024] rounded-xl space-y-3">
+            <span className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5 text-xs">
+              <MapPin size={13} className="text-blue-500" /> Site Address & Logistics
+            </span>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-slate-500 text-[11px] mb-1 font-medium">Site Address *</label>
+                <input
+                  type="text"
+                  value={siteAddress}
+                  onChange={(e) => setSiteAddress(e.target.value)}
+                  className="w-full px-3 py-2 bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] rounded-lg text-xs text-slate-900 dark:text-white focus:outline-none focus:border-amber-500"
+                  required
+                />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+                <div>
+                  <label className="block text-slate-500 text-[11px] mb-1 font-medium">Site PIN Code (6 digits) *</label>
+                  <input
+                    type="text"
+                    value={sitePin}
+                    onChange={(e) => handlePinChange(e.target.value)}
+                    maxLength={6}
+                    className="w-full px-3 py-2 bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] rounded-lg text-xs text-slate-900 dark:text-white font-mono focus:outline-none focus:border-amber-500"
+                    placeholder="e.g. 110001"
+                    required
+                  />
+                </div>
+                <div className="flex items-center gap-2 pt-2">
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={isNcr}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setIsNcr(checked);
+                        if (checked) setTravelExpenses(0);
+                      }}
+                      className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                    />
+                    <span className="text-slate-700 dark:text-slate-300 font-medium">
+                      Delhi NCR (Travel Waived)
+                    </span>
+                  </label>
+                </div>
+                <div>
+                  <label className="block text-slate-500 text-[11px] mb-1 font-medium">
+                    Travel Expenses (₹) {isNcr && '(Waived)'}
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    disabled={isNcr}
+                    value={isNcr ? 0 : travelExpenses}
+                    onChange={(e) => setTravelExpenses(e.target.value === '' ? '' : Number(e.target.value))}
+                    className="w-full px-3 py-2 bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] rounded-lg text-xs text-slate-900 dark:text-white font-mono focus:outline-none focus:border-amber-500 disabled:opacity-50 disabled:bg-slate-100 dark:disabled:bg-[#1C1C20]"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Section 3: Deductions & Penalties */}
+          <div className="p-4 bg-rose-50/50 dark:bg-rose-950/20 border border-rose-100 dark:border-rose-900/30 rounded-xl space-y-3">
+            <span className="font-bold text-rose-700 dark:text-rose-400 flex items-center gap-1.5 text-xs">
+              <DollarSign size={13} className="text-rose-500" /> Deductions / Penalties
+            </span>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-slate-500 text-[11px] mb-1 font-medium">Deduction Amount (₹)</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={deductionAmount}
+                  onChange={(e) => setDeductionAmount(e.target.value === '' ? '' : Number(e.target.value))}
+                  placeholder="0.00"
+                  className="w-full px-3 py-2 bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] rounded-lg text-xs text-rose-600 dark:text-rose-400 font-mono font-bold focus:outline-none focus:border-rose-500"
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-slate-500 text-[11px] mb-1 font-medium">
+                  Deduction Reason {numDeduction > 0 && '*'}
+                </label>
+                <input
+                  type="text"
+                  value={deductionReason}
+                  onChange={(e) => setDeductionReason(e.target.value)}
+                  placeholder="e.g. Quality defect, missing hardware, site delay"
+                  className="w-full px-3 py-2 bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] rounded-lg text-xs text-slate-900 dark:text-white focus:outline-none focus:border-rose-500"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Section 4: UMP Installation Adjustment (if applicable) */}
+          <div className="p-4 bg-slate-50 dark:bg-[#202024] rounded-xl space-y-3">
+            <span className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5 text-xs">
+              <Receipt size={13} className="text-emerald-500" /> Urinal Modesty Panel (UMP) Adjustment
+            </span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-slate-500 text-[11px] mb-1 font-medium">UMP Quantity (units)</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={umpQuantity}
+                  onChange={(e) => setUmpQuantity(e.target.value === '' ? '' : Number(e.target.value))}
+                  placeholder="0"
+                  className="w-full px-3 py-2 bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] rounded-lg text-xs text-slate-900 dark:text-white font-mono focus:outline-none focus:border-amber-500"
+                />
+              </div>
+              <div>
+                <label className="block text-slate-500 text-[11px] mb-1 font-medium">UMP Rate per Unit (₹)</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={umpRate}
+                  onChange={(e) => setUmpRate(e.target.value === '' ? '' : Number(e.target.value))}
+                  placeholder="0.00"
+                  className="w-full px-3 py-2 bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] rounded-lg text-xs text-slate-900 dark:text-white font-mono focus:outline-none focus:border-amber-500"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Section 5: Notes */}
+          <div>
+            <label className="block text-slate-500 text-[11px] mb-1 font-medium">Internal Admin Notes</label>
+            <textarea
+              rows={2}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Add internal notes or reasons for edits..."
+              className="w-full px-3 py-2 bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] rounded-lg text-xs text-slate-900 dark:text-white focus:outline-none focus:border-amber-500"
+            />
+          </div>
+
+          {/* Section 6: Live Recalculation Preview */}
+          <div className="p-3 bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200/60 dark:border-amber-900/40 rounded-xl space-y-1.5 text-[11px]">
+            <span className="font-bold text-amber-800 dark:text-amber-300 block mb-1">
+              Financial Impact Preview (Auto-Recalculated on Save)
+            </span>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-slate-700 dark:text-slate-300">
+              <div>
+                <span className="text-slate-400 block text-[10px]">Subtotal:</span>
+                <span className="font-semibold">₹{estimatedSubtotal.toFixed(2)}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[10px]">Travel:</span>
+                <span className="font-semibold">{isNcr ? '₹0.00' : `₹${numTravel.toFixed(2)}`}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[10px]">Deductions:</span>
+                <span className="font-semibold text-rose-500">-₹{numDeduction.toFixed(2)}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[10px]">Net Due:</span>
+                <span className="font-bold text-slate-900 dark:text-white">₹{estimatedTotal.toFixed(2)}</span>
+              </div>
+            </div>
+            <div className="pt-1 border-t border-amber-200/40 dark:border-amber-900/40 flex justify-between text-slate-500 text-[10px]">
+              <span>Already Paid: ₹{Number(bill.amountPaid).toFixed(2)}</span>
+              <span className="font-bold text-amber-700 dark:text-amber-300">
+                New Balance Due: ₹{estimatedBalance.toFixed(2)}
+              </span>
+            </div>
+          </div>
+
+          {/* Footer Actions */}
+          <div className="pt-3 border-t border-slate-200 dark:border-[#27272A] flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white rounded-xl text-xs font-semibold"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-sm disabled:opacity-50 transition-colors"
+            >
+              {isSubmitting && <RefreshCw size={13} className="animate-spin" />}
+              <span>{isSubmitting ? 'Saving Edits...' : 'Save & Log Changes'}</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 
 // ─── SUB-COMPONENT: CUBICLE MODEL MASTER MODAL ───────────────────────────────
 

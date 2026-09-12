@@ -234,3 +234,21 @@ export interface InstallerLedgerResponse {
   bills: InstallerBill[];
 }
 
+export interface BillAuditLogEntry {
+  id: string;
+  action: string;
+  userId?: string | null;
+  ipAddress?: string | null;
+  changes: {
+    billNo?: string;
+    fields?: Record<string, { before: unknown; after: unknown }>;
+  } | null;
+  createdAt: string;
+  user?: {
+    id: string;
+    firstName?: string | null;
+    lastName?: string | null;
+    email: string;
+  } | null;
+}
+

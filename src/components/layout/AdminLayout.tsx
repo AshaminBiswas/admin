@@ -53,6 +53,7 @@ const AdvancePaymentsTrackerPage = lazyWithRetry(() => import("../../pages/profo
 const QRDocumentValidatorPage = lazyWithRetry(() => import("../../pages/QRDocumentValidatorPage").then((m) => ({ default: m.QRDocumentValidatorPage })));
 const InstallerPaymentsPage = lazyWithRetry(() => import("../../pages/InstallerPaymentsPage").then((m) => ({ default: m.InstallerPaymentsPage })));
 const CreateInstallerBillPage = lazyWithRetry(() => import("../../pages/CreateInstallerBillPage").then((m) => ({ default: m.CreateInstallerBillPage })));
+const EmployeeManagementPage = lazyWithRetry(() => import("../../pages/EmployeeManagementPage").then((m) => ({ default: m.EmployeeManagementPage })));
 import { AICopilot } from "../ai/AICopilot";
 
 function ViewLoadingSkeleton() {
@@ -219,6 +220,8 @@ export function AdminLayout() {
       case "create-installer-bill":
       case "installer-bill-create":
         return <CreateInstallerBillPage onBack={() => setCurrentView("installer-payments")} />;
+      case "employee-management":
+        return <EmployeeManagementPage />;
       case "advance-payments":
       case "payment-tracking":
         return <AdvancePaymentsTrackerPage />;

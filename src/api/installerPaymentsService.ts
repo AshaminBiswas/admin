@@ -14,6 +14,7 @@ import type {
   InstallerBillsFilter,
   InstallerExportFilter,
   InstallerLedgerResponse,
+  BillAuditLogEntry,
 } from '../types/installerPayment';
 
 export const installerPaymentsService = {
@@ -65,6 +66,11 @@ export const installerPaymentsService = {
       body: JSON.stringify(payload),
     });
     return res?.data || res;
+  },
+
+  async getBillAuditLogs(billId: string): Promise<BillAuditLogEntry[]> {
+    const res = await fetchAdminApi<any>(`/installer-payments/${encodeURIComponent(billId)}/audit-logs`);
+    return res?.data || res || [];
   },
 
   async recordPayment(billId: string, payload: RecordPaymentPayload): Promise<InstallerBill> {

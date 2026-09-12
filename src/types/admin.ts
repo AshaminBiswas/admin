@@ -312,11 +312,13 @@ export type AdminView =
   | 'document-validator'
   | 'installer-payments'
   | 'create-installer-bill'
-  | 'installer-bill-create';
+  | 'installer-bill-create'
+  | 'employee-management';
 
 export * from './poManagement';
 export * from './proforma';
 export * from './installerPayment';
+export * from './employee';
 
 /* ─── Admin 360° Profile & Audit Dossier Types ────────────────────────────── */
 
