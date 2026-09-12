@@ -880,8 +880,16 @@ export function EmployeeManagementPage() {
                           </span>
                         </td>
                         <td className="px-4 py-3.5 text-xs text-[#A1A1AA]">
-                          <div>{emp.bankName}</div>
-                          <div className="font-mono text-[11px] text-[#71717A]">{emp.bankAccountNumber} ({emp.bankIfsc})</div>
+                          {emp.bankName || emp.bankAccountNumber ? (
+                            <>
+                              <div>{emp.bankName || 'Bank'}</div>
+                              <div className="font-mono text-[11px] text-[#71717A]">
+                                {emp.bankAccountNumber || '—'} {emp.bankIfsc ? `(${emp.bankIfsc})` : ''}
+                              </div>
+                            </>
+                          ) : (
+                            <span className="text-[#71717A] italic">Not Provided</span>
+                          )}
                         </td>
                         <td className="px-4 py-3.5 font-semibold text-[#FAFAFA]">
                           {formatINR(emp.monthlyCtc)}
@@ -1661,20 +1669,25 @@ export function EmployeeManagementPage() {
                 e.preventDefault();
                 const form = e.target as HTMLFormElement;
                 const formData = new FormData(form);
+                const rawBankAcct = ((formData.get('bankAccountNumber') as string) || '').trim();
+                const rawBankIfsc = ((formData.get('bankIfsc') as string) || '').trim().toUpperCase();
+                const rawBankName = ((formData.get('bankName') as string) || '').trim();
+                const rawBankHolder = ((formData.get('bankAccountHolder') as string) || '').trim();
+
                 const payload = {
-                  name: formData.get('name') as string,
-                  email: formData.get('email') as string,
-                  phone: formData.get('phone') as string,
-                  address: formData.get('address') as string,
+                  name: (formData.get('name') as string).trim(),
+                  email: (formData.get('email') as string).trim().toLowerCase(),
+                  phone: (formData.get('phone') as string).trim(),
+                  address: (formData.get('address') as string).trim(),
                   governmentIdType: formData.get('governmentIdType') as GovernmentIdType,
                   governmentIdNumber: (formData.get('governmentIdNumber') as string).trim().toUpperCase(),
-                  bankAccountNumber: formData.get('bankAccountNumber') as string,
-                  bankIfsc: (formData.get('bankIfsc') as string).trim().toUpperCase(),
-                  bankName: formData.get('bankName') as string,
-                  bankAccountHolder: formData.get('bankAccountHolder') as string,
-                  designation: formData.get('designation') as string,
-                  department: formData.get('department') as string,
-                  responsibilities: (formData.get('responsibilities') as string) || undefined,
+                  bankAccountNumber: rawBankAcct || undefined,
+                  bankIfsc: rawBankIfsc || undefined,
+                  bankName: rawBankName || undefined,
+                  bankAccountHolder: rawBankHolder || undefined,
+                  designation: (formData.get('designation') as string).trim(),
+                  department: (formData.get('department') as string).trim(),
+                  responsibilities: ((formData.get('responsibilities') as string) || '').trim() || undefined,
                   monthlyCtc: Number(formData.get('monthlyCtc')),
                   joiningDate: formData.get('joiningDate') as string,
                   status: (formData.get('status') as EmployeeStatus) || 'ACTIVE',
@@ -1831,48 +1844,47 @@ export function EmployeeManagementPage() {
 
               {/* Bank Account Section */}
               <div className="p-3.5 bg-[#09090B] border border-[#27272A] rounded-xl space-y-2">
-                <span className="text-xs font-bold text-emerald-400 uppercase tracking-wide">
-                  Bank Disbursement Account
-                </span>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-emerald-400 uppercase tracking-wide">
+                    Bank Disbursement Account
+                  </span>
+                  <span className="text-[11px] text-[#71717A] italic font-normal">Optional</span>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs text-[#71717A] mb-1">Bank Name *</label>
+                    <label className="block text-xs text-[#71717A] mb-1">Bank Name</label>
                     <input
                       name="bankName"
-                      required
                       defaultValue={editingEmployee?.bankName || ''}
-                      placeholder="e.g. State Bank of India"
+                      placeholder="e.g. State Bank of India (optional)"
                       className="w-full px-3 py-2 bg-[#18181B] border border-[#27272A] rounded-xl text-[#FAFAFA] text-xs"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-[#71717A] mb-1">Account Holder Name *</label>
+                    <label className="block text-xs text-[#71717A] mb-1">Account Holder Name</label>
                     <input
                       name="bankAccountHolder"
-                      required
                       defaultValue={editingEmployee?.bankAccountHolder || ''}
-                      placeholder="as per bank passbook"
+                      placeholder="as per bank passbook (optional)"
                       className="w-full px-3 py-2 bg-[#18181B] border border-[#27272A] rounded-xl text-[#FAFAFA] text-xs"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-[#71717A] mb-1">Account Number *</label>
+                    <label className="block text-xs text-[#71717A] mb-1">Account Number</label>
                     <input
                       name="bankAccountNumber"
-                      required
                       defaultValue={editingEmployee?.bankAccountNumber || ''}
-                      placeholder="A/C Number"
+                      placeholder="A/C Number (optional)"
                       className="w-full px-3 py-2 bg-[#18181B] border border-[#27272A] rounded-xl text-[#FAFAFA] text-xs font-mono"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-[#71717A] mb-1">IFSC Code *</label>
+                    <label className="block text-xs text-[#71717A] mb-1">IFSC Code</label>
                     <input
                       name="bankIfsc"
-                      required
                       defaultValue={editingEmployee?.bankIfsc || ''}
-                      placeholder="e.g. SBIN0001234"
-                      className="w-full px-3 py-2 bg-[#18181B] border border-[#27272A] rounded-xl text-[#FAFAFA] text-xs font-mono"
+                      placeholder="e.g. SBIN0001234 (optional)"
+                      className="w-full px-3 py-2 bg-[#18181B] border border-[#27272A] rounded-xl text-[#FAFAFA] text-xs font-mono uppercase"
                     />
                   </div>
                 </div>
