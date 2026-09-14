@@ -188,9 +188,32 @@ export function ExpensesPage() {
   const [entryDescription, setEntryDescription] = useState<string>('');
   const [entryPaidTo, setEntryPaidTo] = useState<string>('');
   const [entryReceiptUrl, setEntryReceiptUrl] = useState<string>('');
+  const [isUploadingSlip, setIsUploadingSlip] = useState(false);
+  const [uploadedSlipName, setUploadedSlipName] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [isSubmittingEntry, setIsSubmittingEntry] = useState(false);
   const [entrySuccessMsg, setEntrySuccessMsg] = useState<string | null>(null);
   const [entryWarningMsg, setEntryWarningMsg] = useState<string | null>(null);
+
+  // Edit Expense Modal State
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingExpense, setEditingExpense] = useState<ExpenseEntry | null>(null);
+  const [editAmount, setEditAmount] = useState('');
+  const [editCategory, setEditCategory] = useState('');
+  const [editPaymentMode, setEditPaymentMode] = useState<'CASH' | 'UPI' | 'BANK_TRANSFER'>('CASH');
+  const [editDescription, setEditDescription] = useState('');
+  const [editPaidTo, setEditPaidTo] = useState('');
+  const [editReceiptUrl, setEditReceiptUrl] = useState('');
+  const [editSlipName, setEditSlipName] = useState<string | null>(null);
+  const [isUploadingEditSlip, setIsUploadingEditSlip] = useState(false);
+  const editFileInputRef = useRef<HTMLInputElement>(null);
+  const [editChangeReason, setEditChangeReason] = useState('');
+  const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
+
+  // Delete Expense Modal State (Super Admin Only)
+  const [deleteModalEntry, setDeleteModalEntry] = useState<ExpenseEntry | null>(null);
+  const [deleteReasonText, setDeleteReasonText] = useState('');
+  const [isDeletingEntry, setIsDeletingEntry] = useState(false);
 
   // Void confirmation modal
   const [voidModalEntry, setVoidModalEntry] = useState<ExpenseEntry | null>(null);
@@ -509,6 +532,7 @@ export function ExpensesPage() {
       setEntryDescription('');
       setEntryPaidTo('');
       setEntryReceiptUrl('');
+      setUploadedSlipName(null);
 
       // Refresh live balance from server
       fetchBalance();
@@ -608,6 +632,116 @@ export function ExpensesPage() {
       alert(err.message || 'Failed to void expense');
     } finally {
       setIsVoiding(false);
+    }
+  };
+
+  // ─── Slip File Upload (Fast Entry & Edit Modal) ───────────────────────────
+  const handleSlipFileUpload = async (file: File, isEdit: boolean = false) => {
+    if (!file) return;
+    if (isEdit) {
+      setIsUploadingEditSlip(true);
+    } else {
+      setIsUploadingSlip(true);
+    }
+    try {
+      const res = await expensesApi.uploadReceipt(file);
+      if (isEdit) {
+        setEditReceiptUrl(res.url);
+        setEditSlipName(res.fileName || file.name);
+      } else {
+        setEntryReceiptUrl(res.url);
+        setUploadedSlipName(res.fileName || file.name);
+      }
+    } catch (err: any) {
+      alert(err.message || 'Failed to upload receipt slip');
+    } finally {
+      if (isEdit) {
+        setIsUploadingEditSlip(false);
+      } else {
+        setIsUploadingSlip(false);
+      }
+    }
+  };
+
+  // ─── Open Edit Modal ────────────────────────────────────────────────────────
+  const handleOpenEditModal = (expense: ExpenseEntry) => {
+    setEditingExpense(expense);
+    setEditAmount(String(expense.amount / 100));
+    setEditCategory(expense.categoryId);
+    setEditPaymentMode(expense.paymentMode);
+    setEditDescription(expense.description);
+    setEditPaidTo(expense.paidTo);
+    setEditReceiptUrl(expense.receiptAttachment || '');
+    setEditSlipName(expense.receiptAttachment ? 'Existing receipt attached' : null);
+    setEditChangeReason('');
+    setIsEditModalOpen(true);
+  };
+
+  // ─── Save Edited Expense ───────────────────────────────────────────────────
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingExpense) return;
+    const amountVal = parseFloat(editAmount);
+    if (!amountVal || amountVal <= 0) {
+      alert('Please enter a valid expense amount');
+      return;
+    }
+
+    setIsSubmittingEdit(true);
+    try {
+      const updated = await expensesApi.updateExpense(editingExpense.id, {
+        amount: amountVal,
+        amountInPaise: false,
+        categoryId: editCategory,
+        paymentMode: editPaymentMode,
+        description: editDescription.trim(),
+        paidTo: editPaidTo.trim(),
+        receiptAttachment: editReceiptUrl || null,
+        changeReason: editChangeReason.trim() || 'Updated expense details',
+      });
+
+      // Update local state arrays
+      setTodayEntries((prev) => (prev || []).map((item) => (item.id === updated.id ? updated : item)));
+      setLedgerEntries((prev) => (prev || []).map((item) => (item.id === updated.id ? updated : item)));
+      setPendingEntries((prev) => (prev || []).map((item) => (item.id === updated.id ? updated : item)));
+      if (lastLoggedExpense && lastLoggedExpense.id === updated.id) {
+        setLastLoggedExpense(updated);
+      }
+
+      fetchBalance();
+      setIsEditModalOpen(false);
+      setEditingExpense(null);
+      alert('Expense updated successfully');
+    } catch (err: any) {
+      alert(err.message || 'Failed to update expense entry');
+    } finally {
+      setIsSubmittingEdit(false);
+    }
+  };
+
+  // ─── Confirm Delete Expense (Super Admin Only) ─────────────────────────────
+  const handleConfirmDelete = async () => {
+    if (!deleteModalEntry) return;
+    setIsDeletingEntry(true);
+    try {
+      await expensesApi.deleteExpense(deleteModalEntry.id, deleteReasonText.trim());
+
+      // Remove from all local arrays
+      setTodayEntries((prev) => (prev || []).filter((e) => e.id !== deleteModalEntry.id));
+      setLedgerEntries((prev) => (prev || []).filter((e) => e.id !== deleteModalEntry.id));
+      setPendingEntries((prev) => (prev || []).filter((e) => e.id !== deleteModalEntry.id));
+      if (lastLoggedExpense && lastLoggedExpense.id === deleteModalEntry.id) {
+        setLastLoggedExpense(null);
+      }
+
+      fetchBalance();
+      setDeleteModalEntry(null);
+      setDeleteReasonText('');
+      alert('Expense entry permanently deleted.');
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete expense entry');
+    } finally {
+      setIsDeletingEntry(false);
     }
   };
 
@@ -1239,19 +1373,93 @@ export function ExpensesPage() {
                   />
                 </div>
 
-                {/* Receipt Upload / URL */}
+                {/* Receipt Slip File Upload */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400 flex items-center justify-between">
-                    <span>Receipt Attachment (Optional)</span>
-                    <Camera size={14} className="text-slate-400" />
-                  </label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400 flex items-center gap-1.5">
+                      <Camera size={14} className="text-violet-500" />
+                      <span>Receipt Slip / Voucher Photo</span>
+                    </label>
+                    {entryReceiptUrl && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEntryReceiptUrl('');
+                          setUploadedSlipName(null);
+                        }}
+                        className="text-[11px] text-rose-500 hover:underline"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+
                   <input
-                    type="text"
-                    placeholder="Paste receipt image/PDF URL or leave empty"
-                    value={entryReceiptUrl}
-                    onChange={(e) => setEntryReceiptUrl(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-[#09090B] border border-slate-300 dark:border-[#27272A] text-xs text-slate-900 dark:text-white placeholder:text-slate-400 focus:border-violet-500 focus:outline-none"
+                    type="file"
+                    ref={fileInputRef}
+                    accept="image/*,application/pdf"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleSlipFileUpload(file, false);
+                    }}
                   />
+
+                  {entryReceiptUrl ? (
+                    <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 overflow-hidden">
+                        <CheckCircle size={16} className="text-emerald-500 shrink-0" />
+                        <span className="text-xs text-emerald-700 dark:text-emerald-300 truncate font-medium">
+                          {uploadedSlipName || 'Receipt Slip Attached'}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <a
+                          href={entryReceiptUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-[11px] font-bold text-violet-600 dark:text-violet-400 hover:underline flex items-center gap-0.5"
+                        >
+                          <ExternalLink size={11} /> View
+                        </a>
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          className="text-[11px] font-semibold text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white"
+                        >
+                          Replace
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={isUploadingSlip}
+                        className="w-full py-2.5 px-3 rounded-xl border border-dashed border-slate-300 dark:border-[#3F3F46] hover:border-violet-500 hover:bg-violet-500/5 transition flex items-center justify-center gap-2 text-xs font-semibold text-slate-600 dark:text-zinc-400 cursor-pointer"
+                      >
+                        {isUploadingSlip ? (
+                          <>
+                            <RefreshCw size={14} className="animate-spin text-violet-500" />
+                            <span>Uploading Slip to Cloud...</span>
+                          </>
+                        ) : (
+                          <>
+                            <UploadCloud size={16} className="text-violet-500" />
+                            <span>Upload Slip / Take Photo (Image or PDF)</span>
+                          </>
+                        )}
+                      </button>
+                      <input
+                        type="text"
+                        placeholder="Or paste receipt link directly"
+                        value={entryReceiptUrl}
+                        onChange={(e) => setEntryReceiptUrl(e.target.value)}
+                        className="w-full px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-[#09090B] border border-slate-200 dark:border-[#27272A] text-[11px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:border-violet-500 focus:outline-none"
+                      />
+                    </div>
+                  )}
                 </div>
 
                 <button
@@ -1335,10 +1543,10 @@ export function ExpensesPage() {
                             {e.status}
                           </span>
                         </div>
-                        {(canApprove || isSuperAdmin) && (
-                          <div className="pt-2 border-t border-slate-200 dark:border-[#27272A] flex items-center justify-between gap-2">
-                            {e.status === 'PENDING' && canApprove ? (
-                              <div className="flex items-center gap-1.5">
+                        <div className="pt-2 border-t border-slate-200 dark:border-[#27272A] flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5">
+                            {e.status === 'PENDING' && canApprove && (
+                              <>
                                 <button
                                   type="button"
                                   onClick={() => handleApproveEntry(e)}
@@ -1353,23 +1561,41 @@ export function ExpensesPage() {
                                 >
                                   Reject
                                 </button>
-                              </div>
-                            ) : (
-                              <span className="text-[11px] text-slate-400">
-                                {e.status === 'APPROVED' ? '✓ Approved' : e.status}
-                              </span>
+                              </>
                             )}
+                            {!e.isVoid && (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenEditModal(e)}
+                                className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-[#27272A] hover:bg-slate-200 dark:hover:bg-[#3F3F46] text-slate-700 dark:text-zinc-300 text-xs font-semibold flex items-center gap-1 transition"
+                              >
+                                <Edit3 size={12} /> Edit
+                              </button>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-1.5">
                             {isSuperAdmin && e.status !== 'VOIDED' && (
                               <button
                                 type="button"
                                 onClick={() => setVoidModalEntry(e)}
-                                className="text-xs text-rose-600 hover:text-rose-700 font-semibold"
+                                className="text-xs text-amber-600 hover:text-amber-700 font-semibold px-1"
                               >
-                                Void Entry
+                                Void
+                              </button>
+                            )}
+                            {isSuperAdmin && (
+                              <button
+                                type="button"
+                                onClick={() => setDeleteModalEntry(e)}
+                                className="p-1 rounded-lg hover:bg-rose-500/10 text-rose-500 hover:text-rose-700 transition"
+                                title="Delete expense voucher (Super Admin only)"
+                              >
+                                <Trash2 size={13} />
                               </button>
                             )}
                           </div>
-                        )}
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -1386,7 +1612,7 @@ export function ExpensesPage() {
                           <th className="py-2.5 px-3">Paid To</th>
                           <th className="py-2.5 px-3 text-right">Amount</th>
                           <th className="py-2.5 px-3 text-center">Status</th>
-                          {(canApprove || isSuperAdmin) && <th className="py-2.5 px-3 text-center">Action</th>}
+                          <th className="py-2.5 px-3 text-center">Action</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 dark:divide-[#27272A]">
@@ -1419,42 +1645,60 @@ export function ExpensesPage() {
                                 {e.status}
                               </span>
                             </td>
-                            {(canApprove || isSuperAdmin) && (
-                              <td className="py-2.5 px-3 text-center">
-                                <div className="flex items-center justify-center gap-1.5">
-                                  {e.status === 'PENDING' && canApprove && (
-                                    <>
-                                      <button
-                                        type="button"
-                                        onClick={() => handleApproveEntry(e)}
-                                        className="px-2 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold transition flex items-center gap-1 shadow-sm"
-                                        title="Approve expense entry"
-                                      >
-                                        <Check size={11} /> Approve
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => setSelectedRejectEntry(e)}
-                                        className="px-2 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 text-[11px] font-bold transition"
-                                        title="Reject expense entry"
-                                      >
-                                        Reject
-                                      </button>
-                                    </>
-                                  )}
-                                  {isSuperAdmin && e.status !== 'VOIDED' && (
+                            <td className="py-2.5 px-3 text-center">
+                              <div className="flex items-center justify-center gap-1.5">
+                                {e.status === 'PENDING' && canApprove && (
+                                  <>
                                     <button
                                       type="button"
-                                      onClick={() => setVoidModalEntry(e)}
-                                      className="text-[11px] text-rose-600 hover:text-rose-700 font-semibold px-1 py-0.5"
-                                      title="Void expense entry"
+                                      onClick={() => handleApproveEntry(e)}
+                                      className="px-2 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold transition flex items-center gap-0.5 shadow-sm"
+                                      title="Approve expense entry"
                                     >
-                                      Void
+                                      <Check size={11} /> Approve
                                     </button>
-                                  )}
-                                </div>
-                              </td>
-                            )}
+                                    <button
+                                      type="button"
+                                      onClick={() => setSelectedRejectEntry(e)}
+                                      className="px-2 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 text-[11px] font-bold transition"
+                                      title="Reject expense entry"
+                                    >
+                                      Reject
+                                    </button>
+                                  </>
+                                )}
+                                {!e.isVoid && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenEditModal(e)}
+                                    className="p-1 rounded-lg hover:bg-slate-200 dark:hover:bg-[#27272A] text-slate-500 hover:text-slate-800 dark:hover:text-zinc-200 transition"
+                                    title="Edit expense entry"
+                                  >
+                                    <Edit3 size={13} />
+                                  </button>
+                                )}
+                                {isSuperAdmin && e.status !== 'VOIDED' && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setVoidModalEntry(e)}
+                                    className="text-[11px] text-amber-600 hover:text-amber-700 font-semibold px-1 py-0.5"
+                                    title="Void expense entry"
+                                  >
+                                    Void
+                                  </button>
+                                )}
+                                {isSuperAdmin && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setDeleteModalEntry(e)}
+                                    className="p-1 rounded-lg hover:bg-rose-500/10 text-rose-500 hover:text-rose-700 transition"
+                                    title="Delete expense voucher (Super Admin only)"
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
+                                )}
+                              </div>
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -1593,7 +1837,7 @@ export function ExpensesPage() {
                       <th className="py-3 px-3.5 text-center">Status</th>
                       <th className="py-3 px-3.5">Logged By</th>
                       <th className="py-3 px-3.5 text-center">Receipt</th>
-                      {(canApprove || isSuperAdmin) && <th className="py-3 px-3.5 text-center">Actions</th>}
+                      <th className="py-3 px-3.5 text-center">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-[#27272A]">
@@ -1700,42 +1944,60 @@ export function ExpensesPage() {
                         </td>
 
                         {/* Actions */}
-                        {(canApprove || isSuperAdmin) && (
-                          <td className="py-3 px-3.5 text-center whitespace-nowrap">
-                            <div className="flex items-center justify-center gap-1.5">
-                              {e.status === 'PENDING' && canApprove && (
-                                <>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleApproveEntry(e)}
-                                    className="px-2 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold transition flex items-center gap-1 shadow-sm"
-                                    title="Approve expense entry"
-                                  >
-                                    <Check size={11} /> Approve
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => setSelectedRejectEntry(e)}
-                                    className="px-2 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 text-[11px] font-bold transition"
-                                    title="Reject expense entry"
-                                  >
-                                    Reject
-                                  </button>
-                                </>
-                              )}
-                              {isSuperAdmin && !e.isVoid && e.status !== 'VOIDED' && (
+                        <td className="py-3 px-3.5 text-center whitespace-nowrap">
+                          <div className="flex items-center justify-center gap-1.5">
+                            {e.status === 'PENDING' && canApprove && (
+                              <>
                                 <button
                                   type="button"
-                                  onClick={() => setVoidModalEntry(e)}
-                                  className="text-[11px] text-rose-600 hover:text-rose-700 font-semibold px-1 py-0.5"
-                                  title="Void expense entry"
+                                  onClick={() => handleApproveEntry(e)}
+                                  className="px-2 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold transition flex items-center gap-1 shadow-sm"
+                                  title="Approve expense entry"
                                 >
-                                  Void
+                                  <Check size={11} /> Approve
                                 </button>
-                              )}
-                            </div>
-                          </td>
-                        )}
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedRejectEntry(e)}
+                                  className="px-2 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 text-[11px] font-bold transition"
+                                  title="Reject expense entry"
+                                >
+                                  Reject
+                                </button>
+                              </>
+                            )}
+                            {!e.isVoid && e.status !== 'VOIDED' && (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenEditModal(e)}
+                                className="p-1 rounded-lg hover:bg-slate-200 dark:hover:bg-[#27272A] text-slate-500 hover:text-slate-800 dark:hover:text-zinc-200 transition"
+                                title="Edit expense entry"
+                              >
+                                <Edit3 size={13} />
+                              </button>
+                            )}
+                            {isSuperAdmin && !e.isVoid && e.status !== 'VOIDED' && (
+                              <button
+                                type="button"
+                                onClick={() => setVoidModalEntry(e)}
+                                className="text-[11px] text-amber-600 hover:text-amber-700 font-semibold px-1 py-0.5"
+                                title="Void expense entry"
+                              >
+                                Void
+                              </button>
+                            )}
+                            {isSuperAdmin && (
+                              <button
+                                type="button"
+                                onClick={() => setDeleteModalEntry(e)}
+                                className="p-1 rounded-lg hover:bg-rose-500/10 text-rose-500 hover:text-rose-700 transition"
+                                title="Delete expense voucher (Super Admin only)"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            )}
+                          </div>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -2553,6 +2815,355 @@ export function ExpensesPage() {
                 className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition disabled:opacity-50"
               >
                 {isVoiding ? 'Voiding...' : 'Confirm Void & Reversal'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── MODAL: Edit Expense Entry ────────────────────────────────────────── */}
+      {isEditModalOpen && editingExpense && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto">
+          <div className="w-full max-w-lg p-6 rounded-2xl bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] shadow-2xl space-y-4 my-8">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-[#27272A]">
+              <div>
+                <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <Edit3 size={18} className="text-violet-500" />
+                  <span>Edit Expense Entry</span>
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-zinc-400 font-mono mt-0.5">
+                  Voucher #{editingExpense.entryNumber} • {editingExpense.branch?.name || 'Branch Expense'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsEditModalOpen(false);
+                  setEditingExpense(null);
+                }}
+                className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-[#27272A] text-slate-400 hover:text-slate-600 dark:hover:text-zinc-200"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {editingExpense.status === 'APPROVED' && !editingExpense.isVoid && (
+              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-700 dark:text-amber-400 flex items-start gap-2">
+                <AlertTriangle size={16} className="shrink-0 mt-0.5 text-amber-500" />
+                <span>
+                  <strong>Approved Voucher Notice:</strong> Changing the amount will automatically adjust the branch cash balance and reconcile daily ledger totals.
+                </span>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveEdit} className="space-y-3.5">
+              {/* Amount & Category */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
+                    Amount (₹) <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    required
+                    value={editAmount}
+                    onChange={(e) => setEditAmount(e.target.value)}
+                    className="w-full px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-[#09090B] border border-slate-300 dark:border-[#27272A] text-xs font-bold text-slate-900 dark:text-white focus:border-violet-500 focus:outline-none"
+                    placeholder="0.00"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
+                    Category <span className="text-rose-500">*</span>
+                  </label>
+                  <select
+                    required
+                    value={editCategory}
+                    onChange={(e) => setEditCategory(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-[#09090B] border border-slate-300 dark:border-[#27272A] text-xs text-slate-900 dark:text-white focus:border-violet-500 focus:outline-none"
+                  >
+                    <option value="">Select Category</option>
+                    {(categories || []).map((cat) => (
+                      <option key={cat.id} value={cat.id}>
+                        {cat.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Payment Mode */}
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-700 dark:text-zinc-300">Payment Mode</label>
+                <div className="flex items-center gap-2">
+                  {(['CASH', 'UPI', 'BANK_TRANSFER'] as const).map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => setEditPaymentMode(mode)}
+                      className={`flex-1 py-1.5 rounded-xl text-xs font-bold transition border ${
+                        editPaymentMode === mode
+                          ? 'bg-violet-600 text-white border-violet-600 shadow-sm'
+                          : 'bg-slate-50 dark:bg-[#09090B] text-slate-600 dark:text-zinc-400 border-slate-200 dark:border-[#27272A] hover:bg-slate-100 dark:hover:bg-[#27272A]'
+                      }`}
+                    >
+                      {mode.replace('_', ' ')}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Paid To */}
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
+                  Paid To / Vendor <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editPaidTo}
+                  onChange={(e) => setEditPaidTo(e.target.value)}
+                  className="w-full px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-[#09090B] border border-slate-300 dark:border-[#27272A] text-xs text-slate-900 dark:text-white focus:border-violet-500 focus:outline-none"
+                  placeholder="e.g. Swiggy, Cleaner, Supplier"
+                />
+              </div>
+
+              {/* Description */}
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
+                  Description / Purpose <span className="text-rose-500">*</span>
+                </label>
+                <textarea
+                  rows={2}
+                  required
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  className="w-full px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-[#09090B] border border-slate-300 dark:border-[#27272A] text-xs text-slate-900 dark:text-white focus:border-violet-500 focus:outline-none"
+                  placeholder="Detailed purpose of the expense..."
+                />
+              </div>
+
+              {/* Slip File Upload / Attachment */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-slate-700 dark:text-zinc-300 flex items-center gap-1.5">
+                    <Camera size={14} className="text-violet-500" />
+                    <span>Receipt Slip / Voucher (Image / PDF)</span>
+                  </label>
+                  {editReceiptUrl && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditReceiptUrl('');
+                        setEditSlipName(null);
+                      }}
+                      className="text-[11px] text-rose-500 hover:underline"
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+
+                <input
+                  type="file"
+                  ref={editFileInputRef}
+                  accept="image/*,application/pdf"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleSlipFileUpload(file, true);
+                  }}
+                />
+
+                {editReceiptUrl ? (
+                  <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 overflow-hidden">
+                      <CheckCircle size={15} className="text-emerald-500 shrink-0" />
+                      <span className="text-xs text-emerald-700 dark:text-emerald-300 truncate font-medium">
+                        {editSlipName || 'Receipt Slip Attached'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <a
+                        href={editReceiptUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[11px] font-bold text-violet-600 dark:text-violet-400 hover:underline flex items-center gap-0.5"
+                      >
+                        <ExternalLink size={11} /> View
+                      </a>
+                      <button
+                        type="button"
+                        onClick={() => editFileInputRef.current?.click()}
+                        className="text-[11px] font-semibold text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white"
+                      >
+                        Replace
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    <button
+                      type="button"
+                      onClick={() => editFileInputRef.current?.click()}
+                      disabled={isUploadingEditSlip}
+                      className="w-full py-2.5 px-3 rounded-xl border border-dashed border-slate-300 dark:border-[#3F3F46] hover:border-violet-500 hover:bg-violet-500/5 transition flex items-center justify-center gap-2 text-xs font-semibold text-slate-600 dark:text-zinc-400 cursor-pointer"
+                    >
+                      {isUploadingEditSlip ? (
+                        <>
+                          <RefreshCw size={14} className="animate-spin text-violet-500" />
+                          <span>Uploading Slip to Cloud...</span>
+                        </>
+                      ) : (
+                        <>
+                          <UploadCloud size={15} className="text-violet-500" />
+                          <span>Upload Slip / Photo (Image or PDF)</span>
+                        </>
+                      )}
+                    </button>
+                    <input
+                      type="text"
+                      placeholder="Or paste receipt URL directly"
+                      value={editReceiptUrl}
+                      onChange={(e) => setEditReceiptUrl(e.target.value)}
+                      className="w-full px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-[#09090B] border border-slate-200 dark:border-[#27272A] text-[11px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:border-violet-500 focus:outline-none"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Edit Reason */}
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
+                  Change Reason <span className="text-slate-400 font-normal">(for audit trail)</span>
+                </label>
+                <input
+                  type="text"
+                  value={editChangeReason}
+                  onChange={(e) => setEditChangeReason(e.target.value)}
+                  className="w-full px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-[#09090B] border border-slate-300 dark:border-[#27272A] text-xs text-slate-900 dark:text-white focus:border-violet-500 focus:outline-none"
+                  placeholder="e.g. Corrected amount according to bill, updated vendor name"
+                />
+              </div>
+
+              {/* Form Buttons */}
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100 dark:border-[#27272A]">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsEditModalOpen(false);
+                    setEditingExpense(null);
+                  }}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-[#27272A]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingEdit || isUploadingEditSlip}
+                  className="px-5 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold transition shadow-sm disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {isSubmittingEdit ? (
+                    <>
+                      <RefreshCw size={13} className="animate-spin" />
+                      <span>Saving Changes...</span>
+                    </>
+                  ) : (
+                    <span>Save Changes</span>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ─── MODAL: Delete Expense (Super Admin Only) ────────────────────────── */}
+      {deleteModalEntry && isSuperAdmin && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-md p-6 rounded-2xl bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] shadow-2xl space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-rose-500/10 text-rose-500 flex items-center justify-center shrink-0">
+                <Trash2 size={20} />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900 dark:text-white">Delete Expense Voucher</h3>
+                <p className="text-xs text-slate-500 dark:text-zinc-400 font-mono">
+                  #{deleteModalEntry.entryNumber} • {formatRupee(deleteModalEntry.amount)}
+                </p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-600 dark:text-zinc-400 leading-relaxed">
+              Are you sure you want to permanently delete voucher <strong className="font-mono text-slate-900 dark:text-white">#{deleteModalEntry.entryNumber}</strong>?
+            </p>
+
+            {deleteModalEntry.status === 'APPROVED' && !deleteModalEntry.isVoid ? (
+              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-700 dark:text-amber-400 space-y-1">
+                <div className="font-bold flex items-center gap-1">
+                  <AlertTriangle size={14} className="text-amber-500" />
+                  <span>Automatic Balance Refund</span>
+                </div>
+                <p>
+                  Because this voucher was approved, deleting it will automatically refund{' '}
+                  <strong>{formatRupee(deleteModalEntry.amount)}</strong> back to{' '}
+                  <strong>{deleteModalEntry.branch?.name || 'the branch'}</strong>'s cash balance and subtract it from today's expenses.
+                </p>
+              </div>
+            ) : deleteModalEntry.isVoid ? (
+              <div className="p-2.5 rounded-xl bg-slate-100 dark:bg-[#27272A] text-xs text-slate-500 dark:text-zinc-400">
+                This voucher was previously VOIDED. The record and its audit history will be permanently deleted.
+              </div>
+            ) : (
+              <div className="p-2.5 rounded-xl bg-slate-100 dark:bg-[#27272A] text-xs text-slate-500 dark:text-zinc-400">
+                This voucher is in {deleteModalEntry.status} status and has not impacted cash balances.
+              </div>
+            )}
+
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
+                Deletion Reason <span className="text-slate-400 font-normal">(Optional, for audit log)</span>
+              </label>
+              <textarea
+                rows={2}
+                placeholder="Reason for deletion..."
+                value={deleteReasonText}
+                onChange={(e) => setDeleteReasonText(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-[#09090B] border border-slate-300 dark:border-[#27272A] text-xs text-slate-900 dark:text-white focus:border-rose-500 focus:outline-none"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-[#27272A]">
+              <button
+                type="button"
+                onClick={() => {
+                  setDeleteModalEntry(null);
+                  setDeleteReasonText('');
+                }}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-[#27272A]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                disabled={isDeletingEntry}
+                className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition disabled:opacity-50 flex items-center gap-1.5 shadow-sm"
+              >
+                {isDeletingEntry ? (
+                  <>
+                    <RefreshCw size={13} className="animate-spin" />
+                    <span>Deleting Voucher...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 size={13} />
+                    <span>Permanently Delete</span>
+                  </>
+                )}
               </button>
             </div>
           </div>

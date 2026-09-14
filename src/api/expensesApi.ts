@@ -1,6 +1,7 @@
 import { API_BASE_URL, getAdminToken, fetchAdminApi } from './adminApi';
 import type {
   ExpenseEntry,
+  UpdateExpenseInput,
   ExpenseCategory,
   ExpenseDailyLedger,
   ExpenseFloatTopUp,
@@ -260,6 +261,38 @@ export const expensesApi = {
       body: JSON.stringify({ voidReason }),
     });
     if (!res.success) throw new Error(res.message || res.error?.message || 'Failed to void expense');
+    return res.data!;
+  },
+
+  // 8b. Update Expense Entry
+  async updateExpense(id: string, data: UpdateExpenseInput): Promise<ExpenseEntry> {
+    const res = await fetchAdminApi<ExpenseEntry>(`/expenses/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+    if (!res.success) throw new Error(res.message || res.error?.message || 'Failed to update expense');
+    return res.data!;
+  },
+
+  // 8c. Delete Expense Entry (Super Admin Only)
+  async deleteExpense(id: string, reason?: string): Promise<{ success: boolean; message: string }> {
+    const res = await fetchAdminApi<{ success: boolean; message: string }>(`/expenses/${id}`, {
+      method: 'DELETE',
+      body: JSON.stringify({ reason }),
+    });
+    if (!res.success) throw new Error(res.message || res.error?.message || 'Failed to delete expense entry');
+    return res.data || { success: true, message: 'Expense deleted' };
+  },
+
+  // 8d. Upload Receipt Slip (Image or PDF)
+  async uploadReceipt(file: File): Promise<{ url: string; fileName: string; size?: number }> {
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await fetchAdminApi<{ url: string; fileName: string; size?: number }>('/expenses/upload-receipt', {
+      method: 'POST',
+      body: formData,
+    });
+    if (!res.success) throw new Error(res.message || res.error?.message || 'Failed to upload receipt slip');
     return res.data!;
   },
 

@@ -1208,6 +1208,19 @@ export interface ExpenseEntry {
   employee?: { id: string; employeeId: string; name: string; designation?: string };
 }
 
+export interface UpdateExpenseInput {
+  amount?: number;
+  amountInPaise?: boolean;
+  categoryId?: string;
+  subCategory?: string | null;
+  paymentMode?: ExpensePaymentMode;
+  description?: string;
+  paidTo?: string;
+  receiptAttachment?: string | null;
+  employeeId?: string | null;
+  changeReason?: string;
+}
+
 export interface ExpenseDailyLedger {
   id: string;
   branchId: string;
