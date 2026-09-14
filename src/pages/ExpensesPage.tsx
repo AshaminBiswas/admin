@@ -287,25 +287,30 @@ export function ExpensesPage() {
       try {
         const rawBranches = await expensesApi.getBranches();
         const bList = Array.isArray(rawBranches) ? rawBranches : [];
-        setBranches(bList);
         if (bList.length > 0) {
-          if (!selectedBranchId) {
-            // Default to Delhi HQ or first branch
-            const del = bList.find((b) => b.code.toUpperCase().includes('DEL')) || bList[0];
-            setSelectedBranchId(del.id);
-            setEntryBranchId(del.id);
-          } else {
-            setEntryBranchId(selectedBranchId);
-          }
+          setBranches(bList);
+          const del = bList.find((b) => b.code?.toUpperCase().includes('DEL')) || bList[0];
+          setSelectedBranchId((prev) => prev || del.id);
+          setEntryBranchId((prev) => prev || del.id);
         }
+      } catch (err) {
+        console.warn('[Expenses] Error loading branches:', err);
+      }
 
+      try {
         const rawCats = await expensesApi.getCategories();
         const cList = Array.isArray(rawCats) ? rawCats : [];
-        setCategories(cList);
-        if (cList.length > 0 && !entryCategory) {
-          setEntryCategory(cList[0].id);
+        if (cList.length > 0) {
+          setCategories(cList);
+          if (!entryCategory) {
+            setEntryCategory(cList[0].id);
+          }
         }
+      } catch (err) {
+        console.warn('[Expenses] Error loading categories:', err);
+      }
 
+      try {
         // Proactively auto-sync offline queue if entries exist in localStorage
         const currentQueue = getOfflineQueue();
         if (currentQueue.length > 0 && typeof navigator !== 'undefined' && navigator.onLine) {
@@ -320,11 +325,26 @@ export function ExpensesPage() {
           }).catch((e) => console.warn('[Auto-sync] Boot sync deferred:', e));
         }
       } catch (err) {
-        console.error('Failed to initialize expenses:', err);
+        console.warn('[Expenses] Offline queue check:', err);
       }
     }
+
     loadInit();
   }, []);
+
+  // Ensure default branch selection when branches state updates
+  useEffect(() => {
+    if (branches.length > 0) {
+      if (!selectedBranchId) {
+        const del = branches.find((b) => b.code?.toUpperCase().includes('DEL')) || branches[0];
+        setSelectedBranchId(del.id);
+      }
+      if (!entryBranchId) {
+        const del = branches.find((b) => b.code?.toUpperCase().includes('DEL')) || branches[0];
+        setEntryBranchId(del.id);
+      }
+    }
+  }, [branches, selectedBranchId, entryBranchId]);
 
   // ─── Load Balance & Summaries when Branch changes ───────────────────────────
   const fetchBalance = useCallback(async () => {
