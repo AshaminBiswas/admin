@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import {
   ShieldCheck,
   QrCode,
@@ -17,7 +17,7 @@ import { adminAuthService } from "../api/adminAuthService";
 import { TwoFactorSetupData } from "../types/admin";
 
 export function AdminMandatory2FAPage() {
-  const { adminUser, logout, refreshUserProfile } = useAdminAuth();
+  const { adminUser, logout, refreshUserProfile, complete2FAVerification } = useAdminAuth();
 
   const [setupData, setSetupData] = useState<TwoFactorSetupData | null>(null);
   const [isLoadingSetup, setIsLoadingSetup] = useState(true);
@@ -86,9 +86,9 @@ export function AdminMandatory2FAPage() {
     try {
       const res = await adminAuthService.confirmEnable2FA(cleanCode);
       if (res.success) {
-        setSuccessMsg("Two-Factor Authentication verified successfully! Access granted.");
-        // Refresh profile in context so isTwoFactorEnabled becomes true
-        await refreshUserProfile();
+        setSuccessMsg("Two-Factor Authentication verified successfully! Access granted. Entering Admin Console...");
+        // Instantly activate 2FA and transition directly into the Admin Console dashboard
+        complete2FAVerification(res.user);
       } else {
         setErrorMsg(res.message || "Invalid 6-digit code. Please verify the current code in your app and retry.");
       }

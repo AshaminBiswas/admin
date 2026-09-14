@@ -170,7 +170,7 @@ export const adminAuthService = {
     };
   },
 
-  async confirmEnable2FA(code: string): Promise<{ success: boolean; message?: string }> {
+  async confirmEnable2FA(code: string): Promise<{ success: boolean; user?: AdminUser; message?: string }> {
     const cleanCode = code.trim().replace(/[\s-]+/g, "");
     if (!cleanCode) {
       return { success: false, message: "Please enter a valid 6-digit confirmation code." };
@@ -184,16 +184,43 @@ export const adminAuthService = {
     if (res.success) {
       setLocal2FAEnabled(true);
       const cachedUser = getStoredAdminUser();
-      if (cachedUser) {
-        const updatedUser: AdminUser = {
-          ...cachedUser,
-          isTwoFactorEnabled: true,
-          twoFactorEnabled: true,
-        };
+      const rawUser = res.data?.user || res.data || cachedUser;
+      const resolvedRole = typeof rawUser?.role === "object" && rawUser?.role !== null
+        ? (rawUser.role.slug ?? rawUser.role.name ?? "super_admin")
+        : (rawUser?.role ?? "super_admin");
+
+      const updatedUser: AdminUser = {
+        id: rawUser?.id || cachedUser?.id || "admin-1",
+        email: rawUser?.email || cachedUser?.email || "",
+        firstName: rawUser?.firstName || cachedUser?.firstName || "Executive",
+        lastName: rawUser?.lastName || cachedUser?.lastName || "Admin",
+        role: resolvedRole,
+        mustChangePassword: Boolean(rawUser?.mustChangePassword),
+        isTwoFactorEnabled: true,
+        twoFactorEnabled: true,
+      };
+
+      const accessToken = res.data?.accessToken;
+      const refreshToken = res.data?.refreshToken;
+      if (accessToken) {
+        setAdminTokens(accessToken, refreshToken, updatedUser);
+      } else {
         localStorage.setItem("prc_admin_user_session", JSON.stringify(updatedUser));
       }
+
+      logAdminActivity({
+        action: "2FA_ACTIVATED",
+        entity: "AUTH",
+        category: "AUTH",
+        severity: "SECURITY",
+        details: `Two-Factor Authentication successfully activated for '${updatedUser.email}'.`,
+        adminEmail: updatedUser.email,
+        payload: { method: "RFC6238_TOTP" },
+      });
+
       return {
         success: true,
+        user: updatedUser,
         message: res.message || "Two-Factor Authentication is now active on your account!",
       };
     }

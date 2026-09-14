@@ -1,4 +1,4 @@
-﻿import React, { useState } from "react";
+import React, { useState } from "react";
 import {
   KeyRound,
   Lock,
@@ -14,7 +14,7 @@ import { useAdminAuth } from "../context/AdminAuthContext";
 import { adminAuthService } from "../api/adminAuthService";
 
 export function AdminForceChangePasswordPage() {
-  const { adminUser, logout, refreshUserProfile } = useAdminAuth();
+  const { adminUser, logout, refreshUserProfile, setCurrentView } = useAdminAuth();
 
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -70,6 +70,7 @@ export function AdminForceChangePasswordPage() {
         setSuccessMsg(res.message || "Password successfully established!");
         // Refresh context user profile so mustChangePassword becomes false
         await refreshUserProfile();
+        setCurrentView("dashboard");
       } else {
         setErrorMsg(res.message || "Failed to update password. Please check your credentials.");
       }

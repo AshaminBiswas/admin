@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from "react";
 import { AdminUser, AdminView } from "../types/admin";
-import { adminAuthService, isLocal2FAEnabled } from "../api/adminAuthService";
+import { adminAuthService, isLocal2FAEnabled, setLocal2FAEnabled } from "../api/adminAuthService";
 import {
   getAdminToken,
   getStoredAdminUser,
@@ -34,6 +34,7 @@ interface AdminAuthContextType {
   cancel2FA: () => void;
   logout: (notice?: string) => Promise<void>;
   refreshUserProfile: () => Promise<void>;
+  complete2FAVerification: (verifiedUser?: AdminUser) => void;
 }
 
 const AdminAuthContext = createContext<AdminAuthContextType | undefined>(undefined);
@@ -74,16 +75,19 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
     if (typeof window !== "undefined") {
       const path = window.location.pathname.replace(/^\/+/, "");
       const rootSegment = path.split("/")[0];
-      if (rootSegment) {
+      if (rootSegment && rootSegment !== "login") {
         if (rootSegment === "varients") return "variants";
         if (rootSegment === "notifications") return "notification";
         return rootSegment as AdminView;
       }
     }
     const saved = localStorage.getItem(VIEW_STORAGE_KEY);
-    if (saved === "varients") return "variants";
-    if (saved === "notifications") return "notification";
-    return (saved as AdminView) || "dashboard";
+    if (saved && saved !== "login") {
+      if (saved === "varients") return "variants";
+      if (saved === "notifications") return "notification";
+      return (saved as AdminView) || "dashboard";
+    }
+    return "dashboard";
   });
 
   // Timers
@@ -299,6 +303,25 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // ─── Instant 2FA Verification & Auto-Login ──────────────────────────────────
+  const complete2FAVerification = useCallback((verifiedUser?: AdminUser) => {
+    setLocal2FAEnabled(true);
+    const target = verifiedUser || getStoredAdminUser() || adminUser;
+    if (target) {
+      const updated: AdminUser = {
+        ...target,
+        isTwoFactorEnabled: true,
+        twoFactorEnabled: true,
+      };
+      const norm = normalizeRole(updated);
+      setAdminUser(norm);
+      if (norm) localStorage.setItem("prc_admin_user_session", JSON.stringify(norm));
+    }
+    setPending2FA(false);
+    setMfaToken(null);
+    setCurrentView("dashboard");
+  }, [adminUser]);
+
   // ─── Login ───────────────────────────────────────────────────────────────────
   const login = async (email: string, pass: string) => {
     clearSessionNotice();
@@ -316,6 +339,7 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
       setPending2FA(false);
       setMfaToken(null);
       scheduleProactiveRefresh(PROACTIVE_REFRESH_MS);
+      setCurrentView("dashboard");
       return { success: true, message: res.message };
     }
 
@@ -336,6 +360,7 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
       setPending2FA(false);
       setMfaToken(null);
       scheduleProactiveRefresh(PROACTIVE_REFRESH_MS);
+      setCurrentView("dashboard");
       return { success: true, message: res.message };
     }
     return { success: false, message: res.message };
@@ -364,6 +389,7 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
         cancel2FA,
         logout,
         refreshUserProfile,
+        complete2FAVerification,
       }}
     >
       {children}
@@ -386,6 +412,7 @@ const fallbackAdminAuth: AdminAuthContextType = {
   cancel2FA: () => {},
   logout: async () => {},
   refreshUserProfile: async () => {},
+  complete2FAVerification: () => {},
 };
 
 export function useAdminAuth() {
