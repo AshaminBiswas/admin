@@ -103,9 +103,10 @@ export function AdminManagementPageSkeleton() {
 
 export interface AdminManagementPageProps {
   onViewAdmin?: (adminId: string) => void;
+  onNavigateRoles?: () => void;
 }
 
-export function AdminManagementPage({ onViewAdmin }: AdminManagementPageProps = {}) {
+export function AdminManagementPage({ onViewAdmin, onNavigateRoles }: AdminManagementPageProps = {}) {
   const { adminUser } = useAdminAuth();
   const rawRole = adminUser?.role as any;
   const roleSlug = typeof rawRole === "object" && rawRole !== null
@@ -621,14 +622,28 @@ export function AdminManagementPage({ onViewAdmin }: AdminManagementPageProps = 
 
         <div className="flex items-center gap-2">
           {isSuperAdmin ? (
-            <button
-              type="button"
-              onClick={handleOpenCreateModal}
-              className="bg-[#8B5CF6] hover:bg-[#7C3AED] text-white font-bold text-xs px-4 py-2 rounded-tr-xl rounded-bl-xl transition-all shadow-sm flex items-center gap-2"
-            >
-              <UserPlus size={15} />
-              <span>Provision Admin / Manager</span>
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={handleOpenCreateModal}
+                className="bg-[#8B5CF6] hover:bg-[#7C3AED] text-white font-bold text-xs px-4 py-2 rounded-tr-xl rounded-bl-xl transition-all shadow-sm flex items-center gap-2"
+              >
+                <UserPlus size={15} />
+                <span>Provision Admin / Manager</span>
+              </button>
+
+              {onNavigateRoles && (
+                <button
+                  type="button"
+                  onClick={onNavigateRoles}
+                  className="bg-[#27272A] hover:bg-[#3F3F46] text-[#FAFAFA] font-bold text-xs px-3.5 py-2 rounded-tr-xl rounded-bl-xl transition-all border border-[#3F3F46] flex items-center gap-1.5 shadow-sm"
+                  title="Configure Custom Roles & Granular Permissions"
+                >
+                  <ShieldCheck size={14} className="text-[#A855F7]" />
+                  <span>Roles & Permissions</span>
+                </button>
+              )}
+            </>
           ) : (
             <div className="px-3 py-1.5 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-400 text-xs font-semibold flex items-center gap-1.5">
               <Lock size={12} />
@@ -1268,9 +1283,26 @@ export function AdminManagementPage({ onViewAdmin }: AdminManagementPageProps = 
                         <ShieldCheck size={12} className="text-[#8B5CF6]" />
                         <span>Assign Role & Authority *</span>
                       </span>
-                      <span className="text-[10px] text-[#71717A]">
-                        {rolesList.length} roles available
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-[#71717A]">
+                          {rolesList.length} roles available
+                        </span>
+                        {onNavigateRoles && isSuperAdmin && (
+                          <>
+                            <span className="text-zinc-700">|</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShowCreateModal(false);
+                                onNavigateRoles();
+                              }}
+                              className="text-[10px] text-purple-400 hover:text-purple-300 font-bold underline cursor-pointer"
+                            >
+                              + Customize Roles & Perms
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </label>
 
                     <select
@@ -1296,9 +1328,23 @@ export function AdminManagementPage({ onViewAdmin }: AdminManagementPageProps = 
                               <Shield size={13} className="text-[#A855F7]" />
                               {selectedRole.name}
                             </span>
-                            <span className="text-[9px] px-2 py-0.5 rounded-full font-mono bg-purple-500/20 text-[#A855F7] border border-purple-500/30">
-                              {!selectedRole.isSystem ? "CUSTOM ROLE" : "SYSTEM ROLE"}
-                            </span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[9px] px-2 py-0.5 rounded-full font-mono bg-purple-500/20 text-[#A855F7] border border-purple-500/30">
+                                {!selectedRole.isSystem ? "CUSTOM ROLE" : "SYSTEM ROLE"}
+                              </span>
+                              {onNavigateRoles && isSuperAdmin && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setShowCreateModal(false);
+                                    onNavigateRoles();
+                                  }}
+                                  className="text-[10px] text-purple-400 hover:text-purple-300 font-bold underline cursor-pointer"
+                                >
+                                  Configure
+                                </button>
+                              )}
+                            </div>
                           </div>
                           {selectedRole.description && (
                             <p className="text-[#A1A1AA] text-[10px] leading-relaxed">
@@ -1455,7 +1501,21 @@ export function AdminManagementPage({ onViewAdmin }: AdminManagementPageProps = 
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[11px] text-[#A1A1AA] font-semibold">Assigned Role (Custom or Standard)</label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] text-[#A1A1AA] font-semibold">Assigned Role (Custom or Standard)</label>
+                    {onNavigateRoles && isSuperAdmin && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingAdmin(null);
+                          onNavigateRoles();
+                        }}
+                        className="text-[10px] text-purple-400 hover:text-purple-300 font-bold underline cursor-pointer"
+                      >
+                        Customize Roles & Perms
+                      </button>
+                    )}
+                  </div>
                   <select
                     value={editRoleId}
                     onChange={(e) => setEditRoleId(e.target.value)}

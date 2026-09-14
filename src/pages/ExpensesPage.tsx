@@ -133,8 +133,9 @@ export function ExpensesPage() {
   const [todayEntries, setTodayEntries] = useState<ExpenseEntry[]>([]);
   const [isLoadingToday, setIsLoadingToday] = useState(false);
 
-  // Approval queue (for Tab 2)
+  // Approval queue (for Tab 3)
   const [pendingEntries, setPendingEntries] = useState<ExpenseEntry[]>([]);
+  const [approvalsBranchFilter, setApprovalsBranchFilter] = useState<string>('ALL');
   const [isLoadingPending, setIsLoadingPending] = useState(false);
   const [selectedRejectEntry, setSelectedRejectEntry] = useState<ExpenseEntry | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
@@ -415,12 +416,12 @@ export function ExpensesPage() {
     }
   }, [activeTab, fetchTodayEntries]);
 
-  // ─── Load Approval Queue (Tab 2) ───────────────────────────────────────────
+  // ─── Load Approval Queue (Tab 3) ───────────────────────────────────────────
   const fetchApprovals = useCallback(async () => {
     setIsLoadingPending(true);
     try {
       const res = await expensesApi.getExpenses({
-        branchId: isAllBranches ? undefined : selectedBranchId,
+        branchId: approvalsBranchFilter === 'ALL' ? undefined : approvalsBranchFilter,
         status: 'PENDING',
         limit: 100,
       });
@@ -435,13 +436,18 @@ export function ExpensesPage() {
     } finally {
       setIsLoadingPending(false);
     }
-  }, [selectedBranchId, isAllBranches]);
+  }, [approvalsBranchFilter]);
 
   useEffect(() => {
     if (activeTab === 'approvals') {
       fetchApprovals();
     }
   }, [activeTab, fetchApprovals]);
+
+  // Initial load of pending approvals count for the badge
+  useEffect(() => {
+    fetchApprovals();
+  }, [fetchApprovals]);
 
   // ─── Load Categories with Monthly Spend (Tab 4) ────────────────────────────
   const fetchCategoriesWithSpend = useCallback(async () => {
@@ -671,6 +677,7 @@ export function ExpensesPage() {
         setLastLoggedExpense((prev) => (prev ? { ...prev, status: 'APPROVED' } : null));
       }
       fetchBalance();
+      fetchApprovals();
     } catch (err: any) {
       alert(err.message || 'Failed to approve expense');
     }
@@ -694,6 +701,7 @@ export function ExpensesPage() {
       setSelectedRejectEntry(null);
       setRejectionReason('');
       fetchBalance();
+      fetchApprovals();
     } catch (err: any) {
       alert(err.message || 'Failed to reject expense');
     }
@@ -1200,9 +1208,9 @@ export function ExpensesPage() {
         >
           <Clock size={16} />
           <span>Approval Queue</span>
-          {liveBalance && liveBalance.pendingApprovalsCount > 0 && (
-            <span className="ml-1 px-1.5 py-0.2 rounded-full bg-amber-500 text-black text-[10px] font-bold">
-              {liveBalance.pendingApprovalsCount}
+          {(pendingEntries.length > 0 || (liveBalance && liveBalance.pendingApprovalsCount > 0)) && (
+            <span className="ml-1 px-2 py-0.5 rounded-full bg-amber-500 text-black text-[10px] font-black shadow-xs">
+              {pendingEntries.length > 0 ? pendingEntries.length : liveBalance?.pendingApprovalsCount}
             </span>
           )}
         </button>
@@ -2512,8 +2520,13 @@ export function ExpensesPage() {
         <div className="p-5 sm:p-6 rounded-2xl bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] shadow-sm space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100 dark:border-[#27272A]">
             <div>
-              <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">
-                Pending Expense Approvals
+              <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <span>Pending Expense Approvals</span>
+                {pendingEntries.length > 0 && (
+                  <span className="text-xs px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-500 border border-amber-500/30 font-bold font-mono">
+                    {pendingEntries.length} PENDING
+                  </span>
+                )}
               </h2>
               <p className="text-xs text-slate-500 dark:text-zinc-400">
                 Entries exceeding the auto-approval threshold requiring management sign-off
@@ -2523,10 +2536,55 @@ export function ExpensesPage() {
               <button
                 onClick={fetchApprovals}
                 className="p-2 rounded-xl text-slate-500 hover:bg-slate-100 dark:hover:bg-[#27272A] transition"
+                title="Refresh Approvals Queue"
               >
                 <RefreshCw size={16} className={isLoadingPending ? 'animate-spin' : ''} />
               </button>
             </div>
+          </div>
+
+          {/* Facility Filter Pills for Approvals Queue */}
+          <div className="flex flex-wrap items-center gap-2 pb-2">
+            <span className="text-xs font-semibold text-slate-500 dark:text-zinc-400 flex items-center gap-1 mr-1">
+              <Building2 size={13} />
+              <span>Facility:</span>
+            </span>
+            <button
+              type="button"
+              onClick={() => setApprovalsBranchFilter('ALL')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                approvalsBranchFilter === 'ALL'
+                  ? 'bg-violet-600 text-white shadow-sm'
+                  : 'bg-slate-100 dark:bg-[#27272A] text-slate-600 dark:text-zinc-400 hover:bg-slate-200 dark:hover:bg-[#3F3F46]'
+              }`}
+            >
+              <span>All Branches</span>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${approvalsBranchFilter === 'ALL' ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-[#3F3F46] text-slate-700 dark:text-zinc-300'}`}>
+                {pendingEntries.length}
+              </span>
+            </button>
+            {branches.map((b) => {
+              const bCount = pendingEntries.filter((e) => e.branchId === b.id).length;
+              return (
+                <button
+                  key={b.id}
+                  type="button"
+                  onClick={() => setApprovalsBranchFilter(b.id)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                    approvalsBranchFilter === b.id
+                      ? 'bg-violet-600 text-white shadow-sm'
+                      : 'bg-slate-100 dark:bg-[#27272A] text-slate-600 dark:text-zinc-400 hover:bg-slate-200 dark:hover:bg-[#3F3F46]'
+                  }`}
+                >
+                  <span>{b.name}</span>
+                  {bCount > 0 && (
+                    <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold ${approvalsBranchFilter === b.id ? 'bg-white/20 text-white' : 'bg-amber-500/20 text-amber-500'}`}>
+                      {bCount}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
 
           {(pendingEntries || []).length === 0 ? (
@@ -2536,18 +2594,24 @@ export function ExpensesPage() {
             </div>
           ) : (
             <div className="space-y-3">
-              {(pendingEntries || []).map((e) => (
+              {(pendingEntries || [])
+                .filter((e) => approvalsBranchFilter === 'ALL' || e.branchId === approvalsBranchFilter)
+                .map((e) => (
                 <div
                   key={e.id}
                   className="p-4 rounded-xl bg-slate-50 dark:bg-[#09090B] border border-slate-200 dark:border-[#27272A] flex flex-col sm:flex-row sm:items-center justify-between gap-4"
                 >
                   <div className="space-y-1">
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span className="font-mono font-bold text-violet-600 dark:text-violet-400 text-sm">
                         {e.entryNumber}
                       </span>
                       <span className="text-xs px-2 py-0.5 rounded bg-amber-500/10 text-amber-500 font-bold">
                         PENDING APPROVAL
+                      </span>
+                      <span className="text-xs px-2.5 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 font-semibold flex items-center gap-1 border border-blue-500/20">
+                        <Building2 size={12} />
+                        {e.branch?.name || 'Facility'}
                       </span>
                       <span className="text-xs text-slate-400">({formatDate(e.date)} {e.time})</span>
                     </div>

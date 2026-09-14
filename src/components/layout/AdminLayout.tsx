@@ -309,6 +309,7 @@ export function AdminLayout() {
               }
               setCurrentView("admin-detail");
             }}
+            onNavigateRoles={() => setCurrentView("roles")}
           />
         );
       case "admin-detail":

@@ -228,9 +228,14 @@ export function RolesPage() {
   const { adminUser } = useAdminAuth();
   const rawRole = adminUser?.role as any;
   const loggedInRoleSlug = typeof rawRole === "object" && rawRole !== null
-    ? (rawRole.slug ?? rawRole.name ?? "super_admin")
-    : (rawRole ?? "super_admin");
-  const isSuperAdminUser = (loggedInRoleSlug || "").toLowerCase().includes("super");
+    ? (rawRole.slug ?? rawRole.name ?? (adminUser as any)?.roleSlug ?? "super_admin")
+    : (rawRole ?? (adminUser as any)?.roleSlug ?? "super_admin");
+  const isSuperAdminUser =
+    (loggedInRoleSlug || "").toLowerCase().includes("super") ||
+    (adminUser as any)?.isSuperAdmin === true ||
+    (adminUser as any)?.roleSlug === 'super-admin' ||
+    adminUser?.role === 'super_admin' ||
+    adminUser?.role === 'super-admin';
 
   // Top Nav Tab State
   const [activeTab, setActiveTab] = useState<"roles_matrix" | "permissions_catalog">("roles_matrix");
@@ -272,6 +277,10 @@ export function RolesPage() {
   const [editingRole, setEditingRole] = useState<Role | null>(null);
   const [editRoleName, setEditRoleName] = useState("");
   const [editRoleDesc, setEditRoleDesc] = useState("");
+  const [editPerms, setEditPerms] = useState<Set<string>>(new Set());
+  const [editExpandedGroups, setEditExpandedGroups] = useState<Set<string>>(new Set());
+  const [editPermSearch, setEditPermSearch] = useState("");
+  const [loadingEditPerms, setLoadingEditPerms] = useState(false);
 
   // Delete Role Modal State
   const [deletingRole, setDeletingRole] = useState<Role | null>(null);
@@ -499,6 +508,24 @@ export function RolesPage() {
     });
   }, [allFlatPermissions, debouncedCatalogSearch, catalogModuleFilter]);
 
+  // Filtered Permissions for Edit Role Modal
+  const filteredEditPermGroups = useMemo(() => {
+    if (!editPermSearch.trim()) return allPerms;
+    const q = editPermSearch.toLowerCase().trim();
+    return allPerms
+      .map((g) => {
+        const matchingPerms = g.permissions.filter(
+          (p) =>
+            p.name.toLowerCase().includes(q) ||
+            (p.slug || p.id).toLowerCase().includes(q) ||
+            g.module.toLowerCase().includes(q) ||
+            (p.description && p.description.toLowerCase().includes(q))
+        );
+        return { ...g, permissions: matchingPerms };
+      })
+      .filter((g) => g.permissions.length > 0);
+  }, [allPerms, editPermSearch]);
+
   // Toggle single permission for active role (blocked for Super Admin)
   const handleTogglePermission = (slug: string) => {
     if (isSelectedSuperAdmin) return;
@@ -710,23 +737,92 @@ export function RolesPage() {
     }
   };
 
-  // Submit Edit Role Metadata
+  // ─── Edit Role Modal Handlers ──────────────────────────────────────────
+  const handleOpenEditRole = async (r: Role) => {
+    setEditingRole(r);
+    setEditRoleName(r.name);
+    setEditRoleDesc(r.description || "");
+    setEditPermSearch("");
+    setLoadingEditPerms(true);
+    try {
+      const res = await rolesApi.getById(r.id);
+      if (res && res.success !== false) {
+        const rData = res.data ?? res;
+        const pSlugs: string[] = (rData.permissions ?? []).map((p: any) =>
+          typeof p === "string" ? p : p.slug ?? p.id
+        );
+        setEditPerms(new Set(pSlugs));
+      } else {
+        const pSlugs: string[] = ((r as any).permissions ?? []).map((p: any) =>
+          typeof p === "string" ? p : p.slug ?? p.id
+        );
+        setEditPerms(new Set(pSlugs));
+      }
+    } catch {
+      const pSlugs: string[] = ((r as any).permissions ?? []).map((p: any) =>
+        typeof p === "string" ? p : p.slug ?? p.id
+      );
+      setEditPerms(new Set(pSlugs));
+    } finally {
+      setLoadingEditPerms(false);
+    }
+  };
+
+  const handleToggleEditPerm = (slug: string) => {
+    setEditPerms((prev) => {
+      const next = new Set(prev);
+      if (next.has(slug)) next.delete(slug);
+      else next.add(slug);
+      return next;
+    });
+  };
+
+  const handleToggleEditGroup = (group: PermissionGroup) => {
+    const groupSlugs = group.permissions.map((p) => p.slug || p.id);
+    const allChecked = groupSlugs.length > 0 && groupSlugs.every((s) => editPerms.has(s));
+
+    setEditPerms((prev) => {
+      const next = new Set(prev);
+      if (allChecked) groupSlugs.forEach((s) => next.delete(s));
+      else groupSlugs.forEach((s) => next.add(s));
+      return next;
+    });
+  };
+
+  const handleToggleEditAccordion = (module: string) => {
+    setEditExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(module)) next.delete(module);
+      else next.add(module);
+      return next;
+    });
+  };
+
+  // Submit Edit Role Metadata & Permissions
   const handleSaveEditRole = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingRole || !editRoleName.trim()) return;
     setIsSubmitting(true);
     try {
-      const res = await rolesApi.update(editingRole.id, {
+      // 1. Update role metadata
+      const resMeta = await rolesApi.update(editingRole.id, {
         name: editRoleName.trim(),
         description: editRoleDesc.trim() || undefined,
       });
 
-      if (res && res.success !== false) {
-        showFeedback("success", `Role "${editRoleName}" updated successfully.`);
+      // 2. Update role permissions atomically
+      const resPerms = await rolesApi.updatePermissions(editingRole.id, Array.from(editPerms));
+
+      if (resMeta && resMeta.success !== false && resPerms && resPerms.success !== false) {
+        showFeedback("success", `Role "${editRoleName}" and its assigned permissions updated successfully.`);
         setEditingRole(null);
+        if (selectedRole?.id === editingRole.id) {
+          setRolePerms(new Set(editPerms));
+        }
         await loadRoles();
       } else {
-        showFeedback("error", res.message || "Failed to update role.");
+        const errMsg = resMeta?.message || resPerms?.message || "Failed to update role or permissions.";
+        showFeedback("error", errMsg);
       }
     } catch (err: any) {
       showFeedback("error", err.message || "Failed to update role.");
@@ -1188,13 +1284,9 @@ export function RolesPage() {
                           <>
                             <button
                               type="button"
-                              onClick={() => {
-                                setEditingRole(r);
-                                setEditRoleName(r.name);
-                                setEditRoleDesc(r.description || "");
-                              }}
+                              onClick={() => handleOpenEditRole(r)}
                               className="p-1 text-amber-400 hover:text-amber-300"
-                              title="Edit Role Metadata"
+                              title="Edit Role Name, Description & Permissions"
                             >
                               <Edit2 size={11} />
                             </button>
@@ -1263,6 +1355,18 @@ export function RolesPage() {
                       </div>
                     ) : (
                       <>
+                        {!selectedRole.isSystem && !isSelectedSuperAdmin && isSuperAdminUser && (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEditRole(selectedRole)}
+                            className="px-3 py-2 bg-[#27272A] hover:bg-[#3F3F46] text-amber-400 hover:text-amber-300 rounded-xl font-bold text-xs border border-[#3F3F46] transition-all flex items-center gap-1.5"
+                            title="Edit Role Name, Description & Permissions in Modal"
+                          >
+                            <Edit2 size={13} />
+                            <span>Edit Role</span>
+                          </button>
+                        )}
+
                         <button
                           type="button"
                           onClick={handleToggleGlobalAll}
@@ -1924,15 +2028,24 @@ export function RolesPage() {
         </div>
       )}
 
-      {/* ─── MODAL 2: EDIT ROLE METADATA MODAL ─── */}
+      {/* ─── MODAL 2: EDIT ROLE & PERMISSIONS MODAL ─── */}
       {editingRole && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-          <div className="bg-[#18181B] border border-[#27272A] rounded-2xl w-full max-w-md shadow-2xl p-6 space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-[#18181B] border border-[#27272A] rounded-2xl w-full max-w-2xl shadow-2xl p-6 space-y-4 my-8">
             <div className="flex items-center justify-between border-b border-[#27272A] pb-3">
-              <h3 className="font-bold text-sm text-[#FAFAFA] flex items-center gap-2">
-                <Edit2 size={16} className="text-amber-400" />
-                <span>Edit Role Metadata</span>
-              </h3>
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/40 flex items-center justify-center">
+                  <Edit2 size={16} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-[#FAFAFA]">
+                    Edit Role & Permissions: {editingRole.name}
+                  </h3>
+                  <p className="text-[11px] text-[#A1A1AA]">
+                    Modify role profile name, description, and assigned security permissions.
+                  </p>
+                </div>
+              </div>
               <button
                 type="button"
                 onClick={() => setEditingRole(null)}
@@ -1942,26 +2055,182 @@ export function RolesPage() {
               </button>
             </div>
 
-            <form onSubmit={handleSaveEditRole} className="space-y-3.5 text-xs">
+            <form onSubmit={handleSaveEditRole} className="space-y-4 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[11px] text-[#A1A1AA] font-semibold">Role Name *</label>
+                  <input
+                    type="text"
+                    required
+                    value={editRoleName}
+                    onChange={(e) => setEditRoleName(e.target.value)}
+                    className="w-full bg-[#09090B] border border-[#27272A] rounded-xl px-3 py-2 text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[11px] text-[#71717A] font-semibold">Role Code Slug</label>
+                  <div className="w-full bg-[#09090B]/60 border border-[#27272A] rounded-xl px-3 py-2 text-[#71717A] font-mono text-xs select-all">
+                    {editingRole.slug}
+                  </div>
+                </div>
+              </div>
+
               <div className="space-y-1">
-                <label className="text-[11px] text-[#A1A1AA] font-semibold">Role Name *</label>
-                <input
-                  type="text"
-                  required
-                  value={editRoleName}
-                  onChange={(e) => setEditRoleName(e.target.value)}
+                <label className="text-[11px] text-[#A1A1AA] font-semibold">Role Description</label>
+                <textarea
+                  rows={2}
+                  value={editRoleDesc}
+                  onChange={(e) => setEditRoleDesc(e.target.value)}
+                  placeholder="Describe role responsibilities and operational boundaries..."
                   className="w-full bg-[#09090B] border border-[#27272A] rounded-xl px-3 py-2 text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
                 />
               </div>
 
-              <div className="space-y-1">
-                <label className="text-[11px] text-[#A1A1AA] font-semibold">Description</label>
-                <textarea
-                  rows={3}
-                  value={editRoleDesc}
-                  onChange={(e) => setEditRoleDesc(e.target.value)}
-                  className="w-full bg-[#09090B] border border-[#27272A] rounded-xl p-3 text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
-                />
+              {/* In-Modal Permissions Checklist */}
+              <div className="space-y-2 pt-2 border-t border-[#27272A]">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck size={14} className="text-[#A855F7]" />
+                    <span className="text-[11px] font-bold uppercase text-[#A855F7] tracking-wider">
+                      Assigned Capabilities ({editPerms.size} Granted)
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (editPerms.size === allSystemPermissionSlugs.length) setEditPerms(new Set());
+                        else setEditPerms(new Set(allSystemPermissionSlugs));
+                      }}
+                      className="text-[11px] font-bold text-purple-400 hover:text-purple-300 transition-colors"
+                    >
+                      {editPerms.size === allSystemPermissionSlugs.length ? "Deselect All" : "Grant All"}
+                    </button>
+                    <span className="text-zinc-700">|</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const allModules = allPerms.map((g) => g.module);
+                        setEditExpandedGroups(editExpandedGroups.size === allModules.length ? new Set() : new Set(allModules));
+                      }}
+                      className="text-[11px] font-bold text-[#A1A1AA] hover:text-[#FAFAFA] transition-colors"
+                    >
+                      {editExpandedGroups.size === allPerms.length ? "Collapse All" : "Expand All"}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Search In-Modal */}
+                <div className="relative">
+                  <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#71717A]" />
+                  <input
+                    type="text"
+                    value={editPermSearch}
+                    onChange={(e) => setEditPermSearch(e.target.value)}
+                    placeholder="Search permissions by capability, slug, or module..."
+                    className="w-full pl-8 pr-7 py-1.5 bg-[#09090B] border border-[#27272A] rounded-xl text-xs text-[#FAFAFA] placeholder-[#71717A] focus:outline-none focus:border-[#8B5CF6]"
+                  />
+                  {editPermSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setEditPermSearch("")}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#71717A] hover:text-[#FAFAFA]"
+                    >
+                      <X size={12} />
+                    </button>
+                  )}
+                </div>
+
+                {loadingEditPerms ? (
+                  <div className="p-8 text-center bg-[#09090B] rounded-xl border border-[#27272A] space-y-2">
+                    <RefreshCw size={20} className="animate-spin text-[#A855F7] mx-auto" />
+                    <p className="text-xs text-[#A1A1AA]">Loading role permissions...</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-72 overflow-y-auto p-2 bg-[#09090B] rounded-xl border border-[#27272A]">
+                    {filteredEditPermGroups.map((group) => {
+                      const groupSlugs = group.permissions.map((p) => p.slug || p.id);
+                      const isAll = groupSlugs.length > 0 && groupSlugs.every((s) => editPerms.has(s));
+                      const checkedCount = group.permissions.filter((p) => editPerms.has(p.slug || p.id)).length;
+                      const isExpanded = editExpandedGroups.has(group.module) || Boolean(editPermSearch.trim());
+
+                      return (
+                        <div key={group.module} className="rounded-lg border border-[#27272A] bg-[#18181B] overflow-hidden">
+                          <div className="p-2.5 flex items-center justify-between">
+                            <div
+                              className="flex items-center gap-2 cursor-pointer flex-1"
+                              onClick={() => handleToggleEditAccordion(group.module)}
+                            >
+                              <span className="text-[11px] font-bold uppercase text-[#FAFAFA]">
+                                {formatModuleName(group.module)}
+                              </span>
+                              <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-[#27272A] text-[#A1A1AA]">
+                                {checkedCount}/{groupSlugs.length}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleToggleEditGroup(group)}
+                                className="text-[10px] text-purple-400 hover:text-purple-300 font-bold px-1.5 py-0.5 rounded bg-[#27272A] hover:bg-[#3F3F46]"
+                              >
+                                {isAll ? "Deselect" : "Select"}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleToggleEditAccordion(group.module)}
+                                className="text-[#71717A] hover:text-[#FAFAFA]"
+                              >
+                                {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                              </button>
+                            </div>
+                          </div>
+
+                          {isExpanded && (
+                            <div className="p-2 grid grid-cols-1 sm:grid-cols-2 gap-1.5 bg-[#09090B] border-t border-[#27272A]">
+                              {group.permissions.map((p) => {
+                                const pSlug = p.slug || p.id;
+                                const isChecked = editPerms.has(pSlug);
+                                const crudType = getCrudType(pSlug);
+
+                                return (
+                                  <label
+                                    key={p.id}
+                                    className={`flex items-start justify-between gap-2 p-2 rounded-lg border text-xs cursor-pointer select-none transition-colors ${
+                                      isChecked
+                                        ? "bg-purple-950/30 border-purple-500/40 text-[#FAFAFA]"
+                                        : "bg-[#18181B] border-[#27272A] text-[#A1A1AA] hover:border-[#3F3F46]"
+                                    }`}
+                                  >
+                                    <div className="flex items-start gap-2 min-w-0">
+                                      <input
+                                        type="checkbox"
+                                        checked={isChecked}
+                                        onChange={() => handleToggleEditPerm(pSlug)}
+                                        className="mt-0.5 rounded text-[#8B5CF6] focus:ring-0 cursor-pointer"
+                                      />
+                                      <div className="min-w-0">
+                                        <p className="font-semibold text-[11px] truncate">{p.name}</p>
+                                        <code className="text-[9px] text-[#A855F7] font-mono block truncate">
+                                          {pSlug}
+                                        </code>
+                                      </div>
+                                    </div>
+                                    <div className="flex-shrink-0">
+                                      {getCrudBadge(crudType)}
+                                    </div>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-[#27272A]">
@@ -1974,10 +2243,11 @@ export function RolesPage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={isSubmitting}
-                  className="px-5 py-2 bg-[#8B5CF6] hover:bg-[#7C3AED] disabled:opacity-50 text-white rounded-xl font-bold shadow"
+                  disabled={isSubmitting || loadingEditPerms}
+                  className="px-5 py-2 bg-[#8B5CF6] hover:bg-[#7C3AED] disabled:opacity-50 text-white rounded-xl font-bold shadow flex items-center gap-1.5"
                 >
-                  {isSubmitting ? "Saving..." : "Save Changes"}
+                  <Save size={14} />
+                  <span>{isSubmitting ? "Saving..." : "Save Role & Permissions"}</span>
                 </button>
               </div>
             </form>
