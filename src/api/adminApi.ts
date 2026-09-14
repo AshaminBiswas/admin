@@ -152,14 +152,23 @@ export async function proactiveTokenRefresh(): Promise<boolean> {
 // ─── Keep-Alive Server Ping ────────────────────────────────────────────────────
 /**
  * Silently pings the backend /ping or /health endpoint to prevent Render from sleeping.
+ * Uses mode: 'no-cors' so background keep-alive probes never throw or log CORS errors.
  * Uses a 60-second timeout window to reliably wait for sleeping containers.
  */
 export async function keepAliveServerPing(): Promise<void> {
   try {
-    await fetch(`${API_BASE_URL}/ping`, { method: "GET", signal: AbortSignal.timeout(60000) });
+    await fetch(`${API_BASE_URL}/ping`, {
+      method: "GET",
+      mode: "no-cors",
+      signal: AbortSignal.timeout(60000),
+    });
   } catch {
     try {
-      await fetch(`${API_BASE_URL}/health`, { method: "GET", signal: AbortSignal.timeout(60000) });
+      await fetch(`${API_BASE_URL}/health`, {
+        method: "GET",
+        mode: "no-cors",
+        signal: AbortSignal.timeout(60000),
+      });
     } catch {
       // Silent — ping failures are non-fatal
     }
@@ -241,10 +250,10 @@ async function executeFetchAdminApi<T = any>(
     let response = await fetch(url, { ...options, headers, signal: options.signal || controller.signal });
     clearTimeout(timeoutId);
 
-    // Auto-retry once on transient 502/504 gateway responses caused by Render container spin-up
-    if (!response.ok && (response.status === 502 || response.status === 504) && !isRetry) {
-      console.info(`[PRC Admin API] Server spinning up (HTTP ${response.status}) on ${cleanEndpoint}. Auto-retrying in 2s...`);
-      await new Promise((r) => setTimeout(r, 2000));
+    // Auto-retry once on transient 502/503/504 gateway responses caused by Render container spin-up
+    if (!response.ok && (response.status === 502 || response.status === 503 || response.status === 504) && !isRetry) {
+      console.info(`[PRC Admin API] Server spinning up (HTTP ${response.status}) on ${cleanEndpoint}. Auto-retrying in 2.5s...`);
+      await new Promise((r) => setTimeout(r, 2500));
       return executeFetchAdminApi<T>(endpoint, options, true);
     }
 
@@ -340,10 +349,15 @@ async function executeFetchAdminApi<T = any>(
   } catch (error: any) {
     clearTimeout(timeoutId);
     const isTimeout = error.name === "AbortError" || error.name === "TimeoutError";
+    const isNetworkOrFetchError =
+      error.name === "TypeError" ||
+      String(error.message || "").toLowerCase().includes("fetch") ||
+      String(error.message || "").toLowerCase().includes("network");
 
-    // If request timed out on cold start, auto-retry once because the server is likely awake by now
-    if (isTimeout && !isRetry) {
-      console.info(`[PRC Admin API] Request timed out on ${cleanEndpoint}. Server waking up, auto-retrying...`);
+    // If request timed out or hit cold-start network drop, auto-retry once because the server is likely waking up
+    if ((isTimeout || isNetworkOrFetchError) && !isRetry) {
+      console.info(`[PRC Admin API] Server wake-up / transient error on ${cleanEndpoint}. Auto-retrying in 2.5s...`);
+      await new Promise((r) => setTimeout(r, 2500));
       return executeFetchAdminApi<T>(endpoint, options, true);
     }
 
