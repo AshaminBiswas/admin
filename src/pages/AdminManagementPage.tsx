@@ -156,6 +156,20 @@ export function AdminManagementPage({ onViewAdmin }: AdminManagementPageProps = 
     roleSlug?: string;
   } | null>(null);
 
+  // Super Admin Password Reset Modal State
+  const [resettingPasswordAdmin, setResettingPasswordAdmin] = useState<any | null>(null);
+  const [resetNewPassword, setResetNewPassword] = useState("");
+  const [resetConfirmPassword, setResetConfirmPassword] = useState("");
+  const [resetShowPassword, setResetShowPassword] = useState(false);
+  const [resetMustChangePassword, setResetMustChangePassword] = useState(true);
+  const [resetSendNotificationEmail, setResetSendNotificationEmail] = useState(true);
+  const [resetSuccessData, setResetSuccessData] = useState<{
+    temporaryPassword?: string;
+    adminEmail?: string;
+    adminName?: string;
+  } | null>(null);
+  const [resetCopied, setResetCopied] = useState(false);
+
   const debouncedSearch = useDebounce(searchQuery, 300);
 
   // Cryptographically Secure Password Generator (Zero prefixes, purely random character distribution)
@@ -195,6 +209,110 @@ export function AdminManagementPage({ onViewAdmin }: AdminManagementPageProps = 
 
     const securePwd = pwdArray.join("");
     setPassword(securePwd);
+  };
+
+  const generateResetPassword = () => {
+    const upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+    const lower = "abcdefghijkmnpqrstuvwxyz";
+    const digits = "23456789";
+    const symbols = "!@#$%^&*";
+    const allChars = upper + lower + digits + symbols;
+
+    const getRandomChar = (chars: string) => {
+      const array = new Uint32Array(1);
+      window.crypto.getRandomValues(array);
+      return chars[array[0] % chars.length];
+    };
+
+    const pwdArray: string[] = [
+      getRandomChar(upper),
+      getRandomChar(lower),
+      getRandomChar(digits),
+      getRandomChar(symbols),
+    ];
+
+    for (let i = 4; i < 14; i++) {
+      pwdArray.push(getRandomChar(allChars));
+    }
+
+    for (let i = pwdArray.length - 1; i > 0; i--) {
+      const array = new Uint32Array(1);
+      window.crypto.getRandomValues(array);
+      const j = array[0] % (i + 1);
+      [pwdArray[i], pwdArray[j]] = [pwdArray[j], pwdArray[i]];
+    }
+
+    const securePwd = pwdArray.join("");
+    setResetNewPassword(securePwd);
+    setResetConfirmPassword(securePwd);
+    setResetShowPassword(true);
+  };
+
+  const handleOpenResetPasswordModal = (admin: any) => {
+    setResettingPasswordAdmin(admin);
+    setResetNewPassword("");
+    setResetConfirmPassword("");
+    setResetShowPassword(false);
+    setResetMustChangePassword(true);
+    setResetSendNotificationEmail(true);
+    setResetSuccessData(null);
+    setResetCopied(false);
+  };
+
+  const handleCloseResetPasswordModal = () => {
+    setResettingPasswordAdmin(null);
+    setResetSuccessData(null);
+    setResetNewPassword("");
+    setResetConfirmPassword("");
+    setResetCopied(false);
+  };
+
+  const handleExecuteAdminPasswordReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resettingPasswordAdmin) return;
+
+    if (!resetNewPassword || resetNewPassword.length < 8) {
+      setFeedback({ type: "error", text: "New password must be at least 8 characters long." });
+      return;
+    }
+
+    if (resetNewPassword !== resetConfirmPassword) {
+      setFeedback({ type: "error", text: "New password and confirmation password do not match." });
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const res = await usersApi.changePasswordByAdmin(resettingPasswordAdmin.id, {
+        newPassword: resetNewPassword,
+        mustChangePassword: resetMustChangePassword,
+        sendNotificationEmail: resetSendNotificationEmail,
+      });
+
+      if (res && res.success !== false) {
+        setResetSuccessData({
+          temporaryPassword: resetNewPassword,
+          adminEmail: resettingPasswordAdmin.email,
+          adminName: `${resettingPasswordAdmin.firstName} ${resettingPasswordAdmin.lastName}`,
+        });
+        setFeedback({
+          type: "success",
+          text: `Password successfully updated for '${resettingPasswordAdmin.email}'!`,
+        });
+      } else {
+        setFeedback({
+          type: "error",
+          text: res?.message || res?.error?.message || "Failed to update administrator password.",
+        });
+      }
+    } catch (err: any) {
+      setFeedback({
+        type: "error",
+        text: err.message || "Network error while updating administrator password.",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleOpenCreateModal = () => {
@@ -744,6 +862,16 @@ export function AdminManagementPage({ onViewAdmin }: AdminManagementPageProps = 
                   >
                     <Eye size={14} />
                   </button>
+                  {isSuperAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => handleOpenResetPasswordModal(admin)}
+                      className="p-1 text-[#A1A1AA] hover:text-amber-400"
+                      title="Change / Reset Password"
+                    >
+                      <KeyRound size={14} />
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => handleOpenEdit(admin)}
@@ -868,6 +996,14 @@ export function AdminManagementPage({ onViewAdmin }: AdminManagementPageProps = 
                           </button>
                           {isSuperAdmin && (
                             <>
+                              <button
+                                type="button"
+                                onClick={() => handleOpenResetPasswordModal(admin)}
+                                className="p-1.5 bg-[#27272A] hover:bg-amber-950/40 text-amber-400 hover:text-amber-300 border border-transparent hover:border-amber-500/30 rounded-lg transition-colors"
+                                title="Change / Reset Admin Password"
+                              >
+                                <KeyRound size={13} />
+                              </button>
                               <button
                                 type="button"
                                 onClick={() => handleOpenEdit(admin)}
@@ -1439,17 +1575,31 @@ export function AdminManagementPage({ onViewAdmin }: AdminManagementPageProps = 
 
             <div className="border-t border-[#27272A] pt-4 mt-6 space-y-2">
               {isSuperAdmin && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    const target = viewingAdmin;
-                    setViewingAdmin(null);
-                    handleOpenEdit(target);
-                  }}
-                  className="w-full py-2.5 bg-[#8B5CF6] hover:bg-[#7C3AED] text-white rounded-xl text-xs font-bold shadow"
-                >
-                  Edit Role & Account Settings
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const target = viewingAdmin;
+                      setViewingAdmin(null);
+                      handleOpenResetPasswordModal(target);
+                    }}
+                    className="w-full py-2.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5"
+                  >
+                    <KeyRound size={14} />
+                    <span>Change Administrator Password</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const target = viewingAdmin;
+                      setViewingAdmin(null);
+                      handleOpenEdit(target);
+                    }}
+                    className="w-full py-2.5 bg-[#8B5CF6] hover:bg-[#7C3AED] text-white rounded-xl text-xs font-bold shadow"
+                  >
+                    Edit Role & Account Settings
+                  </button>
+                </>
               )}
               <button
                 type="button"
@@ -1459,6 +1609,225 @@ export function AdminManagementPage({ onViewAdmin }: AdminManagementPageProps = 
                 Close Inspector
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Super Admin Change Password Modal ─── */}
+      {resettingPasswordAdmin && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-md bg-[#18181B] border border-[#27272A] rounded-2xl p-6 shadow-2xl space-y-5 text-[#FAFAFA] max-h-[90vh] overflow-y-auto">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-[#27272A] pb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                  <KeyRound size={20} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-[#FAFAFA]">
+                    Change Admin Password
+                  </h3>
+                  <p className="text-xs text-[#A1A1AA]">
+                    Super Admin Direct Credential Management
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleCloseResetPasswordModal}
+                className="p-1.5 rounded-lg bg-[#27272A] hover:bg-[#3F3F46] text-[#A1A1AA] hover:text-[#FAFAFA] transition-colors"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {resetSuccessData ? (
+              /* Success Card with Copy Password */
+              <div className="space-y-4 py-2">
+                <div className="p-4 bg-emerald-950/40 border border-emerald-500/30 rounded-xl space-y-2 text-center">
+                  <div className="w-10 h-10 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 mx-auto">
+                    <CheckCircle2 size={22} />
+                  </div>
+                  <h4 className="font-bold text-sm text-emerald-300">
+                    Password Reset Complete!
+                  </h4>
+                  <p className="text-xs text-emerald-400/80 leading-relaxed">
+                    The password for <strong className="text-[#FAFAFA]">{resetSuccessData.adminEmail}</strong> has been updated. All previous active sessions and tokens have been revoked.
+                  </p>
+                </div>
+
+                <div className="p-4 bg-[#09090B] border border-[#27272A] rounded-xl space-y-2">
+                  <span className="text-[10px] font-bold text-[#A1A1AA] uppercase tracking-wider block text-center">
+                    New Temporary Password
+                  </span>
+                  <div className="p-3 bg-[#18181B] rounded-lg border border-[#3F3F46] font-mono text-center text-sm font-bold tracking-wider text-[#FAFAFA] select-all break-all">
+                    {resetSuccessData.temporaryPassword}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (resetSuccessData.temporaryPassword) {
+                        navigator.clipboard.writeText(resetSuccessData.temporaryPassword);
+                        setResetCopied(true);
+                        setTimeout(() => setResetCopied(false), 2500);
+                      }
+                    }}
+                    className="w-full py-2 bg-[#27272A] hover:bg-[#3F3F46] text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5 text-purple-300"
+                  >
+                    {resetCopied ? (
+                      <>
+                        <Check size={14} className="text-emerald-400" />
+                        <span className="text-emerald-400">Password Copied to Clipboard!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy size={14} />
+                        <span>Copy Password to Clipboard</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleCloseResetPasswordModal}
+                  className="w-full py-2.5 bg-[#8B5CF6] hover:bg-[#7C3AED] text-white font-bold rounded-xl text-xs shadow-lg transition-colors"
+                >
+                  Done & Close
+                </button>
+              </div>
+            ) : (
+              /* Password Reset Form */
+              <form onSubmit={handleExecuteAdminPasswordReset} className="space-y-4">
+                {/* Target Admin Card */}
+                <div className="p-3.5 bg-[#09090B] border border-[#27272A] rounded-xl space-y-1.5">
+                  <span className="text-[10px] font-bold text-[#71717A] uppercase tracking-wider">
+                    Target Administrator
+                  </span>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-bold text-xs text-[#FAFAFA]">
+                        {resettingPasswordAdmin.firstName} {resettingPasswordAdmin.lastName}
+                      </p>
+                      <p className="text-[11px] text-[#A1A1AA] font-mono">{resettingPasswordAdmin.email}</p>
+                    </div>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-950/80 text-[#A855F7] border border-purple-500/40 uppercase">
+                      {resettingPasswordAdmin.role?.name || resettingPasswordAdmin.role?.slug || "Admin"}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Generate Password Quick Action */}
+                <div className="flex items-center justify-between pt-1">
+                  <label className="text-xs font-semibold text-[#FAFAFA]">
+                    New Password
+                  </label>
+                  <button
+                    type="button"
+                    onClick={generateResetPassword}
+                    className="text-[11px] font-bold text-[#A855F7] hover:text-purple-300 flex items-center gap-1 transition-colors"
+                  >
+                    <Sparkles size={12} />
+                    <span>Generate Secure Password</span>
+                  </button>
+                </div>
+
+                {/* Password Input */}
+                <div className="relative">
+                  <input
+                    type={resetShowPassword ? "text" : "password"}
+                    value={resetNewPassword}
+                    onChange={(e) => setResetNewPassword(e.target.value)}
+                    placeholder="Min. 8 characters"
+                    className="w-full bg-[#09090B] text-[#FAFAFA] placeholder-[#71717A] pl-10 pr-10 py-2.5 rounded-xl text-xs border border-[#27272A] focus:outline-none focus:border-[#8B5CF6] font-mono"
+                    required
+                    minLength={8}
+                  />
+                  <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#71717A]" />
+                  <button
+                    type="button"
+                    onClick={() => setResetShowPassword(!resetShowPassword)}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#71717A] hover:text-[#FAFAFA]"
+                    tabIndex={-1}
+                  >
+                    {resetShowPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                  </button>
+                </div>
+
+                {/* Confirm Password Input */}
+                <div>
+                  <label className="block text-xs font-semibold text-[#FAFAFA] mb-1">
+                    Confirm New Password
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={resetShowPassword ? "text" : "password"}
+                      value={resetConfirmPassword}
+                      onChange={(e) => setResetConfirmPassword(e.target.value)}
+                      placeholder="Re-enter password"
+                      className="w-full bg-[#09090B] text-[#FAFAFA] placeholder-[#71717A] pl-10 pr-10 py-2.5 rounded-xl text-xs border border-[#27272A] focus:outline-none focus:border-[#8B5CF6] font-mono"
+                      required
+                      minLength={8}
+                    />
+                    <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#71717A]" />
+                  </div>
+                  {resetNewPassword && resetConfirmPassword && resetNewPassword !== resetConfirmPassword && (
+                    <p className="text-[11px] text-rose-400 mt-1">Passwords do not match.</p>
+                  )}
+                </div>
+
+                {/* Policy Checkboxes */}
+                <div className="p-3 bg-[#09090B] border border-[#27272A] rounded-xl space-y-2.5">
+                  <label className="flex items-center gap-2 cursor-pointer text-xs text-[#FAFAFA]">
+                    <input
+                      type="checkbox"
+                      checked={resetMustChangePassword}
+                      onChange={(e) => setResetMustChangePassword(e.target.checked)}
+                      className="rounded border-[#27272A] bg-[#18181B] text-[#8B5CF6] focus:ring-[#8B5CF6] h-4 w-4"
+                    />
+                    <span>Force user to change password upon next sign-in</span>
+                  </label>
+
+                  <label className="flex items-center gap-2 cursor-pointer text-xs text-[#FAFAFA]">
+                    <input
+                      type="checkbox"
+                      checked={resetSendNotificationEmail}
+                      onChange={(e) => setResetSendNotificationEmail(e.target.checked)}
+                      className="rounded border-[#27272A] bg-[#18181B] text-[#8B5CF6] focus:ring-[#8B5CF6] h-4 w-4"
+                    />
+                    <span>Dispatch email notification to administrator</span>
+                  </label>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="border-t border-[#27272A] pt-4 flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={handleCloseResetPasswordModal}
+                    className="px-4 py-2.5 bg-[#27272A] hover:bg-[#3F3F46] rounded-xl text-xs font-bold text-[#FAFAFA] transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmitting || !resetNewPassword || resetNewPassword !== resetConfirmPassword}
+                    className="px-5 py-2.5 bg-[#8B5CF6] hover:bg-[#7C3AED] text-white rounded-xl text-xs font-bold shadow-lg shadow-[#8B5CF6]/25 transition-all disabled:opacity-50 flex items-center gap-1.5"
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <RefreshCw size={14} className="animate-spin" />
+                        <span>Updating Password...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Save size={14} />
+                        <span>Update Password</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}

@@ -324,6 +324,93 @@ export const adminAuthService = {
     }
   },
 
+  async forgotPassword(email: string): Promise<{ success: boolean; message: string; maskedEmail?: string }> {
+    try {
+      const res = await fetchAdminApi<{ message?: string; maskedEmail?: string }>("/auth/forgot-password", {
+        method: "POST",
+        body: JSON.stringify({ email: email.trim().toLowerCase() }),
+      });
+      if (res.success) {
+        return {
+          success: true,
+          message: res.message || res.data?.message || "Verification code sent to your registered email.",
+          maskedEmail: res.data?.maskedEmail,
+        };
+      }
+      return {
+        success: false,
+        message: res.error?.message || res.message || "Failed to send reset code. Please check your email address.",
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        message: err.message || "Network error while requesting password reset.",
+      };
+    }
+  },
+
+  async verifyResetOtp(
+    identifier: string,
+    otp: string
+  ): Promise<{ success: boolean; message: string; resetToken?: string }> {
+    try {
+      const res = await fetchAdminApi<{ resetToken?: string; message?: string }>("/auth/verify-reset-otp", {
+        method: "POST",
+        body: JSON.stringify({ identifier: identifier.trim().toLowerCase(), otp: otp.trim() }),
+      });
+      if (res.success) {
+        return {
+          success: true,
+          message: res.message || res.data?.message || "OTP verified successfully.",
+          resetToken: res.data?.resetToken,
+        };
+      }
+      return {
+        success: false,
+        message: res.error?.message || res.message || "Invalid or expired OTP code.",
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        message: err.message || "Network error while verifying OTP.",
+      };
+    }
+  },
+
+  async resetPassword(payload: {
+    email: string;
+    otp: string;
+    password: string;
+    confirmPassword?: string;
+  }): Promise<{ success: boolean; message: string }> {
+    try {
+      const res = await fetchAdminApi("/auth/reset-password", {
+        method: "POST",
+        body: JSON.stringify({
+          identifier: payload.email.trim().toLowerCase(),
+          otp: payload.otp.trim(),
+          password: payload.password,
+          confirmPassword: payload.confirmPassword || payload.password,
+        }),
+      });
+      if (res.success) {
+        return {
+          success: true,
+          message: res.message || "Password reset successfully! You can now log in.",
+        };
+      }
+      return {
+        success: false,
+        message: res.error?.message || res.message || "Failed to reset password. Please check your OTP and try again.",
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        message: err.message || "Network error while resetting password.",
+      };
+    }
+  },
+
   async logout(): Promise<void> {
     const refreshToken = getAdminRefreshToken();
     if (refreshToken) {

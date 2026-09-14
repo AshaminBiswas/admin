@@ -76,6 +76,12 @@ export interface CreatedAdminResult {
   twoFactorSetup?: TwoFactorSetupData;
 }
 
+export interface AdminChangePasswordPayload {
+  newPassword: string;
+  mustChangePassword?: boolean;
+  sendNotificationEmail?: boolean;
+}
+
 export interface DashboardStats {
   totalRevenue: number;
   totalOrders: number;

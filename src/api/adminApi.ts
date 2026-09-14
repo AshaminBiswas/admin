@@ -429,6 +429,20 @@ export const usersApi = {
       method: 'DELETE',
     }),
 
+  /** POST /users/:id/change-password — Super Admin change any user/admin password */
+  changePasswordByAdmin: (
+    id: string,
+    payload: {
+      newPassword: string;
+      mustChangePassword?: boolean;
+      sendNotificationEmail?: boolean;
+    }
+  ) =>
+    fetchAdminApi<any>(`/users/${id}/change-password`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
   /** PATCH /users/profile — update current logged-in user profile */
   updateProfile: (payload: {
     firstName?: string;
