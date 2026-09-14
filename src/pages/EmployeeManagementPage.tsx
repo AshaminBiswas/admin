@@ -29,6 +29,7 @@ import {
   Check,
   Percent,
   RotateCcw,
+  Construction,
 } from 'lucide-react';
 import { employeeService } from '../api/employeeService';
 import { useAdminAuth } from '../context/AdminAuthContext';
@@ -106,7 +107,7 @@ export function EmployeeManagementPage() {
   const isSuperAdmin = adminUser?.role === 'super_admin';
 
   // ─── Active Top Tab ─────────────────────────────────────────────────────────
-  const [activeTab, setActiveTab] = useState<'directory' | 'attendance' | 'leaves' | 'advances' | 'payroll'>('directory');
+  const [activeTab, setActiveTab] = useState<'directory' | 'workers' | 'attendance' | 'leaves' | 'advances' | 'payroll'>('directory');
 
   // Common Date Selector State (defaults to current month/year)
   const today = new Date();
@@ -141,6 +142,13 @@ export function EmployeeManagementPage() {
   const [payrollRuns, setPayrollRuns] = useState<EmployeePayrollRun[]>([]);
   const [isLoadingPayroll, setIsLoadingPayroll] = useState(false);
   const [isCalculatingPayroll, setIsCalculatingPayroll] = useState(false);
+
+  // Worker Hub State
+  const [workerSubTab, setWorkerSubTab] = useState<'attendance' | 'advances' | 'payroll'>('attendance');
+  const [workerSearchQuery, setWorkerSearchQuery] = useState('');
+  const [workerAttendanceFilter, setWorkerAttendanceFilter] = useState<'WORKERS' | 'ALL'>('WORKERS');
+  const [workerAdvancesFilter, setWorkerAdvancesFilter] = useState<'ALL' | 'WORKERS'>('ALL');
+  const [workerPayrollFilter, setWorkerPayrollFilter] = useState<'ALL' | 'WORKERS'>('ALL');
 
   // Modals State
   const [isAddEmployeeModalOpen, setIsAddEmployeeModalOpen] = useState(false);
@@ -268,6 +276,11 @@ export function EmployeeManagementPage() {
     if (activeTab === 'attendance') fetchAttendance();
     if (activeTab === 'advances') fetchAdvancesAndDeductions();
     if (activeTab === 'payroll') fetchPayroll();
+    if (activeTab === 'workers') {
+      fetchAttendance();
+      fetchAdvancesAndDeductions();
+      fetchPayroll();
+    }
   }, [activeTab, fetchAttendance, fetchAdvancesAndDeductions, fetchPayroll]);
 
   // When selected employee for leave ledger changes
@@ -287,7 +300,7 @@ export function EmployeeManagementPage() {
     return new Date(selectedYear, selectedMonth, 0).getDate();
   }, [selectedYear, selectedMonth]);
 
-  // KPI Metrics
+  // KPI Metrics (All Staff)
   const kpis = useMemo(() => {
     const activeStaff = employees.filter((e) => e.status === 'ACTIVE').length;
     const totalMonthlyCtc = employees
@@ -300,6 +313,64 @@ export function EmployeeManagementPage() {
 
     return { activeStaff, totalMonthlyCtc, pendingAdvances, finalizedNetPayroll };
   }, [employees, advancesList, payrollRuns]);
+
+  // Worker Identification & Memoized List
+  const workerEmployees = useMemo(() => {
+    return employees.filter((e) => {
+      const des = (e.designation || '').toLowerCase();
+      const dept = (e.department || '').toLowerCase();
+      return (
+        des === 'workers' ||
+        des.includes('worker') ||
+        des.includes('installer') ||
+        des.includes('fabricator') ||
+        des.includes('carpenter') ||
+        des.includes('helper') ||
+        des.includes('technician') ||
+        dept.includes('operations') ||
+        dept.includes('installation')
+      );
+    });
+  }, [employees]);
+
+  // Worker KPI Metrics
+  const workerKpis = useMemo(() => {
+    const activeWorkers = workerEmployees.filter((e) => e.status === 'ACTIVE');
+    const workerIds = new Set(activeWorkers.map((w) => w.id));
+
+    // Attendance for target selected day
+    const padDay = String(selectedAttendanceDay).padStart(2, '0');
+    const padMonth = String(selectedMonth).padStart(2, '0');
+    const targetDateStr = `${selectedYear}-${padMonth}-${padDay}`;
+
+    const presentWorkersCount = attendanceRecords.filter((r) => {
+      const rDate = new Date(r.date).toISOString().slice(0, 10);
+      return (
+        workerIds.has(r.employeeId) &&
+        rDate === targetDateStr &&
+        (r.status === 'PRESENT' || r.status === 'HALF_DAY')
+      );
+    }).length;
+
+    // Worker advances for selected month/year
+    const workerAdvancesTotal = advancesList
+      .filter((a) => workerIds.has(a.employeeId) && !a.isRecovered)
+      .reduce((sum, a) => sum + Number(a.amount || 0), 0);
+
+    // Worker payroll runs for selected month/year
+    const workerPayrolls = payrollRuns.filter((p) => workerIds.has(p.employeeId));
+    const workerNetPayrollTotal = workerPayrolls.reduce((sum, p) => sum + Number(p.netSalary || 0), 0);
+    const workerPaidCount = workerPayrolls.filter((p) => p.status === 'PAID').length;
+
+    return {
+      totalWorkers: activeWorkers.length,
+      presentToday: presentWorkersCount,
+      pendingAdvances: workerAdvancesTotal,
+      netPayroll: workerNetPayrollTotal,
+      paidCount: workerPaidCount,
+      totalPayrollCount: workerPayrolls.length,
+    };
+  }, [workerEmployees, attendanceRecords, advancesList, payrollRuns, selectedAttendanceDay, selectedMonth, selectedYear]);
 
   // ─── Handlers ───────────────────────────────────────────────────────────────
   const handleSaveEmployee = async (formData: any) => {
@@ -494,6 +565,56 @@ export function EmployeeManagementPage() {
       });
     } catch (err: any) {
       showFeedback('error', err?.message || 'Failed to batch mark attendance');
+      fetchAttendance();
+    }
+  };
+
+  const handleMarkAllWorkersPresentForDay = async (day: number) => {
+    const padDay = String(day).padStart(2, '0');
+    const padMonth = String(selectedMonth).padStart(2, '0');
+    const dateStr = `${selectedYear}-${padMonth}-${padDay}`;
+    const activeWorkers = workerEmployees.filter((e) => e.status === 'ACTIVE');
+    const isSunday = new Date(selectedYear, selectedMonth - 1, day).getDay() === 0;
+
+    if (!confirm(`Mark all ${activeWorkers.length} active WORKERS as PRESENT for ${dateStr}?`)) return;
+
+    // 1. Optimistic 0ms UI update for all active workers
+    setAttendanceRecords((prev) => {
+      const copy = [...prev];
+      activeWorkers.forEach((emp) => {
+        const idx = copy.findIndex(
+          (r) => r.employeeId === emp.id && new Date(r.date).toISOString().slice(0, 10) === dateStr
+        );
+        if (idx >= 0) {
+          copy[idx] = { ...copy[idx], status: 'PRESENT' };
+        } else {
+          copy.push({
+            id: 'temp-' + emp.id + '-' + Date.now(),
+            employeeId: emp.id,
+            date: dateStr,
+            status: 'PRESENT',
+            isSunday,
+            isSundayOverride: false,
+            overtimeHours: 0,
+          });
+        }
+      });
+      return copy;
+    });
+
+    showFeedback('success', `Marked all ${activeWorkers.length} active workers as PRESENT`);
+
+    // 2. Parallelized background batch update
+    try {
+      await employeeService.batchRecordAttendance({
+        date: dateStr,
+        records: activeWorkers.map((e) => ({
+          employeeId: e.id,
+          status: 'PRESENT',
+        })),
+      });
+    } catch (err: any) {
+      showFeedback('error', err?.message || 'Failed to batch mark worker attendance');
       fetchAttendance();
     }
   };
@@ -732,6 +853,12 @@ export function EmployeeManagementPage() {
               if (activeTab === 'attendance') fetchAttendance();
               if (activeTab === 'advances') fetchAdvancesAndDeductions();
               if (activeTab === 'payroll') fetchPayroll();
+              if (activeTab === 'workers') {
+                fetchEmployees();
+                fetchAttendance();
+                fetchAdvancesAndDeductions();
+                fetchPayroll();
+              }
             }}
             className="p-2 bg-[#18181B] hover:bg-[#27272A] text-[#A1A1AA] hover:text-[#FAFAFA] border border-[#27272A] rounded-xl transition"
             title="Refresh Data"
@@ -795,10 +922,16 @@ export function EmployeeManagementPage() {
       <div className="flex items-center gap-2 overflow-x-auto border-b border-[#27272A] pb-px no-scrollbar">
         {[
           { id: 'directory', label: 'Employee Directory', icon: <Users size={16} />, badge: employees.length },
+          {
+            id: 'workers',
+            label: 'Worker Operations Hub',
+            icon: <Construction size={16} />,
+            badge: workerEmployees.length,
+          },
           { id: 'attendance', label: 'Attendance Matrix', icon: <Calendar size={16} /> },
-          { id: 'leaves', label: 'Leave Ledger (CL / EL)', icon: <Award size={16} /> },
           { id: 'advances', label: 'Advances & Deductions', icon: <DollarSign size={16} /> },
           { id: 'payroll', label: 'Monthly Payroll Runs', icon: <FileText size={16} />, badge: payrollRuns.length },
+          { id: 'leaves', label: 'Leave Ledger (CL / EL)', icon: <Award size={16} /> },
         ].map((tab) => (
           <button
             key={tab.id}
@@ -997,12 +1130,668 @@ export function EmployeeManagementPage() {
       )}
 
       {/* ═══════════════════════════════════════════════════════════════════════ */}
+      {/* TAB: WORKER OPERATIONS HUB (Attendance, Advances & Monthly Payroll)     */}
+      {/* ═══════════════════════════════════════════════════════════════════════ */}
+      {activeTab === 'workers' && (
+        <div className="space-y-5">
+          {/* Worker Hub Top Banner & Quick Actions */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-[#18181B] p-4 rounded-2xl border border-[#27272A]">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center gap-1.5">
+                  <Construction size={13} />
+                  <span>Workshop & Site Operations</span>
+                </span>
+                <span className="text-xs text-[#71717A]">
+                  • {workerEmployees.filter((e) => e.status === 'ACTIVE').length} Active Workers
+                </span>
+              </div>
+              <h2 className="text-lg sm:text-xl font-bold text-[#FAFAFA] mt-1">
+                Worker Operations: Attendance, Advances & Payroll Runs
+              </h2>
+              <p className="text-xs text-[#A1A1AA] mt-0.5">
+                Streamlined execution portal for factory workers, carpenters, fabricators, installers, and helpers.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingEmployee(null);
+                  setModalDesignation('Workers');
+                  setIsAddEmployeeModalOpen(true);
+                }}
+                className="px-3.5 py-2 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white text-xs font-semibold rounded-xl shadow-lg transition flex items-center gap-1.5"
+              >
+                <Plus size={14} />
+                <span>Register Worker</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Worker KPI Cards */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+            <div className="p-4 bg-[#18181B] border border-[#27272A] rounded-2xl space-y-1">
+              <div className="flex items-center justify-between text-[#A1A1AA]">
+                <span className="text-xs font-medium uppercase tracking-wider">Active Workers</span>
+                <Users size={16} className="text-amber-400" />
+              </div>
+              <div className="text-2xl font-bold text-[#FAFAFA]">{workerKpis.totalWorkers}</div>
+              <p className="text-xs text-[#71717A]">Workshop & site crew</p>
+            </div>
+
+            <div className="p-4 bg-[#18181B] border border-[#27272A] rounded-2xl space-y-1">
+              <div className="flex items-center justify-between text-[#A1A1AA]">
+                <span className="text-xs font-medium uppercase tracking-wider">Today&apos;s Attendance</span>
+                <Calendar size={16} className="text-emerald-400" />
+              </div>
+              <div className="text-2xl font-bold text-[#FAFAFA]">
+                {workerKpis.presentToday} / {workerKpis.totalWorkers}
+              </div>
+              <p className="text-xs text-emerald-400 font-medium">
+                {workerKpis.totalWorkers > 0
+                  ? `${Math.round((workerKpis.presentToday / workerKpis.totalWorkers) * 100)}% Present Today`
+                  : 'No active workers'}
+              </p>
+            </div>
+
+            <div className="p-4 bg-[#18181B] border border-[#27272A] rounded-2xl space-y-1">
+              <div className="flex items-center justify-between text-[#A1A1AA]">
+                <span className="text-xs font-medium uppercase tracking-wider">Worker Advances</span>
+                <DollarSign size={16} className="text-blue-400" />
+              </div>
+              <div className="text-2xl font-bold text-[#FAFAFA]">{formatINR(workerKpis.pendingAdvances)}</div>
+              <p className="text-xs text-[#71717A]">Recovery in {MONTHS[selectedMonth - 1]?.label}</p>
+            </div>
+
+            <div className="p-4 bg-[#18181B] border border-[#27272A] rounded-2xl space-y-1">
+              <div className="flex items-center justify-between text-[#A1A1AA]">
+                <span className="text-xs font-medium uppercase tracking-wider">Net Worker Payroll</span>
+                <TrendingUp size={16} className="text-purple-400" />
+              </div>
+              <div className="text-2xl font-bold text-[#FAFAFA]">{formatINR(workerKpis.netPayroll)}</div>
+              <p className="text-xs text-[#71717A]">
+                {workerKpis.paidCount} of {workerKpis.totalPayrollCount} runs disbursed
+              </p>
+            </div>
+          </div>
+
+          {/* Sub-Tabs Selector */}
+          <div className="flex items-center gap-2 border-b border-[#27272A] pb-2 overflow-x-auto no-scrollbar">
+            {[
+              { id: 'attendance', label: '1. Worker Attendance Matrix', icon: <Calendar size={15} /> },
+              {
+                id: 'advances',
+                label: '2. Worker Advances & Recovery',
+                icon: <DollarSign size={15} />,
+                badge: advancesList.filter((a) =>
+                  workerEmployees.some((w) => w.id === a.employeeId)
+                ).length,
+              },
+              {
+                id: 'payroll',
+                label: '3. Worker Monthly Payroll Runs',
+                icon: <FileText size={15} />,
+                badge: payrollRuns.filter((p) =>
+                  workerEmployees.some((w) => w.id === p.employeeId)
+                ).length,
+              },
+            ].map((st) => (
+              <button
+                key={st.id}
+                type="button"
+                onClick={() => setWorkerSubTab(st.id as any)}
+                className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold rounded-xl border transition whitespace-nowrap ${
+                  workerSubTab === st.id
+                    ? 'bg-amber-500/10 text-amber-400 border-amber-500/30 shadow-sm'
+                    : 'bg-[#18181B] text-[#A1A1AA] border-[#27272A] hover:text-[#FAFAFA]'
+                }`}
+              >
+                {st.icon}
+                <span>{st.label}</span>
+                {st.badge !== undefined && st.badge > 0 && (
+                  <span className="ml-1 px-1.5 py-0.5 rounded-full bg-[#09090B] text-amber-400 text-[10px] font-mono border border-amber-500/20">
+                    {st.badge}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+
+          {/* ── SUB-VIEW 1: WORKER ATTENDANCE MATRIX ─────────────────────────── */}
+          {workerSubTab === 'attendance' && (
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3 bg-[#18181B] p-3.5 rounded-2xl border border-[#27272A]">
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className="text-sm font-semibold text-[#FAFAFA]">Target Day:</span>
+                  <select
+                    value={selectedAttendanceDay}
+                    onChange={(e) => setSelectedAttendanceDay(Number(e.target.value))}
+                    className="bg-[#09090B] border border-[#27272A] text-sm text-[#FAFAFA] rounded-xl px-3 py-1.5 focus:outline-none focus:border-amber-500"
+                  >
+                    {Array.from({ length: totalDaysInMonth }).map((_, i) => {
+                      const dayNum = i + 1;
+                      const d = new Date(selectedYear, selectedMonth - 1, dayNum);
+                      const isSun = d.getDay() === 0;
+                      return (
+                        <option key={dayNum} value={dayNum}>
+                          Day {dayNum} ({d.toLocaleDateString('en-US', { weekday: 'short' })}){isSun ? ' - Sunday' : ''}
+                        </option>
+                      );
+                    })}
+                  </select>
+
+                  <button
+                    type="button"
+                    onClick={() => handleMarkAllWorkersPresentForDay(selectedAttendanceDay)}
+                    className="px-3.5 py-1.5 bg-[#09090B] hover:bg-[#27272A] text-emerald-400 text-xs font-semibold rounded-xl border border-emerald-500/30 transition flex items-center gap-1.5 shadow-sm"
+                  >
+                    <Check size={14} />
+                    <span>Mark All Workers Present (Day {selectedAttendanceDay})</span>
+                  </button>
+                </div>
+
+                <div className="relative min-w-[220px]">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#71717A]" />
+                  <input
+                    type="text"
+                    placeholder="Search worker by name or ID..."
+                    value={workerSearchQuery}
+                    onChange={(e) => setWorkerSearchQuery(e.target.value)}
+                    className="w-full bg-[#09090B] border border-[#27272A] text-xs text-[#FAFAFA] rounded-xl pl-8 pr-3 py-1.5 focus:outline-none focus:border-amber-500 placeholder:text-[#71717A]"
+                  />
+                </div>
+              </div>
+
+              {/* Worker Attendance Table */}
+              <div className="bg-[#18181B] border border-[#27272A] rounded-2xl overflow-hidden shadow-xl">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead className="bg-[#09090B] text-[#71717A] text-xs uppercase tracking-wider border-b border-[#27272A]">
+                      <tr>
+                        <th className="px-4 py-3.5">Worker Profile</th>
+                        <th className="px-4 py-3.5">Status (Day {selectedAttendanceDay})</th>
+                        <th className="px-4 py-3.5">1-Click Mark</th>
+                        <th className="px-4 py-3.5">Overtime (Hrs)</th>
+                        <th className="px-4 py-3.5">Sunday Shift Override</th>
+                        <th className="px-4 py-3.5">Month Summary</th>
+                        <th className="px-4 py-3.5 text-right">Edit</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#27272A]">
+                      {workerEmployees
+                        .filter(
+                          (e) =>
+                            e.status === 'ACTIVE' &&
+                            (!workerSearchQuery ||
+                              e.name.toLowerCase().includes(workerSearchQuery.toLowerCase()) ||
+                              e.employeeId.toLowerCase().includes(workerSearchQuery.toLowerCase()))
+                        )
+                        .map((emp) => {
+                          const padDay = String(selectedAttendanceDay).padStart(2, '0');
+                          const padMonth = String(selectedMonth).padStart(2, '0');
+                          const targetDateStr = `${selectedYear}-${padMonth}-${padDay}`;
+
+                          const record = attendanceRecords.find(
+                            (r) =>
+                              r.employeeId === emp.id &&
+                              new Date(r.date).toISOString().slice(0, 10) === targetDateStr
+                          );
+
+                          const isTargetSunday =
+                            new Date(selectedYear, selectedMonth - 1, selectedAttendanceDay).getDay() === 0;
+
+                          // Compute monthly summary counts for this worker
+                          const workerMonthRecords = attendanceRecords.filter((r) => r.employeeId === emp.id);
+                          const monthPresent = workerMonthRecords.filter((r) => r.status === 'PRESENT').length;
+                          const monthHalf = workerMonthRecords.filter((r) => r.status === 'HALF_DAY').length;
+                          const monthOtHours = workerMonthRecords.reduce(
+                            (sum, r) => sum + Number(r.overtimeHours || 0),
+                            0
+                          );
+
+                          return (
+                            <tr key={emp.id} className="hover:bg-[#27272A]/40 transition">
+                              <td className="px-4 py-3.5">
+                                <div className="font-semibold text-[#FAFAFA]">{emp.name}</div>
+                                <div className="flex items-center gap-1.5 mt-0.5">
+                                  <span className="text-xs font-mono text-amber-400">{emp.employeeId}</span>
+                                  <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 font-medium">
+                                    {emp.designation}
+                                  </span>
+                                </div>
+                              </td>
+
+                              <td className="px-4 py-3.5">
+                                {record ? (
+                                  <div>
+                                    <span
+                                      className={`px-2.5 py-1 rounded-full text-xs font-medium border inline-block ${
+                                        ATTENDANCE_STATUS_LABELS[record.status]?.bg || 'bg-zinc-800 text-zinc-300'
+                                      }`}
+                                    >
+                                      {ATTENDANCE_STATUS_LABELS[record.status]?.label || record.status}
+                                    </span>
+                                    {record.notes && (
+                                      <div
+                                        className="text-[11px] text-[#71717A] italic mt-1 max-w-[150px] truncate"
+                                        title={record.notes}
+                                      >
+                                        Note: {record.notes}
+                                      </div>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <span className="text-xs text-[#71717A] italic">Not Recorded</span>
+                                )}
+                              </td>
+
+                              <td className="px-4 py-3.5">
+                                <div className="flex flex-wrap items-center gap-1">
+                                  {(['PRESENT', 'HALF_DAY', 'UL', 'CL'] as AttendanceStatus[]).map((st) => (
+                                    <button
+                                      key={st}
+                                      type="button"
+                                      onClick={() => handleQuickStatusChange(emp.id, selectedAttendanceDay, st)}
+                                      className={`px-2 py-1 text-xs rounded-lg border transition ${
+                                        record?.status === st
+                                          ? ATTENDANCE_STATUS_LABELS[st].bg + ' font-bold shadow-sm'
+                                          : 'bg-[#09090B] text-[#A1A1AA] border-[#27272A] hover:bg-[#27272A] hover:text-[#FAFAFA]'
+                                      }`}
+                                      title={`Mark as ${st}`}
+                                    >
+                                      {st === 'PRESENT' ? 'P' : st === 'HALF_DAY' ? 'HD' : st === 'UL' ? 'UL' : 'CL'}
+                                    </button>
+                                  ))}
+                                </div>
+                              </td>
+
+                              <td className="px-4 py-3.5">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  max="24"
+                                  step="0.5"
+                                  defaultValue={record ? Number(record.overtimeHours) : 0}
+                                  key={`${emp.id}-${targetDateStr}-${record?.overtimeHours || 0}`}
+                                  onBlur={(e) => {
+                                    const val = Number(e.target.value || 0);
+                                    if (Number(record?.overtimeHours || 0) !== val) {
+                                      handleOvertimeChange(emp.id, selectedAttendanceDay, val);
+                                    }
+                                  }}
+                                  className="w-20 px-2 py-1 bg-[#09090B] border border-[#27272A] rounded-lg text-xs text-[#FAFAFA] focus:outline-none focus:border-amber-500 font-mono"
+                                />
+                              </td>
+
+                              <td className="px-4 py-3.5">
+                                {isTargetSunday ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => record && handleToggleSundayOverride(record)}
+                                    className={`px-2.5 py-1 text-xs rounded-xl border transition ${
+                                      record?.isSundayOverride
+                                        ? 'bg-amber-500/20 text-amber-400 border-amber-500/40 font-semibold'
+                                        : 'bg-[#09090B] text-[#71717A] border-[#27272A] hover:text-[#FAFAFA]'
+                                    }`}
+                                  >
+                                    {record?.isSundayOverride ? 'Approved (Paid)' : 'Off Day'}
+                                  </button>
+                                ) : (
+                                  <span className="text-xs text-[#71717A]">—</span>
+                                )}
+                              </td>
+
+                              <td className="px-4 py-3.5 text-xs text-[#A1A1AA]">
+                                <div className="font-medium text-[#FAFAFA]">
+                                  {monthPresent} P | {monthHalf} Half
+                                </div>
+                                <div className="text-[11px] text-emerald-400">
+                                  {monthOtHours > 0 ? `+${monthOtHours} hrs OT` : '0 OT hrs'}
+                                </div>
+                              </td>
+
+                              <td className="px-4 py-3.5 text-right">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setEditingAttendance({
+                                      employee: emp,
+                                      record,
+                                      day: selectedAttendanceDay,
+                                      dateStr: targetDateStr,
+                                    })
+                                  }
+                                  className="p-1.5 text-[#A1A1AA] hover:text-amber-400 hover:bg-[#27272A] rounded-lg transition"
+                                  title="Edit detailed attendance"
+                                >
+                                  <Edit2 size={14} />
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── SUB-VIEW 2: WORKER ADVANCES & RECOVERY ───────────────────────── */}
+          {workerSubTab === 'advances' && (
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3 bg-[#18181B] p-3.5 rounded-2xl border border-[#27272A]">
+                <div>
+                  <h3 className="text-base font-semibold text-[#FAFAFA]">
+                    Worker Salary Advances: {MONTHS[selectedMonth - 1]?.label} {selectedYear}
+                  </h3>
+                  <p className="text-xs text-[#A1A1AA]">
+                    Cash and digital advances issued to workshop/site workers. Automatically deducted during monthly payroll run.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setIsAddAdvanceModalOpen(true)}
+                  className="px-4 py-2 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white text-xs font-semibold rounded-xl shadow transition flex items-center gap-1.5"
+                >
+                  <Plus size={14} />
+                  <span>Issue Worker Advance</span>
+                </button>
+              </div>
+
+              {/* Worker Advances Table */}
+              <div className="bg-[#18181B] border border-[#27272A] rounded-2xl overflow-hidden shadow-xl">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead className="bg-[#09090B] text-[#71717A] text-xs uppercase tracking-wider border-b border-[#27272A]">
+                      <tr>
+                        <th className="px-4 py-3.5">Worker</th>
+                        <th className="px-4 py-3.5">Amount</th>
+                        <th className="px-4 py-3.5">Advance Date</th>
+                        <th className="px-4 py-3.5">Reason</th>
+                        <th className="px-4 py-3.5">Recovery Month</th>
+                        <th className="px-4 py-3.5">Recovery Status</th>
+                        <th className="px-4 py-3.5 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#27272A]">
+                      {isLoadingAdvances ? (
+                        <tr>
+                          <td colSpan={7} className="px-4 py-8 text-center text-[#71717A]">
+                            Loading worker advances...
+                          </td>
+                        </tr>
+                      ) : advancesList.filter((a) => workerEmployees.some((w) => w.id === a.employeeId)).length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="px-4 py-8 text-center text-[#71717A]">
+                            No worker advances scheduled for {MONTHS[selectedMonth - 1]?.label} {selectedYear}.
+                          </td>
+                        </tr>
+                      ) : (
+                        advancesList
+                          .filter((a) => workerEmployees.some((w) => w.id === a.employeeId))
+                          .map((adv) => (
+                            <tr key={adv.id} className="hover:bg-[#27272A]/40 transition">
+                              <td className="px-4 py-3.5">
+                                <div className="font-semibold text-[#FAFAFA]">{adv.employee?.name}</div>
+                                <div className="text-xs font-mono text-amber-400">{adv.employee?.employeeId}</div>
+                              </td>
+                              <td className="px-4 py-3.5 font-bold text-[#FAFAFA]">{formatINR(adv.amount)}</td>
+                              <td className="px-4 py-3.5 text-xs text-[#FAFAFA]">
+                                {adv.advanceDate
+                                  ? new Date(adv.advanceDate).toLocaleDateString('en-IN', {
+                                      day: '2-digit',
+                                      month: 'short',
+                                      year: 'numeric',
+                                    })
+                                  : adv.createdAt
+                                  ? new Date(adv.createdAt).toLocaleDateString('en-IN', {
+                                      day: '2-digit',
+                                      month: 'short',
+                                      year: 'numeric',
+                                    })
+                                  : '—'}
+                              </td>
+                              <td className="px-4 py-3.5 text-xs text-[#A1A1AA]">{adv.reason}</td>
+                              <td className="px-4 py-3.5 text-xs text-[#FAFAFA]">
+                                {MONTHS[adv.recoveryMonth - 1]?.label} {adv.recoveryYear}
+                              </td>
+                              <td className="px-4 py-3.5">
+                                <span
+                                  className={`px-2.5 py-0.5 text-xs rounded-full border ${
+                                    adv.isRecovered
+                                      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                      : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                                  }`}
+                                >
+                                  {adv.isRecovered ? '✓ Recovered' : 'Pending Recovery'}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3.5 text-right space-x-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingAdvance(adv)}
+                                  className="p-1.5 text-[#A1A1AA] hover:text-amber-400 hover:bg-[#27272A] rounded-lg transition"
+                                  title="Edit Advance"
+                                >
+                                  <Edit2 size={14} />
+                                </button>
+                                {!adv.isRecovered && (
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      if (!confirm('Cancel/Delete this worker advance record?')) return;
+                                      await employeeService.deleteAdvance(adv.id);
+                                      fetchAdvancesAndDeductions();
+                                    }}
+                                    className="p-1.5 text-[#71717A] hover:text-rose-400 hover:bg-[#27272A] rounded-lg transition"
+                                    title="Delete Advance"
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+                          ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── SUB-VIEW 3: WORKER MONTHLY PAYROLL RUNS ──────────────────────── */}
+          {workerSubTab === 'payroll' && (
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3 bg-[#18181B] p-3.5 rounded-2xl border border-[#27272A]">
+                <div>
+                  <h3 className="text-base font-semibold text-[#FAFAFA]">
+                    Worker Wage Computation: {MONTHS[selectedMonth - 1]?.label} {selectedYear}
+                  </h3>
+                  <p className="text-xs text-[#A1A1AA]">
+                    Net Pay = (Days Worked × Daily Rate) + Overtime Pay - Advances Auto-Recovered - Deductions.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleCalculatePayroll}
+                  disabled={isCalculatingPayroll}
+                  className="px-4 py-2 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 disabled:opacity-50 text-white text-xs font-semibold rounded-xl shadow-lg transition flex items-center gap-2"
+                >
+                  {isCalculatingPayroll ? <RefreshCw className="animate-spin" size={15} /> : <TrendingUp size={15} />}
+                  <span>{isCalculatingPayroll ? 'Calculating Wages...' : 'Calculate Worker Payroll'}</span>
+                </button>
+              </div>
+
+              {/* Worker Payroll Table */}
+              <div className="bg-[#18181B] border border-[#27272A] rounded-2xl overflow-hidden shadow-xl">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead className="bg-[#09090B] text-[#71717A] text-xs uppercase tracking-wider border-b border-[#27272A]">
+                      <tr>
+                        <th className="px-4 py-3.5">Worker</th>
+                        <th className="px-4 py-3.5">Daily Rate / Monthly CTC</th>
+                        <th className="px-4 py-3.5">Days Worked</th>
+                        <th className="px-4 py-3.5">OT Hours & Pay</th>
+                        <th className="px-4 py-3.5">Gross Wage</th>
+                        <th className="px-4 py-3.5">Advances Deducted</th>
+                        <th className="px-4 py-3.5">Net Salary to Pay</th>
+                        <th className="px-4 py-3.5">Status</th>
+                        <th className="px-4 py-3.5 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#27272A]">
+                      {isLoadingPayroll ? (
+                        <tr>
+                          <td colSpan={9} className="px-4 py-12 text-center text-[#71717A]">
+                            Loading worker payroll runs...
+                          </td>
+                        </tr>
+                      ) : payrollRuns.filter((r) => workerEmployees.some((w) => w.id === r.employeeId)).length === 0 ? (
+                        <tr>
+                          <td colSpan={9} className="px-4 py-12 text-center text-[#71717A]">
+                            No payroll calculated yet for workers in {MONTHS[selectedMonth - 1]?.label} {selectedYear}. Click &quot;Calculate Worker Payroll&quot; above.
+                          </td>
+                        </tr>
+                      ) : (
+                        payrollRuns
+                          .filter((r) => workerEmployees.some((w) => w.id === r.employeeId))
+                          .map((run) => (
+                            <tr key={run.id} className="hover:bg-[#27272A]/40 transition">
+                              <td className="px-4 py-3.5">
+                                <div className="font-semibold text-[#FAFAFA]">{run.employee?.name}</div>
+                                <div className="flex items-center gap-1.5 mt-0.5">
+                                  <span className="text-xs font-mono text-amber-400">{run.employee?.employeeId}</span>
+                                  <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 font-medium">
+                                    {run.employee?.designation}
+                                  </span>
+                                </div>
+                              </td>
+
+                              <td className="px-4 py-3.5 text-xs text-[#FAFAFA]">
+                                <div className="font-semibold">{formatINR(run.perDayRate)}/day</div>
+                                <div className="text-[11px] text-[#71717A]">{formatINR(run.monthlyCtc)}/mo</div>
+                              </td>
+
+                              <td className="px-4 py-3.5 text-xs">
+                                <div className="font-bold text-[#FAFAFA]">
+                                  {run.paidDays} / {run.payableDays} Days
+                                </div>
+                                <div className="text-[11px] text-[#71717A]">
+                                  P: {run.presentDays} | Half: {run.halfDays} | Sun: {run.approvedSundays}
+                                </div>
+                              </td>
+
+                              <td className="px-4 py-3.5 text-xs">
+                                <div>{run.overtimeHours} hrs</div>
+                                <div className="text-emerald-400 font-medium">+{formatINR(run.overtimePay)}</div>
+                              </td>
+
+                              <td className="px-4 py-3.5 font-semibold text-[#FAFAFA]">{formatINR(run.grossSalary)}</td>
+
+                              <td className="px-4 py-3.5 text-xs">
+                                <div className="text-rose-400 font-medium">Adv: -{formatINR(run.advanceDeduction)}</div>
+                                {Number(run.otherDeductions || 0) > 0 && (
+                                  <div className="text-rose-400">Other: -{formatINR(run.otherDeductions)}</div>
+                                )}
+                              </td>
+
+                              <td className="px-4 py-3.5">
+                                <div className="text-base font-bold text-emerald-400">{formatINR(run.netSalary)}</div>
+                              </td>
+
+                              <td className="px-4 py-3.5">
+                                <span
+                                  className={`px-2.5 py-0.5 text-xs rounded-full border ${
+                                    run.status === 'PAID'
+                                      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                      : run.status === 'FINALIZED'
+                                      ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                                      : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                                  }`}
+                                >
+                                  {run.status}
+                                </span>
+                              </td>
+
+                              <td className="px-4 py-3.5 text-right space-x-1.5 whitespace-nowrap">
+                                <button
+                                  type="button"
+                                  onClick={() => handleDownloadPdf(run)}
+                                  className="p-1.5 text-[#A1A1AA] hover:text-[#FAFAFA] bg-[#09090B] border border-[#27272A] rounded-lg transition"
+                                  title="Download Payslip PDF"
+                                >
+                                  <Download size={14} />
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleResendEmail(run.id)}
+                                  className="p-1.5 text-[#A1A1AA] hover:text-amber-400 bg-[#09090B] border border-[#27272A] rounded-lg transition"
+                                  title="Email Payslip to Worker"
+                                >
+                                  <Mail size={14} />
+                                </button>
+
+                                {run.status === 'DRAFT' && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleFinalizePayroll(run.id)}
+                                    className="px-2.5 py-1 bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 border border-blue-500/30 text-xs font-semibold rounded-lg transition"
+                                  >
+                                    Finalize
+                                  </button>
+                                )}
+
+                                {isSuperAdmin && (run.status === 'FINALIZED' || run.status === 'PAID') && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRevertPayrollToDraft(run.id)}
+                                    className="px-2.5 py-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 text-xs font-semibold rounded-lg transition inline-flex items-center gap-1"
+                                    title="Revert to Draft"
+                                  >
+                                    <RotateCcw size={12} />
+                                    <span>Make Draft</span>
+                                  </button>
+                                )}
+
+                                {isSuperAdmin && run.status !== 'PAID' && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedPayrollForPaid(run);
+                                      setIsMarkPaidModalOpen(true);
+                                    }}
+                                    className="px-2.5 py-1 bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 text-xs font-semibold rounded-lg transition"
+                                  >
+                                    Mark Paid
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+                          ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ═══════════════════════════════════════════════════════════════════════ */}
       {/* TAB 2: ATTENDANCE MATRIX                                              */}
       {/* ═══════════════════════════════════════════════════════════════════════ */}
       {activeTab === 'attendance' && (
         <div className="space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3 bg-[#18181B] p-3 rounded-2xl border border-[#27272A]">
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <span className="text-sm font-semibold text-[#FAFAFA]">
                 Target Day:
               </span>
@@ -1023,12 +1812,48 @@ export function EmployeeManagementPage() {
                 })}
               </select>
 
+              {/* Filter Pills: All Staff vs Workers Only */}
+              <div className="flex items-center bg-[#09090B] p-0.5 rounded-xl border border-[#27272A]">
+                <button
+                  type="button"
+                  onClick={() => setWorkerAttendanceFilter('ALL')}
+                  className={`px-2.5 py-1 text-xs rounded-lg font-medium transition ${
+                    workerAttendanceFilter === 'ALL'
+                      ? 'bg-[#27272A] text-[#FAFAFA]'
+                      : 'text-[#71717A] hover:text-[#FAFAFA]'
+                  }`}
+                >
+                  All Staff ({employees.filter((e) => e.status === 'ACTIVE').length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setWorkerAttendanceFilter('WORKERS')}
+                  className={`px-2.5 py-1 text-xs rounded-lg font-medium transition flex items-center gap-1 ${
+                    workerAttendanceFilter === 'WORKERS'
+                      ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30 font-semibold'
+                      : 'text-[#71717A] hover:text-[#FAFAFA]'
+                  }`}
+                >
+                  <Construction size={12} />
+                  <span>Only Workers ({workerEmployees.filter((e) => e.status === 'ACTIVE').length})</span>
+                </button>
+              </div>
+
               <button
-                onClick={() => handleMarkAllPresentForDay(selectedAttendanceDay)}
+                type="button"
+                onClick={() =>
+                  workerAttendanceFilter === 'WORKERS'
+                    ? handleMarkAllWorkersPresentForDay(selectedAttendanceDay)
+                    : handleMarkAllPresentForDay(selectedAttendanceDay)
+                }
                 className="px-3 py-1.5 bg-[#09090B] hover:bg-[#27272A] text-emerald-400 text-xs font-semibold rounded-xl border border-emerald-500/30 transition flex items-center gap-1.5"
               >
                 <Check size={14} />
-                <span>Mark All Present for Day {selectedAttendanceDay}</span>
+                <span>
+                  {workerAttendanceFilter === 'WORKERS'
+                    ? `Mark Workers Present (Day ${selectedAttendanceDay})`
+                    : `Mark All Present (Day ${selectedAttendanceDay})`}
+                </span>
               </button>
             </div>
 
@@ -1053,7 +1878,7 @@ export function EmployeeManagementPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#27272A]">
-                  {employees
+                  {(workerAttendanceFilter === 'WORKERS' ? workerEmployees : employees)
                     .filter((e) => e.status === 'ACTIVE')
                     .map((emp) => {
                       const padDay = String(selectedAttendanceDay).padStart(2, '0');
@@ -1343,7 +2168,33 @@ export function EmployeeManagementPage() {
               </button>
             </div>
 
-            <div>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center bg-[#09090B] p-0.5 rounded-xl border border-[#27272A]">
+                <button
+                  type="button"
+                  onClick={() => setWorkerAdvancesFilter('ALL')}
+                  className={`px-2.5 py-1 text-xs rounded-lg font-medium transition ${
+                    workerAdvancesFilter === 'ALL'
+                      ? 'bg-[#27272A] text-[#FAFAFA]'
+                      : 'text-[#71717A] hover:text-[#FAFAFA]'
+                  }`}
+                >
+                  All Staff
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setWorkerAdvancesFilter('WORKERS')}
+                  className={`px-2.5 py-1 text-xs rounded-lg font-medium transition flex items-center gap-1 ${
+                    workerAdvancesFilter === 'WORKERS'
+                      ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30 font-semibold'
+                      : 'text-[#71717A] hover:text-[#FAFAFA]'
+                  }`}
+                >
+                  <Construction size={12} />
+                  <span>Workers Only</span>
+                </button>
+              </div>
+
               {advancesSubTab === 'advances' ? (
                 <button
                   onClick={() => setIsAddAdvanceModalOpen(true)}
@@ -1387,14 +2238,20 @@ export function EmployeeManagementPage() {
                           Loading advances...
                         </td>
                       </tr>
-                    ) : advancesList.length === 0 ? (
+                    ) : (workerAdvancesFilter === 'WORKERS'
+                        ? advancesList.filter((a) => workerEmployees.some((w) => w.id === a.employeeId))
+                        : advancesList
+                      ).length === 0 ? (
                       <tr>
                         <td colSpan={7} className="px-4 py-8 text-center text-[#71717A]">
                           No advances scheduled for {MONTHS[selectedMonth - 1]?.label} {selectedYear}.
                         </td>
                       </tr>
                     ) : (
-                      advancesList.map((adv) => (
+                      (workerAdvancesFilter === 'WORKERS'
+                        ? advancesList.filter((a) => workerEmployees.some((w) => w.id === a.employeeId))
+                        : advancesList
+                      ).map((adv) => (
                         <tr key={adv.id} className="hover:bg-[#27272A]/40 transition">
                           <td className="px-4 py-3.5">
                             <div className="font-medium text-[#FAFAFA]">{adv.employee?.name}</div>
@@ -1551,14 +2408,44 @@ export function EmployeeManagementPage() {
               </p>
             </div>
 
-            <button
-              onClick={handleCalculatePayroll}
-              disabled={isCalculatingPayroll}
-              className="px-4 py-2 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 disabled:opacity-50 text-white text-xs font-semibold rounded-xl shadow-lg transition flex items-center gap-2"
-            >
-              {isCalculatingPayroll ? <RefreshCw className="animate-spin" size={15} /> : <TrendingUp size={15} />}
-              <span>{isCalculatingPayroll ? 'Computing Formulas...' : 'Calculate Monthly Payroll'}</span>
-            </button>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center bg-[#09090B] p-0.5 rounded-xl border border-[#27272A]">
+                <button
+                  type="button"
+                  onClick={() => setWorkerPayrollFilter('ALL')}
+                  className={`px-2.5 py-1 text-xs rounded-lg font-medium transition ${
+                    workerPayrollFilter === 'ALL'
+                      ? 'bg-[#27272A] text-[#FAFAFA]'
+                      : 'text-[#71717A] hover:text-[#FAFAFA]'
+                  }`}
+                >
+                  All Staff ({payrollRuns.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setWorkerPayrollFilter('WORKERS')}
+                  className={`px-2.5 py-1 text-xs rounded-lg font-medium transition flex items-center gap-1 ${
+                    workerPayrollFilter === 'WORKERS'
+                      ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30 font-semibold'
+                      : 'text-[#71717A] hover:text-[#FAFAFA]'
+                  }`}
+                >
+                  <Construction size={12} />
+                  <span>
+                    Workers Only ({payrollRuns.filter((p) => workerEmployees.some((w) => w.id === p.employeeId)).length})
+                  </span>
+                </button>
+              </div>
+
+              <button
+                onClick={handleCalculatePayroll}
+                disabled={isCalculatingPayroll}
+                className="px-4 py-2 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 disabled:opacity-50 text-white text-xs font-semibold rounded-xl shadow-lg transition flex items-center gap-2"
+              >
+                {isCalculatingPayroll ? <RefreshCw className="animate-spin" size={15} /> : <TrendingUp size={15} />}
+                <span>{isCalculatingPayroll ? 'Computing Formulas...' : 'Calculate Monthly Payroll'}</span>
+              </button>
+            </div>
           </div>
 
           {/* Payroll Sheet */}
@@ -1585,14 +2472,20 @@ export function EmployeeManagementPage() {
                         Loading payroll run...
                       </td>
                     </tr>
-                  ) : payrollRuns.length === 0 ? (
+                  ) : (workerPayrollFilter === 'WORKERS'
+                      ? payrollRuns.filter((p) => workerEmployees.some((w) => w.id === p.employeeId))
+                      : payrollRuns
+                    ).length === 0 ? (
                     <tr>
                       <td colSpan={9} className="px-4 py-12 text-center text-[#71717A]">
-                        No payroll calculated yet for {MONTHS[selectedMonth - 1]?.label} {selectedYear}. Click &quot;Calculate Monthly Payroll&quot; above.
+                        No payroll calculated yet for current filter in {MONTHS[selectedMonth - 1]?.label} {selectedYear}. Click &quot;Calculate Monthly Payroll&quot; above.
                       </td>
                     </tr>
                   ) : (
-                    payrollRuns.map((run) => (
+                    (workerPayrollFilter === 'WORKERS'
+                      ? payrollRuns.filter((p) => workerEmployees.some((w) => w.id === p.employeeId))
+                      : payrollRuns
+                    ).map((run) => (
                       <tr key={run.id} className="hover:bg-[#27272A]/40 transition">
                         <td className="px-4 py-3.5">
                           <div className="font-semibold text-[#FAFAFA]">{run.employee?.name}</div>
