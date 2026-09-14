@@ -1155,7 +1155,7 @@ export interface ProformaInvoiceMetrics {
 // ─── Daily Cash Expense Tracker Types ─────────────────────────────────────────
 
 export type ExpensePaymentMode = 'CASH' | 'UPI' | 'BANK_TRANSFER';
-export type ExpenseStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+export type ExpenseStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'VOIDED';
 
 export interface ExpenseCategory {
   id: string;

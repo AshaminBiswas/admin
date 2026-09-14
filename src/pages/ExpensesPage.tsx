@@ -34,6 +34,9 @@ import {
   FileText,
   AlertCircle,
   Info,
+  BookOpen,
+  ExternalLink,
+  ArrowRight,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -100,9 +103,11 @@ const PIE_COLORS = ['#8B5CF6', '#10B981', '#3B82F6', '#F59E0B', '#EC4899', '#636
 export function ExpensesPage() {
   const { adminUser } = useAdminAuth();
   const isSuperAdmin = adminUser?.role === 'super_admin';
+  const canApprove = adminUser?.role === 'super_admin' || adminUser?.role === 'admin' || adminUser?.role === 'manager';
 
   // ─── Core State ─────────────────────────────────────────────────────────────
-  const [activeTab, setActiveTab] = useState<'entry' | 'approvals' | 'reconciliation' | 'categories' | 'reports'>('entry');
+  const [activeTab, setActiveTab] = useState<'entry' | 'ledger' | 'approvals' | 'reconciliation' | 'categories' | 'reports'>('entry');
+  const [lastLoggedExpense, setLastLoggedExpense] = useState<ExpenseEntry | null>(null);
   const [branches, setBranches] = useState<{ id: string; name: string; code: string }[]>([]);
   const [selectedBranchId, setSelectedBranchId] = useState<string>('');
   const [isAllBranches, setIsAllBranches] = useState<boolean>(false);
@@ -361,6 +366,45 @@ export function ExpensesPage() {
     }
   }, [activeTab, fetchCategoriesWithSpend]);
 
+  // ─── Load Ledger Entries (Tab 2: All Entries) ──────────────────────────────
+  const fetchLedgerEntries = useCallback(async (reset = false) => {
+    setIsLoadingLedger(true);
+    try {
+      const res = await expensesApi.getExpenses({
+        branchId: isAllBranches ? undefined : selectedBranchId,
+        categoryId: ledgerFilterCategory || undefined,
+        status: ledgerFilterStatus === 'ALL' ? undefined : ledgerFilterStatus,
+        search: ledgerFilterSearch.trim() || undefined,
+        cursor: reset ? undefined : ledgerCursor || undefined,
+        limit: 50,
+      });
+
+      const entries = Array.isArray(res?.entries)
+        ? res.entries
+        : Array.isArray((res as any)?.data)
+        ? (res as any).data
+        : [];
+
+      if (reset) {
+        setLedgerEntries(entries);
+      } else {
+        setLedgerEntries((prev) => [...prev, ...entries]);
+      }
+      setLedgerCursor(res?.nextCursor || null);
+      setLedgerHasMore(Boolean(res?.hasMore));
+    } catch (err) {
+      console.error('Failed to load ledger entries:', err);
+    } finally {
+      setIsLoadingLedger(false);
+    }
+  }, [selectedBranchId, isAllBranches, ledgerFilterCategory, ledgerFilterStatus, ledgerFilterSearch, ledgerCursor]);
+
+  useEffect(() => {
+    if (activeTab === 'ledger') {
+      fetchLedgerEntries(true);
+    }
+  }, [activeTab, selectedBranchId, isAllBranches, ledgerFilterCategory, ledgerFilterStatus]);
+
   // ─── Load Analytics (Tab 5) ────────────────────────────────────────────────
   const fetchAnalytics = useCallback(async () => {
     setIsLoadingAnalytics(true);
@@ -450,13 +494,15 @@ export function ExpensesPage() {
         refreshOfflineQueue();
       } else {
         setEntrySuccessMsg(`Expense ${res.expense.entryNumber} logged successfully!`);
+        setLastLoggedExpense(res.expense);
         if (res.budgetWarning) {
           setEntryWarningMsg(res.budgetWarning);
         }
       }
 
-      // Prepend to today's list
-      setTodayEntries((prev) => [res.expense, ...prev]);
+      // Prepend to today's list & ledger
+      setTodayEntries((prev) => [res.expense, ...(prev || [])]);
+      setLedgerEntries((prev) => [res.expense, ...(prev || [])]);
 
       // Reset form fields
       setEntryAmount('');
@@ -492,6 +538,7 @@ export function ExpensesPage() {
       refreshOfflineQueue();
       fetchBalance();
       fetchTodayEntries();
+      if (activeTab === 'ledger') fetchLedgerEntries(true);
       alert(`Synchronized ${res.syncedCount} offline entries successfully!`);
     } catch (err: any) {
       alert(err.message || 'Failed to sync offline queue');
@@ -500,37 +547,59 @@ export function ExpensesPage() {
     }
   };
 
-  // ─── Approve Entry ─────────────────────────────────────────────────────────
+  // ─── Approve Entry (Super Admin / Admin / Manager) ─────────────────────────
   const handleApproveEntry = async (entry: ExpenseEntry) => {
     try {
       await expensesApi.approveExpense(entry.id);
-      setPendingEntries((prev) => prev.filter((e) => e.id !== entry.id));
+      setPendingEntries((prev) => (prev || []).filter((e) => e.id !== entry.id));
+      setTodayEntries((prev) =>
+        (prev || []).map((e) => (e.id === entry.id ? { ...e, status: 'APPROVED' } : e))
+      );
+      setLedgerEntries((prev) =>
+        (prev || []).map((e) => (e.id === entry.id ? { ...e, status: 'APPROVED' } : e))
+      );
+      if (lastLoggedExpense && lastLoggedExpense.id === entry.id) {
+        setLastLoggedExpense((prev) => (prev ? { ...prev, status: 'APPROVED' } : null));
+      }
       fetchBalance();
     } catch (err: any) {
       alert(err.message || 'Failed to approve expense');
     }
   };
 
-  // ─── Reject Entry ──────────────────────────────────────────────────────────
+  // ─── Reject Entry (Super Admin / Admin / Manager) ──────────────────────────
   const handleConfirmReject = async () => {
     if (!selectedRejectEntry || !rejectionReason.trim()) return;
     try {
       await expensesApi.rejectExpense(selectedRejectEntry.id, rejectionReason.trim());
-      setPendingEntries((prev) => prev.filter((e) => e.id !== selectedRejectEntry.id));
+      setPendingEntries((prev) => (prev || []).filter((e) => e.id !== selectedRejectEntry.id));
+      setTodayEntries((prev) =>
+        (prev || []).map((e) => (e.id === selectedRejectEntry.id ? { ...e, status: 'REJECTED' } : e))
+      );
+      setLedgerEntries((prev) =>
+        (prev || []).map((e) => (e.id === selectedRejectEntry.id ? { ...e, status: 'REJECTED' } : e))
+      );
+      if (lastLoggedExpense && lastLoggedExpense.id === selectedRejectEntry.id) {
+        setLastLoggedExpense((prev) => (prev ? { ...prev, status: 'REJECTED' } : null));
+      }
       setSelectedRejectEntry(null);
       setRejectionReason('');
+      fetchBalance();
     } catch (err: any) {
       alert(err.message || 'Failed to reject expense');
     }
   };
 
-  // ─── Void Entry ────────────────────────────────────────────────────────────
+  // ─── Void Entry (Super Admin Only) ─────────────────────────────────────────
   const handleConfirmVoid = async () => {
     if (!voidModalEntry || !voidReasonText.trim()) return;
     setIsVoiding(true);
     try {
       await expensesApi.voidExpense(voidModalEntry.id, voidReasonText.trim());
-      setTodayEntries((prev) => prev.filter((e) => e.id !== voidModalEntry.id));
+      setTodayEntries((prev) => (prev || []).filter((e) => e.id !== voidModalEntry.id));
+      setLedgerEntries((prev) =>
+        (prev || []).map((e) => (e.id === voidModalEntry.id ? { ...e, status: 'VOIDED', isVoid: true } : e))
+      );
       setVoidModalEntry(null);
       setVoidReasonText('');
       fetchBalance();
@@ -857,6 +926,18 @@ export function ExpensesPage() {
         </button>
 
         <button
+          onClick={() => setActiveTab('ledger')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition whitespace-nowrap ${
+            activeTab === 'ledger'
+              ? 'bg-violet-600 text-white shadow-sm'
+              : 'text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-[#18181B]'
+          }`}
+        >
+          <BookOpen size={16} />
+          <span>Expense Ledger (All)</span>
+        </button>
+
+        <button
           onClick={() => setActiveTab('approvals')}
           className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition whitespace-nowrap relative ${
             activeTab === 'approvals'
@@ -941,6 +1022,96 @@ export function ExpensesPage() {
                 <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 text-xs flex items-center gap-2">
                   <AlertCircle size={16} className="shrink-0" />
                   <span>{entryWarningMsg}</span>
+                </div>
+              )}
+
+              {lastLoggedExpense && (
+                <div className="p-4 rounded-xl bg-violet-50 dark:bg-[#1E182B] border border-violet-200 dark:border-violet-500/30 space-y-2.5">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-xs font-extrabold text-violet-600 dark:text-violet-400 bg-violet-500/10 px-2 py-0.5 rounded">
+                        {lastLoggedExpense.entryNumber}
+                      </span>
+                      <span
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                          lastLoggedExpense.status === 'APPROVED'
+                            ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
+                            : lastLoggedExpense.status === 'PENDING'
+                            ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30'
+                            : 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30'
+                        }`}
+                      >
+                        {lastLoggedExpense.status === 'APPROVED'
+                          ? '✓ Auto-Approved & Deducted'
+                          : lastLoggedExpense.status === 'PENDING'
+                          ? '⏳ Awaiting Admin Review'
+                          : lastLoggedExpense.status}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLastLoggedExpense(null);
+                        setEntrySuccessMsg(null);
+                      }}
+                      className="text-slate-400 hover:text-slate-600 dark:hover:text-zinc-200"
+                      title="Dismiss voucher banner"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+
+                  <div className="flex items-baseline justify-between pt-1">
+                    <div>
+                      <p className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
+                        {lastLoggedExpense.description}
+                      </p>
+                      <p className="text-[11px] text-slate-500 dark:text-zinc-400">
+                        Paid to <strong className="text-slate-700 dark:text-zinc-300">{lastLoggedExpense.paidTo}</strong> ({lastLoggedExpense.category?.name || 'Expense'})
+                      </p>
+                    </div>
+                    <span className="text-base font-extrabold text-slate-900 dark:text-white">
+                      {formatRupee(lastLoggedExpense.amount)}
+                    </span>
+                  </div>
+
+                  {/* Super Admin Quick Approval on Last Logged Voucher */}
+                  {canApprove && lastLoggedExpense.status === 'PENDING' && (
+                    <div className="pt-2 border-t border-violet-200 dark:border-violet-500/20 flex items-center justify-between gap-2">
+                      <span className="text-[11px] font-medium text-amber-600 dark:text-amber-400">
+                        Admin Action Required:
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedRejectEntry(lastLoggedExpense)}
+                          className="px-2.5 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 text-[11px] font-bold transition"
+                        >
+                          Reject
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleApproveEntry(lastLoggedExpense)}
+                          className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold transition flex items-center gap-1 shadow-sm"
+                        >
+                          <Check size={12} />
+                          Approve Now
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="pt-1.5 flex items-center justify-between text-[11px] text-slate-500 dark:text-zinc-400">
+                    <span>Logged to Today's Feed & Ledger</span>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('ledger')}
+                      className="text-violet-600 dark:text-violet-400 font-semibold hover:underline flex items-center gap-1"
+                    >
+                      <span>View in Full Ledger</span>
+                      <ArrowRight size={12} />
+                    </button>
+                  </div>
                 </div>
               )}
 
@@ -1164,14 +1335,39 @@ export function ExpensesPage() {
                             {e.status}
                           </span>
                         </div>
-                        {isSuperAdmin && (
-                          <div className="pt-2 border-t border-slate-200 dark:border-[#27272A] flex justify-end">
-                            <button
-                              onClick={() => setVoidModalEntry(e)}
-                              className="text-xs text-rose-600 hover:text-rose-700 font-semibold"
-                            >
-                              Void Entry
-                            </button>
+                        {(canApprove || isSuperAdmin) && (
+                          <div className="pt-2 border-t border-slate-200 dark:border-[#27272A] flex items-center justify-between gap-2">
+                            {e.status === 'PENDING' && canApprove ? (
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => handleApproveEntry(e)}
+                                  className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition flex items-center gap-1 shadow-sm"
+                                >
+                                  <Check size={12} /> Approve
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedRejectEntry(e)}
+                                  className="px-2.5 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 text-xs font-bold transition"
+                                >
+                                  Reject
+                                </button>
+                              </div>
+                            ) : (
+                              <span className="text-[11px] text-slate-400">
+                                {e.status === 'APPROVED' ? '✓ Approved' : e.status}
+                              </span>
+                            )}
+                            {isSuperAdmin && e.status !== 'VOIDED' && (
+                              <button
+                                type="button"
+                                onClick={() => setVoidModalEntry(e)}
+                                className="text-xs text-rose-600 hover:text-rose-700 font-semibold"
+                              >
+                                Void Entry
+                              </button>
+                            )}
                           </div>
                         )}
                       </div>
@@ -1190,7 +1386,7 @@ export function ExpensesPage() {
                           <th className="py-2.5 px-3">Paid To</th>
                           <th className="py-2.5 px-3 text-right">Amount</th>
                           <th className="py-2.5 px-3 text-center">Status</th>
-                          {isSuperAdmin && <th className="py-2.5 px-3 text-center">Action</th>}
+                          {(canApprove || isSuperAdmin) && <th className="py-2.5 px-3 text-center">Action</th>}
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 dark:divide-[#27272A]">
@@ -1223,14 +1419,40 @@ export function ExpensesPage() {
                                 {e.status}
                               </span>
                             </td>
-                            {isSuperAdmin && (
+                            {(canApprove || isSuperAdmin) && (
                               <td className="py-2.5 px-3 text-center">
-                                <button
-                                  onClick={() => setVoidModalEntry(e)}
-                                  className="text-[11px] text-rose-600 hover:text-rose-700 font-semibold"
-                                >
-                                  Void
-                                </button>
+                                <div className="flex items-center justify-center gap-1.5">
+                                  {e.status === 'PENDING' && canApprove && (
+                                    <>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleApproveEntry(e)}
+                                        className="px-2 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold transition flex items-center gap-1 shadow-sm"
+                                        title="Approve expense entry"
+                                      >
+                                        <Check size={11} /> Approve
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => setSelectedRejectEntry(e)}
+                                        className="px-2 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 text-[11px] font-bold transition"
+                                        title="Reject expense entry"
+                                      >
+                                        Reject
+                                      </button>
+                                    </>
+                                  )}
+                                  {isSuperAdmin && e.status !== 'VOIDED' && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setVoidModalEntry(e)}
+                                      className="text-[11px] text-rose-600 hover:text-rose-700 font-semibold px-1 py-0.5"
+                                      title="Void expense entry"
+                                    >
+                                      Void
+                                    </button>
+                                  )}
+                                </div>
                               </td>
                             )}
                           </tr>
@@ -1246,7 +1468,307 @@ export function ExpensesPage() {
       )}
 
       {/* ────────────────────────────────────────────────────────────────────── */}
-      {/* TAB 2: APPROVAL QUEUE                                                  */}
+      {/* TAB 2: EXPENSE LEDGER (ALL HISTORICAL ENTRIES)                         */}
+      {/* ────────────────────────────────────────────────────────────────────── */}
+      {activeTab === 'ledger' && (
+        <div className="p-5 sm:p-6 rounded-2xl bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] shadow-sm space-y-5">
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100 dark:border-[#27272A]">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-violet-500/10 text-violet-600 dark:text-violet-400">
+                <BookOpen size={22} />
+              </div>
+              <div>
+                <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">
+                  Organization Expense Ledger (All Entries)
+                </h2>
+                <p className="text-xs text-slate-500 dark:text-zinc-400">
+                  Search, filter, and audit all expense vouchers across dates and locations
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => fetchLedgerEntries(true)}
+                className="p-2 rounded-xl text-slate-500 hover:bg-slate-100 dark:hover:bg-[#27272A] transition"
+                title="Refresh Ledger"
+              >
+                <RefreshCw size={16} className={isLoadingLedger ? 'animate-spin' : ''} />
+              </button>
+            </div>
+          </div>
+
+          {/* Filter Bar */}
+          <div className="flex flex-col md:flex-row gap-2.5 items-stretch md:items-center">
+            {/* Search Input */}
+            <div className="relative flex-1">
+              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search voucher #, description, payee..."
+                value={ledgerFilterSearch}
+                onChange={(e) => setLedgerFilterSearch(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') fetchLedgerEntries(true);
+                }}
+                className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 dark:bg-[#09090B] border border-slate-300 dark:border-[#27272A] text-xs font-medium text-slate-900 dark:text-white placeholder:text-slate-400 focus:border-violet-500 focus:outline-none"
+              />
+            </div>
+
+            {/* Category Filter */}
+            <select
+              value={ledgerFilterCategory}
+              onChange={(e) => setLedgerFilterCategory(e.target.value)}
+              className="px-3 py-2 rounded-xl bg-slate-50 dark:bg-[#09090B] border border-slate-300 dark:border-[#27272A] text-xs font-medium text-slate-800 dark:text-zinc-200 focus:border-violet-500 focus:outline-none"
+            >
+              <option value="">All Categories</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+
+            {/* Status Filter */}
+            <select
+              value={ledgerFilterStatus}
+              onChange={(e) => setLedgerFilterStatus(e.target.value)}
+              className="px-3 py-2 rounded-xl bg-slate-50 dark:bg-[#09090B] border border-slate-300 dark:border-[#27272A] text-xs font-medium text-slate-800 dark:text-zinc-200 focus:border-violet-500 focus:outline-none"
+            >
+              <option value="ALL">All Statuses</option>
+              <option value="APPROVED">Approved Only</option>
+              <option value="PENDING">Pending Approval</option>
+              <option value="REJECTED">Rejected</option>
+              <option value="VOIDED">Voided</option>
+            </select>
+
+            {/* Filter Action Buttons */}
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => fetchLedgerEntries(true)}
+                className="px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold transition shadow-sm"
+              >
+                Search
+              </button>
+
+              {(ledgerFilterSearch || ledgerFilterCategory || ledgerFilterStatus !== 'ALL') && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLedgerFilterSearch('');
+                    setLedgerFilterCategory('');
+                    setLedgerFilterStatus('ALL');
+                  }}
+                  className="px-3 py-2 rounded-xl bg-slate-100 dark:bg-[#27272A] hover:bg-slate-200 dark:hover:bg-[#3F3F46] text-slate-600 dark:text-zinc-400 text-xs font-semibold transition"
+                >
+                  Reset
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Ledger Table */}
+          {(ledgerEntries || []).length === 0 && !isLoadingLedger ? (
+            <div className="py-16 text-center text-slate-400 dark:text-zinc-500 text-sm">
+              <BookOpen size={36} className="mx-auto mb-2 opacity-40" />
+              No expense entries found matching current filters.
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-[#27272A]">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50 dark:bg-[#09090B] text-slate-500 dark:text-zinc-400 uppercase font-semibold border-b border-slate-200 dark:border-[#27272A]">
+                    <tr>
+                      <th className="py-3 px-3.5">Voucher No</th>
+                      <th className="py-3 px-3.5">Date & Time</th>
+                      {isAllBranches && <th className="py-3 px-3.5">Branch</th>}
+                      <th className="py-3 px-3.5">Category</th>
+                      <th className="py-3 px-3.5">Description</th>
+                      <th className="py-3 px-3.5">Paid To</th>
+                      <th className="py-3 px-3.5">Mode</th>
+                      <th className="py-3 px-3.5 text-right">Amount</th>
+                      <th className="py-3 px-3.5 text-center">Status</th>
+                      <th className="py-3 px-3.5">Logged By</th>
+                      <th className="py-3 px-3.5 text-center">Receipt</th>
+                      {(canApprove || isSuperAdmin) && <th className="py-3 px-3.5 text-center">Actions</th>}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-[#27272A]">
+                    {(ledgerEntries || []).map((e) => (
+                      <tr
+                        key={e.id}
+                        className={`hover:bg-slate-50/50 dark:hover:bg-[#27272A]/30 transition ${
+                          e.isVoid || e.status === 'VOIDED' ? 'opacity-60 bg-slate-50/30' : ''
+                        }`}
+                      >
+                        {/* Voucher No */}
+                        <td className="py-3 px-3.5 font-mono font-bold text-violet-600 dark:text-violet-400 whitespace-nowrap">
+                          {e.entryNumber}
+                        </td>
+
+                        {/* Date & Time */}
+                        <td className="py-3 px-3.5 text-slate-600 dark:text-zinc-400 whitespace-nowrap">
+                          <div>{formatDate(e.date)}</div>
+                          <div className="text-[10px] text-slate-400 dark:text-zinc-500">{e.time}</div>
+                        </td>
+
+                        {/* Branch */}
+                        {isAllBranches && (
+                          <td className="py-3 px-3.5 text-slate-700 dark:text-zinc-300 whitespace-nowrap">
+                            {e.branch?.name || '-'}
+                          </td>
+                        )}
+
+                        {/* Category */}
+                        <td className="py-3 px-3.5 whitespace-nowrap">
+                          <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-[#27272A] text-slate-700 dark:text-zinc-300 font-medium">
+                            {e.category?.name || '-'}
+                          </span>
+                        </td>
+
+                        {/* Description */}
+                        <td className="py-3 px-3.5 max-w-[220px] truncate text-slate-800 dark:text-zinc-200" title={e.description}>
+                          {e.description}
+                          {e.isVoid && e.voidReason && (
+                            <span className="block text-[10px] text-rose-500 italic">Voided: {e.voidReason}</span>
+                          )}
+                          {e.status === 'REJECTED' && e.rejectionReason && (
+                            <span className="block text-[10px] text-rose-500 italic">Rejected: {e.rejectionReason}</span>
+                          )}
+                        </td>
+
+                        {/* Paid To */}
+                        <td className="py-3 px-3.5 text-slate-700 dark:text-zinc-300 whitespace-nowrap">
+                          {e.paidTo}
+                        </td>
+
+                        {/* Payment Mode */}
+                        <td className="py-3 px-3.5 whitespace-nowrap">
+                          <span className="text-[10px] px-1.5 py-0.5 rounded font-mono bg-slate-100 dark:bg-[#27272A] text-slate-600 dark:text-zinc-400">
+                            {e.paymentMode}
+                          </span>
+                        </td>
+
+                        {/* Amount */}
+                        <td className="py-3 px-3.5 text-right font-extrabold text-slate-900 dark:text-white whitespace-nowrap">
+                          <span className={e.isVoid || e.status === 'VOIDED' ? 'line-through text-slate-400' : ''}>
+                            {formatRupee(e.amount)}
+                          </span>
+                        </td>
+
+                        {/* Status */}
+                        <td className="py-3 px-3.5 text-center whitespace-nowrap">
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              e.isVoid || e.status === 'VOIDED'
+                                ? 'bg-slate-200 dark:bg-zinc-800 text-slate-500'
+                                : e.status === 'APPROVED'
+                                ? 'bg-emerald-500/10 text-emerald-500'
+                                : e.status === 'PENDING'
+                                ? 'bg-amber-500/10 text-amber-500'
+                                : 'bg-rose-500/10 text-rose-500'
+                            }`}
+                          >
+                            {e.isVoid || e.status === 'VOIDED' ? 'VOIDED' : e.status}
+                          </span>
+                        </td>
+
+                        {/* Logged By */}
+                        <td className="py-3 px-3.5 text-slate-600 dark:text-zinc-400 whitespace-nowrap">
+                          {e.addedBy?.firstName ? `${e.addedBy.firstName} ${e.addedBy.lastName || ''}`.trim() : e.addedBy?.email || '-'}
+                        </td>
+
+                        {/* Receipt */}
+                        <td className="py-3 px-3.5 text-center whitespace-nowrap">
+                          {e.receiptAttachment ? (
+                            <a
+                              href={e.receiptAttachment}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1 text-violet-600 dark:text-violet-400 hover:underline font-semibold text-[11px]"
+                              title="View receipt attachment"
+                            >
+                              <ExternalLink size={12} />
+                              View
+                            </a>
+                          ) : (
+                            <span className="text-slate-400">-</span>
+                          )}
+                        </td>
+
+                        {/* Actions */}
+                        {(canApprove || isSuperAdmin) && (
+                          <td className="py-3 px-3.5 text-center whitespace-nowrap">
+                            <div className="flex items-center justify-center gap-1.5">
+                              {e.status === 'PENDING' && canApprove && (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleApproveEntry(e)}
+                                    className="px-2 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold transition flex items-center gap-1 shadow-sm"
+                                    title="Approve expense entry"
+                                  >
+                                    <Check size={11} /> Approve
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setSelectedRejectEntry(e)}
+                                    className="px-2 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 text-[11px] font-bold transition"
+                                    title="Reject expense entry"
+                                  >
+                                    Reject
+                                  </button>
+                                </>
+                              )}
+                              {isSuperAdmin && !e.isVoid && e.status !== 'VOIDED' && (
+                                <button
+                                  type="button"
+                                  onClick={() => setVoidModalEntry(e)}
+                                  className="text-[11px] text-rose-600 hover:text-rose-700 font-semibold px-1 py-0.5"
+                                  title="Void expense entry"
+                                >
+                                  Void
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Load More Pagination Button */}
+              {ledgerHasMore && (
+                <div className="flex justify-center pt-2">
+                  <button
+                    type="button"
+                    onClick={() => fetchLedgerEntries(false)}
+                    disabled={isLoadingLedger}
+                    className="px-5 py-2.5 rounded-xl bg-slate-100 dark:bg-[#27272A] hover:bg-slate-200 dark:hover:bg-[#3F3F46] text-xs font-bold text-slate-700 dark:text-zinc-300 transition flex items-center gap-2"
+                  >
+                    {isLoadingLedger ? (
+                      <>
+                        <RefreshCw size={14} className="animate-spin" />
+                        <span>Loading Next Entries...</span>
+                      </>
+                    ) : (
+                      <span>Load Next 50 Entries</span>
+                    )}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ────────────────────────────────────────────────────────────────────── */}
+      {/* TAB 3: APPROVAL QUEUE                                                  */}
       {/* ────────────────────────────────────────────────────────────────────── */}
       {activeTab === 'approvals' && (
         <div className="p-5 sm:p-6 rounded-2xl bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] shadow-sm space-y-4">
