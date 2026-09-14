@@ -407,8 +407,18 @@ export function AdminManagementPage({ onViewAdmin }: AdminManagementPageProps = 
       const matchStatus = statusFilter === "ALL" || admin.status === statusFilter;
 
       const adminRoleSlug = (admin.role?.slug || admin.role?.name || admin.role || "").toLowerCase();
+      const isCustomRole = Boolean(
+        admin.role?.isSystem === false ||
+        (!adminRoleSlug.includes("super") &&
+          adminRoleSlug !== "admin" &&
+          !adminRoleSlug.includes("manager") &&
+          !adminRoleSlug.includes("staff") &&
+          !adminRoleSlug.includes("support"))
+      );
+
       const matchRole =
         roleFilter === "ALL" ||
+        (roleFilter === "CUSTOM" && isCustomRole) ||
         (roleFilter === "SUPER_ADMIN" && adminRoleSlug.includes("super")) ||
         (roleFilter === "STORE_MANAGER" && (adminRoleSlug.includes("manager") || adminRoleSlug === "admin")) ||
         (roleFilter === "SUPPORT" && (adminRoleSlug.includes("support") || (!adminRoleSlug.includes("super") && !adminRoleSlug.includes("manager") && adminRoleSlug !== "admin")));
@@ -754,6 +764,7 @@ export function AdminManagementPage({ onViewAdmin }: AdminManagementPageProps = 
           <div className="flex flex-wrap gap-1 bg-[#09090B] p-1 rounded-xl border border-[#27272A]">
             {[
               { id: "ALL", label: "All Roles" },
+              { id: "CUSTOM", label: "Custom Roles" },
               { id: "SUPER_ADMIN", label: "Super Admins" },
               { id: "STORE_MANAGER", label: "Store Managers" },
               { id: "SUPPORT", label: "Support Staff" },

@@ -2,6 +2,8 @@ import React from "react";
 import { AdminAuthProvider, useAdminAuth } from "./context/AdminAuthContext";
 import { ThemeProvider } from "./context/ThemeContext";
 import { AdminLoginPage } from "./pages/AdminLoginPage";
+import { AdminForceChangePasswordPage } from "./pages/AdminForceChangePasswordPage";
+import { AdminMandatory2FAPage } from "./pages/AdminMandatory2FAPage";
 import { AdminLayout } from "./components/layout/AdminLayout";
 
 /* ─── Instant Admin App Shell Skeleton (Zero Blank Screen) ──────────────────── */
@@ -78,14 +80,24 @@ export function AdminAppShellSkeleton() {
 }
 
 function AppContent() {
-  const { isAuthenticated, isLoading } = useAdminAuth();
+  const { isAuthenticated, isLoading, adminUser } = useAdminAuth();
 
   if (isLoading) {
     return <AdminAppShellSkeleton />;
   }
 
-  if (!isAuthenticated) {
+  if (!isAuthenticated || !adminUser) {
     return <AdminLoginPage />;
+  }
+
+  // 1. Mandatory Password Reset Guard (Temporary password on first login)
+  if (adminUser.mustChangePassword) {
+    return <AdminForceChangePasswordPage />;
+  }
+
+  // 2. Mandatory 2FA Setup Guard (Enforced for all administrative/staff accounts)
+  if (!adminUser.isTwoFactorEnabled) {
+    return <AdminMandatory2FAPage />;
   }
 
   return <AdminLayout />;

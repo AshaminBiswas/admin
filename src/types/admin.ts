@@ -3,12 +3,14 @@ export interface AdminUser {
   email: string;
   firstName?: string;
   lastName?: string;
-  role: 'super_admin' | 'admin' | 'manager';
+  role: 'super_admin' | 'admin' | 'manager' | string;
   roleId?: string;
   phone?: string;
   status?: 'ACTIVE' | 'INACTIVE';
   avatar?: string;
+  mustChangePassword?: boolean;
   isTwoFactorEnabled?: boolean;
+  twoFactorEnabled?: boolean;
   twoFactorMethod?: 'totp' | 'email';
 }
 

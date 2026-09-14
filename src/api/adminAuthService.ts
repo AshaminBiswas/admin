@@ -59,7 +59,9 @@ export const adminAuthService = {
         firstName: rawUser.firstName || "Executive",
         lastName: rawUser.lastName || "Admin",
         role: resolvedRole,
+        mustChangePassword: Boolean(rawUser.mustChangePassword),
         isTwoFactorEnabled: Boolean(rawUser.isTwoFactorEnabled || rawUser.twoFactorEnabled),
+        twoFactorEnabled: Boolean(rawUser.isTwoFactorEnabled || rawUser.twoFactorEnabled),
       };
 
       setAdminTokens(accessToken, refreshToken, user);
@@ -112,7 +114,9 @@ export const adminAuthService = {
         firstName: rawUser.firstName || "Executive",
         lastName: rawUser.lastName || "Admin",
         role: resolvedRole,
+        mustChangePassword: Boolean(rawUser.mustChangePassword),
         isTwoFactorEnabled: true,
+        twoFactorEnabled: true,
       };
 
       if (accessToken) {
@@ -179,6 +183,15 @@ export const adminAuthService = {
 
     if (res.success) {
       setLocal2FAEnabled(true);
+      const cachedUser = getStoredAdminUser();
+      if (cachedUser) {
+        const updatedUser: AdminUser = {
+          ...cachedUser,
+          isTwoFactorEnabled: true,
+          twoFactorEnabled: true,
+        };
+        localStorage.setItem("prc_admin_user_session", JSON.stringify(updatedUser));
+      }
       return {
         success: true,
         message: res.message || "Two-Factor Authentication is now active on your account!",
@@ -245,7 +258,9 @@ export const adminAuthService = {
       roleId: payload.roleId,
       phone: payload.phone,
       status: "ACTIVE",
+      mustChangePassword: true,
       isTwoFactorEnabled: false,
+      twoFactorEnabled: false,
     };
 
     return {
@@ -277,7 +292,9 @@ export const adminAuthService = {
             firstName: res.data.firstName || "Executive",
             lastName: res.data.lastName || "Admin",
             role: resolvedRole,
+            mustChangePassword: Boolean(res.data.mustChangePassword),
             isTwoFactorEnabled: is2fa,
+            twoFactorEnabled: is2fa,
           },
         };
       }
@@ -306,6 +323,36 @@ export const adminAuthService = {
       });
 
       if (res.success) {
+        // If backend returned new tokens and user payload, update stored session
+        if (res.data?.accessToken && res.data?.refreshToken) {
+          const rawUser = res.data.user || {};
+          const cachedUser = getStoredAdminUser();
+          const updatedUser: AdminUser = {
+            ...(cachedUser || {}),
+            id: rawUser.id || cachedUser?.id || "admin-1",
+            email: rawUser.email || cachedUser?.email || "",
+            firstName: rawUser.firstName || cachedUser?.firstName || "Executive",
+            lastName: rawUser.lastName || cachedUser?.lastName || "Admin",
+            role: typeof rawUser.role === "object" && rawUser.role !== null
+              ? (rawUser.role.slug ?? rawUser.role.name ?? cachedUser?.role ?? "admin")
+              : (rawUser.role ?? cachedUser?.role ?? "admin"),
+            mustChangePassword: false,
+            isTwoFactorEnabled: Boolean(rawUser.isTwoFactorEnabled || rawUser.twoFactorEnabled || cachedUser?.isTwoFactorEnabled),
+            twoFactorEnabled: Boolean(rawUser.isTwoFactorEnabled || rawUser.twoFactorEnabled || cachedUser?.twoFactorEnabled),
+          };
+          setAdminTokens(res.data.accessToken, res.data.refreshToken, updatedUser);
+        } else {
+          // If no new tokens, update cached user flag directly
+          const cachedUser = getStoredAdminUser();
+          if (cachedUser) {
+            const updatedUser: AdminUser = {
+              ...cachedUser,
+              mustChangePassword: false,
+            };
+            localStorage.setItem("prc_admin_user_session", JSON.stringify(updatedUser));
+          }
+        }
+
         return {
           success: true,
           message: res.message || "Password changed successfully! All active sessions have been updated.",
