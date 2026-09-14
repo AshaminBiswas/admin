@@ -248,6 +248,10 @@ export function ExpensesPage() {
   const [voidReasonText, setVoidReasonText] = useState('');
   const [isVoiding, setIsVoiding] = useState(false);
 
+  // Approve/Reject in-flight tracking (shows loading state per entry button)
+  const [approvingId, setApprovingId] = useState<string | null>(null);
+  const [rejectingId, setRejectingId] = useState<string | null>(null);
+
   // ─── Network & Offline Event Listeners ───────────────────────────────────────
   useEffect(() => {
     const handleOnline = () => {
@@ -664,6 +668,8 @@ export function ExpensesPage() {
 
   // ─── Approve Entry (Super Admin / Admin / Manager) ─────────────────────────
   const handleApproveEntry = async (entry: ExpenseEntry) => {
+    if (approvingId) return; // prevent double-tap
+    setApprovingId(entry.id);
     try {
       await expensesApi.approveExpense(entry.id);
       setPendingEntries((prev) => (prev || []).filter((e) => e.id !== entry.id));
@@ -679,13 +685,26 @@ export function ExpensesPage() {
       fetchBalance();
       fetchApprovals();
     } catch (err: any) {
-      alert(err.message || 'Failed to approve expense');
+      const msg = err.message || 'Failed to approve expense';
+      const isCorsOrNetwork = msg.toLowerCase().includes('cors') ||
+        msg.toLowerCase().includes('network') ||
+        msg.toLowerCase().includes('fetch') ||
+        msg.toLowerCase().includes('failed to reach') ||
+        msg.toLowerCase().includes('timed out');
+      alert(
+        isCorsOrNetwork
+          ? '⚠️ Server connection error. The backend server may still be waking up.\n\nPlease wait 10–15 seconds and try again.'
+          : msg
+      );
+    } finally {
+      setApprovingId(null);
     }
   };
 
   // ─── Reject Entry (Super Admin / Admin / Manager) ──────────────────────────
   const handleConfirmReject = async () => {
     if (!selectedRejectEntry || !rejectionReason.trim()) return;
+    setRejectingId(selectedRejectEntry.id);
     try {
       await expensesApi.rejectExpense(selectedRejectEntry.id, rejectionReason.trim());
       setPendingEntries((prev) => (prev || []).filter((e) => e.id !== selectedRejectEntry.id));
@@ -704,6 +723,8 @@ export function ExpensesPage() {
       fetchApprovals();
     } catch (err: any) {
       alert(err.message || 'Failed to reject expense');
+    } finally {
+      setRejectingId(null);
     }
   };
 
@@ -1379,10 +1400,11 @@ export function ExpensesPage() {
                           <button
                             type="button"
                             onClick={() => handleApproveEntry(lastLoggedExpense)}
-                            className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold transition flex items-center gap-1 shadow-sm"
+                            disabled={!!approvingId}
+                            className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed text-white text-[11px] font-bold transition flex items-center gap-1 shadow-sm"
                           >
                             <Check size={12} />
-                            Approve Now
+                            {approvingId === lastLoggedExpense.id ? 'Waking server…' : 'Approve Now'}
                           </button>
                         </div>
                       </div>
@@ -1734,9 +1756,10 @@ export function ExpensesPage() {
                                 <button
                                   type="button"
                                   onClick={() => handleApproveEntry(e)}
-                                  className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition flex items-center gap-1 shadow-sm"
+                                  disabled={!!approvingId}
+                                  className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed text-white text-xs font-bold transition flex items-center gap-1 shadow-sm"
                                 >
-                                  <Check size={12} /> Approve
+                                  <Check size={12} /> {approvingId === e.id ? 'Waking…' : 'Approve'}
                                 </button>
                                 <button
                                   type="button"
@@ -1881,10 +1904,11 @@ export function ExpensesPage() {
                                     <button
                                       type="button"
                                       onClick={() => handleApproveEntry(e)}
-                                      className="px-2 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold transition flex items-center gap-0.5 shadow-sm"
+                                      disabled={!!approvingId}
+                                      className="px-2 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed text-white text-[11px] font-bold transition flex items-center gap-0.5 shadow-sm"
                                       title="Approve expense entry"
                                     >
-                                      <Check size={11} /> Approve
+                                      <Check size={11} /> {approvingId === e.id ? 'Waking…' : 'Approve'}
                                     </button>
                                     <button
                                       type="button"
@@ -2435,10 +2459,11 @@ export function ExpensesPage() {
                                 <button
                                   type="button"
                                   onClick={() => handleApproveEntry(e)}
-                                  className="px-2 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold transition flex items-center gap-1 shadow-sm"
+                                  disabled={!!approvingId}
+                                  className="px-2 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed text-white text-[11px] font-bold transition flex items-center gap-1 shadow-sm"
                                   title="Approve expense entry"
                                 >
-                                  <Check size={11} /> Approve
+                                  <Check size={11} /> {approvingId === e.id ? 'Waking…' : 'Approve'}
                                 </button>
                                 <button
                                   type="button"
@@ -2665,9 +2690,10 @@ export function ExpensesPage() {
                       </button>
                       <button
                         onClick={() => handleApproveEntry(e)}
-                        className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition shadow-sm cursor-pointer"
+                        disabled={!!approvingId}
+                        className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed text-white text-xs font-bold transition shadow-sm cursor-pointer"
                       >
-                        Approve
+                        {approvingId === e.id ? 'Waking server…' : 'Approve'}
                       </button>
                       {isSuperAdmin && (
                         <button

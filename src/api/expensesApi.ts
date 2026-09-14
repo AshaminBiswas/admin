@@ -1,4 +1,4 @@
-import { API_BASE_URL, getAdminToken, fetchAdminApi } from './adminApi';
+import { API_BASE_URL, getAdminToken, fetchAdminApi, wakeServerAndWait } from './adminApi';
 import type {
   ExpenseEntry,
   UpdateExpenseInput,
@@ -241,6 +241,8 @@ export const expensesApi = {
 
   // 6. Approve Expense
   async approveExpense(id: string, notes?: string): Promise<ExpenseEntry> {
+    // Wake Render server before issuing POST — prevents CORS block on cold-start
+    await wakeServerAndWait();
     const res = await fetchAdminApi<ExpenseEntry>(`/expenses/${id}/approve`, {
       method: 'POST',
       body: JSON.stringify({ notes }),
@@ -251,6 +253,8 @@ export const expensesApi = {
 
   // 7. Reject Expense
   async rejectExpense(id: string, rejectionReason: string): Promise<ExpenseEntry> {
+    // Wake Render server before issuing POST — prevents CORS block on cold-start
+    await wakeServerAndWait();
     const res = await fetchAdminApi<ExpenseEntry>(`/expenses/${id}/reject`, {
       method: 'POST',
       body: JSON.stringify({ rejectionReason }),
@@ -261,6 +265,8 @@ export const expensesApi = {
 
   // 8. Void Expense
   async voidExpense(id: string, voidReason: string): Promise<ExpenseEntry> {
+    // Wake Render server before issuing POST — prevents CORS block on cold-start
+    await wakeServerAndWait();
     const res = await fetchAdminApi<ExpenseEntry>(`/expenses/${id}/void`, {
       method: 'POST',
       body: JSON.stringify({ voidReason }),

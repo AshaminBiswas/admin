@@ -175,6 +175,37 @@ export async function keepAliveServerPing(): Promise<void> {
   }
 }
 
+/**
+ * Actively wakes the Render server and waits until it is reachable before returning.
+ * This performs a real CORS-capable fetch (not no-cors) so we know the Express app
+ * is actually up and can serve CORS headers before we issue a critical mutation.
+ *
+ * Polls /ping up to maxAttempts times with increasing delays (2s → 4s → 6s …).
+ * Used before approve/reject/void expense calls to prevent CORS failures on cold-start.
+ */
+export async function wakeServerAndWait(maxAttempts = 8): Promise<boolean> {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const res = await fetch(`${API_BASE_URL}/ping`, {
+        method: "GET",
+        signal: AbortSignal.timeout(10000),
+      });
+      if (res.ok || res.status < 500) {
+        // Server is up and responding with CORS headers
+        return true;
+      }
+    } catch {
+      // Server still sleeping — wait before next attempt
+    }
+    if (attempt < maxAttempts) {
+      // Progressive back-off: 2s, 4s, 6s, 8s, 8s, 8s, 8s
+      const delayMs = Math.min(attempt * 2000, 8000);
+      await new Promise((r) => setTimeout(r, delayMs));
+    }
+  }
+  return false; // Give up — let the caller proceed anyway
+}
+
 // ─── In-Flight GET Request Deduplication Map ──────────────────────────────────
 const inFlightGetRequests = new Map<string, Promise<any>>();
 
@@ -252,8 +283,8 @@ async function executeFetchAdminApi<T = any>(
 
     // Auto-retry once on transient 502/503/504 gateway responses caused by Render container spin-up
     if (!response.ok && (response.status === 502 || response.status === 503 || response.status === 504) && !isRetry) {
-      console.info(`[PRC Admin API] Server spinning up (HTTP ${response.status}) on ${cleanEndpoint}. Auto-retrying in 2.5s...`);
-      await new Promise((r) => setTimeout(r, 2500));
+      console.info(`[PRC Admin API] Server spinning up (HTTP ${response.status}) on ${cleanEndpoint}. Auto-retrying in 5s...`);
+      await new Promise((r) => setTimeout(r, 5000));
       return executeFetchAdminApi<T>(endpoint, options, true);
     }
 
@@ -356,8 +387,8 @@ async function executeFetchAdminApi<T = any>(
 
     // If request timed out or hit cold-start network drop, auto-retry once because the server is likely waking up
     if ((isTimeout || isNetworkOrFetchError) && !isRetry) {
-      console.info(`[PRC Admin API] Server wake-up / transient error on ${cleanEndpoint}. Auto-retrying in 2.5s...`);
-      await new Promise((r) => setTimeout(r, 2500));
+      console.info(`[PRC Admin API] Server wake-up / transient error on ${cleanEndpoint}. Auto-retrying in 5s...`);
+      await new Promise((r) => setTimeout(r, 5000));
       return executeFetchAdminApi<T>(endpoint, options, true);
     }
 
