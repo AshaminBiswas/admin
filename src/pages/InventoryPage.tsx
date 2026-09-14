@@ -151,19 +151,64 @@ export const InventoryPage: React.FC = () => {
     const { type, id, name } = deleteConfirmation;
     try {
       if (type === 'inventory') {
+        const prodId = id.startsWith('inv-') ? id.slice(4) : id;
+        // Optimistically remove from inventory matrix list immediately
+        setInventoryList((prev) =>
+          prev.filter(
+            (item) =>
+              item.id !== id &&
+              item.productId !== id &&
+              item.productId !== prodId &&
+              `inv-${item.productId}` !== id &&
+              item.id !== `inv-${id}`
+          )
+        );
+        setTotalItems((prev) => Math.max(0, prev - 1));
+
+        // Immediately close any open product dossier or edit/action modal for this item
+        if (
+          selectedDossierProductId === id ||
+          selectedDossierProductId === prodId ||
+          (selectedDossierProductId && id.includes(selectedDossierProductId))
+        ) {
+          setSelectedDossierProductId(null);
+          setIsDossierModalOpen(false);
+        }
+        if (quickActionProduct?.id === id || quickActionProduct?.id === prodId) {
+          setQuickActionProduct(null);
+        }
+        if (editingStockItem?.id === id || editingStockItem?.productId === prodId) {
+          setEditingStockItem(null);
+        }
+
         await inventoryApi.deleteInventoryItem(id);
         showToast(`SKU '${name}' de-allocated from facility`, 'success');
       } else if (type === 'purchase') {
+        setPurchasesList((prev) => prev.filter((p) => p.id !== id));
+        setTotalItems((prev) => Math.max(0, prev - 1));
+        if (selectedPurchase?.id === id) {
+          setSelectedPurchase(null);
+        }
         await inventoryApi.deletePurchase(id, true);
         showToast(`Purchase order '${name}' voided and inventory rolled back`, 'success');
       } else if (type === 'transfer') {
+        setTransfersList((prev) => prev.filter((t) => t.id !== id));
+        setTotalItems((prev) => Math.max(0, prev - 1));
+        if (selectedTransfer?.id === id) {
+          setSelectedTransfer(null);
+        }
         await inventoryApi.deleteStockTransfer(id);
         showToast(`Transfer '${name}' deleted successfully`, 'success');
       } else if (type === 'supplier') {
+        setSuppliers((prev) => prev.filter((s) => s.id !== id));
+        if (editingSupplier?.id === id) {
+          setEditingSupplier(null);
+        }
         await inventoryApi.deleteSupplier(id);
         showToast(`Supplier '${name}' deactivated successfully`, 'success');
         loadReferenceData();
       } else if (type === 'branch') {
+        setBranches((prev) => prev.filter((b) => b.id !== id));
         await inventoryApi.deleteBranch(id);
         showToast(`Facility '${name}' deactivated successfully`, 'success');
         loadReferenceData();
@@ -172,6 +217,7 @@ export const InventoryPage: React.FC = () => {
       fetchTabData();
     } catch (err: any) {
       showToast(err?.message || `Failed to delete ${type}`, 'error');
+      fetchTabData();
     }
   };
 
@@ -2596,7 +2642,21 @@ export const InventoryPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="p-4 border-t border-slate-200 dark:border-[#27272A] bg-slate-50/50 dark:bg-[#09090B]/50 flex justify-end">
+            <div className="p-4 border-t border-slate-200 dark:border-[#27272A] bg-slate-50/50 dark:bg-[#09090B]/50 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => {
+                  setDeleteConfirmation({
+                    type: 'purchase',
+                    id: selectedPurchase.id,
+                    name: selectedPurchase.invoiceNumber || `PO #${selectedPurchase.id.slice(0, 6)}`,
+                  });
+                }}
+                className="px-3 py-2 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Void / Delete Purchase</span>
+              </button>
               <button
                 onClick={() => setSelectedPurchase(null)}
                 className="px-4 py-2 bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] text-slate-700 dark:text-[#FAFAFA] rounded-xl text-xs font-bold hover:border-[#8B5CF6]"

@@ -5,6 +5,7 @@ import { AdminLoginPage } from "./pages/AdminLoginPage";
 import { AdminForceChangePasswordPage } from "./pages/AdminForceChangePasswordPage";
 import { AdminMandatory2FAPage } from "./pages/AdminMandatory2FAPage";
 import { AdminLayout } from "./components/layout/AdminLayout";
+import { isLocal2FAEnabled } from "./api/adminAuthService";
 
 /* ─── Instant Admin App Shell Skeleton (Zero Blank Screen) ──────────────────── */
 export function AdminAppShellSkeleton() {
@@ -96,7 +97,12 @@ function AppContent() {
   }
 
   // 2. Mandatory 2FA Setup Guard (Enforced for all administrative/staff accounts)
-  if (!adminUser.isTwoFactorEnabled) {
+  const is2FAActive = Boolean(
+    adminUser.isTwoFactorEnabled ||
+    adminUser.twoFactorEnabled ||
+    isLocal2FAEnabled()
+  );
+  if (!is2FAActive) {
     return <AdminMandatory2FAPage />;
   }
 

@@ -326,6 +326,7 @@ export const expensesApi = {
     source: string;
     referenceNo?: string | null;
     notes?: string | null;
+    receiptAttachment?: string | null;
   }): Promise<ExpenseFloatTopUp> {
     const res = await fetchAdminApi<ExpenseFloatTopUp>('/expenses/ledger/float-topup', {
       method: 'POST',

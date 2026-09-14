@@ -941,7 +941,13 @@ export const inventoryApi = {
 
       if (prodList.length > 0) {
         const existingProductIds = new Set(invItems.map((item) => item.productId || item.product?.id));
-        const missingProducts = prodList.filter((p: any) => !existingProductIds.has(p.id));
+        const missingProducts = prodList.filter(
+          (p: any) =>
+            !existingProductIds.has(p.id) &&
+            (Number(p.stock) || 0) > 0 &&
+            p.status !== 'INACTIVE' &&
+            !p.deletedAt
+        );
 
         const mappedMissing: InventoryItem[] = missingProducts.map((p: any) => ({
           id: `inv-${p.id}`,

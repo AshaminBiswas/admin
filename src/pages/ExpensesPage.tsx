@@ -38,6 +38,8 @@ import {
   ExternalLink,
   ArrowRight,
   IndianRupee,
+  Printer,
+  Upload,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -103,8 +105,13 @@ const PIE_COLORS = ['#8B5CF6', '#10B981', '#3B82F6', '#F59E0B', '#EC4899', '#636
 
 export function ExpensesPage() {
   const { adminUser } = useAdminAuth();
-  const isSuperAdmin = adminUser?.role === 'super_admin';
-  const canApprove = adminUser?.role === 'super_admin' || adminUser?.role === 'admin' || adminUser?.role === 'manager';
+  const rawRole = adminUser?.role as any;
+  const roleSlug = String(
+    (adminUser as any)?.roleSlug ||
+    (typeof rawRole === 'object' && rawRole !== null ? rawRole.slug ?? rawRole.name ?? '' : rawRole ?? '')
+  ).toLowerCase();
+  const isSuperAdmin = roleSlug.includes('super') || (adminUser as any)?.isSuperAdmin === true;
+  const canApprove = isSuperAdmin || roleSlug === 'admin' || roleSlug === 'manager' || roleSlug === 'accountant';
 
   // ─── Core State ─────────────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState<'entry' | 'ledger' | 'approvals' | 'reconciliation' | 'categories' | 'reports'>('entry');
@@ -146,6 +153,9 @@ export function ExpensesPage() {
   const [topUpSource, setTopUpSource] = useState('Cash from Bank');
   const [topUpRef, setTopUpRef] = useState('');
   const [topUpNotes, setTopUpNotes] = useState('');
+  const [topUpReceiptUrl, setTopUpReceiptUrl] = useState<string | null>(null);
+  const [topUpSlipName, setTopUpSlipName] = useState<string | null>(null);
+  const [isUploadingTopUpSlip, setIsUploadingTopUpSlip] = useState(false);
   const [isSubmittingTopUp, setIsSubmittingTopUp] = useState(false);
 
   // Float History
@@ -174,12 +184,13 @@ export function ExpensesPage() {
   const [ledgerFilterSearch, setLedgerFilterSearch] = useState('');
   const [isLoadingLedger, setIsLoadingLedger] = useState(false);
 
-  // Receipt Preview Modal (Image & PDF)
+  // Receipt Preview Modal (Image, PDF & Official Voucher)
   const [previewReceipt, setPreviewReceipt] = useState<{
     isOpen: boolean;
     url: string;
     entry?: ExpenseEntry | null;
-  }>({ isOpen: false, url: '', entry: null });
+    floatRecord?: ExpenseFloatTopUp | null;
+  }>({ isOpen: false, url: '', entry: null, floatRecord: null });
 
   // Offline queue
   const [offlineQueue, setOfflineQueue] = useState<OfflineQueuedExpense[]>([]);
@@ -775,7 +786,7 @@ export function ExpensesPage() {
 
   // ─── Confirm Delete Expense (Super Admin Only) ─────────────────────────────
   const handleConfirmDelete = async () => {
-    if (!deleteModalEntry) return;
+    if (!deleteModalEntry || !isSuperAdmin) return;
     setIsDeletingEntry(true);
     try {
       await expensesApi.deleteExpense(deleteModalEntry.id, deleteReasonText.trim());
@@ -850,14 +861,17 @@ export function ExpensesPage() {
         source: topUpSource,
         referenceNo: topUpRef || null,
         notes: topUpNotes || null,
+        receiptAttachment: topUpReceiptUrl || null,
       });
       setIsTopUpModalOpen(false);
       setTopUpAmount('');
       setTopUpRef('');
       setTopUpNotes('');
+      setTopUpReceiptUrl(null);
+      setTopUpSlipName(null);
       fetchBalance();
       fetchFloatHistory();
-      alert('Cash float top-up added to live cash balance!');
+      alert('Cash float top-up recorded and added to live balance!');
     } catch (err: any) {
       alert(err.message || 'Failed to record float top-up');
     } finally {
@@ -881,7 +895,7 @@ export function ExpensesPage() {
 
   // ─── Float Top-Up Delete (Super Admin Only) ────────────────────────────────
   const handleDeleteFloat = async () => {
-    if (!deleteFloatEntry) return;
+    if (!deleteFloatEntry || !isSuperAdmin) return;
     setIsDeletingFloat(true);
     try {
       await expensesApi.deleteFloatTopUp(deleteFloatEntry.id);
@@ -1714,7 +1728,7 @@ export function ExpensesPage() {
                                 <Edit3 size={12} /> Edit
                               </button>
                             )}
-                            {e.receiptAttachment && (
+                            {e.receiptAttachment ? (
                               <button
                                 type="button"
                                 onClick={() => setPreviewReceipt({ isOpen: true, url: e.receiptAttachment!, entry: e })}
@@ -1723,7 +1737,16 @@ export function ExpensesPage() {
                               >
                                 <Camera size={12} /> Slip
                               </button>
-                            )}
+                            ) : isSuperAdmin ? (
+                              <button
+                                type="button"
+                                onClick={() => setPreviewReceipt({ isOpen: true, url: '', entry: e })}
+                                className="px-2 py-1 rounded-lg bg-slate-100 dark:bg-[#27272A] hover:bg-slate-200 text-slate-600 dark:text-zinc-400 text-xs font-semibold flex items-center gap-1 transition"
+                                title="View Official Cash Payment Voucher"
+                              >
+                                <Receipt size={12} /> Voucher
+                              </button>
+                            ) : null}
                           </div>
 
                           <div className="flex items-center gap-1.5">
@@ -1808,6 +1831,16 @@ export function ExpensesPage() {
                                 >
                                   <Camera size={12} />
                                   <span>View</span>
+                                </button>
+                              ) : isSuperAdmin ? (
+                                <button
+                                  type="button"
+                                  onClick={() => setPreviewReceipt({ isOpen: true, url: '', entry: e })}
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 dark:bg-[#27272A] hover:bg-slate-200 text-slate-600 dark:text-zinc-400 text-[11px] font-medium transition cursor-pointer"
+                                  title="View Official Cash Payment Voucher"
+                                >
+                                  <Receipt size={12} />
+                                  <span>Voucher</span>
                                 </button>
                               ) : (
                                 <span className="text-slate-300 dark:text-zinc-600 text-[11px]">-</span>
@@ -1921,6 +1954,7 @@ export function ExpensesPage() {
                     <th className="py-2.5 px-3">Source / Vendor</th>
                     <th className="py-2.5 px-3">Notes</th>
                     <th className="py-2.5 px-3">Added By</th>
+                    {isSuperAdmin && <th className="py-2.5 px-3 text-center">Payment Receipt</th>}
                     {isSuperAdmin && <th className="py-2.5 px-3 text-center">Action</th>}
                   </tr>
                 </thead>
@@ -1947,6 +1981,45 @@ export function ExpensesPage() {
                           : '—'}
                       </td>
                       {isSuperAdmin && (
+                        <td className="py-2.5 px-3 text-center whitespace-nowrap">
+                          {f.receiptAttachment ? (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setPreviewReceipt({
+                                  isOpen: true,
+                                  url: f.receiptAttachment,
+                                  entry: null,
+                                  floatRecord: f,
+                                })
+                              }
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-violet-500/10 hover:bg-violet-500/20 text-violet-600 dark:text-violet-400 font-bold text-xs transition border border-violet-500/20 cursor-pointer shadow-xs"
+                              title="View Payment Receipt Slip"
+                            >
+                              <Camera size={13} />
+                              <span>View Receipt</span>
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setPreviewReceipt({
+                                  isOpen: true,
+                                  url: '',
+                                  entry: null,
+                                  floatRecord: f,
+                                })
+                              }
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-[#27272A] hover:bg-slate-200 text-slate-600 dark:text-zinc-400 text-xs font-semibold transition cursor-pointer"
+                              title="View Official Cash Float Disbursal Voucher"
+                            >
+                              <Receipt size={13} />
+                              <span>Voucher</span>
+                            </button>
+                          )}
+                        </td>
+                      )}
+                      {isSuperAdmin && (
                         <td className="py-2.5 px-3 text-center">
                           <button
                             type="button"
@@ -1968,7 +2041,7 @@ export function ExpensesPage() {
       )}
 
       {/* ─── MODAL: Delete Float Top-Up Confirmation ──────────────────────── */}
-      {deleteFloatEntry && (
+      {deleteFloatEntry && isSuperAdmin && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className="bg-white dark:bg-[#18181B] rounded-2xl shadow-2xl border border-slate-200 dark:border-[#27272A] w-full max-w-sm p-6 space-y-4">
             <div className="flex items-center gap-3">
@@ -2311,6 +2384,16 @@ export function ExpensesPage() {
                               <Camera size={13} />
                               <span>View Slip</span>
                             </button>
+                          ) : isSuperAdmin ? (
+                            <button
+                              type="button"
+                              onClick={() => setPreviewReceipt({ isOpen: true, url: '', entry: e })}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-[#27272A] hover:bg-slate-200 dark:hover:bg-[#3F3F46] text-slate-600 dark:text-zinc-400 text-xs font-semibold transition cursor-pointer"
+                              title="View Official Payment Receipt Voucher"
+                            >
+                              <Receipt size={13} />
+                              <span>Voucher</span>
+                            </button>
                           ) : (
                             <span className="text-slate-300 dark:text-zinc-600 text-xs">-</span>
                           )}
@@ -2469,7 +2552,7 @@ export function ExpensesPage() {
                     </div>
 
                     <div className="flex items-center gap-2">
-                      {e.receiptAttachment && (
+                      {e.receiptAttachment ? (
                         <button
                           type="button"
                           onClick={() => setPreviewReceipt({ isOpen: true, url: e.receiptAttachment!, entry: e })}
@@ -2479,7 +2562,17 @@ export function ExpensesPage() {
                           <Camera size={14} />
                           <span>View Slip</span>
                         </button>
-                      )}
+                      ) : isSuperAdmin ? (
+                        <button
+                          type="button"
+                          onClick={() => setPreviewReceipt({ isOpen: true, url: '', entry: e })}
+                          className="px-3 py-2 rounded-xl bg-slate-100 dark:bg-[#27272A] hover:bg-slate-200 text-slate-600 dark:text-zinc-400 text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer"
+                          title="View Official Cash Payment Voucher"
+                        >
+                          <Receipt size={14} />
+                          <span>View Voucher</span>
+                        </button>
+                      ) : null}
                       <button
                         onClick={() => setSelectedRejectEntry(e)}
                         className="px-3 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 text-xs font-bold transition cursor-pointer"
@@ -2492,6 +2585,16 @@ export function ExpensesPage() {
                       >
                         Approve
                       </button>
+                      {isSuperAdmin && (
+                        <button
+                          type="button"
+                          onClick={() => setDeleteModalEntry(e)}
+                          className="p-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 text-xs font-bold transition cursor-pointer"
+                          title="Delete expense voucher (Super Admin only)"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -3027,6 +3130,56 @@ export function ExpensesPage() {
                 />
               </div>
 
+              {/* Payment Receipt / Bank Slip Upload */}
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-600 dark:text-zinc-400">
+                  Payment Receipt / Bank Slip (Optional)
+                </label>
+                <div className="flex items-center gap-2">
+                  <label className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-xl border border-dashed border-slate-300 dark:border-[#27272A] hover:border-violet-500/50 bg-slate-50/50 dark:bg-[#09090B]/50 cursor-pointer text-xs transition">
+                    <Upload size={14} className="text-violet-500" />
+                    <span className="text-slate-600 dark:text-zinc-400 font-medium truncate">
+                      {isUploadingTopUpSlip
+                        ? 'Uploading receipt...'
+                        : topUpSlipName || 'Attach Bank Slip / Cash Receipt (JPG, PNG, PDF)'}
+                    </span>
+                    <input
+                      type="file"
+                      accept="image/*,application/pdf"
+                      className="hidden"
+                      disabled={isUploadingTopUpSlip}
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        setIsUploadingTopUpSlip(true);
+                        try {
+                          const res = await expensesApi.uploadReceipt(file);
+                          setTopUpReceiptUrl(res.url);
+                          setTopUpSlipName(file.name);
+                        } catch (err: any) {
+                          alert(err.message || 'Failed to upload receipt slip');
+                        } finally {
+                          setIsUploadingTopUpSlip(false);
+                        }
+                      }}
+                    />
+                  </label>
+                  {topUpReceiptUrl && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTopUpReceiptUrl(null);
+                        setTopUpSlipName(null);
+                      }}
+                      className="p-2 rounded-xl hover:bg-rose-500/10 text-rose-500 transition"
+                      title="Remove attached receipt"
+                    >
+                      <X size={15} />
+                    </button>
+                  )}
+                </div>
+              </div>
+
               <div className="flex justify-end gap-2 pt-3">
                 <button
                   type="button"
@@ -3555,7 +3708,7 @@ export function ExpensesPage() {
       )}
 
       {/* ─── Receipt Slip / Voucher Preview Modal ───────────────────────── */}
-      {previewReceipt.isOpen && previewReceipt.url && (
+      {previewReceipt.isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] rounded-2xl w-full max-w-4xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
             {/* Modal Header */}
@@ -3567,23 +3720,29 @@ export function ExpensesPage() {
                 <div>
                   <div className="flex items-center gap-2">
                     <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                      Receipt Slip / Voucher Preview
+                      {previewReceipt.floatRecord ? 'Cash Float Payment Receipt' : 'Expense Payment Receipt & Voucher'}
                     </h3>
-                    {previewReceipt.entry?.entryNumber && (
-                      <span className="font-mono font-bold text-xs px-2 py-0.5 rounded-md bg-violet-100 dark:bg-violet-950/60 text-violet-600 dark:text-violet-400 border border-violet-200 dark:border-violet-800/50">
-                        {previewReceipt.entry.entryNumber}
+                    {previewReceipt.floatRecord ? (
+                      <span className="font-mono font-bold text-xs px-2 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/50">
+                        FLT-{previewReceipt.floatRecord.id.slice(0, 8).toUpperCase()}
                       </span>
-                    )}
+                    ) : previewReceipt.entry?.entryNumber ? (
+                      <span className="font-mono font-bold text-xs px-2 py-0.5 rounded-md bg-violet-100 dark:bg-violet-950/60 text-violet-600 dark:text-violet-400 border border-violet-200 dark:border-violet-800/50">
+                        #{previewReceipt.entry.entryNumber}
+                      </span>
+                    ) : null}
                   </div>
                   <p className="text-xs text-slate-500 dark:text-zinc-400">
-                    Official financial document attached to expense voucher
+                    {previewReceipt.floatRecord
+                      ? 'Official cash float disbursal record for daily vendor and petty cash expenses'
+                      : 'Official financial document and authorization record'}
                   </p>
                 </div>
               </div>
 
               <button
                 type="button"
-                onClick={() => setPreviewReceipt({ isOpen: false, url: '', entry: null })}
+                onClick={() => setPreviewReceipt({ isOpen: false, url: '', entry: null, floatRecord: null })}
                 className="p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#27272A] transition cursor-pointer"
               >
                 <X size={18} />
@@ -3591,7 +3750,36 @@ export function ExpensesPage() {
             </div>
 
             {/* Metadata Strip */}
-            {previewReceipt.entry && (
+            {previewReceipt.floatRecord ? (
+              <div className="px-5 py-2.5 bg-slate-100/60 dark:bg-[#09090B] border-b border-slate-200 dark:border-[#27272A] flex flex-wrap items-center justify-between gap-3 text-xs">
+                <div className="flex flex-wrap items-center gap-3 text-slate-600 dark:text-zinc-300">
+                  <span>Branch: <strong className="text-slate-900 dark:text-white">{previewReceipt.floatRecord.branch?.name || '-'}</strong></span>
+                  <span>•</span>
+                  <span>
+                    Date:{' '}
+                    <strong className="text-slate-900 dark:text-white">
+                      {previewReceipt.floatRecord.date
+                        ? new Date(previewReceipt.floatRecord.date).toLocaleDateString('en-IN', {
+                            day: '2-digit',
+                            month: 'short',
+                            year: 'numeric',
+                          })
+                        : '-'}
+                    </strong>
+                  </span>
+                  <span>•</span>
+                  <span>Source / Payee: <strong className="text-slate-900 dark:text-white">{previewReceipt.floatRecord.source}</strong></span>
+                  <span>•</span>
+                  <span>Ref: <strong className="text-slate-900 dark:text-white font-mono">{previewReceipt.floatRecord.referenceNo || '—'}</strong></span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-500">Top-Up Amount:</span>
+                  <span className="text-sm font-extrabold text-emerald-600 dark:text-emerald-400">
+                    +{formatRupee(previewReceipt.floatRecord.amount)}
+                  </span>
+                </div>
+              </div>
+            ) : previewReceipt.entry ? (
               <div className="px-5 py-2.5 bg-slate-100/60 dark:bg-[#09090B] border-b border-slate-200 dark:border-[#27272A] flex flex-wrap items-center justify-between gap-3 text-xs">
                 <div className="flex flex-wrap items-center gap-3 text-slate-600 dark:text-zinc-300">
                   <span>Branch: <strong className="text-slate-900 dark:text-white">{previewReceipt.entry.branch?.name || '-'}</strong></span>
@@ -3605,60 +3793,255 @@ export function ExpensesPage() {
                   <span>Mode: <strong className="text-slate-900 dark:text-white font-mono">{previewReceipt.entry.paymentMode}</strong></span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-slate-500">Amount:</span>
+                  <span className="text-xs text-slate-500">Voucher Amount:</span>
                   <span className="text-sm font-extrabold text-violet-600 dark:text-violet-400">
                     {formatRupee(previewReceipt.entry.amount)}
                   </span>
                 </div>
               </div>
-            )}
+            ) : null}
 
             {/* Media Content Body */}
-            <div className="p-4 flex-1 overflow-auto flex items-center justify-center bg-slate-100/40 dark:bg-[#09090B]/60 min-h-[350px]">
-              {previewReceipt.url.toLowerCase().includes('.pdf') || previewReceipt.url.startsWith('data:application/pdf') ? (
-                <div className="w-full h-full min-h-[500px] flex flex-col rounded-xl overflow-hidden border border-slate-200 dark:border-[#27272A]">
-                  <iframe
-                    src={previewReceipt.url}
-                    title="PDF Voucher Slip"
-                    className="w-full flex-1 min-h-[480px] bg-white rounded-xl"
-                  />
+            <div className="p-4 sm:p-6 flex-1 overflow-auto flex items-center justify-center bg-slate-100/40 dark:bg-[#09090B]/60 min-h-[350px]">
+              {previewReceipt.url ? (
+                previewReceipt.url.toLowerCase().includes('.pdf') || previewReceipt.url.startsWith('data:application/pdf') ? (
+                  <div className="w-full h-full min-h-[500px] flex flex-col rounded-xl overflow-hidden border border-slate-200 dark:border-[#27272A]">
+                    <iframe
+                      src={previewReceipt.url}
+                      title="Payment Receipt PDF Document"
+                      className="w-full flex-1 min-h-[480px] bg-white rounded-xl"
+                    />
+                  </div>
+                ) : (
+                  <div className="max-w-full max-h-[65vh] flex items-center justify-center overflow-hidden rounded-xl bg-black/5 dark:bg-black/20 p-2">
+                    <img
+                      src={previewReceipt.url}
+                      alt="Payment Receipt Slip"
+                      className="max-h-[60vh] max-w-full object-contain rounded-lg shadow-sm"
+                    />
+                  </div>
+                )
+              ) : previewReceipt.floatRecord ? (
+                /* Generated Digital Cash Float Payment Voucher */
+                <div className="w-full max-w-2xl bg-white dark:bg-[#18181B] rounded-2xl border border-slate-200 dark:border-[#27272A] p-6 shadow-sm space-y-5 text-slate-800 dark:text-zinc-200">
+                  <div className="flex items-center justify-between border-b border-slate-100 dark:border-[#27272A] pb-4">
+                    <div>
+                      <h4 className="text-base font-extrabold text-slate-900 dark:text-white uppercase tracking-wider">
+                        PACIFIC RESTROOM CUBICLE & LOCKER SOLUTIONS
+                      </h4>
+                      <p className="text-xs text-slate-500 dark:text-zinc-400">
+                        Official Cash Float Disbursal & Receipt Voucher
+                      </p>
+                    </div>
+                    <div className="text-right font-mono text-xs text-emerald-600 dark:text-emerald-400 font-bold">
+                      FLT-{previewReceipt.floatRecord.id.slice(0, 8).toUpperCase()}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 text-xs">
+                    <div>
+                      <span className="text-slate-400 block">Date of Disbursal</span>
+                      <strong className="text-slate-900 dark:text-white font-semibold">
+                        {previewReceipt.floatRecord.date
+                          ? new Date(previewReceipt.floatRecord.date).toLocaleDateString('en-IN', {
+                              day: '2-digit',
+                              month: 'long',
+                              year: 'numeric',
+                            })
+                          : '-'}
+                      </strong>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 block">Branch Location</span>
+                      <strong className="text-slate-900 dark:text-white font-semibold">
+                        {previewReceipt.floatRecord.branch?.name || 'Delhi HQ'}
+                        {previewReceipt.floatRecord.branch?.code ? ` (${previewReceipt.floatRecord.branch.code})` : ''}
+                      </strong>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 block">Disbursed / Source</span>
+                      <strong className="text-slate-900 dark:text-white font-semibold">
+                        {previewReceipt.floatRecord.source}
+                      </strong>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 block">Reference / Cheque No</span>
+                      <strong className="text-slate-900 dark:text-white font-semibold">
+                        {previewReceipt.floatRecord.referenceNo || '—'}
+                      </strong>
+                    </div>
+                  </div>
+
+                  <div className="p-4 rounded-xl bg-emerald-500/5 dark:bg-emerald-950/20 border border-emerald-500/20 flex items-center justify-between">
+                    <div>
+                      <span className="text-[11px] text-slate-500 dark:text-zinc-400 block">Total Float Amount Disbursed</span>
+                      <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400">
+                        +{formatRupee(previewReceipt.floatRecord.amount)}
+                      </div>
+                    </div>
+                    <span className="text-[10px] uppercase font-bold px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
+                      Added to Cash-in-Hand
+                    </span>
+                  </div>
+
+                  {previewReceipt.floatRecord.notes && (
+                    <div className="text-xs bg-slate-50 dark:bg-[#09090B] p-3 rounded-xl border border-slate-100 dark:border-[#27272A]">
+                      <span className="text-slate-400 block mb-0.5 font-medium">Remarks / Purpose:</span>
+                      <p className="text-slate-700 dark:text-zinc-300">{previewReceipt.floatRecord.notes}</p>
+                    </div>
+                  )}
+
+                  <div className="pt-4 border-t border-slate-100 dark:border-[#27272A] flex items-center justify-between text-[11px] text-slate-400">
+                    <div>
+                      <span>Disbursed By: </span>
+                      <strong className="text-slate-600 dark:text-zinc-300">
+                        {previewReceipt.floatRecord.addedBy
+                          ? `${previewReceipt.floatRecord.addedBy.firstName || ''} ${previewReceipt.floatRecord.addedBy.lastName || ''}`.trim() || previewReceipt.floatRecord.addedBy.email
+                          : 'Finance Desk'}
+                      </strong>
+                    </div>
+                    <div className="text-right">
+                      <span className="block text-emerald-600 dark:text-emerald-400 font-semibold">✓ Super Admin Verified</span>
+                      <span>Pacific Restroom Financial Registry</span>
+                    </div>
+                  </div>
                 </div>
-              ) : (
-                <div className="max-w-full max-h-[65vh] flex items-center justify-center overflow-hidden rounded-xl bg-black/5 dark:bg-black/20 p-2">
-                  <img
-                    src={previewReceipt.url}
-                    alt="Receipt Slip Voucher"
-                    className="max-h-[60vh] max-w-full object-contain rounded-lg shadow-sm"
-                  />
+              ) : previewReceipt.entry ? (
+                /* Generated Digital Expense Payment Voucher */
+                <div className="w-full max-w-2xl bg-white dark:bg-[#18181B] rounded-2xl border border-slate-200 dark:border-[#27272A] p-6 shadow-sm space-y-5 text-slate-800 dark:text-zinc-200">
+                  <div className="flex items-center justify-between border-b border-slate-100 dark:border-[#27272A] pb-4">
+                    <div>
+                      <h4 className="text-base font-extrabold text-slate-900 dark:text-white uppercase tracking-wider">
+                        PACIFIC RESTROOM CUBICLE & LOCKER SOLUTIONS
+                      </h4>
+                      <p className="text-xs text-slate-500 dark:text-zinc-400">
+                        Official Cash Outflow Payment Voucher
+                      </p>
+                    </div>
+                    <div className="text-right font-mono text-sm text-violet-600 dark:text-violet-400 font-bold">
+                      #{previewReceipt.entry.entryNumber}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 text-xs">
+                    <div>
+                      <span className="text-slate-400 block">Date & Time</span>
+                      <strong className="text-slate-900 dark:text-white font-semibold">
+                        {formatDate(previewReceipt.entry.date)} {previewReceipt.entry.time}
+                      </strong>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 block">Branch Location</span>
+                      <strong className="text-slate-900 dark:text-white font-semibold">
+                        {previewReceipt.entry.branch?.name || '-'}
+                        {previewReceipt.entry.branch?.code ? ` (${previewReceipt.entry.branch.code})` : ''}
+                      </strong>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 block">Paid To (Payee / Vendor)</span>
+                      <strong className="text-slate-900 dark:text-white font-semibold">
+                        {previewReceipt.entry.paidTo}
+                      </strong>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 block">Payment Mode</span>
+                      <strong className="text-slate-900 dark:text-white font-semibold font-mono">
+                        {previewReceipt.entry.paymentMode}
+                      </strong>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 block">Expense Category</span>
+                      <strong className="text-slate-900 dark:text-white font-semibold">
+                        {previewReceipt.entry.category?.name || '-'}
+                      </strong>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 block">Voucher Status</span>
+                      <span className={`inline-block font-bold text-[10px] px-2 py-0.5 rounded-full ${
+                        previewReceipt.entry.status === 'APPROVED'
+                          ? 'bg-emerald-500/10 text-emerald-500'
+                          : previewReceipt.entry.status === 'PENDING'
+                          ? 'bg-amber-500/10 text-amber-500'
+                          : 'bg-rose-500/10 text-rose-500'
+                      }`}>
+                        {previewReceipt.entry.status}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="text-xs bg-slate-50 dark:bg-[#09090B] p-3 rounded-xl border border-slate-100 dark:border-[#27272A]">
+                    <span className="text-slate-400 block mb-0.5 font-medium">Description / Particulars:</span>
+                    <p className="text-slate-800 dark:text-zinc-200 font-medium">{previewReceipt.entry.description}</p>
+                  </div>
+
+                  <div className="p-4 rounded-xl bg-violet-500/5 dark:bg-violet-950/20 border border-violet-500/20 flex items-center justify-between">
+                    <div>
+                      <span className="text-[11px] text-slate-500 dark:text-zinc-400 block">Payment Voucher Amount</span>
+                      <div className="text-2xl font-black text-violet-600 dark:text-violet-400">
+                        {formatRupee(previewReceipt.entry.amount)}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[10px] text-slate-400 block">Logged By:</span>
+                      <span className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
+                        {previewReceipt.entry.addedBy?.firstName || previewReceipt.entry.addedBy?.email || 'Cashier'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="pt-4 border-t border-slate-100 dark:border-[#27272A] flex items-center justify-between text-[11px] text-slate-400">
+                    <div>
+                      {previewReceipt.entry.approvedBy && (
+                        <span>Approved by: <strong className="text-slate-600 dark:text-zinc-300">{previewReceipt.entry.approvedBy.firstName || previewReceipt.entry.approvedBy.email}</strong></span>
+                      )}
+                    </div>
+                    <div className="text-right">
+                      <span className="block text-violet-600 dark:text-violet-400 font-semibold">PRC Hardware Financial Record</span>
+                      <span>Pacific Restroom Financial Registry</span>
+                    </div>
+                  </div>
                 </div>
-              )}
+              ) : null}
             </div>
 
             {/* Modal Actions Footer */}
             <div className="flex items-center justify-between px-5 py-3.5 border-t border-slate-100 dark:border-[#27272A] bg-slate-50/50 dark:bg-[#18181B]">
               <div className="flex items-center gap-2">
-                <a
-                  href={previewReceipt.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-[#27272A] hover:bg-slate-200 dark:hover:bg-[#3F3F46] text-slate-700 dark:text-zinc-200 text-xs font-semibold transition flex items-center gap-1.5"
+                {previewReceipt.url && (
+                  <>
+                    <a
+                      href={previewReceipt.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-[#27272A] hover:bg-slate-200 dark:hover:bg-[#3F3F46] text-slate-700 dark:text-zinc-200 text-xs font-semibold transition flex items-center gap-1.5"
+                    >
+                      <ExternalLink size={14} />
+                      <span>Open in New Tab</span>
+                    </a>
+                    <a
+                      href={previewReceipt.url}
+                      download={`receipt-${previewReceipt.entry?.entryNumber || previewReceipt.floatRecord?.id || 'slip'}`}
+                      className="px-3.5 py-2 rounded-xl bg-violet-500/10 hover:bg-violet-500/20 text-violet-600 dark:text-violet-400 text-xs font-semibold transition flex items-center gap-1.5"
+                    >
+                      <Download size={14} />
+                      <span>Download Slip</span>
+                    </a>
+                  </>
+                )}
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-[#27272A] hover:bg-slate-200 dark:hover:bg-[#3F3F46] text-slate-700 dark:text-zinc-200 text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer"
+                  title="Print Payment Receipt Voucher"
                 >
-                  <ExternalLink size={14} />
-                  <span>Open in New Tab</span>
-                </a>
-                <a
-                  href={previewReceipt.url}
-                  download={`voucher-slip-${previewReceipt.entry?.entryNumber || 'receipt'}`}
-                  className="px-3.5 py-2 rounded-xl bg-violet-500/10 hover:bg-violet-500/20 text-violet-600 dark:text-violet-400 text-xs font-semibold transition flex items-center gap-1.5"
-                >
-                  <Download size={14} />
-                  <span>Download Slip</span>
-                </a>
+                  <Printer size={14} />
+                  <span>Print Receipt</span>
+                </button>
               </div>
 
               <button
                 type="button"
-                onClick={() => setPreviewReceipt({ isOpen: false, url: '', entry: null })}
+                onClick={() => setPreviewReceipt({ isOpen: false, url: '', entry: null, floatRecord: null })}
                 className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white dark:bg-zinc-100 dark:hover:bg-white dark:text-zinc-900 text-xs font-bold transition cursor-pointer"
               >
                 Close

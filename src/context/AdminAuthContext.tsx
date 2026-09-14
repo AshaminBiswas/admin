@@ -39,14 +39,14 @@ interface AdminAuthContextType {
 const AdminAuthContext = createContext<AdminAuthContextType | undefined>(undefined);
 
 export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
-  // Normalize role: backend can return role as object {slug} or as string
   function normalizeRole(user: any): AdminUser | null {
     if (!user) return null;
     const r = user.role;
     const roleSlug = typeof r === "object" && r !== null
       ? (r.slug ?? r.name ?? "super_admin")
       : (r ?? "super_admin");
-    return { ...user, role: roleSlug };
+    const is2FA = Boolean(user.isTwoFactorEnabled ?? user.twoFactorEnabled ?? isLocal2FAEnabled());
+    return { ...user, role: roleSlug, isTwoFactorEnabled: is2FA, twoFactorEnabled: is2FA };
   }
 
   const [adminUser, setAdminUser] = useState<AdminUser | null>(() => {
@@ -276,16 +276,23 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
     checkSession();
   }, [scheduleProactiveRefresh, logout]);
 
-  // ─── Refresh User Profile ────────────────────────────────────────────────────
   const refreshUserProfile = async () => {
-    const res = await adminAuthService.getProfile();
-    if (res.success && res.user) {
-      setAdminUser(res.user);
-      localStorage.setItem("prc_admin_user_session", JSON.stringify(res.user));
-    } else if (adminUser) {
+    try {
+      const res = await adminAuthService.getProfile();
+      if (res.success && res.user) {
+        const norm = normalizeRole(res.user);
+        setAdminUser(norm);
+        if (norm) localStorage.setItem("prc_admin_user_session", JSON.stringify(norm));
+        return;
+      }
+    } catch {}
+
+    if (adminUser) {
+      const is2FA = Boolean(adminUser.isTwoFactorEnabled ?? adminUser.twoFactorEnabled ?? isLocal2FAEnabled());
       const updated = {
         ...adminUser,
-        isTwoFactorEnabled: isLocal2FAEnabled(),
+        isTwoFactorEnabled: is2FA,
+        twoFactorEnabled: is2FA,
       };
       setAdminUser(updated);
       localStorage.setItem("prc_admin_user_session", JSON.stringify(updated));

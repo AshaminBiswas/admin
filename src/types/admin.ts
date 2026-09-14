@@ -1257,6 +1257,7 @@ export interface ExpenseFloatTopUp {
   source: string;
   referenceNo?: string | null;
   notes?: string | null;
+  receiptAttachment?: string | null;
   addedById: string;
   createdAt: string;
   branch?: { id: string; name: string; code: string };

@@ -281,21 +281,29 @@ export const adminAuthService = {
           ? (resRole.slug ?? resRole.name ?? "super_admin")
           : (resRole ?? "super_admin");
 
-        const is2fa = Boolean(res.data.isTwoFactorEnabled || res.data.twoFactorEnabled);
+        const is2fa = Boolean(
+          res.data.isTwoFactorEnabled ??
+          res.data.twoFactorEnabled ??
+          cachedUser?.isTwoFactorEnabled ??
+          isLocal2FAEnabled()
+        );
         setLocal2FAEnabled(is2fa);
+
+        const profileUser: AdminUser = {
+          id: res.data.id || cachedUser?.id || "admin-1",
+          email: res.data.email || cachedUser?.email || "",
+          firstName: res.data.firstName || cachedUser?.firstName || "Executive",
+          lastName: res.data.lastName || cachedUser?.lastName || "Admin",
+          role: resolvedRole,
+          mustChangePassword: Boolean(res.data.mustChangePassword),
+          isTwoFactorEnabled: is2fa,
+          twoFactorEnabled: is2fa,
+        };
+        localStorage.setItem("prc_admin_user_session", JSON.stringify(profileUser));
 
         return {
           success: true,
-          user: {
-            id: res.data.id || "admin-1",
-            email: res.data.email,
-            firstName: res.data.firstName || "Executive",
-            lastName: res.data.lastName || "Admin",
-            role: resolvedRole,
-            mustChangePassword: Boolean(res.data.mustChangePassword),
-            isTwoFactorEnabled: is2fa,
-            twoFactorEnabled: is2fa,
-          },
+          user: profileUser,
         };
       }
     } catch {}
