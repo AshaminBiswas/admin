@@ -168,6 +168,7 @@ export function UsersPage({ onNavigateB2BPricing, onViewCustomer }: UsersPagePro
   const [editStatus, setEditStatus] = useState<"ACTIVE" | "INACTIVE" | "SUSPENDED">("ACTIVE");
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [emailConflict, setEmailConflict] = useState(false);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const debouncedSearch = useDebounce(searchQuery, 300);
 
@@ -367,6 +368,7 @@ export function UsersPage({ onNavigateB2BPricing, onViewCustomer }: UsersPagePro
       if (res && res.success !== false) {
         setFeedback({ type: "success", text: `Account for ${firstName} ${lastName} created successfully.` });
         setShowCreateModal(false);
+        setEmailConflict(false);
         setFirstName("");
         setLastName("");
         setEmail("");
@@ -376,7 +378,22 @@ export function UsersPage({ onNavigateB2BPricing, onViewCustomer }: UsersPagePro
         setPassword("");
         await loadData();
       } else {
-        setFeedback({ type: "error", text: res.message || res.error?.message || "Failed to create user account." });
+        const isConflict =
+          res.statusCode === 409 ||
+          res.error?.code === "EMAIL_TAKEN" ||
+          res.error?.code === "CONFLICT" ||
+          res.message?.toLowerCase().includes("already in use") ||
+          res.message?.toLowerCase().includes("already exists");
+
+        if (isConflict) {
+          setEmailConflict(true);
+          setFeedback({
+            type: "error",
+            text: `Account Conflict: An account with email "${email}" already exists. Please use a different email or locate and update the existing account.`,
+          });
+        } else {
+          setFeedback({ type: "error", text: res.message || res.error?.message || "Failed to create user account." });
+        }
       }
     } catch (err: any) {
       setFeedback({ type: "error", text: err.message || "Failed to create user account." });
@@ -1048,10 +1065,22 @@ export function UsersPage({ onNavigateB2BPricing, onViewCustomer }: UsersPagePro
                   type="email"
                   required
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    if (emailConflict) setEmailConflict(false);
+                  }}
                   placeholder="anand@singhaniaprojects.in"
-                  className="w-full bg-[#09090B] border border-[#27272A] rounded-xl px-3 py-2 text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
+                  className={`w-full bg-[#09090B] border rounded-xl px-3 py-2 text-[#FAFAFA] focus:outline-none ${
+                    emailConflict
+                      ? "border-amber-500/80 focus:border-amber-400 ring-1 ring-amber-500/30"
+                      : "border-[#27272A] focus:border-[#8B5CF6]"
+                  }`}
                 />
+                {emailConflict && (
+                  <p className="text-[10px] text-amber-400 font-medium mt-0.5">
+                    ⚠️ This email already exists in the system.
+                  </p>
+                )}
               </div>
 
               {accountType === "B2B" && (

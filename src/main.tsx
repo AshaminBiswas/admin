@@ -9,7 +9,18 @@ import { keepAliveServerPing } from './api/adminApi'
 // and then every 4 minutes, so the Render server NEVER sleeps — regardless of
 // whether anyone is authenticated.
 keepAliveServerPing();
-const _preLoginPing = setInterval(keepAliveServerPing, 4 * 60 * 1000);
+const _preLoginPing = setInterval(keepAliveServerPing, 3.5 * 60 * 1000);
+
+if (typeof window !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      keepAliveServerPing();
+    }
+  });
+  window.addEventListener('focus', () => {
+    keepAliveServerPing();
+  });
+}
 // ─── Auto-Reload on Stale Deployment / Chunk Load Failure ─────────────────────
 // When a new version is deployed to Vercel, old chunks are removed.
 // If a user has an older tab open, dynamic imports will fail with MIME/network errors.

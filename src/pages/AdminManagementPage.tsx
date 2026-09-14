@@ -146,8 +146,8 @@ export function AdminManagementPage({ onViewAdmin }: AdminManagementPageProps = 
   const [editRoleId, setEditRoleId] = useState("");
   const [editStatus, setEditStatus] = useState<"ACTIVE" | "INACTIVE">("ACTIVE");
 
-  // UI state
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [emailConflict, setEmailConflict] = useState(false);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [creationResult, setCreationResult] = useState<{
     user: any;
@@ -471,9 +471,25 @@ export function AdminManagementPage({ onViewAdmin }: AdminManagementPageProps = 
           roleSlug: assignedRole?.slug || "admin",
         });
         setFeedback({ type: "success", text: `Admin ${cleanFirstName} ${cleanLastName} provisioned successfully with assigned role '${assignedRole?.name || "Admin"}'!` });
+        setEmailConflict(false);
         await loadData();
       } else {
-        setFeedback({ type: "error", text: res.error?.message || res.message || "Failed to create administrator." });
+        const isConflict =
+          res.statusCode === 409 ||
+          res.error?.code === "EMAIL_TAKEN" ||
+          res.error?.code === "CONFLICT" ||
+          res.message?.toLowerCase().includes("already in use") ||
+          res.message?.toLowerCase().includes("already exists");
+
+        if (isConflict) {
+          setEmailConflict(true);
+          setFeedback({
+            type: "error",
+            text: `Account Conflict: An account with email "${cleanEmail}" already exists. If this staff member or user is already registered, you can update their role from User Management or edit them below.`,
+          });
+        } else {
+          setFeedback({ type: "error", text: res.error?.message || res.message || "Failed to create administrator." });
+        }
       }
     } catch (err: any) {
       setFeedback({ type: "error", text: err.message || "Failed to create administrator." });
@@ -1202,10 +1218,22 @@ export function AdminManagementPage({ onViewAdmin }: AdminManagementPageProps = 
                         type="email"
                         required
                         value={email}
-                        onChange={(e) => setEmail(e.target.value)}
+                        onChange={(e) => {
+                          setEmail(e.target.value);
+                          if (emailConflict) setEmailConflict(false);
+                        }}
                         placeholder="admin.user@prchardware.com"
-                        className="w-full bg-[#09090B] border border-[#27272A] rounded-xl px-3 py-2 text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
+                        className={`w-full bg-[#09090B] border rounded-xl px-3 py-2 text-[#FAFAFA] focus:outline-none ${
+                          emailConflict
+                            ? "border-amber-500/80 focus:border-amber-400 ring-1 ring-amber-500/30"
+                            : "border-[#27272A] focus:border-[#8B5CF6]"
+                        }`}
                       />
+                      {emailConflict && (
+                        <p className="text-[10px] text-amber-400 font-medium mt-0.5">
+                          ⚠️ This email already exists in the system.
+                        </p>
+                      )}
                     </div>
                     <div className="space-y-1">
                       <label className="text-[11px] text-[#A1A1AA] font-semibold flex items-center gap-1">

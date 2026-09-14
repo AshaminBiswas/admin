@@ -151,19 +151,54 @@ export async function proactiveTokenRefresh(): Promise<boolean> {
 
 // ─── Keep-Alive Server Ping ────────────────────────────────────────────────────
 /**
- * Silently pings the backend /health endpoint to prevent Render from sleeping.
- * Call this on an interval (e.g. every 4 minutes) while the admin is logged in.
+ * Silently pings the backend /ping or /health endpoint to prevent Render from sleeping.
+ * Uses a 60-second timeout window to reliably wait for sleeping containers.
  */
 export async function keepAliveServerPing(): Promise<void> {
   try {
-    await fetch(`${API_BASE_URL}/health`, { method: "GET", signal: AbortSignal.timeout(10000) });
+    await fetch(`${API_BASE_URL}/ping`, { method: "GET", signal: AbortSignal.timeout(60000) });
   } catch {
-    // Silent — ping failures are non-fatal
+    try {
+      await fetch(`${API_BASE_URL}/health`, { method: "GET", signal: AbortSignal.timeout(60000) });
+    } catch {
+      // Silent — ping failures are non-fatal
+    }
   }
 }
 
-// ─── Main API Fetch with Reactive Refresh ─────────────────────────────────────
+// ─── In-Flight GET Request Deduplication Map ──────────────────────────────────
+const inFlightGetRequests = new Map<string, Promise<any>>();
+
+// ─── Main API Fetch with Reactive Refresh & Auto-Retry ────────────────────────
 export async function fetchAdminApi<T = any>(
+  endpoint: string,
+  options: RequestInit = {},
+  isRetry = false
+): Promise<{ success: boolean; data?: T; message?: string; error?: any; [key: string]: any }> {
+  const method = (options.method || "GET").toUpperCase();
+  const cleanEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
+  const isGet = method === "GET";
+  const token = getAdminToken();
+
+  // Deduplicate identical in-flight GET requests to prevent backend stampedes
+  const dedupKey = isGet ? `${cleanEndpoint}_${token || "anon"}` : null;
+  if (dedupKey && inFlightGetRequests.has(dedupKey) && !isRetry) {
+    return inFlightGetRequests.get(dedupKey)!;
+  }
+
+  const promise = executeFetchAdminApi<T>(endpoint, options, isRetry);
+
+  if (dedupKey && !isRetry) {
+    inFlightGetRequests.set(dedupKey, promise);
+    promise.finally(() => {
+      inFlightGetRequests.delete(dedupKey);
+    });
+  }
+
+  return promise;
+}
+
+async function executeFetchAdminApi<T = any>(
   endpoint: string,
   options: RequestInit = {},
   isRetry = false
@@ -197,14 +232,21 @@ export async function fetchAdminApi<T = any>(
     cleanEndpoint.includes("/po-management/sync") ||
     cleanEndpoint.includes("/reports");
 
-  // Configure timeout controller (90s for cold starts & sync operations, 50s for general requests on Render)
-  const timeoutMs = isColdStartOrLongOp ? 90000 : 50000;
+  // Extended timeout for cold-start wake-up on Render (90s for long ops, 65s for standard requests)
+  const timeoutMs = isColdStartOrLongOp ? 95000 : 65000;
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     let response = await fetch(url, { ...options, headers, signal: options.signal || controller.signal });
     clearTimeout(timeoutId);
+
+    // Auto-retry once on transient 502/504 gateway responses caused by Render container spin-up
+    if (!response.ok && (response.status === 502 || response.status === 504) && !isRetry) {
+      console.info(`[PRC Admin API] Server spinning up (HTTP ${response.status}) on ${cleanEndpoint}. Auto-retrying in 2s...`);
+      await new Promise((r) => setTimeout(r, 2000));
+      return executeFetchAdminApi<T>(endpoint, options, true);
+    }
 
     // Reactive refresh on 401/403 (token expired mid-session)
     if (
@@ -298,8 +340,16 @@ export async function fetchAdminApi<T = any>(
   } catch (error: any) {
     clearTimeout(timeoutId);
     const isTimeout = error.name === "AbortError" || error.name === "TimeoutError";
+
+    // If request timed out on cold start, auto-retry once because the server is likely awake by now
+    if (isTimeout && !isRetry) {
+      console.info(`[PRC Admin API] Request timed out on ${cleanEndpoint}. Server waking up, auto-retrying...`);
+      return executeFetchAdminApi<T>(endpoint, options, true);
+    }
+
     return {
       success: false,
+      statusCode: isTimeout ? 504 : 0,
       error: {
         code: isTimeout ? "TIMEOUT" : "NETWORK_ERROR",
         message: isTimeout
