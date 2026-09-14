@@ -219,7 +219,8 @@ export function ExpensesPage() {
   useEffect(() => {
     async function loadInit() {
       try {
-        const bList = await expensesApi.getBranches();
+        const rawBranches = await expensesApi.getBranches();
+        const bList = Array.isArray(rawBranches) ? rawBranches : [];
         setBranches(bList);
         if (bList.length > 0 && !selectedBranchId) {
           // Default to Delhi HQ or first branch
@@ -227,7 +228,8 @@ export function ExpensesPage() {
           setSelectedBranchId(del.id);
         }
 
-        const cList = await expensesApi.getCategories();
+        const rawCats = await expensesApi.getCategories();
+        const cList = Array.isArray(rawCats) ? rawCats : [];
         setCategories(cList);
         if (cList.length > 0 && !entryCategory) {
           setEntryCategory(cList[0].id);
@@ -288,7 +290,12 @@ export function ExpensesPage() {
         date: todayStr,
         limit: 50,
       });
-      setTodayEntries(res.entries);
+      const entries = Array.isArray(res?.entries)
+        ? res.entries
+        : Array.isArray((res as any)?.data)
+        ? (res as any).data
+        : [];
+      setTodayEntries(entries);
     } catch (err) {
       console.error('Failed to load today entries:', err);
     } finally {
@@ -311,7 +318,12 @@ export function ExpensesPage() {
         status: 'PENDING',
         limit: 100,
       });
-      setPendingEntries(res.entries);
+      const entries = Array.isArray(res?.entries)
+        ? res.entries
+        : Array.isArray((res as any)?.data)
+        ? (res as any).data
+        : [];
+      setPendingEntries(entries);
     } catch (err) {
       console.error('Failed to load pending approvals:', err);
     } finally {
@@ -335,7 +347,7 @@ export function ExpensesPage() {
         month: now.getMonth() + 1,
         branchId: isAllBranches ? undefined : selectedBranchId,
       });
-      setCategories(list);
+      setCategories(Array.isArray(list) ? list : []);
     } catch (err) {
       console.error('Failed to load categories:', err);
     } finally {
@@ -800,7 +812,7 @@ export function ExpensesPage() {
             {liveBalance ? formatRupee(liveBalance.todayExpenses) : '₹0.00'}
           </div>
           <p className="text-[11px] text-slate-500 dark:text-zinc-500 mt-1">
-            From {todayEntries.filter((e) => e.status === 'APPROVED').length} approved vouchers
+            From {(todayEntries || []).filter((e) => e?.status === 'APPROVED').length} approved vouchers
           </p>
         </div>
 
@@ -1104,7 +1116,7 @@ export function ExpensesPage() {
                 </button>
               </div>
 
-              {todayEntries.length === 0 ? (
+              {(todayEntries || []).length === 0 ? (
                 <div className="py-12 text-center text-slate-400 dark:text-zinc-500 text-sm">
                   <Receipt size={32} className="mx-auto mb-2 opacity-40" />
                   No cash expenses logged today yet.
@@ -1113,7 +1125,7 @@ export function ExpensesPage() {
                 <div className="space-y-3">
                   {/* Mobile stacked cards */}
                   <div className="block sm:hidden space-y-2.5">
-                    {todayEntries.map((e) => (
+                    {(todayEntries || []).map((e) => (
                       <div
                         key={e.id}
                         className="p-3.5 rounded-xl bg-slate-50 dark:bg-[#09090B] border border-slate-200 dark:border-[#27272A] space-y-2"
@@ -1182,7 +1194,7 @@ export function ExpensesPage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 dark:divide-[#27272A]">
-                        {todayEntries.map((e) => (
+                        {(todayEntries || []).map((e) => (
                           <tr key={e.id} className="hover:bg-slate-50/50 dark:hover:bg-[#27272A]/30 transition">
                             <td className="py-2.5 px-3 font-mono font-semibold text-violet-600 dark:text-violet-400">
                               {e.entryNumber}
@@ -1257,14 +1269,14 @@ export function ExpensesPage() {
             </div>
           </div>
 
-          {pendingEntries.length === 0 ? (
+          {(pendingEntries || []).length === 0 ? (
             <div className="py-16 text-center text-slate-400 dark:text-zinc-500 text-sm">
               <CheckCircle size={36} className="mx-auto mb-2 text-emerald-500/50" />
               All caught up! Zero pending approvals in queue.
             </div>
           ) : (
             <div className="space-y-3">
-              {pendingEntries.map((e) => (
+              {(pendingEntries || []).map((e) => (
                 <div
                   key={e.id}
                   className="p-4 rounded-xl bg-slate-50 dark:bg-[#09090B] border border-slate-200 dark:border-[#27272A] flex flex-col sm:flex-row sm:items-center justify-between gap-4"
@@ -1716,12 +1728,12 @@ export function ExpensesPage() {
                 Category Spend Distribution
               </h3>
 
-              {analytics && analytics.categoryDistribution.length > 0 ? (
+              {analytics?.categoryDistribution && analytics.categoryDistribution.length > 0 ? (
                 <div className="h-64 w-full">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
-                        data={analytics.categoryDistribution}
+                        data={analytics.categoryDistribution || []}
                         dataKey="amountRupees"
                         nameKey="name"
                         cx="50%"
@@ -1730,7 +1742,7 @@ export function ExpensesPage() {
                         innerRadius={45}
                         paddingAngle={3}
                       >
-                        {analytics.categoryDistribution.map((_, idx) => (
+                        {(analytics.categoryDistribution || []).map((_, idx) => (
                           <Cell key={`cell-${idx}`} fill={PIE_COLORS[idx % PIE_COLORS.length]} />
                         ))}
                       </Pie>
@@ -1753,10 +1765,10 @@ export function ExpensesPage() {
                 Monthly Spend Trend ({reportYear})
               </h3>
 
-              {analytics && (
+              {analytics && Array.isArray(analytics.trendData) && analytics.trendData.length > 0 ? (
                 <div className="h-64 w-full">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={analytics.trendData}>
+                    <BarChart data={analytics.trendData || []}>
                       <CartesianGrid strokeDasharray="3 3" opacity={0.1} />
                       <XAxis dataKey="month" stroke="#888888" fontSize={11} />
                       <YAxis stroke="#888888" fontSize={11} />
@@ -1764,6 +1776,10 @@ export function ExpensesPage() {
                       <Bar dataKey="amountRupees" fill="#8B5CF6" radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
+                </div>
+              ) : (
+                <div className="h-64 flex items-center justify-center text-xs text-slate-400">
+                  No monthly trend data available
                 </div>
               )}
             </div>
