@@ -37,6 +37,7 @@ import {
   BookOpen,
   ExternalLink,
   ArrowRight,
+  IndianRupee,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -146,6 +147,12 @@ export function ExpensesPage() {
   const [topUpRef, setTopUpRef] = useState('');
   const [topUpNotes, setTopUpNotes] = useState('');
   const [isSubmittingTopUp, setIsSubmittingTopUp] = useState(false);
+
+  // Float History
+  const [floatHistory, setFloatHistory] = useState<any[]>([]);
+  const [isLoadingFloatHistory, setIsLoadingFloatHistory] = useState(false);
+  const [deleteFloatEntry, setDeleteFloatEntry] = useState<any | null>(null);
+  const [isDeletingFloat, setIsDeletingFloat] = useState(false);
 
   // Reports & Analytics (for Tab 5)
   const [analytics, setAnalytics] = useState<ExpenseRollupAnalytics | null>(null);
@@ -373,6 +380,7 @@ export function ExpensesPage() {
   useEffect(() => {
     if (activeTab === 'entry') {
       fetchTodayEntries();
+      fetchFloatHistory();
     }
   }, [activeTab, fetchTodayEntries]);
 
@@ -848,11 +856,42 @@ export function ExpensesPage() {
       setTopUpRef('');
       setTopUpNotes('');
       fetchBalance();
+      fetchFloatHistory();
       alert('Cash float top-up added to live cash balance!');
     } catch (err: any) {
       alert(err.message || 'Failed to record float top-up');
     } finally {
       setIsSubmittingTopUp(false);
+    }
+  };
+
+  // ─── Float History Loader ──────────────────────────────────────────────────
+  const fetchFloatHistory = async () => {
+    const branchToUse = isAllBranches ? undefined : selectedBranchId || undefined;
+    setIsLoadingFloatHistory(true);
+    try {
+      const res = await expensesApi.getFloatTopUps({ branchId: branchToUse, limit: 100 });
+      setFloatHistory(res.records);
+    } catch (err) {
+      console.error('Failed to load float history:', err);
+    } finally {
+      setIsLoadingFloatHistory(false);
+    }
+  };
+
+  // ─── Float Top-Up Delete (Super Admin Only) ────────────────────────────────
+  const handleDeleteFloat = async () => {
+    if (!deleteFloatEntry) return;
+    setIsDeletingFloat(true);
+    try {
+      await expensesApi.deleteFloatTopUp(deleteFloatEntry.id);
+      setDeleteFloatEntry(null);
+      fetchBalance();
+      fetchFloatHistory();
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete float top-up');
+    } finally {
+      setIsDeletingFloat(false);
     }
   };
 
@@ -1842,6 +1881,138 @@ export function ExpensesPage() {
       )}
 
       {/* ────────────────────────────────────────────────────────────────────── */}
+      {/* FLOAT HISTORY TABLE (inline in Tab 1)                                   */}
+      {/* ────────────────────────────────────────────────────────────────────── */}
+      {activeTab === 'entry' && (
+        <div className="p-5 sm:p-6 rounded-2xl bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] shadow-sm space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-[#27272A]">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                <IndianRupee size={18} />
+              </div>
+              <div>
+                <h2 className="text-base font-bold text-slate-900 dark:text-white">Cash Float History</h2>
+                <p className="text-xs text-slate-500 dark:text-zinc-400">All cash top-ups given to vendors / added to petty cash register</p>
+              </div>
+            </div>
+            <button
+              onClick={fetchFloatHistory}
+              className="p-2 rounded-xl text-slate-500 hover:bg-slate-100 dark:hover:bg-[#27272A] transition"
+              title="Refresh float history"
+            >
+              <RefreshCw size={15} className={isLoadingFloatHistory ? 'animate-spin' : ''} />
+            </button>
+          </div>
+
+          {isLoadingFloatHistory ? (
+            <div className="py-8 text-center text-slate-400 dark:text-zinc-500 text-sm animate-pulse">Loading float history…</div>
+          ) : floatHistory.length === 0 ? (
+            <div className="py-8 text-center text-slate-400 dark:text-zinc-500 text-sm">
+              <IndianRupee size={28} className="mx-auto mb-2 opacity-30" />
+              No cash float top-ups recorded yet.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50 dark:bg-[#09090B] text-slate-500 dark:text-zinc-400 uppercase font-semibold border-b border-slate-200 dark:border-[#27272A]">
+                  <tr>
+                    <th className="py-2.5 px-3">Date</th>
+                    <th className="py-2.5 px-3 text-right">Amount</th>
+                    <th className="py-2.5 px-3">Source / Vendor</th>
+                    <th className="py-2.5 px-3">Notes</th>
+                    <th className="py-2.5 px-3">Added By</th>
+                    {isSuperAdmin && <th className="py-2.5 px-3 text-center">Action</th>}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-[#27272A]">
+                  {floatHistory.map((f) => (
+                    <tr key={f.id} className="hover:bg-slate-50/50 dark:hover:bg-[#27272A]/30 transition">
+                      <td className="py-2.5 px-3 text-slate-600 dark:text-zinc-300 whitespace-nowrap">
+                        {f.date
+                          ? new Date(f.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+                          : '-'}
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-bold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
+                        +{formatRupee(f.amount)}
+                      </td>
+                      <td className="py-2.5 px-3 font-medium text-slate-800 dark:text-zinc-200 max-w-[160px] truncate">
+                        {f.source}
+                      </td>
+                      <td className="py-2.5 px-3 text-slate-500 dark:text-zinc-400 max-w-[160px] truncate">
+                        {f.notes || f.referenceNo || '—'}
+                      </td>
+                      <td className="py-2.5 px-3 text-slate-500 dark:text-zinc-400 whitespace-nowrap">
+                        {f.addedBy
+                          ? `${f.addedBy.firstName || ''} ${f.addedBy.lastName || ''}`.trim() || f.addedBy.email
+                          : '—'}
+                      </td>
+                      {isSuperAdmin && (
+                        <td className="py-2.5 px-3 text-center">
+                          <button
+                            type="button"
+                            onClick={() => setDeleteFloatEntry(f)}
+                            className="p-1.5 rounded-lg hover:bg-rose-500/10 text-rose-500 hover:text-rose-700 transition"
+                            title="Delete float top-up (reverses balance)"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ─── MODAL: Delete Float Top-Up Confirmation ──────────────────────── */}
+      {deleteFloatEntry && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white dark:bg-[#18181B] rounded-2xl shadow-2xl border border-slate-200 dark:border-[#27272A] w-full max-w-sm p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-xl bg-rose-500/10 text-rose-500">
+                <Trash2 size={20} />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900 dark:text-white">Delete Float Top-Up?</h3>
+                <p className="text-xs text-slate-500 dark:text-zinc-400">This action cannot be undone.</p>
+              </div>
+            </div>
+            <div className="p-3.5 rounded-xl bg-rose-500/5 border border-rose-500/20 space-y-1 text-sm">
+              <p className="text-rose-700 dark:text-rose-400 font-semibold">
+                ₹{((deleteFloatEntry.amount || 0) / 100).toLocaleString('en-IN', { minimumFractionDigits: 2 })} will be deducted from live cash balance
+              </p>
+              <p className="text-slate-600 dark:text-zinc-400 text-xs">Source: <span className="font-medium">{deleteFloatEntry.source}</span></p>
+              {deleteFloatEntry.notes && (
+                <p className="text-slate-500 dark:text-zinc-500 text-xs">Notes: {deleteFloatEntry.notes}</p>
+              )}
+            </div>
+            <div className="flex items-center justify-end gap-3 pt-1">
+              <button
+                type="button"
+                onClick={() => setDeleteFloatEntry(null)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-[#27272A] transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteFloat}
+                disabled={isDeletingFloat}
+                className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition shadow-sm flex items-center gap-1.5 disabled:opacity-60"
+              >
+                <Trash2 size={13} />
+                {isDeletingFloat ? 'Deleting...' : 'Delete & Reverse Balance'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ────────────────────────────────────────────────────────────────────── */}
+
       {/* TAB 2: EXPENSE LEDGER (ALL HISTORICAL ENTRIES)                         */}
       {/* ────────────────────────────────────────────────────────────────────── */}
       {activeTab === 'ledger' && (

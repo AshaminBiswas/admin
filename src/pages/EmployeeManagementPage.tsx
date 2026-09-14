@@ -2640,7 +2640,7 @@ export function EmployeeManagementPage() {
                   designation: computedDesignation,
                   department: (formData.get('department') as string).trim(),
                   responsibilities: ((formData.get('responsibilities') as string) || '').trim() || undefined,
-                  monthlyCtc: Number(formData.get('monthlyCtc')),
+                  monthlyCtc: Number(formData.get('monthlyCtc') || 0),
                   joiningDate: formData.get('joiningDate') as string,
                   status: (formData.get('status') as EmployeeStatus) || 'ACTIVE',
                 };
@@ -2754,14 +2754,17 @@ export function EmployeeManagementPage() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-[#A1A1AA] mb-1">Monthly CTC (₹) *</label>
+                  <label className="block text-xs font-semibold text-[#A1A1AA] mb-1">
+                    Monthly CTC (₹)
+                    <span className="ml-1.5 text-[10px] font-normal text-emerald-500 bg-emerald-500/10 px-1.5 py-0.5 rounded-md">Optional</span>
+                  </label>
                   <input
                     type="number"
                     step="1"
                     name="monthlyCtc"
-                    required
+                    min="0"
                     defaultValue={editingEmployee ? Number(editingEmployee.monthlyCtc) : ''}
-                    placeholder="e.g. 45000"
+                    placeholder="Leave blank for daily-wage workers"
                     className="w-full px-3 py-2 bg-[#09090B] border border-[#27272A] rounded-xl text-[#FAFAFA] focus:outline-none focus:border-amber-500 font-mono"
                   />
                 </div>

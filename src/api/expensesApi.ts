@@ -474,4 +474,37 @@ export const expensesApi = {
     if (!res.success) throw new Error(res.message || res.error?.message || 'Failed to load branches');
     return res.data?.branches || res.data || [];
   },
+
+  // 16. Float Top-Up History
+  async getFloatTopUps(params?: {
+    branchId?: string;
+    startDate?: string;
+    endDate?: string;
+    limit?: number;
+    cursor?: string;
+  }): Promise<{ records: any[]; nextCursor: string | null; hasMore: boolean; totalCount: number }> {
+    const sp = new URLSearchParams();
+    if (params?.branchId) sp.set('branchId', params.branchId);
+    if (params?.startDate) sp.set('startDate', params.startDate);
+    if (params?.endDate) sp.set('endDate', params.endDate);
+    if (params?.limit) sp.set('limit', String(params.limit));
+    if (params?.cursor) sp.set('cursor', params.cursor);
+    const qs = sp.toString() ? `?${sp.toString()}` : '';
+    const res = await fetchAdminApi(`/expenses/ledger/float-topup${qs}`);
+    if (!res.success) throw new Error(res.message || res.error?.message || 'Failed to load float top-up history');
+    return {
+      records: res.data || [],
+      nextCursor: res.nextCursor || null,
+      hasMore: res.hasMore || false,
+      totalCount: res.totalCount || 0,
+    };
+  },
+
+  // 17. Delete Float Top-Up (Super Admin Only)
+  async deleteFloatTopUp(id: string): Promise<{ message: string; reversedAmount: number }> {
+    const res = await fetchAdminApi(`/expenses/ledger/float-topup/${id}`, { method: 'DELETE' });
+    if (!res.success) throw new Error(res.message || res.error?.message || 'Failed to delete float top-up');
+    return { message: res.message || 'Float top-up deleted', reversedAmount: res.reversedAmount || 0 };
+  },
 };
+

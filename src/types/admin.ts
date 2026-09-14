@@ -1258,7 +1258,7 @@ export interface ExpenseFloatTopUp {
   addedById: string;
   createdAt: string;
   branch?: { id: string; name: string; code: string };
-  addedBy?: { id: string; firstName?: string; lastName?: string };
+  addedBy?: { id: string; firstName?: string; lastName?: string; email?: string };
 }
 
 export interface BranchCashBalanceInfo {
