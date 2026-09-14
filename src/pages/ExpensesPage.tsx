@@ -161,10 +161,18 @@ export function ExpensesPage() {
   const [ledgerEntries, setLedgerEntries] = useState<ExpenseEntry[]>([]);
   const [ledgerCursor, setLedgerCursor] = useState<string | null>(null);
   const [ledgerHasMore, setLedgerHasMore] = useState(false);
+  const [ledgerFilterBranch, setLedgerFilterBranch] = useState<string>('ALL');
   const [ledgerFilterCategory, setLedgerFilterCategory] = useState('');
   const [ledgerFilterStatus, setLedgerFilterStatus] = useState('ALL');
   const [ledgerFilterSearch, setLedgerFilterSearch] = useState('');
   const [isLoadingLedger, setIsLoadingLedger] = useState(false);
+
+  // Receipt Preview Modal (Image & PDF)
+  const [previewReceipt, setPreviewReceipt] = useState<{
+    isOpen: boolean;
+    url: string;
+    entry?: ExpenseEntry | null;
+  }>({ isOpen: false, url: '', entry: null });
 
   // Offline queue
   const [offlineQueue, setOfflineQueue] = useState<OfflineQueuedExpense[]>([]);
@@ -180,6 +188,7 @@ export function ExpensesPage() {
   const [isSubmittingCat, setIsSubmittingCat] = useState(false);
 
   // Fast Entry Form State (Tab 1)
+  const [entryBranchId, setEntryBranchId] = useState<string>('');
   const [entryAmount, setEntryAmount] = useState<string>('');
   const [entryCategory, setEntryCategory] = useState<string>(() => {
     return localStorage.getItem('prc_last_expense_category') || '';
@@ -225,6 +234,17 @@ export function ExpensesPage() {
     const handleOnline = () => {
       setIsOnline(true);
       refreshOfflineQueue();
+      const currentQueue = getOfflineQueue();
+      if (currentQueue.length > 0) {
+        expensesApi.syncOfflineQueue().then((res) => {
+          if (res.syncedCount > 0) {
+            refreshOfflineQueue();
+            fetchBalance();
+            fetchTodayEntries();
+            if (activeTab === 'ledger') fetchLedgerEntries(true);
+          }
+        }).catch((e) => console.warn('[Auto-sync] Reconnect sync deferred:', e));
+      }
     };
     const handleOffline = () => setIsOnline(false);
 
@@ -250,10 +270,15 @@ export function ExpensesPage() {
         const rawBranches = await expensesApi.getBranches();
         const bList = Array.isArray(rawBranches) ? rawBranches : [];
         setBranches(bList);
-        if (bList.length > 0 && !selectedBranchId) {
-          // Default to Delhi HQ or first branch
-          const del = bList.find((b) => b.code.toUpperCase().includes('DEL')) || bList[0];
-          setSelectedBranchId(del.id);
+        if (bList.length > 0) {
+          if (!selectedBranchId) {
+            // Default to Delhi HQ or first branch
+            const del = bList.find((b) => b.code.toUpperCase().includes('DEL')) || bList[0];
+            setSelectedBranchId(del.id);
+            setEntryBranchId(del.id);
+          } else {
+            setEntryBranchId(selectedBranchId);
+          }
         }
 
         const rawCats = await expensesApi.getCategories();
@@ -261,6 +286,20 @@ export function ExpensesPage() {
         setCategories(cList);
         if (cList.length > 0 && !entryCategory) {
           setEntryCategory(cList[0].id);
+        }
+
+        // Proactively auto-sync offline queue if entries exist in localStorage
+        const currentQueue = getOfflineQueue();
+        if (currentQueue.length > 0 && typeof navigator !== 'undefined' && navigator.onLine) {
+          expensesApi.syncOfflineQueue().then((res) => {
+            if (res.syncedCount > 0) {
+              console.info(`[Auto-Sync] Synchronized ${res.syncedCount} queued expenses to server.`);
+              refreshOfflineQueue();
+              fetchBalance();
+              fetchTodayEntries();
+              if (activeTab === 'ledger') fetchLedgerEntries(true);
+            }
+          }).catch((e) => console.warn('[Auto-sync] Boot sync deferred:', e));
         }
       } catch (err) {
         console.error('Failed to initialize expenses:', err);
@@ -393,8 +432,17 @@ export function ExpensesPage() {
   const fetchLedgerEntries = useCallback(async (reset = false) => {
     setIsLoadingLedger(true);
     try {
+      const branchParam =
+        ledgerFilterBranch === 'ALL'
+          ? undefined
+          : ledgerFilterBranch
+          ? ledgerFilterBranch
+          : isAllBranches
+          ? undefined
+          : selectedBranchId;
+
       const res = await expensesApi.getExpenses({
-        branchId: isAllBranches ? undefined : selectedBranchId,
+        branchId: branchParam,
         categoryId: ledgerFilterCategory || undefined,
         status: ledgerFilterStatus === 'ALL' ? undefined : ledgerFilterStatus,
         search: ledgerFilterSearch.trim() || undefined,
@@ -420,13 +468,13 @@ export function ExpensesPage() {
     } finally {
       setIsLoadingLedger(false);
     }
-  }, [selectedBranchId, isAllBranches, ledgerFilterCategory, ledgerFilterStatus, ledgerFilterSearch, ledgerCursor]);
+  }, [ledgerFilterBranch, selectedBranchId, isAllBranches, ledgerFilterCategory, ledgerFilterStatus, ledgerFilterSearch, ledgerCursor]);
 
   useEffect(() => {
     if (activeTab === 'ledger') {
       fetchLedgerEntries(true);
     }
-  }, [activeTab, selectedBranchId, isAllBranches, ledgerFilterCategory, ledgerFilterStatus]);
+  }, [activeTab, ledgerFilterBranch, selectedBranchId, isAllBranches, ledgerFilterCategory, ledgerFilterStatus]);
 
   // ─── Load Analytics (Tab 5) ────────────────────────────────────────────────
   const fetchAnalytics = useCallback(async () => {
@@ -472,13 +520,11 @@ export function ExpensesPage() {
       alert('Please specify who was paid');
       return;
     }
-    if (!selectedBranchId && !isAllBranches) {
+    const branchToUse = entryBranchId || (isAllBranches ? branches[0]?.id : selectedBranchId);
+    if (!branchToUse) {
       alert('Please select a branch location');
       return;
     }
-
-    const branchToUse = isAllBranches ? branches[0]?.id : selectedBranchId;
-    if (!branchToUse) return;
 
     setIsSubmittingEntry(true);
     setEntrySuccessMsg(null);
@@ -1129,132 +1175,189 @@ export function ExpensesPage() {
       {/* TAB 1: CASHIER FAST ENTRY & LIVE BALANCE                               */}
       {/* ────────────────────────────────────────────────────────────────────── */}
       {activeTab === 'entry' && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* Left Column: Fast Mobile Entry Form (5 cols on lg) */}
-          <div className="lg:col-span-5 space-y-4">
-            <div className="p-5 sm:p-6 rounded-2xl bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] shadow-sm space-y-4">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-[#27272A]">
+        <div className="space-y-4">
+          {offlineQueue.length > 0 && (
+            <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-amber-800 dark:text-amber-300 animate-in fade-in duration-300">
+              <div className="flex items-center gap-2.5">
+                <AlertTriangle size={18} className="text-amber-500 shrink-0" />
                 <div>
-                  <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">
-                    Fast Expense Logging
-                  </h2>
-                  <p className="text-xs text-slate-500 dark:text-zinc-400">Log cash outflow in under 10 seconds</p>
+                  <p className="text-xs sm:text-sm font-bold">
+                    {offlineQueue.length} Expense Voucher(s) Waiting in Browser Local Storage
+                  </p>
+                  <p className="text-[11px] text-amber-700/80 dark:text-amber-400/80">
+                    These entries were saved locally while the server was waking up or offline. Click sync to save them permanently to the central database.
+                  </p>
                 </div>
-                <span className="text-[11px] font-semibold px-2 py-1 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-                  Auto-approves &le; ₹2,000
-                </span>
               </div>
+              <button
+                type="button"
+                onClick={handleSyncOffline}
+                disabled={isSyncingOffline}
+                className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold transition flex items-center justify-center gap-2 shrink-0 shadow-sm cursor-pointer"
+              >
+                <RefreshCw size={14} className={isSyncingOffline ? 'animate-spin' : ''} />
+                <span>{isSyncingOffline ? 'Syncing...' : `Sync ${offlineQueue.length} Entries to Server Now`}</span>
+              </button>
+            </div>
+          )}
 
-              {entrySuccessMsg && (
-                <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs flex items-center gap-2">
-                  <CheckCircle size={16} className="shrink-0" />
-                  <span>{entrySuccessMsg}</span>
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* Left Column: Fast Mobile Entry Form (5 cols on lg) */}
+            <div className="lg:col-span-5 space-y-4">
+              <div className="p-5 sm:p-6 rounded-2xl bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] shadow-sm space-y-4">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-[#27272A]">
+                  <div>
+                    <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">
+                      Fast Expense Logging
+                    </h2>
+                    <p className="text-xs text-slate-500 dark:text-zinc-400">Log cash outflow in under 10 seconds</p>
+                  </div>
+                  <span className="text-[11px] font-semibold px-2 py-1 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                    Auto-approves &le; ₹2,000
+                  </span>
                 </div>
-              )}
 
-              {entryWarningMsg && (
-                <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 text-xs flex items-center gap-2">
-                  <AlertCircle size={16} className="shrink-0" />
-                  <span>{entryWarningMsg}</span>
-                </div>
-              )}
+                {entrySuccessMsg && (
+                  <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs flex items-center gap-2">
+                    <CheckCircle size={16} className="shrink-0" />
+                    <span>{entrySuccessMsg}</span>
+                  </div>
+                )}
 
-              {lastLoggedExpense && (
-                <div className="p-4 rounded-xl bg-violet-50 dark:bg-[#1E182B] border border-violet-200 dark:border-violet-500/30 space-y-2.5">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-xs font-extrabold text-violet-600 dark:text-violet-400 bg-violet-500/10 px-2 py-0.5 rounded">
-                        {lastLoggedExpense.entryNumber}
-                      </span>
-                      <span
-                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                          lastLoggedExpense.status === 'APPROVED'
-                            ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
+                {entryWarningMsg && (
+                  <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 text-xs flex items-center gap-2">
+                    <AlertCircle size={16} className="shrink-0" />
+                    <span>{entryWarningMsg}</span>
+                  </div>
+                )}
+
+                {lastLoggedExpense && (
+                  <div className="p-4 rounded-xl bg-violet-50 dark:bg-[#1E182B] border border-violet-200 dark:border-violet-500/30 space-y-2.5">
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-bold text-xs text-violet-700 dark:text-violet-300">
+                          {lastLoggedExpense.entryNumber}
+                        </span>
+                        <span
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                            lastLoggedExpense.status === 'APPROVED'
+                              ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
+                              : lastLoggedExpense.status === 'PENDING'
+                              ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30'
+                              : 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30'
+                          }`}
+                        >
+                          {lastLoggedExpense.status === 'APPROVED'
+                            ? '✓ Auto-Approved & Deducted'
                             : lastLoggedExpense.status === 'PENDING'
-                            ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30'
-                            : 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30'
-                        }`}
-                      >
-                        {lastLoggedExpense.status === 'APPROVED'
-                          ? '✓ Auto-Approved & Deducted'
-                          : lastLoggedExpense.status === 'PENDING'
-                          ? '⏳ Awaiting Admin Review'
-                          : lastLoggedExpense.status}
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setLastLoggedExpense(null);
-                        setEntrySuccessMsg(null);
-                      }}
-                      className="text-slate-400 hover:text-slate-600 dark:hover:text-zinc-200"
-                      title="Dismiss voucher banner"
-                    >
-                      <X size={14} />
-                    </button>
-                  </div>
-
-                  <div className="flex items-baseline justify-between pt-1">
-                    <div>
-                      <p className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
-                        {lastLoggedExpense.description}
-                      </p>
-                      <p className="text-[11px] text-slate-500 dark:text-zinc-400">
-                        Paid to <strong className="text-slate-700 dark:text-zinc-300">{lastLoggedExpense.paidTo}</strong> ({lastLoggedExpense.category?.name || 'Expense'})
-                      </p>
-                    </div>
-                    <span className="text-base font-extrabold text-slate-900 dark:text-white">
-                      {formatRupee(lastLoggedExpense.amount)}
-                    </span>
-                  </div>
-
-                  {/* Super Admin Quick Approval on Last Logged Voucher */}
-                  {canApprove && lastLoggedExpense.status === 'PENDING' && (
-                    <div className="pt-2 border-t border-violet-200 dark:border-violet-500/20 flex items-center justify-between gap-2">
-                      <span className="text-[11px] font-medium text-amber-600 dark:text-amber-400">
-                        Admin Action Required:
-                      </span>
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => setSelectedRejectEntry(lastLoggedExpense)}
-                          className="px-2.5 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 text-[11px] font-bold transition"
-                        >
-                          Reject
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleApproveEntry(lastLoggedExpense)}
-                          className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold transition flex items-center gap-1 shadow-sm"
-                        >
-                          <Check size={12} />
-                          Approve Now
-                        </button>
+                            ? '⏳ Awaiting Admin Review'
+                            : lastLoggedExpense.status}
+                        </span>
                       </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setLastLoggedExpense(null);
+                          setEntrySuccessMsg(null);
+                        }}
+                        className="text-slate-400 hover:text-slate-600 dark:hover:text-zinc-200"
+                        title="Dismiss voucher banner"
+                      >
+                        <X size={14} />
+                      </button>
                     </div>
-                  )}
 
-                  <div className="pt-1.5 flex items-center justify-between text-[11px] text-slate-500 dark:text-zinc-400">
-                    <span>Logged to Today's Feed & Ledger</span>
-                    <button
-                      type="button"
-                      onClick={() => setActiveTab('ledger')}
-                      className="text-violet-600 dark:text-violet-400 font-semibold hover:underline flex items-center gap-1"
-                    >
-                      <span>View in Full Ledger</span>
-                      <ArrowRight size={12} />
-                    </button>
+                    <div className="flex items-baseline justify-between pt-1">
+                      <div>
+                        <p className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
+                          {lastLoggedExpense.description}
+                        </p>
+                        <p className="text-[11px] text-slate-500 dark:text-zinc-400">
+                          Paid to <strong className="text-slate-700 dark:text-zinc-300">{lastLoggedExpense.paidTo}</strong> ({lastLoggedExpense.category?.name || 'Expense'})
+                        </p>
+                      </div>
+                      <span className="text-base font-extrabold text-slate-900 dark:text-white">
+                        {formatRupee(lastLoggedExpense.amount)}
+                      </span>
+                    </div>
+
+                    {/* Super Admin Quick Approval on Last Logged Voucher */}
+                    {canApprove && lastLoggedExpense.status === 'PENDING' && (
+                      <div className="pt-2 border-t border-violet-200 dark:border-violet-500/20 flex items-center justify-between gap-2">
+                        <span className="text-[11px] font-medium text-amber-600 dark:text-amber-400">
+                          Admin Action Required:
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedRejectEntry(lastLoggedExpense)}
+                            className="px-2.5 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 text-[11px] font-bold transition"
+                          >
+                            Reject
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleApproveEntry(lastLoggedExpense)}
+                            className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold transition flex items-center gap-1 shadow-sm"
+                          >
+                            <Check size={12} />
+                            Approve Now
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="pt-1.5 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500 dark:text-zinc-400">
+                      <div className="flex items-center gap-2">
+                        <span>Logged to Today's Feed</span>
+                        {lastLoggedExpense.receiptAttachment && (
+                          <button
+                            type="button"
+                            onClick={() => setPreviewReceipt({ isOpen: true, url: lastLoggedExpense.receiptAttachment!, entry: lastLoggedExpense })}
+                            className="px-2 py-0.5 rounded-md bg-violet-500/10 hover:bg-violet-500/20 text-violet-600 dark:text-violet-400 font-semibold text-[11px] flex items-center gap-1 transition border border-violet-500/20"
+                          >
+                            <Camera size={12} />
+                            <span>View Uploaded Slip</span>
+                          </button>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('ledger')}
+                        className="text-violet-600 dark:text-violet-400 font-semibold hover:underline flex items-center gap-1"
+                      >
+                        <span>View in Full Ledger</span>
+                        <ArrowRight size={12} />
+                      </button>
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              <form onSubmit={handleFastEntrySubmit} className="space-y-4">
-                {/* Amount Input */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400">
-                    Amount (₹) <span className="text-rose-500">*</span>
-                  </label>
+                <form onSubmit={handleFastEntrySubmit} className="space-y-4">
+                  {/* Branch Location Selection */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400 flex items-center gap-1.5">
+                      <Building2 size={14} className="text-violet-500" />
+                      <span>Branch Location <span className="text-rose-500">*</span></span>
+                    </label>
+                    <select
+                      value={entryBranchId}
+                      onChange={(e) => setEntryBranchId(e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-[#09090B] border border-slate-300 dark:border-[#27272A] text-sm font-semibold text-slate-900 dark:text-white focus:border-violet-500 focus:outline-none cursor-pointer"
+                    >
+                      {branches.map((b) => (
+                        <option key={b.id} value={b.id} className="dark:bg-[#18181B]">
+                          {b.name} ({b.code})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Amount Input */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400">
+                      Amount (₹) <span className="text-rose-500">*</span>
+                    </label>
                   <div className="relative">
                     <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-lg font-bold text-slate-400">
                       ₹
@@ -1572,6 +1675,16 @@ export function ExpensesPage() {
                                 <Edit3 size={12} /> Edit
                               </button>
                             )}
+                            {e.receiptAttachment && (
+                              <button
+                                type="button"
+                                onClick={() => setPreviewReceipt({ isOpen: true, url: e.receiptAttachment!, entry: e })}
+                                className="px-2.5 py-1 rounded-lg bg-violet-500/10 hover:bg-violet-500/20 text-violet-600 dark:text-violet-400 text-xs font-semibold flex items-center gap-1 transition border border-violet-500/20"
+                                title="View receipt slip"
+                              >
+                                <Camera size={12} /> Slip
+                              </button>
+                            )}
                           </div>
 
                           <div className="flex items-center gap-1.5">
@@ -1612,6 +1725,7 @@ export function ExpensesPage() {
                           <th className="py-2.5 px-3">Paid To</th>
                           <th className="py-2.5 px-3 text-right">Amount</th>
                           <th className="py-2.5 px-3 text-center">Status</th>
+                          <th className="py-2.5 px-3 text-center">Receipt</th>
                           <th className="py-2.5 px-3 text-center">Action</th>
                         </tr>
                       </thead>
@@ -1644,6 +1758,21 @@ export function ExpensesPage() {
                               >
                                 {e.status}
                               </span>
+                            </td>
+                            <td className="py-2.5 px-3 text-center whitespace-nowrap">
+                              {e.receiptAttachment ? (
+                                <button
+                                  type="button"
+                                  onClick={() => setPreviewReceipt({ isOpen: true, url: e.receiptAttachment!, entry: e })}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-violet-500/10 hover:bg-violet-500/20 text-violet-600 dark:text-violet-400 font-bold text-[11px] transition border border-violet-500/20 shadow-xs cursor-pointer"
+                                  title="View uploaded receipt slip"
+                                >
+                                  <Camera size={12} />
+                                  <span>View</span>
+                                </button>
+                              ) : (
+                                <span className="text-slate-300 dark:text-zinc-600 text-[11px]">-</span>
+                              )}
                             </td>
                             <td className="py-2.5 px-3 text-center">
                               <div className="flex items-center justify-center gap-1.5">
@@ -1709,6 +1838,7 @@ export function ExpensesPage() {
             </div>
           </div>
         </div>
+      </div>
       )}
 
       {/* ────────────────────────────────────────────────────────────────────── */}
@@ -1761,6 +1891,23 @@ export function ExpensesPage() {
               />
             </div>
 
+            {/* Branch Filter */}
+            <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-[#09090B] px-3 py-2 rounded-xl border border-slate-300 dark:border-[#27272A]">
+              <Building2 size={15} className="text-violet-500 shrink-0" />
+              <select
+                value={ledgerFilterBranch}
+                onChange={(e) => setLedgerFilterBranch(e.target.value)}
+                className="bg-transparent text-xs font-semibold text-slate-800 dark:text-zinc-200 focus:outline-none cursor-pointer"
+              >
+                <option value="ALL" className="dark:bg-[#18181B]">All Branches (Consolidated)</option>
+                {branches.map((b) => (
+                  <option key={b.id} value={b.id} className="dark:bg-[#18181B]">
+                    {b.name} ({b.code})
+                  </option>
+                ))}
+              </select>
+            </div>
+
             {/* Category Filter */}
             <select
               value={ledgerFilterCategory}
@@ -1793,20 +1940,21 @@ export function ExpensesPage() {
               <button
                 type="button"
                 onClick={() => fetchLedgerEntries(true)}
-                className="px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold transition shadow-sm"
+                className="px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold transition shadow-sm cursor-pointer"
               >
                 Search
               </button>
 
-              {(ledgerFilterSearch || ledgerFilterCategory || ledgerFilterStatus !== 'ALL') && (
+              {(ledgerFilterSearch || ledgerFilterCategory || ledgerFilterBranch !== 'ALL' || ledgerFilterStatus !== 'ALL') && (
                 <button
                   type="button"
                   onClick={() => {
                     setLedgerFilterSearch('');
                     setLedgerFilterCategory('');
+                    setLedgerFilterBranch('ALL');
                     setLedgerFilterStatus('ALL');
                   }}
-                  className="px-3 py-2 rounded-xl bg-slate-100 dark:bg-[#27272A] hover:bg-slate-200 dark:hover:bg-[#3F3F46] text-slate-600 dark:text-zinc-400 text-xs font-semibold transition"
+                  className="px-3 py-2 rounded-xl bg-slate-100 dark:bg-[#27272A] hover:bg-slate-200 dark:hover:bg-[#3F3F46] text-slate-600 dark:text-zinc-400 text-xs font-semibold transition cursor-pointer"
                 >
                   Reset
                 </button>
@@ -1814,11 +1962,63 @@ export function ExpensesPage() {
             </div>
           </div>
 
+          {/* Offline Queue Banner in Tab 2 */}
+          {offlineQueue.length > 0 && (
+            <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-amber-800 dark:text-amber-300 animate-in fade-in duration-300">
+              <div className="flex items-center gap-2.5">
+                <AlertTriangle size={18} className="text-amber-500 shrink-0" />
+                <div>
+                  <p className="text-xs sm:text-sm font-bold">
+                    {offlineQueue.length} Expense Voucher(s) Waiting in Browser Local Storage
+                  </p>
+                  <p className="text-[11px] text-amber-700/80 dark:text-amber-400/80">
+                    These entries were saved locally while the server was asleep or offline. Click sync to save them permanently to the central database.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleSyncOffline}
+                disabled={isSyncingOffline}
+                className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold transition flex items-center justify-center gap-2 shrink-0 shadow-sm cursor-pointer"
+              >
+                <RefreshCw size={14} className={isSyncingOffline ? 'animate-spin' : ''} />
+                <span>{isSyncingOffline ? 'Syncing...' : `Sync ${offlineQueue.length} Entries to Server Now`}</span>
+              </button>
+            </div>
+          )}
+
           {/* Ledger Table */}
           {(ledgerEntries || []).length === 0 && !isLoadingLedger ? (
-            <div className="py-16 text-center text-slate-400 dark:text-zinc-500 text-sm">
-              <BookOpen size={36} className="mx-auto mb-2 opacity-40" />
-              No expense entries found matching current filters.
+            <div className="py-16 text-center text-slate-400 dark:text-zinc-500 text-sm space-y-3">
+              <BookOpen size={36} className="mx-auto opacity-40" />
+              <p className="font-semibold text-slate-700 dark:text-zinc-300">
+                No expense entries found matching current filters.
+              </p>
+              <div className="flex items-center justify-center gap-2 pt-1">
+                {ledgerFilterBranch !== 'ALL' && (
+                  <button
+                    type="button"
+                    onClick={() => setLedgerFilterBranch('ALL')}
+                    className="px-3.5 py-1.5 rounded-xl bg-violet-50 dark:bg-violet-950/40 text-violet-600 dark:text-violet-400 text-xs font-semibold hover:bg-violet-100 transition border border-violet-200 dark:border-violet-800/40 cursor-pointer"
+                  >
+                    View All Branches (Consolidated)
+                  </button>
+                )}
+                {(ledgerFilterSearch || ledgerFilterCategory || ledgerFilterStatus !== 'ALL') && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLedgerFilterSearch('');
+                      setLedgerFilterCategory('');
+                      setLedgerFilterStatus('ALL');
+                    }}
+                    className="px-3.5 py-1.5 rounded-xl bg-slate-100 dark:bg-[#27272A] text-slate-700 dark:text-zinc-300 text-xs font-semibold hover:bg-slate-200 transition cursor-pointer"
+                  >
+                    Clear Search & Filters
+                  </button>
+                )}
+              </div>
             </div>
           ) : (
             <div className="space-y-4">
@@ -1828,7 +2028,9 @@ export function ExpensesPage() {
                     <tr>
                       <th className="py-3 px-3.5">Voucher No</th>
                       <th className="py-3 px-3.5">Date & Time</th>
-                      {isAllBranches && <th className="py-3 px-3.5">Branch</th>}
+                      {(ledgerFilterBranch === 'ALL' || branches.length > 1) && (
+                        <th className="py-3 px-3.5">Branch</th>
+                      )}
                       <th className="py-3 px-3.5">Category</th>
                       <th className="py-3 px-3.5">Description</th>
                       <th className="py-3 px-3.5">Paid To</th>
@@ -1860,9 +2062,10 @@ export function ExpensesPage() {
                         </td>
 
                         {/* Branch */}
-                        {isAllBranches && (
+                        {(ledgerFilterBranch === 'ALL' || branches.length > 1) && (
                           <td className="py-3 px-3.5 text-slate-700 dark:text-zinc-300 whitespace-nowrap">
-                            {e.branch?.name || '-'}
+                            <span className="font-semibold">{e.branch?.name || '-'}</span>
+                            {e.branch?.code && <span className="ml-1 text-[10px] text-slate-400">({e.branch.code})</span>}
                           </td>
                         )}
 
@@ -1928,18 +2131,17 @@ export function ExpensesPage() {
                         {/* Receipt */}
                         <td className="py-3 px-3.5 text-center whitespace-nowrap">
                           {e.receiptAttachment ? (
-                            <a
-                              href={e.receiptAttachment}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex items-center gap-1 text-violet-600 dark:text-violet-400 hover:underline font-semibold text-[11px]"
-                              title="View receipt attachment"
+                            <button
+                              type="button"
+                              onClick={() => setPreviewReceipt({ isOpen: true, url: e.receiptAttachment!, entry: e })}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-violet-500/10 hover:bg-violet-500/20 text-violet-600 dark:text-violet-400 font-bold text-xs transition border border-violet-500/20 shadow-xs cursor-pointer"
+                              title="View Receipt Slip / Voucher"
                             >
-                              <ExternalLink size={12} />
-                              View
-                            </a>
+                              <Camera size={13} />
+                              <span>View Slip</span>
+                            </button>
                           ) : (
-                            <span className="text-slate-400">-</span>
+                            <span className="text-slate-300 dark:text-zinc-600 text-xs">-</span>
                           )}
                         </td>
 
@@ -2096,15 +2298,26 @@ export function ExpensesPage() {
                     </div>
 
                     <div className="flex items-center gap-2">
+                      {e.receiptAttachment && (
+                        <button
+                          type="button"
+                          onClick={() => setPreviewReceipt({ isOpen: true, url: e.receiptAttachment!, entry: e })}
+                          className="px-3 py-2 rounded-xl bg-violet-500/10 hover:bg-violet-500/20 text-violet-600 dark:text-violet-400 text-xs font-bold transition flex items-center gap-1.5 border border-violet-500/20 cursor-pointer shadow-xs"
+                          title="Inspect receipt slip before approving"
+                        >
+                          <Camera size={14} />
+                          <span>View Slip</span>
+                        </button>
+                      )}
                       <button
                         onClick={() => setSelectedRejectEntry(e)}
-                        className="px-3 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 text-xs font-bold transition"
+                        className="px-3 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 text-xs font-bold transition cursor-pointer"
                       >
                         Reject
                       </button>
                       <button
                         onClick={() => handleApproveEntry(e)}
-                        className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition shadow-sm"
+                        className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition shadow-sm cursor-pointer"
                       >
                         Approve
                       </button>
@@ -3164,6 +3377,120 @@ export function ExpensesPage() {
                     <span>Permanently Delete</span>
                   </>
                 )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Receipt Slip / Voucher Preview Modal ───────────────────────── */}
+      {previewReceipt.isOpen && previewReceipt.url && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] rounded-2xl w-full max-w-4xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-[#27272A] bg-slate-50/50 dark:bg-[#18181B]">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-violet-500/10 text-violet-600 dark:text-violet-400">
+                  <Camera size={20} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                      Receipt Slip / Voucher Preview
+                    </h3>
+                    {previewReceipt.entry?.entryNumber && (
+                      <span className="font-mono font-bold text-xs px-2 py-0.5 rounded-md bg-violet-100 dark:bg-violet-950/60 text-violet-600 dark:text-violet-400 border border-violet-200 dark:border-violet-800/50">
+                        {previewReceipt.entry.entryNumber}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-slate-500 dark:text-zinc-400">
+                    Official financial document attached to expense voucher
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setPreviewReceipt({ isOpen: false, url: '', entry: null })}
+                className="p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#27272A] transition cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Metadata Strip */}
+            {previewReceipt.entry && (
+              <div className="px-5 py-2.5 bg-slate-100/60 dark:bg-[#09090B] border-b border-slate-200 dark:border-[#27272A] flex flex-wrap items-center justify-between gap-3 text-xs">
+                <div className="flex flex-wrap items-center gap-3 text-slate-600 dark:text-zinc-300">
+                  <span>Branch: <strong className="text-slate-900 dark:text-white">{previewReceipt.entry.branch?.name || '-'}</strong></span>
+                  <span>•</span>
+                  <span>Date: <strong className="text-slate-900 dark:text-white">{formatDate(previewReceipt.entry.date)} {previewReceipt.entry.time}</strong></span>
+                  <span>•</span>
+                  <span>Paid To: <strong className="text-slate-900 dark:text-white">{previewReceipt.entry.paidTo}</strong></span>
+                  <span>•</span>
+                  <span>Category: <strong className="text-slate-900 dark:text-white">{previewReceipt.entry.category?.name || '-'}</strong></span>
+                  <span>•</span>
+                  <span>Mode: <strong className="text-slate-900 dark:text-white font-mono">{previewReceipt.entry.paymentMode}</strong></span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-500">Amount:</span>
+                  <span className="text-sm font-extrabold text-violet-600 dark:text-violet-400">
+                    {formatRupee(previewReceipt.entry.amount)}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Media Content Body */}
+            <div className="p-4 flex-1 overflow-auto flex items-center justify-center bg-slate-100/40 dark:bg-[#09090B]/60 min-h-[350px]">
+              {previewReceipt.url.toLowerCase().includes('.pdf') || previewReceipt.url.startsWith('data:application/pdf') ? (
+                <div className="w-full h-full min-h-[500px] flex flex-col rounded-xl overflow-hidden border border-slate-200 dark:border-[#27272A]">
+                  <iframe
+                    src={previewReceipt.url}
+                    title="PDF Voucher Slip"
+                    className="w-full flex-1 min-h-[480px] bg-white rounded-xl"
+                  />
+                </div>
+              ) : (
+                <div className="max-w-full max-h-[65vh] flex items-center justify-center overflow-hidden rounded-xl bg-black/5 dark:bg-black/20 p-2">
+                  <img
+                    src={previewReceipt.url}
+                    alt="Receipt Slip Voucher"
+                    className="max-h-[60vh] max-w-full object-contain rounded-lg shadow-sm"
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Modal Actions Footer */}
+            <div className="flex items-center justify-between px-5 py-3.5 border-t border-slate-100 dark:border-[#27272A] bg-slate-50/50 dark:bg-[#18181B]">
+              <div className="flex items-center gap-2">
+                <a
+                  href={previewReceipt.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-[#27272A] hover:bg-slate-200 dark:hover:bg-[#3F3F46] text-slate-700 dark:text-zinc-200 text-xs font-semibold transition flex items-center gap-1.5"
+                >
+                  <ExternalLink size={14} />
+                  <span>Open in New Tab</span>
+                </a>
+                <a
+                  href={previewReceipt.url}
+                  download={`voucher-slip-${previewReceipt.entry?.entryNumber || 'receipt'}`}
+                  className="px-3.5 py-2 rounded-xl bg-violet-500/10 hover:bg-violet-500/20 text-violet-600 dark:text-violet-400 text-xs font-semibold transition flex items-center gap-1.5"
+                >
+                  <Download size={14} />
+                  <span>Download Slip</span>
+                </a>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setPreviewReceipt({ isOpen: false, url: '', entry: null })}
+                className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white dark:bg-zinc-100 dark:hover:bg-white dark:text-zinc-900 text-xs font-bold transition cursor-pointer"
+              >
+                Close
               </button>
             </div>
           </div>

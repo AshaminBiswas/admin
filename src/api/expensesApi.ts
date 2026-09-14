@@ -49,10 +49,15 @@ export function saveOfflineQueue(queue: OfflineQueuedExpense[]) {
 
 export function addToOfflineQueue(item: Omit<OfflineQueuedExpense, 'clientTempId' | 'queuedAt'>): OfflineQueuedExpense {
   const queue = getOfflineQueue();
+  const now = new Date();
+  const dateStr = item.date || now.toISOString().split('T')[0];
+  const timeStr = item.time || now.toTimeString().split(' ')[0];
   const queued: OfflineQueuedExpense = {
     ...item,
+    date: dateStr,
+    time: timeStr,
     clientTempId: `off_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-    queuedAt: new Date().toISOString(),
+    queuedAt: now.toISOString(),
   };
   queue.push(queued);
   saveOfflineQueue(queue);
