@@ -1,0 +1,483 @@
+import { API_BASE_URL, getAdminToken } from './adminApi';
+import type {
+  ExpenseEntry,
+  ExpenseCategory,
+  ExpenseDailyLedger,
+  ExpenseFloatTopUp,
+  BranchCashBalanceInfo,
+  MultiBranchSummaryInfo,
+  ExpenseRollupAnalytics,
+} from '../types/admin';
+
+const OFFLINE_QUEUE_KEY = 'prc_offline_expense_queue';
+
+function authHeaders(): Record<string, string> {
+  const token = getAdminToken();
+  return {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+}
+
+// ─── Offline Queue Engine ────────────────────────────────────────────────────
+
+export interface OfflineQueuedExpense {
+  clientTempId: string;
+  amount: number;
+  amountInPaise?: boolean;
+  categoryId: string;
+  categoryName?: string;
+  subCategory?: string | null;
+  paymentMode: 'CASH' | 'UPI' | 'BANK_TRANSFER';
+  description: string;
+  paidTo: string;
+  receiptAttachment?: string | null;
+  branchId: string;
+  branchName?: string;
+  departmentId?: string | null;
+  employeeId?: string | null;
+  date?: string;
+  time?: string;
+  queuedAt: string;
+}
+
+export function getOfflineQueue(): OfflineQueuedExpense[] {
+  try {
+    const raw = localStorage.getItem(OFFLINE_QUEUE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveOfflineQueue(queue: OfflineQueuedExpense[]) {
+  localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(queue));
+}
+
+export function addToOfflineQueue(item: Omit<OfflineQueuedExpense, 'clientTempId' | 'queuedAt'>): OfflineQueuedExpense {
+  const queue = getOfflineQueue();
+  const queued: OfflineQueuedExpense = {
+    ...item,
+    clientTempId: `off_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    queuedAt: new Date().toISOString(),
+  };
+  queue.push(queued);
+  saveOfflineQueue(queue);
+  return queued;
+}
+
+export function removeFromOfflineQueue(clientTempId: string) {
+  const queue = getOfflineQueue().filter((q) => q.clientTempId !== clientTempId);
+  saveOfflineQueue(queue);
+}
+
+export function clearOfflineQueue() {
+  localStorage.removeItem(OFFLINE_QUEUE_KEY);
+}
+
+// ─── Expenses API Client ─────────────────────────────────────────────────────
+
+export const expensesApi = {
+  // 1. Live Running Balance
+  async getLiveBalance(branchId: string): Promise<BranchCashBalanceInfo> {
+    const res = await fetch(`${API_BASE_URL}/expenses/live-balance/${branchId}`, {
+      headers: authHeaders(),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.message || 'Failed to fetch live balance');
+    return json.data;
+  },
+
+  // 2. Multi-Branch Summary (Super Admin)
+  async getMultiBranchSummary(): Promise<MultiBranchSummaryInfo> {
+    const res = await fetch(`${API_BASE_URL}/expenses/summary/multi-branch`, {
+      headers: authHeaders(),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.message || 'Failed to fetch multi-branch summary');
+    return json.data;
+  },
+
+  // 3. Paginated Expense List
+  async getExpenses(params: Record<string, any> = {}): Promise<{
+    entries: ExpenseEntry[];
+    nextCursor: string | null;
+    hasMore: boolean;
+    totalCount: number;
+  }> {
+    const sp = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== '') {
+        sp.set(k, String(v));
+      }
+    });
+
+    const res = await fetch(`${API_BASE_URL}/expenses?${sp.toString()}`, {
+      headers: authHeaders(),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.message || 'Failed to load expenses');
+    return json;
+  },
+
+  // 4. Create Single Expense (with offline fallback)
+  async createExpense(data: {
+    amount: number;
+    amountInPaise?: boolean;
+    categoryId: string;
+    subCategory?: string | null;
+    paymentMode?: 'CASH' | 'UPI' | 'BANK_TRANSFER';
+    description: string;
+    paidTo: string;
+    receiptAttachment?: string | null;
+    branchId: string;
+    departmentId?: string | null;
+    employeeId?: string | null;
+    date?: string;
+    time?: string;
+    clientTempId?: string | null;
+  }): Promise<{ expense: ExpenseEntry; budgetWarning?: string | null; isOffline?: boolean }> {
+    // Check if browser is offline
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      const queued = addToOfflineQueue(data as any);
+      // Construct optimistic entry for instant feedback
+      const optimistic: ExpenseEntry = {
+        id: queued.clientTempId,
+        entryNumber: `OFFLINE-${queued.clientTempId.slice(-4).toUpperCase()}`,
+        date: queued.date || new Date().toISOString().split('T')[0],
+        time: queued.time || new Date().toTimeString().split(' ')[0],
+        amount: Math.round(data.amount * 100),
+        categoryId: data.categoryId,
+        subCategory: data.subCategory,
+        paymentMode: data.paymentMode || 'CASH',
+        description: data.description,
+        paidTo: data.paidTo,
+        receiptAttachment: data.receiptAttachment,
+        branchId: data.branchId,
+        departmentId: data.departmentId,
+        employeeId: data.employeeId,
+        addedById: 'current-user',
+        status: 'PENDING',
+        isVoid: false,
+        clientTempId: queued.clientTempId,
+        createdAt: queued.queuedAt,
+        updatedAt: queued.queuedAt,
+      };
+      return { expense: optimistic, isOffline: true };
+    }
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/expenses`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify(data),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.message || 'Failed to record expense');
+      return { expense: json.data, budgetWarning: json.budgetWarning };
+    } catch (err: any) {
+      // If network failed, save offline
+      if (err.name === 'TypeError' || err.message?.includes('fetch')) {
+        const queued = addToOfflineQueue(data as any);
+        const optimistic: ExpenseEntry = {
+          id: queued.clientTempId,
+          entryNumber: `OFFLINE-${queued.clientTempId.slice(-4).toUpperCase()}`,
+          date: queued.date || new Date().toISOString().split('T')[0],
+          time: queued.time || new Date().toTimeString().split(' ')[0],
+          amount: Math.round(data.amount * 100),
+          categoryId: data.categoryId,
+          subCategory: data.subCategory,
+          paymentMode: data.paymentMode || 'CASH',
+          description: data.description,
+          paidTo: data.paidTo,
+          receiptAttachment: data.receiptAttachment,
+          branchId: data.branchId,
+          departmentId: data.departmentId,
+          employeeId: data.employeeId,
+          addedById: 'current-user',
+          status: 'PENDING',
+          isVoid: false,
+          clientTempId: queued.clientTempId,
+          createdAt: queued.queuedAt,
+          updatedAt: queued.queuedAt,
+        };
+        return { expense: optimistic, isOffline: true };
+      }
+      throw err;
+    }
+  },
+
+  // 5. Batch Sync Offline Queue
+  async syncOfflineQueue(): Promise<{
+    syncedCount: number;
+    duplicateCount: number;
+    errorCount: number;
+    synced: any[];
+  }> {
+    const queue = getOfflineQueue();
+    if (queue.length === 0) {
+      return { syncedCount: 0, duplicateCount: 0, errorCount: 0, synced: [] };
+    }
+
+    const payload = queue.map((q) => ({
+      amount: q.amount,
+      amountInPaise: false,
+      categoryId: q.categoryId,
+      subCategory: q.subCategory,
+      paymentMode: q.paymentMode,
+      description: q.description,
+      paidTo: q.paidTo,
+      receiptAttachment: q.receiptAttachment,
+      branchId: q.branchId,
+      departmentId: q.departmentId,
+      employeeId: q.employeeId,
+      date: q.date,
+      time: q.time,
+      clientTempId: q.clientTempId,
+    }));
+
+    const res = await fetch(`${API_BASE_URL}/expenses/batch-sync`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ entries: payload }),
+    });
+
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.message || 'Batch sync failed');
+
+    // On success, clear the offline queue
+    clearOfflineQueue();
+    return json.data;
+  },
+
+  // 6. Approve Expense
+  async approveExpense(id: string, notes?: string): Promise<ExpenseEntry> {
+    const res = await fetch(`${API_BASE_URL}/expenses/${id}/approve`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ notes }),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.message || 'Failed to approve expense');
+    return json.data;
+  },
+
+  // 7. Reject Expense
+  async rejectExpense(id: string, rejectionReason: string): Promise<ExpenseEntry> {
+    const res = await fetch(`${API_BASE_URL}/expenses/${id}/reject`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ rejectionReason }),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.message || 'Failed to reject expense');
+    return json.data;
+  },
+
+  // 8. Void Expense
+  async voidExpense(id: string, voidReason: string): Promise<ExpenseEntry> {
+    const res = await fetch(`${API_BASE_URL}/expenses/${id}/void`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ voidReason }),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.message || 'Failed to void expense');
+    return json.data;
+  },
+
+  // 9. Daily Closing Reconciliation
+  async reconcileDaily(data: {
+    branchId: string;
+    date: string;
+    physicalCashCounted: number;
+    physicalCashInPaise?: boolean;
+    reconciliationNotes?: string | null;
+  }): Promise<ExpenseDailyLedger> {
+    const res = await fetch(`${API_BASE_URL}/expenses/ledger/reconcile`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify(data),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.message || 'Reconciliation failed');
+    return json.data;
+  },
+
+  // 10. Cash Float Top-Up
+  async addFloatTopUp(data: {
+    branchId: string;
+    date?: string;
+    amount: number;
+    amountInPaise?: boolean;
+    source: string;
+    referenceNo?: string | null;
+    notes?: string | null;
+  }): Promise<ExpenseFloatTopUp> {
+    const res = await fetch(`${API_BASE_URL}/expenses/ledger/float-topup`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify(data),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.message || 'Failed to record float top-up');
+    return json.data;
+  },
+
+  // 11. Category Master
+  async getCategories(params: { year?: number; month?: number; branchId?: string } = {}): Promise<ExpenseCategory[]> {
+    const sp = new URLSearchParams();
+    if (params.year) sp.set('year', String(params.year));
+    if (params.month) sp.set('month', String(params.month));
+    if (params.branchId) sp.set('branchId', params.branchId);
+
+    const res = await fetch(`${API_BASE_URL}/expenses/categories?${sp.toString()}`, {
+      headers: authHeaders(),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.message || 'Failed to fetch categories');
+    return json.data;
+  },
+
+  async createCategory(data: {
+    name: string;
+    description?: string | null;
+    monthlyBudgetLimit?: number | null;
+    budgetInPaise?: boolean;
+    isActive?: boolean;
+  }): Promise<ExpenseCategory> {
+    const res = await fetch(`${API_BASE_URL}/expenses/categories`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify(data),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.message || 'Failed to create category');
+    return json.data;
+  },
+
+  async updateCategory(
+    id: string,
+    data: {
+      name?: string;
+      description?: string | null;
+      monthlyBudgetLimit?: number | null;
+      budgetInPaise?: boolean;
+      isActive?: boolean;
+    }
+  ): Promise<ExpenseCategory> {
+    const res = await fetch(`${API_BASE_URL}/expenses/categories/${id}`, {
+      method: 'PATCH',
+      headers: authHeaders(),
+      body: JSON.stringify(data),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.message || 'Failed to update category');
+    return json.data;
+  },
+
+  async deleteCategory(id: string): Promise<ExpenseCategory> {
+    const res = await fetch(`${API_BASE_URL}/expenses/categories/${id}`, {
+      method: 'DELETE',
+      headers: authHeaders(),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.message || 'Failed to delete category');
+    return json.data;
+  },
+
+  // 12. Rollup Analytics
+  async getAnalytics(params: {
+    branchId?: string;
+    year?: number;
+    month?: number;
+    period?: 'month' | 'year';
+  } = {}): Promise<ExpenseRollupAnalytics> {
+    const sp = new URLSearchParams();
+    if (params.branchId) sp.set('branchId', params.branchId);
+    if (params.year) sp.set('year', String(params.year));
+    if (params.month) sp.set('month', String(params.month));
+    if (params.period) sp.set('period', params.period);
+
+    const res = await fetch(`${API_BASE_URL}/expenses/reports/analytics?${sp.toString()}`, {
+      headers: authHeaders(),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.message || 'Failed to fetch analytics');
+    return json.data;
+  },
+
+  // 13. Download Multi-Sheet Excel Report (.xlsx)
+  async downloadExcelReport(query: {
+    period: 'day' | 'week' | 'month' | 'year';
+    branchId?: string;
+    date?: string;
+    startDate?: string;
+    month?: number;
+    year?: number;
+  }): Promise<void> {
+    const sp = new URLSearchParams();
+    Object.entries(query).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== '') {
+        sp.set(k, String(v));
+      }
+    });
+
+    const res = await fetch(`${API_BASE_URL}/expenses/reports/export?${sp.toString()}`, {
+      headers: {
+        Authorization: `Bearer ${getAdminToken()}`,
+      },
+    });
+
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}));
+      throw new Error(errJson.message || 'Failed to generate Excel report');
+    }
+
+    const blob = await res.blob();
+    const disposition = res.headers.get('Content-Disposition') || '';
+    const match = disposition.match(/filename="?([^"]+)"?/);
+    const filename = match ? match[1] : `Expenses_Report_${query.period}.xlsx`;
+
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  },
+
+  // 14. Settings
+  async getSettings(branchId?: string): Promise<any> {
+    const sp = branchId ? `?branchId=${branchId}` : '';
+    const res = await fetch(`${API_BASE_URL}/expenses/settings${sp}`, {
+      headers: authHeaders(),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.message || 'Failed to load settings');
+    return json.data;
+  },
+
+  async updateSettings(data: any): Promise<any> {
+    const res = await fetch(`${API_BASE_URL}/expenses/settings`, {
+      method: 'PATCH',
+      headers: authHeaders(),
+      body: JSON.stringify(data),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.message || 'Failed to update settings');
+    return json.data;
+  },
+
+  // 15. Fetch Active Branches
+  async getBranches(): Promise<{ id: string; name: string; code: string }[]> {
+    const res = await fetch(`${API_BASE_URL}/branches`, {
+      headers: authHeaders(),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.message || 'Failed to load branches');
+    return json.data?.branches || json.data || [];
+  },
+};

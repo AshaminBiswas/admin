@@ -97,6 +97,8 @@ export function AdminHeader({ isCollapsed, onToggleCollapse, onToggleMobile }: A
       case "installer-payments": return "Cubicle Installer Payment Tracking";
       case "create-installer-bill":
       case "installer-bill-create": return "New Installer Bill";
+      case "expenses":
+      case "cash-expenses": return "Daily Cash Expense Tracker";
       case "settings": return "Security & Two-Factor Authentication (2FA)";
       default: return "PRC Admin Console";
     }

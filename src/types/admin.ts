@@ -313,7 +313,9 @@ export type AdminView =
   | 'installer-payments'
   | 'create-installer-bill'
   | 'installer-bill-create'
-  | 'employee-management';
+  | 'employee-management'
+  | 'expenses'
+  | 'cash-expenses';
 
 export * from './poManagement';
 export * from './proforma';
@@ -1149,6 +1151,145 @@ export interface ProformaInvoiceMetrics {
   totalBalanceDue: number;
   statusCounts: Record<string, number>;
 }
+
+// ─── Daily Cash Expense Tracker Types ─────────────────────────────────────────
+
+export type ExpensePaymentMode = 'CASH' | 'UPI' | 'BANK_TRANSFER';
+export type ExpenseStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+
+export interface ExpenseCategory {
+  id: string;
+  name: string;
+  description?: string | null;
+  monthlyBudgetLimit?: number | null; // In paise
+  budgetRupees?: number | null;
+  currentMonthSpendPaise?: number;
+  currentMonthSpendRupees?: number;
+  entriesCount?: number;
+  percentUsed?: number;
+  isOverBudget?: boolean;
+  isActive: boolean;
+  isDeleted?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ExpenseEntry {
+  id: string;
+  entryNumber: string;
+  date: string;
+  time: string;
+  amount: number; // in paise
+  categoryId: string;
+  subCategory?: string | null;
+  paymentMode: ExpensePaymentMode;
+  description: string;
+  paidTo: string;
+  receiptAttachment?: string | null;
+  branchId: string;
+  departmentId?: string | null;
+  employeeId?: string | null;
+  addedById: string;
+  status: ExpenseStatus;
+  approvedById?: string | null;
+  approvedAt?: string | null;
+  rejectionReason?: string | null;
+  isVoid: boolean;
+  voidReason?: string | null;
+  voidedById?: string | null;
+  voidedAt?: string | null;
+  clientTempId?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  category?: ExpenseCategory;
+  branch?: { id: string; name: string; code: string };
+  addedBy?: { id: string; firstName?: string; lastName?: string; email: string };
+  approvedBy?: { id: string; firstName?: string; lastName?: string; email: string };
+  employee?: { id: string; employeeId: string; name: string; designation?: string };
+}
+
+export interface ExpenseDailyLedger {
+  id: string;
+  branchId: string;
+  date: string;
+  openingBalance: number; // in paise
+  cashReceived: number; // in paise
+  totalExpenses: number; // in paise
+  closingBalance: number; // in paise
+  physicalCashCounted?: number | null; // in paise
+  variance?: number | null; // in paise
+  isReconciled: boolean;
+  reconciledById?: string | null;
+  reconciledAt?: string | null;
+  reconciliationNotes?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+  branch?: { id: string; name: string; code: string };
+  reconciledBy?: { id: string; firstName?: string; lastName?: string };
+}
+
+export interface ExpenseFloatTopUp {
+  id: string;
+  branchId: string;
+  date: string;
+  amount: number; // in paise
+  source: string;
+  referenceNo?: string | null;
+  notes?: string | null;
+  addedById: string;
+  createdAt: string;
+  branch?: { id: string; name: string; code: string };
+  addedBy?: { id: string; firstName?: string; lastName?: string };
+}
+
+export interface BranchCashBalanceInfo {
+  branchId: string;
+  currentBalance: number; // in paise
+  currentBalanceRupees: number;
+  todayOpening: number;
+  todayReceived: number;
+  todayExpenses: number;
+  todayClosing: number;
+  physicalCashCounted: number | null;
+  variance: number | null;
+  isReconciled: boolean;
+  reconciledAt: string | null;
+  pendingApprovalsCount: number;
+  lastEntryAt: string | null;
+}
+
+export interface MultiBranchSummaryInfo {
+  branches: (BranchCashBalanceInfo & { branch: { id: string; name: string; code: string } })[];
+  consolidated: {
+    totalCashInHand: number;
+    totalCashInHandRupees: number;
+    todayTotalExpenses: number;
+    todayTotalExpensesRupees: number;
+    todayTotalReceived: number;
+    totalPendingApprovals: number;
+  };
+}
+
+export interface ExpenseRollupAnalytics {
+  year: number;
+  month: number;
+  grandTotalPaise: number;
+  grandTotalRupees: number;
+  categoryDistribution: {
+    name: string;
+    amountPaise: number;
+    amountRupees: number;
+    count: number;
+    percentage: number;
+  }[];
+  trendData: {
+    month: string;
+    monthNum: number;
+    amountRupees: number;
+  }[];
+  branchesCount: number;
+}
+
 
 
 

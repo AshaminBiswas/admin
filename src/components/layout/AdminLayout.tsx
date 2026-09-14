@@ -54,6 +54,7 @@ const QRDocumentValidatorPage = lazyWithRetry(() => import("../../pages/QRDocume
 const InstallerPaymentsPage = lazyWithRetry(() => import("../../pages/InstallerPaymentsPage").then((m) => ({ default: m.InstallerPaymentsPage })));
 const CreateInstallerBillPage = lazyWithRetry(() => import("../../pages/CreateInstallerBillPage").then((m) => ({ default: m.CreateInstallerBillPage })));
 const EmployeeManagementPage = lazyWithRetry(() => import("../../pages/EmployeeManagementPage").then((m) => ({ default: m.EmployeeManagementPage })));
+const ExpensesPage = lazyWithRetry(() => import("../../pages/ExpensesPage").then((m) => ({ default: m.ExpensesPage })));
 import { AICopilot } from "../ai/AICopilot";
 
 function ViewLoadingSkeleton() {
@@ -222,6 +223,9 @@ export function AdminLayout() {
         return <CreateInstallerBillPage onBack={() => setCurrentView("installer-payments")} />;
       case "employee-management":
         return <EmployeeManagementPage />;
+      case "expenses":
+      case "cash-expenses":
+        return <ExpensesPage />;
       case "advance-payments":
       case "payment-tracking":
         return <AdvancePaymentsTrackerPage />;
