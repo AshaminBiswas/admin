@@ -1,4 +1,4 @@
-import { API_BASE_URL, getAdminToken } from './adminApi';
+import { API_BASE_URL, getAdminToken, fetchAdminApi } from './adminApi';
 import type {
   ExpenseEntry,
   ExpenseCategory,
@@ -10,14 +10,6 @@ import type {
 } from '../types/admin';
 
 const OFFLINE_QUEUE_KEY = 'prc_offline_expense_queue';
-
-function authHeaders(): Record<string, string> {
-  const token = getAdminToken();
-  return {
-    'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
-}
 
 // ─── Offline Queue Engine ────────────────────────────────────────────────────
 
@@ -80,22 +72,16 @@ export function clearOfflineQueue() {
 export const expensesApi = {
   // 1. Live Running Balance
   async getLiveBalance(branchId: string): Promise<BranchCashBalanceInfo> {
-    const res = await fetch(`${API_BASE_URL}/expenses/live-balance/${branchId}`, {
-      headers: authHeaders(),
-    });
-    const json = await res.json();
-    if (!res.ok) throw new Error(json.message || 'Failed to fetch live balance');
-    return json.data;
+    const res = await fetchAdminApi<BranchCashBalanceInfo>(`/expenses/live-balance/${branchId}`);
+    if (!res.success) throw new Error(res.message || res.error?.message || 'Failed to fetch live balance');
+    return res.data!;
   },
 
   // 2. Multi-Branch Summary (Super Admin)
   async getMultiBranchSummary(): Promise<MultiBranchSummaryInfo> {
-    const res = await fetch(`${API_BASE_URL}/expenses/summary/multi-branch`, {
-      headers: authHeaders(),
-    });
-    const json = await res.json();
-    if (!res.ok) throw new Error(json.message || 'Failed to fetch multi-branch summary');
-    return json.data;
+    const res = await fetchAdminApi<MultiBranchSummaryInfo>('/expenses/summary/multi-branch');
+    if (!res.success) throw new Error(res.message || res.error?.message || 'Failed to fetch multi-branch summary');
+    return res.data!;
   },
 
   // 3. Paginated Expense List
@@ -112,12 +98,14 @@ export const expensesApi = {
       }
     });
 
-    const res = await fetch(`${API_BASE_URL}/expenses?${sp.toString()}`, {
-      headers: authHeaders(),
-    });
-    const json = await res.json();
-    if (!res.ok) throw new Error(json.message || 'Failed to load expenses');
-    return json;
+    const res = await fetchAdminApi(`/expenses?${sp.toString()}`);
+    if (!res.success) throw new Error(res.message || res.error?.message || 'Failed to load expenses');
+    return {
+      entries: res.data || [],
+      nextCursor: res.nextCursor ?? null,
+      hasMore: res.hasMore ?? false,
+      totalCount: res.totalCount ?? 0,
+    };
   },
 
   // 4. Create Single Expense (with offline fallback)
@@ -140,7 +128,6 @@ export const expensesApi = {
     // Check if browser is offline
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
       const queued = addToOfflineQueue(data as any);
-      // Construct optimistic entry for instant feedback
       const optimistic: ExpenseEntry = {
         id: queued.clientTempId,
         entryNumber: `OFFLINE-${queued.clientTempId.slice(-4).toUpperCase()}`,
@@ -167,17 +154,15 @@ export const expensesApi = {
     }
 
     try {
-      const res = await fetch(`${API_BASE_URL}/expenses`, {
+      const res = await fetchAdminApi('/expenses', {
         method: 'POST',
-        headers: authHeaders(),
         body: JSON.stringify(data),
       });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.message || 'Failed to record expense');
-      return { expense: json.data, budgetWarning: json.budgetWarning };
+      if (!res.success) throw new Error(res.message || res.error?.message || 'Failed to record expense');
+      return { expense: res.data, budgetWarning: res.budgetWarning };
     } catch (err: any) {
-      // If network failed, save offline
-      if (err.name === 'TypeError' || err.message?.includes('fetch')) {
+      // If network failed or abort, save offline
+      if (err.name === 'TypeError' || err.name === 'AbortError' || err.message?.includes('fetch') || err.message?.includes('network')) {
         const queued = addToOfflineQueue(data as any);
         const optimistic: ExpenseEntry = {
           id: queued.clientTempId,
@@ -236,54 +221,46 @@ export const expensesApi = {
       clientTempId: q.clientTempId,
     }));
 
-    const res = await fetch(`${API_BASE_URL}/expenses/batch-sync`, {
+    const res = await fetchAdminApi('/expenses/batch-sync', {
       method: 'POST',
-      headers: authHeaders(),
       body: JSON.stringify({ entries: payload }),
     });
 
-    const json = await res.json();
-    if (!res.ok) throw new Error(json.message || 'Batch sync failed');
+    if (!res.success) throw new Error(res.message || res.error?.message || 'Batch sync failed');
 
     // On success, clear the offline queue
     clearOfflineQueue();
-    return json.data;
+    return res.data;
   },
 
   // 6. Approve Expense
   async approveExpense(id: string, notes?: string): Promise<ExpenseEntry> {
-    const res = await fetch(`${API_BASE_URL}/expenses/${id}/approve`, {
+    const res = await fetchAdminApi<ExpenseEntry>(`/expenses/${id}/approve`, {
       method: 'POST',
-      headers: authHeaders(),
       body: JSON.stringify({ notes }),
     });
-    const json = await res.json();
-    if (!res.ok) throw new Error(json.message || 'Failed to approve expense');
-    return json.data;
+    if (!res.success) throw new Error(res.message || res.error?.message || 'Failed to approve expense');
+    return res.data!;
   },
 
   // 7. Reject Expense
   async rejectExpense(id: string, rejectionReason: string): Promise<ExpenseEntry> {
-    const res = await fetch(`${API_BASE_URL}/expenses/${id}/reject`, {
+    const res = await fetchAdminApi<ExpenseEntry>(`/expenses/${id}/reject`, {
       method: 'POST',
-      headers: authHeaders(),
       body: JSON.stringify({ rejectionReason }),
     });
-    const json = await res.json();
-    if (!res.ok) throw new Error(json.message || 'Failed to reject expense');
-    return json.data;
+    if (!res.success) throw new Error(res.message || res.error?.message || 'Failed to reject expense');
+    return res.data!;
   },
 
   // 8. Void Expense
   async voidExpense(id: string, voidReason: string): Promise<ExpenseEntry> {
-    const res = await fetch(`${API_BASE_URL}/expenses/${id}/void`, {
+    const res = await fetchAdminApi<ExpenseEntry>(`/expenses/${id}/void`, {
       method: 'POST',
-      headers: authHeaders(),
       body: JSON.stringify({ voidReason }),
     });
-    const json = await res.json();
-    if (!res.ok) throw new Error(json.message || 'Failed to void expense');
-    return json.data;
+    if (!res.success) throw new Error(res.message || res.error?.message || 'Failed to void expense');
+    return res.data!;
   },
 
   // 9. Daily Closing Reconciliation
@@ -294,14 +271,12 @@ export const expensesApi = {
     physicalCashInPaise?: boolean;
     reconciliationNotes?: string | null;
   }): Promise<ExpenseDailyLedger> {
-    const res = await fetch(`${API_BASE_URL}/expenses/ledger/reconcile`, {
+    const res = await fetchAdminApi<ExpenseDailyLedger>('/expenses/ledger/reconcile', {
       method: 'POST',
-      headers: authHeaders(),
       body: JSON.stringify(data),
     });
-    const json = await res.json();
-    if (!res.ok) throw new Error(json.message || 'Reconciliation failed');
-    return json.data;
+    if (!res.success) throw new Error(res.message || res.error?.message || 'Reconciliation failed');
+    return res.data!;
   },
 
   // 10. Cash Float Top-Up
@@ -314,14 +289,12 @@ export const expensesApi = {
     referenceNo?: string | null;
     notes?: string | null;
   }): Promise<ExpenseFloatTopUp> {
-    const res = await fetch(`${API_BASE_URL}/expenses/ledger/float-topup`, {
+    const res = await fetchAdminApi<ExpenseFloatTopUp>('/expenses/ledger/float-topup', {
       method: 'POST',
-      headers: authHeaders(),
       body: JSON.stringify(data),
     });
-    const json = await res.json();
-    if (!res.ok) throw new Error(json.message || 'Failed to record float top-up');
-    return json.data;
+    if (!res.success) throw new Error(res.message || res.error?.message || 'Failed to record float top-up');
+    return res.data!;
   },
 
   // 11. Category Master
@@ -331,12 +304,11 @@ export const expensesApi = {
     if (params.month) sp.set('month', String(params.month));
     if (params.branchId) sp.set('branchId', params.branchId);
 
-    const res = await fetch(`${API_BASE_URL}/expenses/categories?${sp.toString()}`, {
-      headers: authHeaders(),
-    });
-    const json = await res.json();
-    if (!res.ok) throw new Error(json.message || 'Failed to fetch categories');
-    return json.data;
+    const queryStr = sp.toString();
+    const endpoint = queryStr ? `/expenses/categories?${queryStr}` : '/expenses/categories';
+    const res = await fetchAdminApi<ExpenseCategory[]>(endpoint);
+    if (!res.success) throw new Error(res.message || res.error?.message || 'Failed to fetch categories');
+    return res.data || [];
   },
 
   async createCategory(data: {
@@ -346,14 +318,12 @@ export const expensesApi = {
     budgetInPaise?: boolean;
     isActive?: boolean;
   }): Promise<ExpenseCategory> {
-    const res = await fetch(`${API_BASE_URL}/expenses/categories`, {
+    const res = await fetchAdminApi<ExpenseCategory>('/expenses/categories', {
       method: 'POST',
-      headers: authHeaders(),
       body: JSON.stringify(data),
     });
-    const json = await res.json();
-    if (!res.ok) throw new Error(json.message || 'Failed to create category');
-    return json.data;
+    if (!res.success) throw new Error(res.message || res.error?.message || 'Failed to create category');
+    return res.data!;
   },
 
   async updateCategory(
@@ -366,24 +336,20 @@ export const expensesApi = {
       isActive?: boolean;
     }
   ): Promise<ExpenseCategory> {
-    const res = await fetch(`${API_BASE_URL}/expenses/categories/${id}`, {
+    const res = await fetchAdminApi<ExpenseCategory>(`/expenses/categories/${id}`, {
       method: 'PATCH',
-      headers: authHeaders(),
       body: JSON.stringify(data),
     });
-    const json = await res.json();
-    if (!res.ok) throw new Error(json.message || 'Failed to update category');
-    return json.data;
+    if (!res.success) throw new Error(res.message || res.error?.message || 'Failed to update category');
+    return res.data!;
   },
 
   async deleteCategory(id: string): Promise<ExpenseCategory> {
-    const res = await fetch(`${API_BASE_URL}/expenses/categories/${id}`, {
+    const res = await fetchAdminApi<ExpenseCategory>(`/expenses/categories/${id}`, {
       method: 'DELETE',
-      headers: authHeaders(),
     });
-    const json = await res.json();
-    if (!res.ok) throw new Error(json.message || 'Failed to delete category');
-    return json.data;
+    if (!res.success) throw new Error(res.message || res.error?.message || 'Failed to delete category');
+    return res.data!;
   },
 
   // 12. Rollup Analytics
@@ -399,12 +365,9 @@ export const expensesApi = {
     if (params.month) sp.set('month', String(params.month));
     if (params.period) sp.set('period', params.period);
 
-    const res = await fetch(`${API_BASE_URL}/expenses/reports/analytics?${sp.toString()}`, {
-      headers: authHeaders(),
-    });
-    const json = await res.json();
-    if (!res.ok) throw new Error(json.message || 'Failed to fetch analytics');
-    return json.data;
+    const res = await fetchAdminApi<ExpenseRollupAnalytics>(`/expenses/reports/analytics?${sp.toString()}`);
+    if (!res.success) throw new Error(res.message || res.error?.message || 'Failed to fetch analytics');
+    return res.data!;
   },
 
   // 13. Download Multi-Sheet Excel Report (.xlsx)
@@ -423,9 +386,10 @@ export const expensesApi = {
       }
     });
 
+    const token = getAdminToken();
     const res = await fetch(`${API_BASE_URL}/expenses/reports/export?${sp.toString()}`, {
       headers: {
-        Authorization: `Bearer ${getAdminToken()}`,
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
     });
 
@@ -452,32 +416,24 @@ export const expensesApi = {
   // 14. Settings
   async getSettings(branchId?: string): Promise<any> {
     const sp = branchId ? `?branchId=${branchId}` : '';
-    const res = await fetch(`${API_BASE_URL}/expenses/settings${sp}`, {
-      headers: authHeaders(),
-    });
-    const json = await res.json();
-    if (!res.ok) throw new Error(json.message || 'Failed to load settings');
-    return json.data;
+    const res = await fetchAdminApi(`/expenses/settings${sp}`);
+    if (!res.success) throw new Error(res.message || res.error?.message || 'Failed to load settings');
+    return res.data;
   },
 
   async updateSettings(data: any): Promise<any> {
-    const res = await fetch(`${API_BASE_URL}/expenses/settings`, {
+    const res = await fetchAdminApi('/expenses/settings', {
       method: 'PATCH',
-      headers: authHeaders(),
       body: JSON.stringify(data),
     });
-    const json = await res.json();
-    if (!res.ok) throw new Error(json.message || 'Failed to update settings');
-    return json.data;
+    if (!res.success) throw new Error(res.message || res.error?.message || 'Failed to update settings');
+    return res.data;
   },
 
   // 15. Fetch Active Branches
   async getBranches(): Promise<{ id: string; name: string; code: string }[]> {
-    const res = await fetch(`${API_BASE_URL}/branches`, {
-      headers: authHeaders(),
-    });
-    const json = await res.json();
-    if (!res.ok) throw new Error(json.message || 'Failed to load branches');
-    return json.data?.branches || json.data || [];
+    const res = await fetchAdminApi('/branches');
+    if (!res.success) throw new Error(res.message || res.error?.message || 'Failed to load branches');
+    return res.data?.branches || res.data || [];
   },
 };
