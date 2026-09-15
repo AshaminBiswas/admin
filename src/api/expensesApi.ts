@@ -1,4 +1,4 @@
-import { API_BASE_URL, getAdminToken, fetchAdminApi, wakeServerAndWait } from './adminApi';
+import { API_BASE_URL, getAdminToken, fetchAdminApi } from './adminApi';
 import type {
   ExpenseEntry,
   UpdateExpenseInput,
@@ -11,6 +11,26 @@ import type {
 } from '../types/admin';
 
 const OFFLINE_QUEUE_KEY = 'prc_offline_expense_queue';
+const BRANCHES_CACHE_KEY = 'prc_cached_branches';
+const CATEGORIES_CACHE_KEY = 'prc_cached_categories';
+
+export function getCachedBranches(): { id: string; name: string; code: string }[] {
+  try {
+    const raw = localStorage.getItem(BRANCHES_CACHE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function getCachedCategories(): ExpenseCategory[] {
+  try {
+    const raw = localStorage.getItem(CATEGORIES_CACHE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
 
 // ─── Offline Queue Engine ────────────────────────────────────────────────────
 
@@ -241,8 +261,6 @@ export const expensesApi = {
 
   // 6. Approve Expense
   async approveExpense(id: string, notes?: string): Promise<ExpenseEntry> {
-    // Wake Render server before issuing POST — prevents CORS block on cold-start
-    await wakeServerAndWait();
     const res = await fetchAdminApi<ExpenseEntry>(`/expenses/${id}/approve`, {
       method: 'POST',
       body: JSON.stringify({ notes }),
@@ -253,8 +271,6 @@ export const expensesApi = {
 
   // 7. Reject Expense
   async rejectExpense(id: string, rejectionReason: string): Promise<ExpenseEntry> {
-    // Wake Render server before issuing POST — prevents CORS block on cold-start
-    await wakeServerAndWait();
     const res = await fetchAdminApi<ExpenseEntry>(`/expenses/${id}/reject`, {
       method: 'POST',
       body: JSON.stringify({ rejectionReason }),
@@ -265,8 +281,6 @@ export const expensesApi = {
 
   // 8. Void Expense
   async voidExpense(id: string, voidReason: string): Promise<ExpenseEntry> {
-    // Wake Render server before issuing POST — prevents CORS block on cold-start
-    await wakeServerAndWait();
     const res = await fetchAdminApi<ExpenseEntry>(`/expenses/${id}/void`, {
       method: 'POST',
       body: JSON.stringify({ voidReason }),
@@ -353,7 +367,13 @@ export const expensesApi = {
     const endpoint = queryStr ? `/expenses/categories?${queryStr}` : '/expenses/categories';
     const res = await fetchAdminApi<ExpenseCategory[]>(endpoint);
     if (!res.success) throw new Error(res.message || res.error?.message || 'Failed to fetch categories');
-    return res.data || [];
+    const list = res.data || [];
+    if (!queryStr && list.length > 0) {
+      try {
+        localStorage.setItem(CATEGORIES_CACHE_KEY, JSON.stringify(list));
+      } catch {}
+    }
+    return list;
   },
 
   async createCategory(data: {
@@ -487,13 +507,20 @@ export const expensesApi = {
         ? res
         : [];
       if (list.length > 0) {
-        return list.map((b: any) => ({
+        const mapped = list.map((b: any) => ({
           id: b.id,
           name: b.name,
           code: b.code || (b.name?.toLowerCase().includes('kol') ? 'KOL' : 'DEL'),
         }));
+        try {
+          localStorage.setItem(BRANCHES_CACHE_KEY, JSON.stringify(mapped));
+        } catch {}
+        return mapped;
       }
     } catch {}
+
+    const cached = getCachedBranches();
+    if (cached.length > 0) return cached;
 
     return [
       { id: 'b1000000-0000-0000-0000-000000000001', name: 'Delhi HQ', code: 'DEL' },
@@ -513,7 +540,7 @@ export const expensesApi = {
     if (params?.branchId) sp.set('branchId', params.branchId);
     if (params?.startDate) sp.set('startDate', params.startDate);
     if (params?.endDate) sp.set('endDate', params.endDate);
-    if (params?.limit) sp.set('limit', String(params.limit));
+    sp.set('limit', String(params?.limit || 20));
     if (params?.cursor) sp.set('cursor', params.cursor);
     const qs = sp.toString() ? `?${sp.toString()}` : '';
     const res = await fetchAdminApi(`/expenses/ledger/float-topup${qs}`);

@@ -60,6 +60,8 @@ import {
   getOfflineQueue,
   removeFromOfflineQueue,
   clearOfflineQueue,
+  getCachedBranches,
+  getCachedCategories,
   OfflineQueuedExpense,
 } from '../api/expensesApi';
 import type {
@@ -116,21 +118,47 @@ export function ExpensesPage() {
   // ─── Core State ─────────────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState<'entry' | 'ledger' | 'approvals' | 'reconciliation' | 'categories' | 'reports'>('entry');
   const [lastLoggedExpense, setLastLoggedExpense] = useState<ExpenseEntry | null>(null);
-  const [branches, setBranches] = useState<{ id: string; name: string; code: string }[]>([]);
-  const [selectedBranchId, setSelectedBranchId] = useState<string>('');
-  const [isAllBranches, setIsAllBranches] = useState<boolean>(false);
+  const [branches, setBranches] = useState<{ id: string; name: string; code: string }[]>(() => {
+    return getCachedBranches();
+  });
+  const [selectedBranchId, setSelectedBranchId] = useState<string>(() => {
+    const saved = localStorage.getItem('prc_last_expense_branch_id');
+    if (saved) return saved;
+    const cached = getCachedBranches();
+    const del = cached.find((b) => b.code?.toUpperCase().includes('DEL')) || cached[0];
+    return del?.id || '';
+  });
+  const [isAllBranches, setIsAllBranches] = useState<boolean>(() => {
+    return localStorage.getItem('prc_last_expense_is_all') === 'true';
+  });
 
   // Live balance & summary
-  const [liveBalance, setLiveBalance] = useState<BranchCashBalanceInfo | null>(null);
+  const [liveBalance, setLiveBalance] = useState<BranchCashBalanceInfo | null>(() => {
+    try {
+      const raw = localStorage.getItem('prc_cached_live_balance');
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  });
   const [multiSummary, setMultiSummary] = useState<MultiBranchSummaryInfo | null>(null);
   const [isLoadingBalance, setIsLoadingBalance] = useState(false);
 
   // Categories master
-  const [categories, setCategories] = useState<ExpenseCategory[]>([]);
+  const [categories, setCategories] = useState<ExpenseCategory[]>(() => {
+    return getCachedCategories();
+  });
   const [isLoadingCategories, setIsLoadingCategories] = useState(false);
 
   // Today entries stream (for Tab 1)
-  const [todayEntries, setTodayEntries] = useState<ExpenseEntry[]>([]);
+  const [todayEntries, setTodayEntries] = useState<ExpenseEntry[]>(() => {
+    try {
+      const raw = localStorage.getItem('prc_cached_today_entries');
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
   const [isLoadingToday, setIsLoadingToday] = useState(false);
 
   // Approval queue (for Tab 3)
@@ -286,24 +314,25 @@ export function ExpensesPage() {
     setOfflineQueue(getOfflineQueue());
   };
 
-  // ─── Initial Load: Branches & Categories ────────────────────────────────────
+  // ─── Initial Load: Branches & Categories in Parallel ───────────────────────
   useEffect(() => {
     async function loadInit() {
       try {
-        const rawBranches = await expensesApi.getBranches();
+        const [rawBranches, rawCats] = await Promise.all([
+          expensesApi.getBranches().catch(() => []),
+          expensesApi.getCategories().catch(() => []),
+        ]);
+
         const bList = Array.isArray(rawBranches) ? rawBranches : [];
         if (bList.length > 0) {
           setBranches(bList);
-          const del = bList.find((b) => b.code?.toUpperCase().includes('DEL')) || bList[0];
+          const savedBranchId = localStorage.getItem('prc_last_expense_branch_id');
+          const matchedBranch = savedBranchId && bList.find((b) => b.id === savedBranchId);
+          const del = matchedBranch || bList.find((b) => b.code?.toUpperCase().includes('DEL')) || bList[0];
           setSelectedBranchId((prev) => prev || del.id);
           setEntryBranchId((prev) => prev || del.id);
         }
-      } catch (err) {
-        console.warn('[Expenses] Error loading branches:', err);
-      }
 
-      try {
-        const rawCats = await expensesApi.getCategories();
         const cList = Array.isArray(rawCats) ? rawCats : [];
         if (cList.length > 0) {
           setCategories(cList);
@@ -312,7 +341,7 @@ export function ExpensesPage() {
           }
         }
       } catch (err) {
-        console.warn('[Expenses] Error loading categories:', err);
+        console.warn('[Expenses] Error loading init metadata:', err);
       }
 
       try {
@@ -337,6 +366,17 @@ export function ExpensesPage() {
     loadInit();
   }, []);
 
+  // Persist branch selection to localStorage for instant subsequent loads
+  useEffect(() => {
+    if (selectedBranchId) {
+      localStorage.setItem('prc_last_expense_branch_id', selectedBranchId);
+    }
+  }, [selectedBranchId]);
+
+  useEffect(() => {
+    localStorage.setItem('prc_last_expense_is_all', String(isAllBranches));
+  }, [isAllBranches]);
+
   // Ensure default branch selection when branches state updates
   useEffect(() => {
     if (branches.length > 0) {
@@ -359,7 +399,7 @@ export function ExpensesPage() {
       if (isAllBranches) {
         const sum = await expensesApi.getMultiBranchSummary();
         setMultiSummary(sum);
-        setLiveBalance({
+        const consolidatedBalance: BranchCashBalanceInfo = {
           branchId: 'ALL',
           currentBalance: sum.consolidated.totalCashInHand,
           currentBalanceRupees: sum.consolidated.totalCashInHandRupees,
@@ -373,10 +413,17 @@ export function ExpensesPage() {
           reconciledAt: null,
           pendingApprovalsCount: sum.consolidated.totalPendingApprovals,
           lastEntryAt: null,
-        });
+        };
+        setLiveBalance(consolidatedBalance);
+        try {
+          localStorage.setItem('prc_cached_live_balance', JSON.stringify(consolidatedBalance));
+        } catch {}
       } else {
         const bal = await expensesApi.getLiveBalance(selectedBranchId);
         setLiveBalance(bal);
+        try {
+          localStorage.setItem('prc_cached_live_balance', JSON.stringify(bal));
+        } catch {}
       }
     } catch (err) {
       console.error('Error fetching balance:', err);
@@ -406,6 +453,9 @@ export function ExpensesPage() {
         ? (res as any).data
         : [];
       setTodayEntries(entries);
+      try {
+        localStorage.setItem('prc_cached_today_entries', JSON.stringify(entries));
+      } catch {}
     } catch (err) {
       console.error('Failed to load today entries:', err);
     } finally {
@@ -447,11 +497,6 @@ export function ExpensesPage() {
       fetchApprovals();
     }
   }, [activeTab, fetchApprovals]);
-
-  // Initial load of pending approvals count for the badge
-  useEffect(() => {
-    fetchApprovals();
-  }, [fetchApprovals]);
 
   // ─── Load Categories with Monthly Spend (Tab 4) ────────────────────────────
   const fetchCategoriesWithSpend = useCallback(async () => {
@@ -666,63 +711,147 @@ export function ExpensesPage() {
     }
   };
 
-  // ─── Approve Entry (Super Admin / Admin / Manager) ─────────────────────────
+  // ─── Approve Entry (Instant Optimistic Update) ─────────────────────────────
   const handleApproveEntry = async (entry: ExpenseEntry) => {
-    if (approvingId) return; // prevent double-tap
+    if (approvingId === entry.id) return; // prevent double-tap
     setApprovingId(entry.id);
+
+    // 1. Snapshot previous state for rollback on error
+    const prevPending = pendingEntries;
+    const prevToday = todayEntries;
+    const prevLedger = ledgerEntries;
+    const prevLastLogged = lastLoggedExpense;
+    const prevBalance = liveBalance;
+
+    // 2. Optimistic Instant Update (0ms UI feedback)
+    const optimisticApproved: ExpenseEntry = {
+      ...entry,
+      status: 'APPROVED',
+      approvedAt: new Date().toISOString(),
+      approvedBy: adminUser
+        ? {
+            id: adminUser.id,
+            firstName: (adminUser as any).firstName || (adminUser as any).name || 'Admin',
+            lastName: (adminUser as any).lastName || '',
+            email: adminUser.email || '',
+          }
+        : entry.approvedBy,
+    };
+
+    // Immediately remove from pending approvals queue
+    setPendingEntries((prev) => (prev || []).filter((e) => e.id !== entry.id));
+    // Immediately mark as APPROVED in today entries and ledger
+    setTodayEntries((prev) =>
+      (prev || []).map((e) => (e.id === entry.id ? optimisticApproved : e))
+    );
+    setLedgerEntries((prev) =>
+      (prev || []).map((e) => (e.id === entry.id ? optimisticApproved : e))
+    );
+    if (lastLoggedExpense && lastLoggedExpense.id === entry.id) {
+      setLastLoggedExpense(optimisticApproved);
+    }
+    // Immediately update live balance and pending count
+    setLiveBalance((prev) => {
+      if (!prev) return null;
+      const newExpenses = prev.todayExpenses + entry.amount;
+      const newBal = prev.currentBalance - entry.amount;
+      return {
+        ...prev,
+        pendingApprovalsCount: Math.max(0, prev.pendingApprovalsCount - 1),
+        todayExpenses: newExpenses,
+        currentBalance: newBal,
+        currentBalanceRupees: newBal / 100,
+        todayClosing: prev.todayOpening + prev.todayReceived - newExpenses,
+      };
+    });
+
     try {
-      await expensesApi.approveExpense(entry.id);
-      setPendingEntries((prev) => (prev || []).filter((e) => e.id !== entry.id));
-      setTodayEntries((prev) =>
-        (prev || []).map((e) => (e.id === entry.id ? { ...e, status: 'APPROVED' } : e))
-      );
-      setLedgerEntries((prev) =>
-        (prev || []).map((e) => (e.id === entry.id ? { ...e, status: 'APPROVED' } : e))
-      );
-      if (lastLoggedExpense && lastLoggedExpense.id === entry.id) {
-        setLastLoggedExpense((prev) => (prev ? { ...prev, status: 'APPROVED' } : null));
+      const serverUpdated = await expensesApi.approveExpense(entry.id);
+      if (serverUpdated) {
+        setTodayEntries((prev) =>
+          (prev || []).map((e) => (e.id === entry.id ? serverUpdated : e))
+        );
+        setLedgerEntries((prev) =>
+          (prev || []).map((e) => (e.id === entry.id ? serverUpdated : e))
+        );
+        if (lastLoggedExpense && lastLoggedExpense.id === entry.id) {
+          setLastLoggedExpense(serverUpdated);
+        }
       }
       fetchBalance();
-      fetchApprovals();
     } catch (err: any) {
+      // Rollback optimistic state
+      setPendingEntries(prevPending);
+      setTodayEntries(prevToday);
+      setLedgerEntries(prevLedger);
+      setLastLoggedExpense(prevLastLogged);
+      setLiveBalance(prevBalance);
+
       const msg = err.message || 'Failed to approve expense';
-      const isCorsOrNetwork = msg.toLowerCase().includes('cors') ||
-        msg.toLowerCase().includes('network') ||
-        msg.toLowerCase().includes('fetch') ||
-        msg.toLowerCase().includes('failed to reach') ||
-        msg.toLowerCase().includes('timed out');
-      alert(
-        isCorsOrNetwork
-          ? '⚠️ Server connection error. The backend server may still be waking up.\n\nPlease wait 10–15 seconds and try again.'
-          : msg
-      );
+      alert(`⚠️ Could not approve expense voucher ${entry.entryNumber}: ${msg}`);
     } finally {
       setApprovingId(null);
     }
   };
 
-  // ─── Reject Entry (Super Admin / Admin / Manager) ──────────────────────────
+  // ─── Reject Entry (Instant Optimistic Update) ──────────────────────────────
   const handleConfirmReject = async () => {
     if (!selectedRejectEntry || !rejectionReason.trim()) return;
-    setRejectingId(selectedRejectEntry.id);
+    const entryToReject = selectedRejectEntry;
+    const reason = rejectionReason.trim();
+
+    setRejectingId(entryToReject.id);
+    setSelectedRejectEntry(null);
+    setRejectionReason('');
+
+    // Snapshot previous state for rollback
+    const prevPending = pendingEntries;
+    const prevToday = todayEntries;
+    const prevLedger = ledgerEntries;
+    const prevLastLogged = lastLoggedExpense;
+    const prevBalance = liveBalance;
+
+    // Optimistic instant update
+    const optimisticRejected: ExpenseEntry = {
+      ...entryToReject,
+      status: 'REJECTED',
+      rejectionReason: reason,
+    };
+
+    setPendingEntries((prev) => (prev || []).filter((e) => e.id !== entryToReject.id));
+    setTodayEntries((prev) =>
+      (prev || []).map((e) => (e.id === entryToReject.id ? optimisticRejected : e))
+    );
+    setLedgerEntries((prev) =>
+      (prev || []).map((e) => (e.id === entryToReject.id ? optimisticRejected : e))
+    );
+    if (lastLoggedExpense && lastLoggedExpense.id === entryToReject.id) {
+      setLastLoggedExpense(optimisticRejected);
+    }
+    setLiveBalance((prev) =>
+      prev ? { ...prev, pendingApprovalsCount: Math.max(0, prev.pendingApprovalsCount - 1) } : null
+    );
+
     try {
-      await expensesApi.rejectExpense(selectedRejectEntry.id, rejectionReason.trim());
-      setPendingEntries((prev) => (prev || []).filter((e) => e.id !== selectedRejectEntry.id));
-      setTodayEntries((prev) =>
-        (prev || []).map((e) => (e.id === selectedRejectEntry.id ? { ...e, status: 'REJECTED' } : e))
-      );
-      setLedgerEntries((prev) =>
-        (prev || []).map((e) => (e.id === selectedRejectEntry.id ? { ...e, status: 'REJECTED' } : e))
-      );
-      if (lastLoggedExpense && lastLoggedExpense.id === selectedRejectEntry.id) {
-        setLastLoggedExpense((prev) => (prev ? { ...prev, status: 'REJECTED' } : null));
+      const serverUpdated = await expensesApi.rejectExpense(entryToReject.id, reason);
+      if (serverUpdated) {
+        setTodayEntries((prev) =>
+          (prev || []).map((e) => (e.id === entryToReject.id ? serverUpdated : e))
+        );
+        setLedgerEntries((prev) =>
+          (prev || []).map((e) => (e.id === entryToReject.id ? serverUpdated : e))
+        );
       }
-      setSelectedRejectEntry(null);
-      setRejectionReason('');
       fetchBalance();
-      fetchApprovals();
     } catch (err: any) {
-      alert(err.message || 'Failed to reject expense');
+      // Rollback
+      setPendingEntries(prevPending);
+      setTodayEntries(prevToday);
+      setLedgerEntries(prevLedger);
+      setLastLoggedExpense(prevLastLogged);
+      setLiveBalance(prevBalance);
+
+      alert(`⚠️ Failed to reject expense: ${err.message || 'Server error'}`);
     } finally {
       setRejectingId(null);
     }
@@ -1404,7 +1533,7 @@ export function ExpensesPage() {
                             className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed text-white text-[11px] font-bold transition flex items-center gap-1 shadow-sm"
                           >
                             <Check size={12} />
-                            {approvingId === lastLoggedExpense.id ? 'Waking server…' : 'Approve Now'}
+                            {approvingId === lastLoggedExpense.id ? 'Approving…' : 'Approve Now'}
                           </button>
                         </div>
                       </div>
@@ -1702,10 +1831,17 @@ export function ExpensesPage() {
               </div>
 
               {(todayEntries || []).length === 0 ? (
-                <div className="py-12 text-center text-slate-400 dark:text-zinc-500 text-sm">
-                  <Receipt size={32} className="mx-auto mb-2 opacity-40" />
-                  No cash expenses logged today yet.
-                </div>
+                isLoadingToday ? (
+                  <div className="py-12 text-center text-slate-400 dark:text-zinc-500 text-sm animate-pulse space-y-2">
+                    <RefreshCw size={24} className="mx-auto animate-spin opacity-50 text-violet-500" />
+                    <p>Loading today's cash expenses...</p>
+                  </div>
+                ) : (
+                  <div className="py-12 text-center text-slate-400 dark:text-zinc-500 text-sm">
+                    <Receipt size={32} className="mx-auto mb-2 opacity-40" />
+                    No cash expenses logged today yet.
+                  </div>
+                )
               ) : (
                 <div className="space-y-3">
                   {/* Mobile stacked cards */}
@@ -1759,7 +1895,7 @@ export function ExpensesPage() {
                                   disabled={!!approvingId}
                                   className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed text-white text-xs font-bold transition flex items-center gap-1 shadow-sm"
                                 >
-                                  <Check size={12} /> {approvingId === e.id ? 'Waking…' : 'Approve'}
+                                  <Check size={12} /> {approvingId === e.id ? 'Approving…' : 'Approve'}
                                 </button>
                                 <button
                                   type="button"
@@ -1908,7 +2044,7 @@ export function ExpensesPage() {
                                       className="px-2 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed text-white text-[11px] font-bold transition flex items-center gap-0.5 shadow-sm"
                                       title="Approve expense entry"
                                     >
-                                      <Check size={11} /> {approvingId === e.id ? 'Waking…' : 'Approve'}
+                                      <Check size={11} /> {approvingId === e.id ? 'Approving…' : 'Approve'}
                                     </button>
                                     <button
                                       type="button"
@@ -2463,7 +2599,7 @@ export function ExpensesPage() {
                                   className="px-2 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed text-white text-[11px] font-bold transition flex items-center gap-1 shadow-sm"
                                   title="Approve expense entry"
                                 >
-                                  <Check size={11} /> {approvingId === e.id ? 'Waking…' : 'Approve'}
+                                   <Check size={11} /> {approvingId === e.id ? 'Approving…' : 'Approve'}
                                 </button>
                                 <button
                                   type="button"
@@ -2693,7 +2829,7 @@ export function ExpensesPage() {
                         disabled={!!approvingId}
                         className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed text-white text-xs font-bold transition shadow-sm cursor-pointer"
                       >
-                        {approvingId === e.id ? 'Waking server…' : 'Approve'}
+                        {approvingId === e.id ? 'Approving…' : 'Approve'}
                       </button>
                       {isSuperAdmin && (
                         <button
