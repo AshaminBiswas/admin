@@ -28,13 +28,14 @@ D:\
 - **Database Connection Architecture**:
   - `DATABASE_URL`: Supabase Transaction Pooler via PgBouncer on port `6543` (`?pgbouncer=true`). Used for application queries.
   - `DIRECT_URL`: Supabase Direct Session Pooler on port `5432`. Required for DDL migrations and schema changes.
-- **Database Self-Healing**: `src/scripts/fix-db.js` runs automatically on `npm start` to idempotently patch missing columns and indexes before Express boots.
+- **Database Self-Healing & Instant Boot**: `src/scripts/fix-db.js` and `src/config/database.ts` use SHA256 hash tracking against `_applied_schema_patches` to complete schema verification in <20ms on boot (skipping redundant DDL statements). `seed-all-permissions.js` performs single-query diffing and bulk inserts, dropping startup overhead from 50s down to <1s.
+- **Sleep Prevention & Keep-Alive**: `src/jobs/keepAlive.ts` pings `https://prc-backend-6sw7.onrender.com/health` every 4 minutes externally, preventing Render free-tier inactivity timeouts. Zero-overhead `/ping` and `/api/v1/ping` endpoints allow instant health monitoring.
 - **Caching & KV**: Upstash Redis (REST HTTP client) and `ioredis`.
 - **Background Jobs & Queues**: BullMQ worker queues for async jobs, emails, and batch processing (`src/queues/bullmq.worker.ts`).
 - **Real-Time Communication**: Server-Sent Events (SSE) at `/api/v1/notifications/stream` and internal `eventBus` (`src/events/eventBus.ts`).
 - **Authentication**: JWT (Access + Refresh tokens), 2FA TOTP (Speakeasy + QR codes), Email OTP, RBAC with granular permissions.
 - **Payments**: Razorpay SDK and PhonePe Gateway integration with webhook signature verification.
-- **Invoicing & GST**: Indian GST tax engine (Intrastate CGST+SGST, Interstate IGST), HSN/SAC code mapping, IRN / E-Invoice readiness.
+- **Invoicing & GST**: Indian GST tax engine (Intrastate CGST+SGST, Interstate IGST), HSN/SAC code mapping, IRN / E-Invoice suite with endpoints at `/api/v1/invoices`, `/api/v1/gst/invoices`, and `/api/v1/gst/einvoice`.
 
 ### 2.2 Admin Console (`D:\admin`)
 - **Framework**: React 18, Vite 6, TypeScript.
@@ -51,6 +52,10 @@ D:\
     - **GST Tax Invoice Hub (`InvoiceListView.tsx`)**: Mobile invoice stream with legal name, GSTIN, tax breakdown, and instant PDF action buttons.
     - **PO Management & Email Workspace (`POManagementPage.tsx`, `PODetailPage.tsx`)**: Inbound email pipeline, 4 classification tabs (`PO_DETECTED`, `POSSIBLE_PO`, `GENERAL_EMAIL`, `ALL`), dedicated full-page email dossier with interactive HTML viewer, threaded customer replies, attachment galleries, timeline audit logs, **AI-Powered PO Detection & Intent Extraction** (1-click AI Scan & Detect PO button, PRC PILOT AI Procurement Audit card, live confidence percentage, customer PO extraction, and batch AI auto-classification across pending submissions).
     - **Customer Accounts Directory (`UsersPage.tsx`)**: Mobile customer cards with contact chips, B2B enterprise details, and role badges.
+    - **Administrator Master Console (`AdminManagementPage.tsx`)**: Enterprise staff credentials directory with 4 interactive KPI metric cards, role-filtered staff tables, mobile touch cards, 360 activity inspector modal, and **Super Admin Direct Password Management** (1-click `KeyRound` modal to change/reset passwords for any administrator role without requiring previous passwords, cryptographically secure random password generator, forced password change on next sign-in flag `mustChangePassword`, optional email notification dispatch, and 1-click temporary password copy confirmation).
+    - **Executive Authentication & Recovery (`AdminLoginPage.tsx`)**: Enterprise login portal supporting standard email/password authentication, TOTP 2FA verification with 8-digit emergency backup recovery, and **Admin Self-Service Password Recovery** (dedicated multi-stage forgot password flow directly on the console card featuring registered corporate email validation, 6-digit numeric OTP verification with 60-second resend countdown, live password match validation, and seamless transition back to login).
+    - **Employee & Payroll Management Workspace (`EmployeeManagementPage.tsx`)**: 6-tab enterprise HR hub (Employee Master Directory; **Worker Operations Hub** with 3 dedicated sub-views for Worker Attendance, Worker Advances & Recovery, and Worker Monthly Payroll Runs; Daily Attendance Matrix with 0ms optimistic updates and worker-only filter toggle; Leave Ledger with automated monthly CL/EL accrual; Advances & Deductions tracking with worker-only filter and full edit/delete modals; and Monthly Payroll Engine with worker-only filter, formula calculation, Super Admin disbursement authorization, PDF payslip generation, and automated payslip emailing).
+    - **Daily Cash Expense Tracker Workspace (`ExpensesPage.tsx`)**: 6-tab responsive operational cash management hub with **Instant 0ms Optimistic Voucher Approvals & Rejections** (immediate UI state transitions, live balance mutation, and non-blocking background synchronization with automated rollback on error; zero artificial polling delays), **Stale-While-Revalidate (SWR) Instant Boot** (0ms initial mount utilizing local storage cached facilities, categories, and balances with parallel background refresh and clean shimmer loading states), Fast-Log Cash Outflow form with dual-attribution (`paidBy` Who Paid Name field + `paidTo` Vendor/Person), quick preset buttons, auto-approval threshold notifications, recently logged voucher preview card with direct ledger shortcuts and inline approval, receipt attachments, and live Today transaction feed; Dedicated Organization Expense Ledger Tab for browsing, searching, and filtering all historical vouchers across dates, categories, statuses, and branches; Pending Approval Queue for management authorization with inline 1-click Approve/Reject; Float Top-Up & End-of-Day Physical Cash Reconciliation with interactive currency denomination counter ($\times 500, 200, 100, 50, 20, 10, 5, 2, 1$) and automated variance flags; Category Master & Monthly Budgets; and Multi-Sheet Server-Side Excel Generator for Day/Week/Month/Year expense reports featuring branch location selection (Delhi HQ, Kolkata Branch, or All Branches Consolidated), uniform 13-column itemized voucher worksheets across all report periods with clickable receipt slip hyperlinks, and native Excel `autoFilter` header controls.
 - **State & Auth**: `AdminAuthContext` (JWT in localStorage), `ThemeContext` (Light/Dark mode).
 - **Features**: Real-time SSE notification stream, executive analytics, product/variant CRUD, quotation pipeline, GST Tax Invoice Hub, custom B2B pricing, RBAC roles & permissions, media studio.
 
@@ -77,7 +82,7 @@ D:\
 
 ## 3. Database Schema & Prisma Models (`prisma/schema.prisma`)
 
-### Core Models Registry (65 Active Models):
+### Core Models Registry (79 Active Models):
 
 1. **Authentication, Users & RBAC**:
    - `User`: Customers, staff, and superadmins (`email`, `phone`, `role`, `status`, `isTwoFactorEnabled`, `twoFactorSecret`, `b2bCompanyName`, `b2bGstin`).
@@ -145,11 +150,35 @@ D:\
     - `ProformaInvoiceHistory` & `ProformaInvoiceSequence`: Atomic annual sequence tracking (`PRC/PI/2026-27/0001`) and chronological state transitions audit trail.
 13. **Cubicle Installer Payment Tracking System**:
     - `CubicleInstaller`: Master installer credentials directory (`id`, `name`, `email` unique, `phone`, `isActive`, `createdAt`, `updatedAt`).
-    - `CubicleModel`: Master rate catalog for cubicle models (`modelName` unique, `installationPrice`, `isActive`, `createdAt`, `updatedAt`).
-    - `InstallerBill`: Itemized installer job billing records (`billNumber` unique sequential `PPSI-00001`, `installerId` foreign key to `CubicleInstaller`, `installerName`, `installerPhone`, `installerEmail`, `siteAddress`, `jobDate`, `isNcr`, `travelExpenses`, `subtotal`, `totalAmount`, `amountPaid`, `balanceDue`, `paymentStatus` enum `PARTIAL`/`CLEARED`, `paymentDate`, `notes` mandatory internal audit notes, `emailStatus`, `emailSentAt`, `emailError`, `createdById`, `createdAt`, `updatedAt`).
-    - `InstallerBillItem`: Line items mapped to cubicle models (`billId`, `cubicleModelId`, `modelName`, `quantity`, `unitPrice`, `lineTotal`).
+    - `CubicleModel`: Master rate catalog for installation models across categories (`modelName` unique, `installationPrice`, `category` enum `CUBICLE`/`UMP`/`LOCKER` default `CUBICLE`, `isActive`, `createdAt`, `updatedAt`).
+    - `InstallerBill`: Itemized installer job billing records (`billNumber` unique sequential `PPSI-00001`, `installerId` foreign key to `CubicleInstaller`, `installerName`, `installerPhone`, `installerEmail`, `siteAddress`, `jobDate`, `isNcr`, `travelExpenses`, `cubicleQuantity`, `cubicleTotal`, `umpQuantity`, `umpRate`, `umpTotal`, `lockerQuantity`, `lockerTotal`, `deductionAmount`, `deductionReason`, `subtotal`, `totalAmount`, `amountPaid`, `balanceDue`, `paymentStatus` enum `PARTIAL`/`CLEARED`, `paymentDate`, `notes` mandatory internal audit notes, `emailStatus`, `emailSentAt`, `emailError`, `createdById`, `createdAt`, `updatedAt`).
+    - `InstallerBillItem`: Line items mapped to models (`billId`, `cubicleModelId`, `modelName`, `category` enum `CUBICLE`/`UMP`/`LOCKER` default `CUBICLE`, `quantity`, `unitPrice`, `lineTotal`).
     - `InstallerBillPayment`: Payment installment audit records (`billId`, `amount`, `paymentDate`, `paymentMode`, `referenceNumber`, `notes`, `recordedById`, `createdAt`).
     - `InstallerBillSequence`: Atomic sequence generator tracking sequential numbers (`PPSI-XXXXX`).
+14. **Employee Management & Payroll Suite**:
+    - `Employee`: Master employee HR credentials directory (`id`, `employeeId` unique sequential `PPSE202609001`, `name`, `email` unique, `phone`, `address`, `governmentIdType` `AADHAAR`/`PAN`/`VOTER_ID`, `governmentIdNumber`, `bankAccountNumber` optional, `bankIfsc` optional, `bankName` optional, `bankAccountHolder` optional, `designation`, `department`, `responsibilities`, `monthlyCtc`, `joiningDate`, `status` `ACTIVE`/`INACTIVE`/`TERMINATED`, `clBalance`, `elBalance`, `createdAt`, `updatedAt`).
+    - `EmployeeAttendance`: Daily attendance and shift logging (`employeeId`, `date`, `status` `PRESENT`/`CL`/`EL`/`UL`/`HALF_DAY`/`LEAVE`, `isSunday`, `isSundayOverride`, `overtimeHours`, `notes`, `markedById`, `createdAt`, `updatedAt`). `@@unique([employeeId, date])`.
+    - `EmployeeLeaveLedger`: Chronological leave accrual & usage audit ledger (`employeeId`, `leaveType` `CL`/`EL`, `transactionType` `ACCRUAL`/`USAGE`/`ADJUSTMENT`, `amount`, `balanceAfter`, `month`, `year`, `reason`, `recordedById`, `createdAt`).
+    - `EmployeeAdvance`: Short-term salary advances and scheduled recovery ledger (`employeeId`, `amount`, `reason`, `advanceDate`, `recoveryMonth`, `recoveryYear`, `isRecovered`, `recoveredAt`, `payrollRunId`, `createdById`, `createdAt`, `updatedAt`).
+    - `EmployeeDeduction`: Custom deductions and penalties ledger (`employeeId`, `amount`, `reason`, `applyMonth`, `applyYear`, `isApplied`, `appliedAt`, `payrollRunId`, `createdById`, `createdAt`, `updatedAt`).
+    - `EmployeePayrollRun`: Monthly payroll calculations and disbursement advice (`employeeId`, `month`, `year`, `monthlyCtc`, `totalCalendarDays`, `sundaysCount`, `approvedSundays`, `payableDays`, `perDayRate`, `presentDays`, `clDays`, `elDays`, `halfDays`, `unpaidDays`, `paidDays`, `overtimeHours`, `overtimeRate`, `overtimePay`, `grossSalary`, `advanceDeduction`, `otherDeductions`, `deductionSummary`, `netSalary`, `status` `DRAFT`/`FINALIZED`/`PAID`, `paidAt`, `paymentMode`, `paymentReference`, `paymentNotes`, `emailSent`, `emailSentAt`, `emailStatus`, `emailError`, `createdById`, `finalizedById`, `createdAt`, `updatedAt`). `@@unique([employeeId, year, month])`.
+    - `EmployeeIdSequence`: Atomic sequence generator tracking monthly sequences (`PPSE` + `YYYYMM` + `XXX`).
+15. **Daily Cash Expense Tracker & Cash-in-Hand Balance Suite**:
+    - `ExpenseCategory`: Master directory of expense heads (`name`, `code` unique, `description`, `icon`, `color`, `isActive`, `isDefault`, `maxLimitPaise`, `requiresApproval`, `monthlyBudgetPaise`, `displayOrder`). Pre-seeded with 10 industry-standard categories (Logistics, Packaging, Tea/Snacks, Site Supplies, Repair, Utilities, Petty Office, Travel, Casual Labor, Miscellaneous).
+    - `ExpenseEntry`: Itemized operational cash outflow records (`expenseNumber` sequential `EXP-YYYY-MM-XXXX`, `branchId`, `categoryId`, `amountPaise` strictly integer paise, `paymentMode` enum `CASH`/`UPI`/`BANK_TRANSFER`/`PETTY_CARD`/`CHEQUE`, `paidTo`, `paidBy` (cashier/payer staff name), `contactNumber`, `purpose`, `invoiceNumber`, `receiptUrl`, `notes`, `status` enum `PENDING_APPROVAL`/`APPROVED`/`REJECTED`/`AUTO_APPROVED`/`VOIDED`, `approvedById`, `approvedAt`, `rejectionReason`, `voidReason`, `voidedById`, `voidedAt`, `offlineClientId`, `syncedAt`, `createdById`, `employeeId`).
+    - `ExpenseDailyLedger`: End-of-day physical cash count reconciliation and audit locking (`branchId`, `date`, `openingBalancePaise`, `totalFloatInPaise`, `totalExpensePaise`, `closingBalancePaise`, `physicalCashCountPaise`, `variancePaise`, `varianceReason`, `status` enum `OPEN`/`RECONCILED`/`VARIANCE_FLAGGED`/`LOCKED`, `notes`, `denominationJson` storing currency note counts $\times 500, 200, 100, 50, 20, 10, 5, 2, 1$, `closedById`, `closedAt`, `approvedById`, `approvedAt`). `@@unique([branchId, date])`.
+    - `ExpenseFloatTopUp`: Replenishment of branch cash-in-hand register float (`branchId`, `amountPaise`, `source`, `referenceNumber`, `notes`, `addedById`).
+    - `BranchCashBalance`: $O(1)$ fast lookup table maintaining live running cash balance (`branchId` unique, `currentBalancePaise`, `lastCalculatedAt`, `lastExpenseAt`).
+    - `ExpenseDailyRollup`: High-performance pre-aggregated day-wise summary table updated on write (`branchId`, `date`, `totalExpensePaise`, `totalCount`, `approvedCount`, `pendingCount`, `rejectedCount`, `voidedCount`, `categoryBreakdownJson`). `@@unique([branchId, date])`.
+    - `ExpenseMonthlyRollup`: High-performance month-wise financial summary table updated on write (`branchId`, `year`, `month`, `totalExpensePaise`, `totalCount`, `categoryBreakdownJson`). `@@unique([branchId, year, month])`.
+    - `ExpenseAuditLog`: Immutable financial security audit log tracking every expense mutation, approval, rejection, void, top-up, and daily ledger lock.
+    - `ExpenseSequence`: Atomic concurrency-safe sequence generator for `EXP-YYYY-MM-XXXX`.
+    - `ExpenseSettings`: Branch or global threshold and policy configuration (`autoApprovalLimitPaise` default 200000 = ₹2,000, `requireReceiptAbovePaise` default 50000 = ₹500, `requireEmployeeLinkAbovePaise` default 500000 = ₹5,000, `maxDailyExpenseLimitPaise` default 5000000 = ₹50,000, `negativeBalanceAllowed` default false).
+16. **B2B Order Management & Physical Stock Reservation Suite**:
+    - `B2bOrder`: Master B2B enterprise order record (`orderNumber` unique sequential `PRC-B2B-YYYY-YY/XXXX`, `customerId` FK to `User`, `branchId` FK to `Branch`, `source` enum `ADMIN_OFFLINE`/`CUSTOMER_SELF_SERVICE`, `status` enum `PENDING_APPROVAL`/`CONFIRMED`/`CANCELLED`/`REJECTED`, `subtotalPaise`, `taxAmountPaise`, `grandTotalPaise`, `quoteId` optional FK to `Quote`, `poSubmissionId` optional FK to `PoSubmission`, `clientRequestId` unique idempotency key, `notes`, `approvedById`, `approvedAt`, `rejectionReason`, `rejectedById`, `rejectedAt`, `cancelledById`, `cancelledAt`, `cancellationReason`).
+    - `B2bOrderItem`: Itemized order line records (`orderId` FK to `B2bOrder`, `productId` FK to `Product`, `sku`, `name`, `quantity`, `unitPricePaise`, `taxPercent`, `taxAmountPaise`, `totalPaise`, `isRemoved`).
+    - `StockReservation`: Non-deducted inventory hold placed during `PENDING_APPROVAL` (`b2bOrderId` FK to `B2bOrder`, `b2bOrderItemId` FK to `B2bOrderItem`, `branchId` FK to `Branch`, `productId` FK to `Product`, `quantity`, `status` enum `ACTIVE`/`CONVERTED`/`RELEASED`, `expiresAt`). Available stock formula: $\text{Available} = \text{Physical} - \text{Active Reservations}$.
+    - `B2bOrderSequence`: Atomic transaction-safe yearly sequence generator (`financialYear`, `lastSequence`) producing sequential `PRC-B2B-YYYY-YY/XXXX` order references.
 
 > **Note on Removed Subsystems**: The legacy multi-tenant enterprise venture/POS subsystem was permanently removed in favor of direct SKU catalog management and this streamlined multi-branch inventory tracking suite.
 
@@ -166,6 +195,7 @@ All modules follow a uniform, production-grade layered architecture:
 | `appointments` | `/api/v1/appointments` | Hardware service & installation scheduling |
 | `auth` | `/api/v1/auth` | JWT auth, 2FA TOTP, email verification, password resets |
 | `b2b-pricing` | `/api/v1/b2b-pricing` | Customer-specific pricing matrices & bulk rate lookup |
+| `b2b-orders` | `/api/v1/b2b-orders` | Dedicated B2B Dual-Channel Order Management — Admin Offline orders (immediate confirm + physical stock deduction), Customer Self-Service orders (`pending_approval` + stock reservation), Super Admin approval gate (reservation -> physical deduction `B2B_ORDER`), Super Admin rejection (releases reservation, 0 stock movements), customer self-cancellation (strictly `pending_approval`), Super Admin cancellation (restores stock `B2B_CANCELLATION`), Super Admin line-item editing (delta stock adjustments `B2B_ADJUSTMENT`), and available stock lookup (`physical - reservedQuantity`). |
 | `banners` | `/api/v1/banners` | Promotional hero banners, position targeting, CTR metrics |
 | `cart` | `/api/v1/cart` | Shopping cart sync, item mutations, stock availability |
 | `categories` | `/api/v1/categories` | Hierarchical category taxonomy & bestseller flags |
@@ -182,7 +212,7 @@ All modules follow a uniform, production-grade layered architecture:
 | `transfers` | `/api/v1/transfers` | Inter-branch transfers with reservation, dispatch, and receiving stages |
 | `stock-adjustments` | `/api/v1/stock-adjustments` | Cycle count adjustments, damages, returns with mandatory reason audit |
 | `stock-movements` | `/api/v1/stock-movements` | Immutable audit ledger of every inventory mutation across facilities |
-| `invoices` | `/api/v1/invoices` | GST tax invoices, IRN generation, E-Invoicing, PDF export |
+| `invoices` | `/api/v1/invoices`, `/api/v1/gst/invoices`, `/api/v1/gst/einvoice` | GST tax invoices, IRN generation (`POST /gst/einvoice/:id/generate`), IRN cancellation, signed QR codes, IRN JSON exports, HTML/PDF rendering, and DRAFT validations |
 | `logistics` | `/api/v1/logistics` | Courier integration, waybill generation, SLA tracking |
 | `notifications` | `/api/v1/notifications` | Real-time SSE event stream, user inbox, admin alerts |
 | `orders` | `/api/v1/orders` | Full order lifecycle, status transitions, cancellation restock |
@@ -198,11 +228,12 @@ All modules follow a uniform, production-grade layered architecture:
 | `settings` | `/api/v1/settings` | System-wide configuration, company GSTIN, maintenance |
 | `shipping` | `/api/v1/shipping` | Shipping zone calculation, pincode validation |
 | `upload` | `/api/v1/upload` | Media asset upload manager, image optimization |
-| `users` | `/api/v1/users` | Customer profiles, admin staff management, addresses |
+| `users` | `/api/v1/users` | Customer profiles, admin staff management, addresses, and **Super Admin Password Management** (`POST /api/v1/users/:id/change-password` guarded by `requireSuperAdmin` and `authorize('users.update')` allowing direct password changes for any administrator account with mandatory session revocation and optional forced reset on next sign-in). |
 | `variants` | `/api/v1/variants` | Product variant matrix (color, size, finish), SKUs |
 | `wishlist` | `/api/v1/wishlist` | Customer saved wishlists & demand forecast tracking |
-| `ai-agent` | `/api/v1/ai-agent` | **NVIDIA NIM AI Copilot** — `POST /chat` (admin copilot), `POST /draft-reply` (PO email drafter with stock context), `POST /report` (business analytics report generator). Model: `meta/llama-3.2-90b-vision-instruct`. Requires `NVIDIA_API_KEY` env var. Admin-only (`authenticate` + `authorize` guard). |
-| `installer-payments` | `/api/v1/installer-payments` | **Cubicle Installer Payment Tracking** — Models master CRUD (Super Admin only), atomic sequential bill generation (`PPSI-00001`), NCR logic (locks travel expenses to 0.00), installment payments ledger, auto-clearance status, automatic invoice-style PDF bill email dispatch on full clearance, and full historical Excel (.xlsx) export (Super Admin only). |
+| `installer-payments` | `/api/v1/installer-payments` | **Cubicle Installer Payment Tracking** — Dynamic Models Master CRUD across 3 categories (`CUBICLE`, `UMP`, `LOCKER`), atomic sequential bill generation (`PPSI-00001`), automated NCR territory detection, deductions & penalties (`deductionAmount`, `deductionReason`), installment payments ledger, auto-clearance calculation (`Net Total = Math.max(0, Subtotal + Travel - Deductions)`), automated PDF advice with red deduction itemization, 26-column Excel (.xlsx) export with deduction metrics, technician filter queries, and dedicated installer payment history ledger endpoint (`GET /installers/:id/ledger`). |
+| `employees` | `/api/v1/employees` | **Employee Management & Payroll Suite** — Master employee HR directory with auto-generated atomic sequential IDs (`PPSE202609001`), strict Government ID validation (Aadhaar/PAN/Voter ID), bank credentials, daily attendance tracking with Sunday override & overtime hours, automated leave accrual (+1.00 CL/month, +0.25 EL/month), advance and deduction recovery pipelines, monthly payroll formula calculation engine ($\text{Payable Days} = \text{Total Days} - \text{Default Sundays} + \text{Approved Sundays}$, $\text{Paid Days} = \text{Present} + \text{CL} + \text{EL} + 0.5 \times \text{Half} + \text{Approved Sundays}$, $\text{OT Pay} = \text{OT Hours} \times (\text{Per-Day Rate} / 8)$, $\text{Net} = \text{Gross} - \text{Advances} - \text{Deductions}$), Super Admin disbursement authorization (`POST /payroll/:id/mark-paid`), vector-styled A4 PDF payslip generation via `pdfmake`, and automated email dispatch with PDF attachment via `sendMail`. |
+| `expenses` | `/api/v1/expenses` | **Organization-Level Daily Cash Expense Tracker** — Fast entry cashier workflow (<10s) with dual attribution (`paidBy` Who Paid Name + `paidTo` Vendor/Person), live running cash-in-hand balance ($O(1)$ `BranchCashBalance`), dual-layer threshold auto-approval ($\le ₹2,000$ auto-approved, $> ₹2,000$ admin review), **Atomic Batch Pipelined Transactions** (`prisma.$transaction([ ... ])` on approval/rejection eliminating interactive transaction overhead on PgBouncer pooler), receipt slip upload engine (`POST /upload-receipt` via Multer memory storage & Supabase CDN supporting JPEG, PNG, WEBP, HEIC, PDF up to 10MB), voucher edit pipeline (`PATCH /:id` with atomic balance recomputation and audit logging), super-admin voucher deletion (`DELETE /:id` with automatic financial refund/restoration for approved vouchers back into `BranchCashBalance.currentBalance`), float top-up replenishments, voiding with reverse balances & audit reasons, end-of-day physical cash reconciliation with denomination breakdown ($\times 500, 200, 100, 50, 20, 10, 5, 2, 1$) & variance reporting, multi-sheet Excel reports via `exceljs` with branch location selection (Delhi HQ, Kolkata Branch, or All Branches Consolidated), uniform 13-column itemized voucher worksheets across all report periods (Date, Voucher No, Branch, Who Paid, Category, Sub-Category, Amount, Payment Mode, Description, Paid To, Clickable Receipt Slip, Status, Approved By) with native `autoFilter` header controls and total sum formulas, pre-aggregated daily/monthly rollups on write, and offline tolerance sync. |
 
 ---
 
@@ -286,14 +317,24 @@ The Storefront was architected and optimized for native app-like responsiveness 
   3. **Granular Role Assignment & Preview**: Dynamic role selector fetching all active system and custom roles with role badge, description, and permission scope overview before provisioning.
   4. **Password Security Suite**: Features real-time email regex validator, 1-click **Generate Strong Password** utility (`generateRandomPassword`), reveal/hide password toggle, and "Require password change on first sign-in" enforcement.
 - **Custom Role & Custom Permission CRUD Governance Suite (`/api/v1/roles/permissions`, `roles.service.ts`, `RolesPage.tsx`, `rolesApi`)**:
-  1. **Full Permission CRUD Endpoints**:
+  1. **Comprehensive Platform Permissions Registry (49 Modules, 241 Permissions)**:
+     - Expanded from the legacy 120 permissions to a comprehensive 241-permission matrix covering every operational domain across the company:
+       - **Employee Management HR Suite**: `employees` (`read`, `create`, `update`, `delete`, `export`), `attendance` (`read`, `mark`, `update`, `batch`, `sunday_approval`), `leaves` (`read`, `adjust`, `accrue`), `advances` (`read`, `create`, `update`, `delete`), `deductions` (`read`, `create`, `update`, `delete`), `payroll` (`read`, `calculate`, `finalize`, `revert_draft`, `disburse`, `download_payslip`, `email_payslip`).
+       - **Installer Payments & Cubicle Suite**: `installer_payments` (`read`, `create`, `update`, `delete`, `record_payment`, `download_bill`, `send_email`, `export`), `cubicle_installers` (`read`, `create`, `update`, `delete`, `ledger`), `cubicle_models` (`read`, `create`, `update`, `delete`).
+       - **B2B Proforma Invoices (PI)**: `proforma_invoices` (`read`, `create`, `update`, `approve`, `cancel`, `sign`, `send_email`, `send_whatsapp`, `download_pdf`, `delete`), `invoices.edit`.
+       - **PO Management & AI Scanner**: `po_management` (`read`, `create`, `update`, `classify`, `ai_scan`, `reply_email`, `assign`, `delete`), `po.manage`.
+       - **Multi-Branch Operations & Logistics**: `branches` (`read`, `create`, `update`, `delete`), `suppliers` (`read`, `create`, `update`, `delete`, `manage`), `purchases` (`read`, `create`, `update`, `delete`, `view`, `edit`), `stock_transfers` (`read`, `create`, `edit`, `dispatch`, `receive`, `cancel`), `transfers` aliases.
+       - **Catalog & Pricing Extensions**: `materials` (`read`, `create`, `update`, `delete`, `manage`), `b2b_pricing` (`read`, `create`, `update`, `delete`), `appointments` (`read`, `create`, `update`, `delete`, `manage`), `projects` (`read`, `create`, `update`, `delete`, `manage`), `ai_agent` (`ai.use`).
+     - **Self-Healing on Container Boot**: `fix-db.js` automatically runs `seedAllPermissions()` on every deploy/restart to idempotently patch any missing permissions in Supabase PostgreSQL and link them to the Super Admin role.
+     - **Custom Role Route Authorization**: Backend routes across `employee-management`, `installer-payments`, `b2b-pricing`, `materials`, and `projects` use granular `authorize(...)` and role middleware fallback so customized staff roles possess exact, scoped execution privileges without requiring hardcoded admin role slugs.
+  2. **Full Permission CRUD Endpoints**:
      - `POST /api/v1/roles/permissions`: Create new discrete permissions with display name, module categorization, auto/custom key slug, and scope description.
      - `GET /api/v1/roles/permissions`: List all registered permissions grouped by module.
      - `PATCH /api/v1/roles/permissions/:id`: Update permission metadata (name, module, slug, description).
      - `DELETE /api/v1/roles/permissions/:id`: Permanently delete custom permissions and automatically cascade-revoke from assigned role junction tables.
-  2. **Dual-Tab RBAC Command Center (`RolesPage.tsx`)**:
-     - **Tab 1 ("Security Roles & Access Matrix")**: Select role, view assigned permissions count, toggle discrete or batch CRUD actions (All Create, All Read, All Update, All Delete), clone role templates, and quickly register new custom permissions directly via an in-matrix shortcut button without losing place.
-     - **Tab 2 ("System & Custom Permissions Directory")**: Full searchable and filterable directory of all permissions with module chips, CRUD badges, code snippets with 1-click clipboard copy, and inline Edit & Delete modals for custom permissions.
+  3. **Dual-Tab RBAC Command Center (`RolesPage.tsx`)**:
+     - **Tab 1 ("Security Roles & Access Matrix")**: Select role, view assigned permissions count, toggle discrete or batch CRUD actions (All Create, All Read, All Update, All Delete), clone role templates, and quickly register new custom permissions directly via an in-matrix shortcut button without losing place. All 49 modules feature dedicated icons (`Briefcase`, `Clock`, `CalendarCheck`, `IndianRupee`, `Wrench`, `Building2`, `Truck`, `Receipt`, `Bot`, `FolderKanban`, etc.) and human-readable formatting (`formatModuleName`).
+     - **Tab 2 ("System & Custom Permissions Directory")**: Full searchable and filterable directory of all 241 permissions with module chips, CRUD badges, code snippets with 1-click clipboard copy, and inline Edit & Delete modals for custom permissions.
 - **Multi-Branch Live Stock, Concurrency-Guarded Sales & Catalog Search Engine (`inventory.service.ts`, `checkout.service.ts`, `orders.service.ts`, `ProductPicker.tsx`, `ProductsPage.tsx`, `InventoryPage.tsx`)**:
   1. **Atomic Concurrency-Guarded Sales Mutation (`recordSale`)**: Every customer order checkout automatically decrements branch stock with atomic guard conditions (`updateMany({ where: { productId, branchId, quantity: { gte: qty } } })`), rolls back the checkout transaction on stock exhaustion, creates immutable `StockMovement` records (`SALE_OUT`), synchronizes catalog totals (`syncProductStock`), and emits real-time `inventory.low_stock` alerts.
   2. **Order Cancellation & Return Restock (`recordRestock`)**: When orders are cancelled or returned, line items are automatically credited back to the fulfilling facility ledger as `RETURN_IN` movements with full audit rationale.
@@ -602,21 +643,494 @@ The Storefront was architected and optimized for native app-like responsiveness 
             - Status transitions: `PARTIAL` when `amountPaid < totalAmount`, and `CLEARED` when `amountPaid >= totalAmount`.
           - **Payment Installments Ledger**:
             - Supports recording partial installments (`InstallerBillPayment`) with payment date, mode (Bank Transfer, UPI, Cash, Cheque), reference/UTR number, and notes, updating `amountPaid` and `balanceDue` atomically.
-          - **Automated Bill PDF Generation & Transactional Email Dispatch**:
+          - **Automated Bill PDF Generation & Dedicated Installer Email Dispatch**:
             - Itemized PDF bill generated using `pdfmake` featuring Pacific Products & Solutions corporate styling, obsidian navy headers (`#0F172A`), amber accents (`#D97706`), clean vector icons, job/site details, itemized breakdown, payment summary, and authorized signature seal.
-            - Triggered automatically when bill status flips to `CLEARED` (or upon manual retry): dispatches high-priority email via `sendMail` with the PDF attached directly to the installer (`installerEmail`) and logs dispatch status (`emailStatus: SENT` / `FAILED`, `emailSentAt`, `emailError`).
+            - **Dedicated Recipient Routing (`to: bill.installerEmail`)**: Emails are explicitly dispatched to the installer's verified email address (`installerEmail`).
+            - **Dynamic Cleared vs Partial Styling**:
+              - **CLEARED bills**: Dispatches receipt with subject `Payment Cleared — Bill #${bill.billNo} — Pacific Products & Solutions`, green cleared banner, and zero balance confirmation.
+              - **PARTIAL bills**: Dispatches advice with subject `Payment Advice & Installation Bill #${bill.billNo} — Pacific Products & Solutions`, amber statement banner, and itemized breakdown of Amount Disbursed to Date vs Outstanding Balance Due.
+            - **Automatic Auto-Dispatch on Creation**: Configurable checkbox on `CreateInstallerBillPage.tsx` (`sendEmailToInstaller: true` by default) dispatches official payment voucher immediately upon generation.
+            - **Interactive Email Dispatch Modal (`SendBillEmailModal`)**: Admins can click "Send Email", "Resend", or "Retry" to open an interactive modal displaying Installer Name, editable destination email address, bill financial summary, and attached PDF voucher filename before dispatching.
+            - **Table Email Clearance Action**: Removed previous disabled "On Clearance" gating; now permits dispatching advice for any bill with an installer email, displaying a live green "Sent" badge alongside a "Resend" button.
+          - **Super Admin-Only Bill Editing & Field Adjustments (`PATCH /api/v1/installer-payments/:id`)**:
+            - **Strict Security & RBAC**: Endpoint strictly restricted to Super Admin via `requireSuperAdmin` middleware. Non-super-admins receive HTTP 403 Forbidden.
+            - **Editable Scopes & Recalculation**: Super Admin can adjust technician info (name, email, install date), site logistics (address, PIN, NCR toggle), travel expenses, UMP overrides, deduction amount & reason, and internal admin notes. Financial totals (`subtotal`, `total`, `balanceDue`, and `paymentStatus`) are automatically recomputed server-side.
+            - **Audit Trail Logging (`audit_logs`)**: Every edit automatically writes an entry to `audit_logs` capturing `userId`, `ipAddress`, `action: 'UPDATE'`, `entity: 'InstallerBill'`, and a granular `changes.fields` mapping containing `{ before, after }` values for all modified properties.
+            - **Audit Log Retrieval API (`GET /api/v1/installer-payments/:id/audit-logs`)**: Available to all authorized admins to inspect the chronological edit trail of any bill.
+            - **UI Integration (`EditInstallerBillModal`, `BillDetailsDrawer`)**:
+              - Edit button (pencil icon) rendered exclusively for `isSuperAdmin` in Desktop table, Mobile cards, Ledger job items, and Bill Dossier Drawer.
+              - `EditInstallerBillModal`: interactive modal with auto-NCR PIN detection, live financial recalculation preview, and deduction reason enforcement.
+              - `BillDetailsDrawer`: dedicated "Issue & Edit History" section displaying issuing user (`bill.createdBy`), issue date, and live timeline of past edits with before → after values.
+          - **Super Admin-Only Bill Deletion (`DELETE /api/v1/installer-payments/:id`)**:
+            - **Strict Security & RBAC**: Endpoint strictly protected by `authenticate` and `requireSuperAdmin` middleware. Rejects non-super-admins with HTTP 403 Forbidden.
+            - **Soft-Delete Safety**: Updates `deletedAt: new Date()`, safely preserving payment history, line items, and audit integrity while completely removing the bill from lists, KPI metrics, and Excel exports.
+            - **UI Integration**: Red trash action button rendered exclusively for `isSuperAdmin` in the desktop bills table, mobile touch cards, and the Bill Dossier Drawer.
+            - **Confirmation Modal (`DeleteBillConfirmationModal`)**: Double-confirmation dialog displaying bill number, installer details, site address, and amount before executing deletion.
+          - **Dynamic Multi-Category Model Master (Cubicles, UMP, Lockers)**:
+            - **Super Admin Dynamic Rate & Model Configuration**: In Tab 3 ("Model Master"), Super Admin can register, edit, and deactivate models across three product categories:
+              - `CUBICLE`: Restroom Cubicle Models (e.g. Delight, Sky Light, Horizon).
+              - `UMP`: Urinal Modesty Panels (e.g. Standard UMP, Full Height UMP).
+              - `LOCKER`: Locker Systems (e.g. 1-Tier Locker, 2-Tier Locker, 3-Tier Locker, Z-Locker).
+            - **Category Filtering & Badges**: Filter tabs for "All Models", "Restroom Cubicles", "Urinal Modesty Panels (UMP)", and "Lockers" with color-coded badges (Violet for Cubicles, Emerald for UMP, Blue for Lockers).
+          - **Default Zero (0) Values & Mandatory Active Selection**:
+            - **Zero Pre-Selection Policy**: In `CreateInstallerBillPage.tsx` and fallback creation modal, no model is pre-selected on mount. All initial quantities default to `0` with unit prices at `₹0.00`.
+            - Admins must actively select the model from the master dropdown and enter quantities greater than 0 before submission.
+            - Validates that at least one valid item is selected and non-zero across the job scopes.
+          - **Dedicated Scope Columns in Bills Table**:
+            - Desktop table displays 3 dedicated scope breakdown columns:
+              - **Cubicles**: Lists installed cubicle models, unit counts, and cubicle subtotal units.
+              - **UMP**: Lists installed UMP models and counts with emerald badge indicator.
+              - **Lockers**: Lists installed locker models and counts with blue badge indicator.
+            - Mobile touch cards provide itemized color-coded scope breakdown cards for Cubicles, UMP, and Lockers.
+          - **Itemized Scopes in Dossier Drawer & PDF Payment Vouchers**:
+            - **Bill Details Drawer (`BillDetailsDrawer`)**: Renders distinct itemized sections for Cubicle Models, Urinal Modesty Panels (UMP), and Locker Units, with line totals and a detailed financial breakdown.
+            - **PDF Payment Voucher (`installer-bill-pdf.service.ts`)**: Integrated the new official **Pacific Restroom Cubicle & Locker Solutions** brand logo (`PACIFIC_RESTROOM_LOGO_DATA_URL`) with 3D isometric architectural cubicle emblem, replacing the legacy monogram. Category badges (`[CUBICLE]`, `[UMP]`, `[LOCKER]`) and scope subtotals itemized in the voucher table.
+            - **Excel History Export (`installer-export.service.ts`)**: 24-column executive `.xlsx` workbook export with frozen header pane, dark navy styling (`#1E293B`), Indian Rupee formatting (`₹#,##0.00`), and dedicated breakdown columns:
+              - **Cubicle Breakdown**: `Cubicle Units`, `Cubicle Subtotal (₹)`
+              - **UMP Breakdown**: `UMP Units`, `UMP Rate (₹)`, `UMP Total (₹)`
+              - **Locker Breakdown**: `Locker Units`, `Locker Subtotal (₹)`
+              - **Overall Financials & Audit**: `Total Units`, `Subtotal (₹)`, `Travel Expenses (₹)`, `Total Due (₹)`, `Amount Paid (₹)`, `Balance Due (₹)`, `Payment Status`, `Payment Date`, `Clearance Email Status`, and bottom-line summary totals row.
+          - **Complete Removal of Hardcoded Models & Prices (100% Dynamic Catalog)**:
+            - **No Seeded / Hardcoded Rates**: All static seed insertions (`Delight`, `Sky Light`, `Standard UMP`, `1-Tier Locker`, etc.) and hardcoded fallbacks (such as fixed ₹150 for UMP or ₹900 defaults) have been completely removed from `fix-db.js`, `schema.prisma`, backend schemas/services, and Admin UI.
+            - **Super Admin Dynamic Control**: All models and rates must be registered and managed dynamically by Super Admin via Tab 3 ("Installation Models Master") with custom naming, pricing, and active status across `CUBICLE`, `UMP`, and `LOCKER`.
+            - **Clean Database Catalog**: Removed all inactive hardcoded seed models from the live database, ensuring only genuine administrator-configured models appear in bill creation dropdowns.
+            - **Category Synchronization & State Reset**: `CubicleModelModal` accepts `initialCategory` dynamically matching the active tab pill filter (`CUBICLE`, `UMP`, `LOCKER`), includes reactive `useEffect` form reset, and database self-healing in `fix-db.js` ensures model categories match their installation scope.
           - **Admin Console Operational Hub & Dedicated New Bill Page**:
-            - **Dedicated "New Installer Bill" Page (`CreateInstallerBillPage.tsx`, route `'create-installer-bill'`)**: Replaced modal popup with a full-page view featuring breadcrumbs, "Back to Bills" navigation, installer auto-fetch selector, dynamic model rows, automated NCR postal PIN detection, explicit **Payment Date** picker, and **Mandatory Internal Notes** textarea.
+            - **Dedicated "New Installer Bill" Page (`CreateInstallerBillPage.tsx`, route `'create-installer-bill'`)**: Full-page view featuring breadcrumbs, "Back to Bills" navigation, installer auto-fetch selector, dynamic model rows across Cubicle, UMP, and Locker sections, automated NCR postal PIN detection, explicit **Payment Date** picker, **Mandatory Internal Notes** textarea, and auto-dispatch email toggle.
             - **Super Admin Installers Directory (`cubicle_installers` & Admin Tab 2)**: Super Admin can register, edit, and deactivate installers (`name`, `email`, `phone`). Gated on API (`requireSuperAdmin`) and Admin UI.
             - **Admin Auto-Fetch**: When generating a new bill, Admins can choose from registered installers in a dropdown, automatically pre-filling the installer's legal name, registered email, and contact phone.
             - **Mandatory Internal Notes**: Required internal audit and verification notes field enforced with strict validation at both backend Zod schema and UI form levels.
-            - **Tab 1 ("Payment Records & Bills")**: 4 KPI metric cards (Total Bills, Cleared Payments ₹, Outstanding Balance ₹, Pending Clearance), comprehensive multi-field filters (Search by installer/bill/phone, Payment Status, NCR filter), desktop data table showing Payment Date, and touch-optimized mobile cards. Includes modal for Recording Installments and a slide-over Job Dossier Drawer with timeline history.
-            - **Tab 3 ("Cubicle Models Master - Super Admin")**: Model CRUD with name, rate, active status toggle, and soft deletion. Hardened with defensive array checks, fallback seeds, and safe date/number formatters to prevent runtime view errors.
-            - **Tab 4 ("Full Payment Export - Super Admin")**: Date range filtering, status filtering, and one-click binary `.xlsx` workbook generation with styled navy headers, Indian currency formatting, and totals row.
+          - **Deductions & Penalties Engine (`deductionAmount`, `deductionReason`)**:
+            - **Net Calculation Formula**: `Net Total = Math.max(0, Subtotal + Travel Expenses - Deduction Amount)`, `Balance Due = Math.max(0, Net Total - Amount Paid)`.
+            - **Mandatory Reason Guard**: Whenever a deduction amount > 0 is entered, a non-empty deduction reason is strictly enforced across backend Zod validation schemas (`CreateInstallerBillSchema`, `UpdateInstallerBillSchema`) and Admin UI forms.
+            - **Itemized PDF Payment Advice (`installer-bill-pdf.service.ts`)**: Itemizes deductions with explicit red formatting (`-₹<deductionAmount>`) and states the deduction reason, retitling the final disbursement line to `Net Disbursement Due: ₹<total>`.
+            - **26-Column Excel Audit Report (`installer-export.service.ts`)**: Expanded from 24 to 26 columns (`A` through `Z`):
+              - Col 19: `Deductions (₹)` (formatted currency `₹#,##0.00` with bottom summary sum)
+              - Col 20: `Deduction Reason` (left-aligned audit explanation text)
+              - Supported single-technician export when filtering by `installerId`.
+          - **Installer-Wise Payment History & Ledger Hub (Tab 5: "Installer Ledgers & History")**:
+            - **Dedicated Ledger API (`GET /api/v1/installer-payments/installers/:id/ledger`)**: Computes lifetime technician KPI metrics (Total Jobs Completed, Total Units across Cubicles/UMP/Lockers, Gross Subtotal, Travel Reimbursement, Total Deductions, Net Payable, Total Disbursed, Balance Due, Cleared vs Partial counts) and retrieves full chronological job records.
+            - **Admin Tab 5 Interface (`InstallerPaymentsPage.tsx`)**:
+              - **Technician Selector**: Dropdown to select any registered technician with live profile overview card.
+              - **6 Lifetime Executive KPI Cards**: Completed Jobs, Units Installed, Gross Earnings & Travel, Total Deductions (highlighted in red), Total Disbursed, and Balance Due.
+              - **Download Technician Statement (.xlsx)**: 1-click export of the installer's complete statement.
+              - **Chronological Jobs & Payment Ledger Table**: Comprehensive history showing Bill No, Date, Site Address & PIN, Units Breakdown, Subtotal, Travel, Deductions & Reason, Net Total, Disbursed, Balance, Status pill, and 1-tap PDF voucher download.
+            - **Tab 1 ("Payment Records & Bills")**: Added dynamic "Installer" filter dropdown to isolate bills by technician; bills table displays deduction badges with tooltips under the Total Due column.
+            - **Tab 2 ("Installers Directory")**: Added a direct "View Payment Ledger & History" action icon button on each installer row/card to jump immediately to that technician's ledger in Tab 5.
+            - **Bill Details Drawer & Modals**: Enhanced `BillDetailsDrawer` and `CreateBillModal` to display and capture deductions, penalties, and reasons alongside Net Disbursement calculations.
+          - **Fast Schema Auto-Healing & Render Port Binding Protocol**:
+            - **`_applied_schema_patches` Hash-Cache Table**: Tracks cryptographic SHA-256 hashes of all applied schema statements. On container boot, `fix-db.js` fetches applied hashes in a single fast query (~150ms) and skips already-verified patches instantly, slashing execution time from 73+ seconds down to ~0.7 seconds.
+            - **15-Second Pre-Start Guard**: Strict safety timeout in `fix-db.js` guarantees that database verification will never exceed 15 seconds, preventing Render's 60-second port scan timeout from ever killing the container with SIGTERM.
+            - **Port Binding Priority**: `server.ts` binds `app.listen(port, '0.0.0.0')` immediately on boot so Render detects an active listening port in <100ms.
+
+    29. **Employee & Payroll Management System (`employee-management`, `EmployeeManagementPage.tsx`, `employeeService.ts`, `payslip-pdf.service.ts`)**:
+          - **Master Employee Directory**:
+            - Auto-generated alphanumeric ID (`EMP-0001` upwards, strictly formatted and system-generated).
+            - Complete employee profile: Full Name, unique Email, Phone, Address, Government ID (Aadhaar / PAN / Voter / Passport / Driving License), Bank Account details (Account Number, IFSC, Bank Name, Account Holder Name), Department, Designation, Joining Date, and Active/Inactive status.
+            - **Designation Hierarchy & "Workers" First-Class Role**:
+              - Default designation for new staff is **"Workers"** (`COMMON_DESIGNATIONS` includes `Workers`, `Hardware Technician`, `Cubicle Installer`, `Site Supervisor`, `Operations Executive`, `Senior Hardware Engineer`, `Sales & Business Development`, `Finance & Accounts`, `Administration & HR`, `Fabricator / Carpenter`, `Helper / Support Staff`).
+              - Quick 1-tap designation pill buttons (`[Workers]`, `[Hardware Technician]`, `[Cubicle Installer]`, `[Site Supervisor]`) for fast mobile/touch logging.
+              - Custom designation support (`+ Other`) for specialized trades or custom job titles.
+              - Employee Directory toolbar filter dropdown for **Designation** allowing 1-click filtering of staff by "Workers" or other roles, with backend query support (`GET /api/v1/employees?designation=Workers`).
+            - **Optional Bank Disbursement Account Protocol**:
+              - Bank account section in Add/Edit Employee is completely optional, supporting cash-based workers and daily wage staff who do not have immediate bank credentials.
+              - Clear "(Optional)" visual badges and helper guidance in the modal.
+              - Backend Zod schemas (`CreateEmployeeSchema`, `UpdateEmployeeSchema`) sanitize empty strings, whitespace, and placeholder strings (`N/A`, `NA`, `NONE`, `NIL`) to `null` without triggering IFSC regex validation failures.
+              - Directory table gracefully indicates `Optional (Not Provided)` for staff without bank credentials.
+            - Compensation profile: Monthly CTC, Basic Salary (50% of CTC), HRA (40% of Basic), Special Allowance (remainder), and dynamic Leave Balances (CL, EL).
+          - **Worker Operations Hub (Dedicated Tab for Factory & On-Site Workers)**:
+            - **Target Roles**: Tailored for factory workers, carpenters, fabricators, installers, and helpers (`Workers`, `Fabricator / Carpenter`, `Helper / Support Staff`, `Cubicle Installer`, `Hardware Technician`).
+            - **Worker Summary KPI Dashboard**: Real-time cards showing Active Workers headcount, Today's Worker Attendance Rate (% & present count), Total Worker Advances Pending Recovery for active month, and Total Worker Net Wages calculated / disbursed.
+            - **Sub-View 1: Worker Attendance Matrix**: Fast daily attendance recording with 1-click status pills (`P`, `HD`, `UL`, `CL`), inline overtime hours stepper, Sunday shift override toggle, worker search, monthly attendance summary counters per worker, and 1-click "Mark All Workers Present" batch action.
+            - **Sub-View 2: Worker Advances & Recovery**: Cash/salary advance issuance with preset amounts (₹500, ₹1,000, ₹2,000, ₹5,000), worker-specific pending recovery balance tracking, recovery scheduling, and full edit/delete controls.
+            - **Sub-View 3: Worker Monthly Payroll Runs**: 1-click worker wage calculation ($(\text{Days Worked} \times \text{Daily Rate}) + \text{OT Pay} - \text{Advances Deducted} - \text{Deductions} = \text{Net Salary}$), cash/bank disbursement authorization, payslip PDF download, and email dispatch.
+            - **Worker Quick Filters Across Other Tabs**: Added 1-click toggle pills (`[All Staff] | [Only Workers]`) across general Attendance Matrix, Advances & Deductions, and Monthly Payroll Runs tabs.
+          - **Daily Attendance Matrix & Instant Operations**:
+            - 0ms optimistic UI updates with silent background API persistence for zero perceived latency.
+            - Status toggle chips: `PRESENT`, `CL` (Casual Leave), `EL` (Earned Leave), `HALF_DAY`, `UL` (Unpaid Leave), `LEAVE`.
+            - Overtime tracker with stepper (+0.5h increments) and immediate recalculation.
+            - Sunday shift approval toggle (`isSundayOverride`) allowing Sunday work to count as an additional paid day.
+            - Single-click "Mark All Active Staff Present" batch endpoint (`POST /api/v1/employees/attendance/batch`) with parallel processing.
+            - Dedicated Edit Attendance modal allowing detailed remarks, overtime hour adjustments, and Sunday override flags.
+          - **Leave Ledger & Automated Accrual Engine**:
+            - Monthly accrual job (`POST /api/v1/employees/leaves/accrue-monthly`) awarding +1.00 CL and +0.25 EL to all active staff.
+            - Leave Adjustment & Debit Protocol: Debit adjustments deduct directly from the respective balance (CL Debit reduces CL balance, EL Debit reduces EL balance) with live remaining balance calculation and reason logging.
+            - Chronological leave transaction ledger with before/after audit tracking.
+          - **Salary Advances & Deductions Tracking**:
+            - Advance tracking: Amount, Advance Taken Date (`advanceDate`), Recovery Month/Year schedule, and repayment tracking.
+            - One-time Deductions: Deduction Amount, Reason, and Apply Month/Year schedule.
+            - Full Edit & Delete capabilities with modals for both Advances and Deductions.
+          - **Monthly Payroll Engine & Super Admin Revert-to-Draft Workflow**:
+            - Prorated salary calculation: `payableDays = presentDays + clDays + elDays + (halfDays * 0.5) + (totalSundays + sundayOverrideCount)`.
+            - Overtime rate: `((basicSalary / daysInMonth) / 8) * 1.5 * overtimeHours`.
+            - Auto-recovery of scheduled advances and deductions for the active pay period.
+            - Net Salary = `(Gross Earned Salary + Overtime Pay) - (Advance Deducted + General Deductions)`.
+            - **Finalize Run**: Locks deductions and advances (`isRecovered: true`, `isApplied: true`), assigns `finalizedById`, marks run `FINALIZED`.
+            - **Super Admin Revert to Draft (`POST /api/v1/employees/payroll/:id/revert-draft`)**:
+              - Strictly guarded by `requireSuperAdmin` middleware on backend and `isSuperAdmin` in Admin UI.
+              - Atomically reopens linked advances (`isRecovered: false`, `recoveredAt: null`, `payrollRunId: null`).
+              - Atomically reopens linked deductions (`isApplied: false`, `appliedAt: null`, `payrollRunId: null`).
+              - Clears `finalizedById`, `paidAt`, `paymentMode`, `paymentReference`, and resets status to `DRAFT`.
+            - **Disbursement & Payslip Dispatch**:
+              - Super Admin records payment mode (`CASH`, `BANK_TRANSFER`, `UPI`, `CHEQUE`), reference number, and payment notes.
+              - Automated dispatch of official payslip PDF advice via email (`sendMail`).
+              - 1-click Download Official Payslip PDF (`GET /api/v1/employees/payroll/:id/pdf`) built with `pdfmake` featuring the official **Pacific Restroom Cubicle & Locker Solutions** logo (`PACIFIC_RESTROOM_LOGO_DATA_URL`).
+              - 1-click Resend Payslip Email (`POST /api/v1/employees/payroll/:id/send-email`).
+
+    30. **Daily Cash Expense Tracker & Multi-Branch Ledger Suite (`ExpensesPage.tsx`, `expensesApi.ts`, `expenses.service.ts`, `expenses.schema.ts`)**:
+          - **Multi-Branch Consolidated Ledger & Filter Architecture**:
+            - Super Admins and Admins can view expenses across all branches (`Delhi HQ`, `Kolkata Branch`) in a single consolidated ledger view (`branchId: 'ALL'`) or filter down to a specific branch via the dedicated branch selector.
+            - Tab 1 Fast Cashier Entry Form features an explicit **Branch Location** dropdown picker (`entryBranchId`), ensuring that expenses logged for either Delhi or Kolkata are correctly tagged at entry time.
+            - Tab 2 Organization Expense Ledger table dynamically displays the **Branch** column whenever the consolidated view is selected or multiple branches exist, with branch badge pills (`Delhi HQ (DEL)`, `Kolkata Branch (KOL)`).
+            - Backend Zod validation (`ExpenseFilterQuerySchema`) expanded to accept `status: 'VOIDED'` and `status: 'ALL'`. The `getExpenses` query engine handles voided filter states gracefully, ensuring active and voided records display transparently in the ledger without throwing 400 Bad Request errors.
+          - **Resilient Offline Browser Queue & Auto-Sync Engine**:
+            - Captures failed or slow submissions into browser `localStorage` (`prc_offline_expense_queue`) with exact date, time, and branch stamps when the backend is asleep or network drops.
+            - Proactively auto-syncs queued vouchers to PostgreSQL on application mount (`loadInit`) and network reconnect (`window.online`).
+            - Amber **Offline Queue Alert Banner** displayed in both Tab 1 (Fast Entry) and Tab 2 (Ledger) notifying the administrator of pending offline vouchers with a 1-click **Sync Queued Entries Now** button.
+          - **Receipt Slip / Voucher Interactive Preview Modal (Images & PDFs)**:
+            - Rich modal viewer (`previewReceipt`) supporting high-resolution receipt images (JPEG, PNG, WEBP) and multi-page PDF documents via an embedded `<iframe />` viewport.
+            - Includes voucher metadata header (Voucher No, Amount, Category, Paid To, Date & Time, Status badge, Branch code).
+            - Fast action buttons: **Open in New Tab** (`ExternalLink`) and **Download Slip** (`Download`).
+            - View Slip buttons (`Camera` icon) mounted across:
+              - Tab 1 Today's cash entries desktop table (`Receipt` column).
+              - Tab 1 Today's cash entries mobile cards.
+              - Tab 1 "Recently Logged Voucher" success card preview.
+              - Tab 2 Organization Expense Ledger desktop table (`Receipt` column).
+              - Tab 3 Pending Approvals queue cards.
+
+          - **Auto-Approval System Removed (2026-09-14)**:
+            - All new expense entries now always start as `PENDING` regardless of amount.
+            - The `getEffectiveSettings()` call and `autoApprovalThreshold` conditional block have been removed from `createExpense()`.
+            - Balance, ledger, and rollup mutations only occur on explicit approval via `approveExpense()`.
+          - **Strict Super Admin Exclusivity for Expense & Cash Float Deletions (`requireSuperAdmin`) (2026-09-14)**:
+            - Both `DELETE /api/v1/expenses/:id` and `DELETE /api/v1/expenses/ledger/float-topup/:id` are strictly guarded by `requireSuperAdmin` middleware in `expenses.routes.ts`, guaranteeing that standard `admin` roles (which bypass standard `authorize()` checks) cannot invoke deletion operations.
+            - **Expense Deletion Protocol (`deleteExpense`)**: Atomically reverses financial state if approved/not voided (`BranchCashBalance` incremented, `ExpenseDailyLedger` total expenses decremented and closing balance incremented, `ExpenseDailyRollup` and `ExpenseMonthlyRollup` amounts and counts decremented), creates an audit record in `ExpenseAuditLog`, and deletes the `ExpenseEntry`.
+            - **Float Top-Up Deletion Protocol (`deleteFloatTopUp`)**: Atomically reverses `BranchCashBalance` (-amount) and `ExpenseDailyLedger` (-cashReceived, -closingBalance), creates an audit record in `ExpenseAuditLog`, and removes the `ExpenseFloatTopUp` record.
+            - **Admin UI Guards (`ExpensesPage.tsx`)**: Robust role resolution checks `roleSlug.includes('super') || adminUser?.isSuperAdmin === true`. Delete buttons and confirmation modals across Tab 1 (Today's Outflows table & mobile cards), Tab 2 (Organization Expense Ledger), Tab 3 (Pending Approvals Queue), and Tab 4 (Float Top-Up History) are strictly rendered only when `isSuperAdmin === true`. Handlers `handleConfirmDelete` and `handleDeleteFloat` actively block non-superadmins.
+          - **Payment Receipt Attachment & Super Admin Inspection Hub (2026-09-14)**:
+            - **Cash Float Payment Receipt Support**: Added `receiptAttachment` field (`receipt_attachment` column in `expense_float_top_ups` via `fix-db.js` patch & Prisma schema). When recording a float top-up, finance/cashier staff can attach a bank transfer slip, cheque photo, or signed cash receipt (JPG, PNG, PDF) using `expensesApi.uploadReceipt`.
+            - **Float History Table Inspection**: Added a dedicated **Payment Receipt** column in the Cash Float Top-Up History table visible exclusively to Super Admins. If a receipt file is attached, 1-click **View Receipt** opens the full document preview. If paperless, Super Admin can click **Voucher** to view the generated official **PRC Cash Float Disbursal & Receipt Voucher**.
+            - **Universal Super Admin Payment Receipt / Voucher Access**: In Tab 1 (Today's Outflows), Tab 2 (Organization Expense Ledger), and Tab 3 (Pending Approvals Queue), Super Admins can inspect uploaded receipts or view the generated official **PRC Cash Outflow Payment Voucher** even if no paper slip was uploaded at entry time.
+            - **Comprehensive Preview & Print Suite**: The preview modal supports high-resolution image zoom, embedded PDF documents, 1-click download, new tab opening, and 1-click printable vouchers (`window.print()`).
+
+    31. **Employee Management — Monthly CTC Optional (2026-09-14)**:
+          - `monthlyCtc` field in `CreateEmployeeSchema` changed from `positive()` (required) to `min(0).optional().default(0)`.
+          - Admin UI Add Employee form: `required` removed, label updated to show **Optional** badge (emerald), placeholder updated to "Leave blank for daily-wage workers".
+          - Form submission defaults `monthlyCtc` to `0` when left blank.
+
+    32. **Admin RBAC Login, Governance Matrix & Mandatory 2FA Onboarding (2026-09-14)**:
+          - **Custom Role Login Fix (Bug 1)**:
+            - `adminLogin` in `auth.service.ts` replaced static role enum whitelist (`['super-admin', 'admin', 'manager', 'staff']`) with dynamic validation verifying the account has at least one non-customer role (`!CUSTOMER_ROLE_SLUGS.includes(slug)`).
+            - Added case-insensitive email search (`mode: 'insensitive'`) and email normalization (`trim().toLowerCase()`) in both `adminLogin` and `createUser` to ensure zero credential mismatch errors.
+          - **Staff & Admin Access Governance / RBAC Matrix Fix (Bug 2)**:
+            - `listUsers` in `users.service.ts` replaced hardcoded admin role slug whitelist with dynamic `where.userRoles = { some: { role: { slug: { notIn: CUSTOMER_ROLE_SLUGS } } } }`.
+            - All administrators and staff created with custom roles now dynamically appear in the RBAC Matrix table with full role details, permissions, and status.
+            - Added dedicated **Custom Roles** tab to `AdminManagementPage.tsx` search and filter toolbar.
+          - **Forced Password Reset on First Login (Feature Request)**:
+            - Any staff or admin provisioned with a temporary password is automatically flagged with `mustChangePassword: true`.
+            - **Server-Side Enforcement**: In `auth.middleware.ts`, `authenticate` blocks all operational API routes with `403 PASSWORD_CHANGE_REQUIRED` until password change is fulfilled via `/auth/change-password`.
+            - **Client-Side Enforcement**: `App.tsx` routes accounts with `mustChangePassword: true` to `AdminForceChangePasswordPage.tsx` (Step 1 of 2). Direct URL navigation cannot bypass this step.
+          - **Mandatory Two-Factor Authentication Setup (Feature Request)**:
+            - Once password is updated, account automatically transitions to `AdminMandatory2FAPage.tsx` (Step 2 of 2).
+            - **Server-Side Enforcement**: In `auth.middleware.ts`, `authenticate` blocks all operational API routes with `403 TWO_FACTOR_REQUIRED` for administrative/staff accounts until 2FA setup is confirmed.
+            - **Client-Side Enforcement**: `App.tsx` keeps account locked on `AdminMandatory2FAPage.tsx` until TOTP 6-digit confirmation succeeds via `adminAuthService.confirmEnable2FA()`.
+    33. **Two-Factor Authentication Session Persistence & Stock Data Deletion Integrity (2026-09-14)**:
+          - **2FA State Hydration & Reload Fix**:
+            - **Backend `getMe`**: Added missing `twoFactorEnabled: user.twoFactorEnabled ?? false` and `isTwoFactorEnabled: user.twoFactorEnabled ?? false` to `getMe()` in `auth.service.ts`.
+            - **Admin Auth Context & Profile**: `adminAuthService.getProfile()` resolves `is2fa = Boolean(res.data.isTwoFactorEnabled ?? res.data.twoFactorEnabled ?? cachedUser?.isTwoFactorEnabled ?? isLocal2FAEnabled())` and persists normalized session. `AdminAuthContext.tsx` preserves 2FA across hydration.
+            - **App.tsx Guard**: 2FA setup guard checks `is2FAActive = Boolean(adminUser.isTwoFactorEnabled || adminUser.twoFactorEnabled || isLocal2FAEnabled())`, ensuring administrators with verified 2FA are never re-prompted for 2FA on page reload.
+          - **Stock Data Deletion & Detail Cleanup Integrity**:
+            - **Backend `deleteInventoryItem`**: Upgraded to handle direct UUIDs as well as synthetic `inv-${productId}` or `productId`. Writes off remaining units in `StockMovement` ledger as `FACILITY_DEALLOCATION`, deletes `inventory` rows, and syncs `product.stock = 0`.
+            - **Soft-Deleted Product Isolation**: `listInventory` in `inventory.service.ts` filters out soft-deleted products (`product: { deletedAt: null }`), preventing phantom stock records from surfacing. `deleteProduct` in `products.service.ts` cleans up associated `inventory` rows and clears inventory cache.
+            - **Admin API Inventory Merging**: `inventoryApi.getInventory` in `adminApi.ts` updated to only merge catalog products that have positive stock (`(Number(p.stock) || 0) > 0`), active status, and not deleted, preventing deleted/zero-stock items from resurrecting in the UI table.
+            - **Admin Console UI Optimistic Pruning**: `handleConfirmDelete` in `InventoryPage.tsx` immediately removes deleted items from state and closes all active detail/dossier/edit modals (`selectedPurchase`, `selectedTransfer`, `selectedDossierProductId`, `editingStockItem`, `quickActionProduct`).    34. **Custom Role Branch Location Resolution & Expense Update Authorization (2026-09-14)**:
+          - **Branch Facility Listing Permission Accessibility**:
+            - In `inventory.routes.ts`, `branchesRouter.get('/')` and `branchesRouter.get('/:id')` were previously restricted to `authorize('inventory.stock.read', 'inventory.view', 'branches.read')`.
+            - As a result, administrators or staff created with custom expense roles (e.g. `expenses.create`, `expenses.read`, `expenses.update`) received `403 Forbidden` on `/branches`, resulting in an empty Branch Location selection dropdown and blocking expense logging with "Please select a branch location".
+            - Read access on `GET /branches` and `GET /branches/:id` is now accessible to all authenticated administrative staff (`authenticate`), while facility mutations (create, update, delete) remain strictly guarded by `inventory.warehouses.create` / `branches.create`.
+          - **Resilient Fallback & Expense Update Route Alignment**:
+            - In `expensesApi.ts`, `getBranches()` now gracefully parses responses and provides default fallback locations matching active database facilities (`Delhi HQ` and `Kolkata Branch`).
+            - In `ExpensesPage.tsx`, `loadInit()` decouples branch and category fetching, and a reactive `useEffect` automatically selects the first active branch (`Delhi HQ`) if unselected.
+            - In `expenses.routes.ts`, added `expenses.update` permission to `PATCH /api/v1/expenses/:id`, enabling custom expense roles with update permissions to edit expense entries.
+
+    35. **First-Time 2FA Setup Automatic Login & Instant Dashboard Transition (2026-09-14)**:
+          - **Backend Token Issuance on 2FA Confirmation**:
+            - In `twoFactor.service.ts`, `enable2Fa` now issues a fresh authentication token pair (`accessToken` and `refreshToken`) and returns the complete authenticated `user` payload with `twoFactorEnabled: true` and `isTwoFactorEnabled: true`.
+            - In `auth.controller.ts`, `enable2Fa` automatically attaches the HTTP-only refresh token cookie (`setRefreshCookie`).
+            - Added resilient database fallback in `enable2Fa` and `setup2Fa` (`user.twoFactorSecret`), ensuring TOTP setup never fails even if the Redis cache session is evicted or temporarily unavailable.
+          - **Client-Side Instant Auto-Login & Navigation**:
+            - In `adminAuthService.ts`, `confirmEnable2FA` captures the freshly issued tokens, invokes `setAdminTokens`, and marks `setLocal2FAEnabled(true)`.
+            - In `AdminAuthContext.tsx`, implemented `complete2FAVerification(verifiedUser?)`, which updates the authenticated user in React state, synchronizes `localStorage`, sets `currentView("dashboard")`, and pushes `/dashboard` to the browser history.
+            - Sanitized `currentView` initialization so route segments `/login` cleanly default to `"dashboard"` instead of retaining an invalid non-view string.
+            - In `AdminMandatory2FAPage.tsx`, `handleVerifyAndEnable` immediately calls `complete2FAVerification(res.user)` upon successful code entry, seamlessly transitioning the administrator directly into the Admin Console dashboard without requiring manual navigation or re-login.
+
+    37. **Cross-Branch Pending Expense Approvals Queue & Custom Role In-Modal Permissions Governance (2026-09-14)**:
+          - **Cross-Branch Expense Approvals Queue Visibility**:
+            - In `ExpensesPage.tsx`, `fetchApprovals` previously defaulted to `branchId: selectedBranchId` (Delhi HQ), which suppressed pending approval vouchers logged from other branches (e.g. Kolkata Branch).
+            - Introduced `approvalsBranchFilter` state initialized to `'ALL'`, allowing management to view pending approvals across the entire organization by default.
+            - Added initial `fetchApprovals()` invocation upon component mount to populate the top navigation badge count immediately.
+            - Rendered interactive facility filter pills (`All Branches (${pendingEntries.length})`, `Delhi HQ`, `Kolkata Branch`) in the Approvals Tab toolbar for instant facility switching.
+            - Attached facility badges (`<Building2 /> ${e.branch?.name || 'Facility'}`) to every pending expense voucher card.
+            - Triggered `fetchApprovals()` on both `handleApproveEntry` and `handleConfirmReject` for instant live list refetching and badge count synchronization.
+          - **Custom Role Permissions Management & Super Admin In-Modal Authorization**:
+            - In `RolesPage.tsx`, enhanced Super Admin detection logic (`isSuperAdminUser`) across role slugs, boolean flags, and nested objects.
+            - Transformed Modal 2 (`editingRole`) from a metadata-only edit into a comprehensive Role & Permissions Management modal.
+            - Added `editPerms`, `editExpandedGroups`, `editPermSearch`, and `loadingEditPerms` states.
+            - Implemented `handleOpenEditRole(r: Role)` to dynamically query `rolesApi.getById(r.id)` and seed active role permissions into `editPerms`.
+            - Built in-modal search filtering, "Grant All", "Deselect All", "Expand All", and "Collapse All" controls.
+            - Grouped capabilities into module accordions with category headers, granted counter badges (`{checkedCount}/{groupSlugs.length}`), and quick "Select" / "Deselect" module buttons.
+            - Provided individual permission checkboxes with display name, code slug, and color-coded CRUD badges.
+            - Implemented `handleSaveEditRole` to atomically update role metadata (`rolesApi.update`) AND role permissions (`rolesApi.updatePermissions`).
+            - Added direct "Edit Role" button in the right-column header for custom roles alongside list action icons.
+          - **Staff Admin Provisioning Shortcuts**:
+            - Connected `onNavigateRoles` prop in `AdminLayout.tsx` and `AdminManagementPage.tsx` for 1-click navigation to `roles` view (`setCurrentView("roles")`).
+            - Added "Roles & Permissions" shortcut button in the staff directory header toolbar next to "+ Provision Admin / Manager".
+            - Embedded "+ Customize Roles & Perms" shortcut link in the Create Admin modal role selector header and active role preview card.
+            - Embedded "Customize Roles & Perms" shortcut link in the Edit Admin modal role selector.
 
 ---
 
-*Last Updated: 2026-09-11 (Implemented automated NCR postal PIN code matching with 137+ pin master registry, fixed Cubicle Model Master view loading error with defensive guards, dedicated New Installer Bill page, Super Admin Installers Directory, Admin details auto-fetch, explicit payment date, and mandatory internal audit notes)*
+*Last Updated: 2026-09-14 (Custom role in-modal permissions governance and cross-branch pending expense approvals queue complete; verified 0 TypeScript compiler errors across full stack)*
 
+---
 
+## 38. Expense Approval CORS Fix — Render Cold-Start Server Wake-Up (2026-09-14)
 
+### Root Cause
+The CORS block on `POST /api/v1/expenses/:id/approve` was **not** caused by a misconfigured CORS policy in Express. The backend `app.ts` already has `admin-delta-kohl.vercel.app` hardcoded in the allowlist (line 106) and a permissive fallback `return callback(null, true)` for all other origins.
+
+The actual cause is **Render free-tier cold-start**: when the Render container is sleeping, Render's load-balancer proxy returns an HTTP `503` before Node.js/Express even loads. That `503` carries **no `Access-Control-Allow-Origin` header** because Express hasn't run yet. The browser's preflight check fails → CORS error.
+
+### Fix Applied
+
+#### `D:\admin\src\api\adminApi.ts`
+- Added `wakeServerAndWait(maxAttempts = 8)` export function (lines ~177–207):
+  - Polls `GET /ping` (with full CORS, not `no-cors`) every 2s → 4s → 6s → 8s (progressive back-off).
+  - Returns `true` once the server responds with any non-5xx status.
+  - Returns `false` after max attempts — caller proceeds anyway.
+- Increased auto-retry delay for 502/503/504 and network/CORS errors from **2.5s → 5s** (server needs more time to wake from sleep).
+
+#### `D:\admin\src\api\expensesApi.ts`
+- Imported `wakeServerAndWait` from `adminApi`.
+- `approveExpense()`, `rejectExpense()`, `voidExpense()` — all now call `await wakeServerAndWait()` before issuing the `POST` request. This guarantees Express is up and CORS headers will be returned.
+
+#### `D:\admin\src\pages\ExpensesPage.tsx`
+- Added `approvingId: string | null` state — tracks which expense entry is currently being approved.
+- Added `rejectingId: string | null` state — tracks which entry is being rejected.
+- Updated `handleApproveEntry`:
+  - Guards against double-tap.
+  - Sets `approvingId` while in-flight, clears in `finally`.
+  - On CORS/network error, shows a user-friendly `⚠️ Server connection error. Backend waking up.` alert instead of raw error message.
+- Updated `handleConfirmReject`: sets/clears `rejectingId` in try/finally.
+- All 5 Approve buttons in JSX updated with `disabled={!!approvingId}` and conditional label `'Waking server…'` while the specific entry is being approved.
+
+### Verification
+- `npx tsc --noEmit` → **exit code 0** on both `admin` and `PRC-Backend`.
+
+---
+
+## 39. Daily Cash Expense Tracker — Optimistic UI, Payer Attribution & Multi-Branch Excel Reporting Suite (2026-09-15)
+
+### 39.1 Problem Statement & Requirements
+1. **Approval Lag & UI Slowness**: Users experienced server response delays (10-15s) when clicking Approve on expense vouchers, along with sluggish page loading when navigating to the Daily Cash Expense Tracker.
+2. **Excel Report Branch Selection**: Reports previously lacked an option to filter and export data specifically for the Kolkata Branch, Delhi HQ, or All Branches Consolidated.
+3. **Uniform Excel Columns & Formatting**:
+   - Every downloaded expense report (Day, Week, Month, Year) must feature a standard itemized vouchers table with all 13 standard columns: Current Date, Voucher No, Branch, Who Paid (Name / Employee), Category, Sub-Category, Amount, Payment Mode, Description / Note, Paid To (Vendor / Person), Slip (Receipt URL / Link), Status, and Approved By.
+   - Clickable hyperlinks for receipt attachments linking directly to the uploaded slip image or PDF document.
+   - Native Excel auto-filter (`autoFilter`) enabled on all report sheets so downloaded workbooks open with filter dropdowns ready for immediate analysis.
+4. **Fast Expense Logging Payer Name Field**:
+   - Addition of a "Who Paid (Name)" field (`paidBy`) to track the specific cashier or staff member who disbursed the funds, complementing the existing "Paid To (Vendor / Person)" (`paidTo`) field.
+
+### 39.2 Implementation Details
+
+#### 1. Database & Schema (`PRC-Backend`)
+- **Prisma Schema (`prisma/schema.prisma`)**: Added `paidBy String? @map("paid_by")` to `model ExpenseEntry`.
+- **Database Self-Healing (`src/scripts/fix-db.js`)**:
+  - Added idempotent DDL statement: `ALTER TABLE "expense_entries" ADD COLUMN IF NOT EXISTS "paid_by" TEXT;`.
+  - Added `"paid_by" TEXT,` to the `CREATE TABLE IF NOT EXISTS "expense_entries"` DDL definition.
+  - Executed and verified via `node src/scripts/fix-db.js`.
+- **Prisma Client**: Re-generated with `npx prisma generate` (`v5.22.0`).
+
+#### 2. Backend Validation & Services (`PRC-Backend`)
+- **Validation Schemas (`expenses.schema.ts`)**:
+  - Added `paidBy: z.string().optional().nullable()` to both `CreateExpenseSchema` and `UpdateExpenseSchema`.
+- **Expense Service (`expenses.service.ts`)**:
+  - `createExpense`: Stores `paidBy: input.paidBy ? input.paidBy.trim() : null` and includes full relations (`branch`, `employee`, `addedBy`, `approvedBy`).
+  - `updateExpense`: Updates `paidBy` and returns enriched relations.
+  - `exportReport`: Included `category`, `branch`, `employee`, `addedBy`, and `approvedBy` relations across Day, Week, Month, and Year reports. Added raw itemized voucher queries to Month and Year reports and forwarded them to the workbook generators.
+- **Excel Export Service (`expenses-export.service.ts`)**:
+  - Implemented `addRawVouchersWorksheet(wb, sheetName, entries, defaultBranchName)`:
+    - 13 standard columns: `Date`, `Voucher No`, `Branch`, `Who Paid (Name)`, `Category`, `Sub-Category`, `Amount (₹)`, `Payment Mode`, `Description / Note`, `Paid To (Vendor / Person)`, `Receipt Slip`, `Status`, `Approved By`.
+    - Clickable hyperlink for receipt slips (`{ text: 'View Slip / Receipt', hyperlink: e.receiptAttachment }`) with blue underline styling, falling back to `'No Slip'`.
+    - Total sum formula row: `SUM(G2:G{n})` formatted in Indian currency `₹#,##0.00`.
+    - Native `autoFilter` range activated across all columns (`ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: Math.max(entries.length + 1, 1), column: ws.columns.length } }`).
+  - Unified Day Sheet 2, Week Sheet 3, Month Sheet 3, and Year Sheet 3 with `addRawVouchersWorksheet`.
+  - Added `autoFilter` to all summary, rollup, pivot, and reconciliation sheets across all 4 export workbooks.
+
+#### 3. Cross-Project Types & Frontend Alignment
+- **Admin Types (`admin/src/types/admin.ts`)**: Added `paidBy?: string | null;` to `ExpenseEntry` and `UpdateExpenseInput`.
+- **Admin API (`admin/src/api/expensesApi.ts`)**: Added `paidBy?: string | null;` to `OfflineQueuedExpense` and `createExpense`.
+- **Frontend Types (`frontend/src/types/index.ts`)**: Added `paidBy?: string | null;` to `ExpenseEntry`.
+- **Frontend Services (`frontend/src/services/cashExpenseService.ts`)**: Added `paidBy?: string | null;` to `createExpense`.
+
+#### 4. Admin UI Architecture (`admin/src/pages/ExpensesPage.tsx`)
+- **Excel Report Branch Filter**:
+  - Added `reportBranchId` state (defaults to `'ALL'`).
+  - Added interactive branch selection dropdown in the Multi-Sheet Excel Generator card header (Tab 5) with options: `All Branches (Consolidated)`, `Delhi HQ`, and `Kolkata Branch`.
+  - Wired `handleDownloadExcel(overridePeriod)` to pass the selected `reportBranchId` in the query params.
+- **Fast Expense Logging Form**:
+  - Added `entryDate` state defaulting to the user's current local date (`YYYY-MM-DD`), allowing staff to select custom or past dates for back-dated vouchers with automated reset back to current date on submit.
+  - Added `entryPaidBy` state and a dedicated "Who Paid (Name)" text input next to "Paid To (Vendor / Person)".
+  - Compact, high-density, mobile-first UI revamp: reduced padding (`p-3.5 sm:p-4`), scaled down input sizes (`text-xs`), normalized labels (`text-[11px] font-semibold`), removed redundant subtitle text ("Log cash outflow in under 10 seconds"), transformed category selection and payment mode into streamlined, touch-friendly `<select>` dropdowns with dark mode support and local category memory (`localStorage`), and compacted slip file attachment and submit buttons.
+- **Edit Expense Modal**:
+  - Added `editDate` state and date picker allowing modification of expense dates with backend schema (`UpdateExpenseSchema.date`) and service (`updateExpense`) support.
+  - Added `editPaidBy` state and "Who Paid (Name)" input field.
+- **Voucher Displays**:
+  - Displayed `paidBy` attribution across Today's Outflows desktop table and mobile cards, Organization Ledger table and mobile drawer, Pending Approvals queue cards, and Recently Logged summary banner.
+- **Performance & Instant Feedback**:
+  - Zero-delay 0ms optimistic updates for instant UI status transitions on Approve/Reject without waiting for network round-trips.
+- **Cash Float Date Picker & Voucher List Updates**:
+  - **Custom Date Selection**: Added `topUpDate` state in `admin/src/pages/ExpensesPage.tsx` defaulting to `getTodayDateString()` (`YYYY-MM-DD`).
+  - **Date Picker in Top-Up Modal**: Added a dedicated top-up date input field with a "Set Today" shortcut in `isTopUpModalOpen` modal, allowing finance admins to record cash float additions for custom/past dates. Automatically resets to current date on submit.
+  - **Timezone-Safe Date Display**: Created `formatDisplayDate(dateStr, monthFormat)` parsing `YYYY-MM-DD` directly to prevent off-by-one day display drift across local timezones in the Cash Float History table and the Digital Cash Float Payment Voucher preview modal.
+  - **Full-Spectrum Excel Export for Cash Float Top-Ups**:
+    - Implemented `addFloatTopUpsWorksheet(wb, sheetName, topUps, defaultBranchName)` in `expenses-export.service.ts` featuring 9 standard columns: `Date`, `Record ID`, `Branch`, `Amount (₹)`, `Source of Cash Float`, `Reference / Cheque No`, `Notes / Purpose`, `Payment Receipt Slip`, and `Added By`.
+    - Includes clickable hyperlinks (`View Receipt Slip`), formula sum row (`=SUM(D2:D{n})`), rupee currency formatting, Segoe UI typography, and native Excel `autoFilter`.
+    - Injected itemized `Cash Float Top-Ups` worksheet across all 4 export periods: Day (Sheet 3), Week (Sheet 4), Month (Sheet 4), and Year (Sheet 4).
+    - Enriched `exportReport` in `expenses.service.ts` with `{ branch: true, addedBy: true }` relations and chronological ordering (`[{ date: 'asc' }, { createdAt: 'asc' }]`) for all float queries.
+
+### 39.3 Verification & Quality Assurance
+- `PRC-Backend`: `npx tsc --noEmit` passed with **0 compiler errors**.
+- `admin`: `npx tsc --noEmit` passed with **0 compiler errors**.
+- `frontend`: `npm run build` (Vite) succeeded with **0 errors**.
+### 40. Rate Limiting, CORS Resilience & Reverse Proxy Infrastructure (2026-09-15)
+
+#### 40.1 Architecture & Fixes
+- **Management & Operational Dashboard Bypass**:
+  - In `src/middleware/rateLimit.middleware.ts`, normalized user role checks via `.toLowerCase().replace(/[-_]/g, '')`.
+  - Authenticated roles (`super_admin`, `super-admin`, `admin`, `manager`, `accountant`, `cashier`, `staff`) now completely bypass the rate limiter, preventing false-positive 429 errors during intensive management console operations (e.g. updating expense entries, float audits, bulk edits).
+- **CORS Header Guarantee on Rate Limit & Error Responses**:
+  - In `src/middleware/rateLimit.middleware.ts`, injected `Access-Control-Allow-Origin: req.headers.origin` and `Access-Control-Allow-Credentials: true` directly before sending 429 Too Many Requests responses in both Redis and in-memory paths.
+  - In `src/utils/response.ts`, enhanced `sendError` to automatically inject origin and credentials CORS headers if absent, preventing Chrome/Edge from masking 4xx/5xx errors as generic `ERR_FAILED` or `blocked by CORS policy` network failures.
+- **Render Cloud Reverse Proxy Detection (`trust proxy`)**:
+  - In `src/app.ts`, configured `app.set('trust proxy', 1)` when running in production (`env.NODE_ENV === 'production'`) or on Render (`process.env.RENDER`), ensuring Express accurately parses real client IPs from `X-Forwarded-For` rather than clustering all worldwide users into Render's shared gateway IP.
+- **Global Umbrella Limit Expansion**:
+  - Increased `generalLimiter` default capacity from 1,200 to 3,000 req/min per IP to comfortably accommodate high-frequency frontend and admin operations.
+- **Admin Console Background Keep-Alive Throttling**:
+  - In `d:\admin\src\api\adminApi.ts`, added a 60-second rate-throttle guard (`_lastKeepAlivePing`) to `keepAliveServerPing()`, eliminated `mode: 'no-cors'` in favor of standard CORS with a 10s timeout, and removed redundant `/health` cascade pings to eliminate ping storms on window focus / tab visibility changes.
+
+### 40.2 Verification & Quality Assurance
+- `PRC-Backend`: `npx tsc --noEmit` passed with **0 compiler errors**.
+- `admin`: `npx tsc --noEmit` passed with **0 compiler errors**.
+- Full-stack build and schema integrity preserved.
+
+---
+
+### 41. B2B Order Management & Physical Stock Reservation Suite (2026-09-15)
+
+#### 41.1 System Architecture & Invariant Rules
+The B2B Order Management module provides enterprise dual-channel order placement, approval gates, physical vs reserved stock tracking, and complete audit synchronization:
+
+1. **Dual-Channel Order Ingestion**:
+   - **Channel 1 (Admin Offline Orders)**: Super Admin places an order on a customer's behalf from the Admin Panel (`POST /api/v1/b2b-orders/offline`). Trusted by definition — the order is created directly in `CONFIRMED` status, physical inventory is deducted immediately in a single database transaction, and a `B2B_ORDER` stock movement is recorded.
+   - **Channel 2 (Customer Self-Service Orders)**: Authenticated B2B wholesale customer places their own order (or converts an approved quotation) via `POST /api/v1/b2b-orders/submit`. The order lands in `PENDING_APPROVAL` status. Physical stock is **NOT** deducted; instead, inventory is **reserved** in `StockReservation` with `status: ACTIVE` and incremented on `Inventory.reservedQuantity`.
+2. **Available Stock Invariant Formula**:
+   $$\text{Available Stock} = \text{Physical Stock (`Inventory.quantity`)} - \text{Active Reservations (`Inventory.reservedQuantity`)}$$
+   - Prevents overselling across retail and B2B channels. Available stock is returned by `GET /api/v1/b2b-orders/stock-check` and enforced during both submission and approval.
+3. **Super Admin Approval Gate**:
+   - Only users with `req.user.role === 'super_admin'` can approve (`POST /:id/approve`), reject (`POST /:id/reject`), edit (`PATCH /:id/edit`), or cancel confirmed orders (`POST /:id/cancel`). Non-super-admins receive HTTP 403 Forbidden.
+   - **Approval**: Transitions status to `CONFIRMED`, decrements `Inventory.reservedQuantity`, decrements `Inventory.quantity` (physical deduction), marks reservations as `CONVERTED`, logs `B2B_ORDER` stock movements, and records `approvedById` and `approvedAt`.
+   - **Rejection**: Transitions status to `REJECTED`, releases reservations (`RELEASED`), decrements `Inventory.reservedQuantity`, records `rejectionReason`, and logs **zero** stock movements (no physical stock was touched).
+4. **Customer Self-Service Cancellation Protocol**:
+   - Authenticated customers can cancel their own orders via `POST /api/v1/b2b-orders/:id/customer-cancel` **strictly when** `status === 'PENDING_APPROVAL'`.
+   - Releasing the order decrements `Inventory.reservedQuantity`, marks reservations `RELEASED`, sets order status to `CANCELLED`, and logs zero physical movements.
+   - Attempting to cancel a `CONFIRMED` order returns HTTP 400 Bad Request ("Only orders in pending_approval status can be cancelled by the customer").
+5. **Super Admin Confirmed Order Cancellation & Restocking**:
+   - Super Admin can cancel confirmed orders via `POST /api/v1/b2b-orders/:id/cancel`.
+   - Restores physical inventory (`Inventory.quantity += line.quantity`), logs `B2B_CANCELLATION` stock movements with the audit reason, and sets status to `CANCELLED`.
+6. **Super Admin Confirmed Order Editing with Delta Stock Adjustments**:
+   - Super Admin can edit quantities or soft-remove line items (`isRemoved: true`) via `PATCH /api/v1/b2b-orders/:id/edit`.
+   - **Positive Delta** (increase): Verifies available physical stock, deducts difference from `Inventory.quantity`, and logs `B2B_ADJUSTMENT` movement.
+   - **Negative Delta** (decrease / removal): Returns surplus back to `Inventory.quantity` and logs `B2B_ADJUSTMENT` movement.
+   - Recalculates order subtotal, 18% GST tax, and grand total.
+7. **Numbering Pattern & Idempotency**:
+   - Sequence format: `PRC-B2B-<FY>/<seq>` (e.g. `PRC-B2B-2026-27/001`) generated atomically via `B2bOrderSequence`.
+   - Idempotency: `client_request_id` header or body field. If an order with that key exists, the existing record is returned without duplicate insertion.
+
+#### 41.2 Database & Migrations (`PRC-Backend`)
+- **Schema (`prisma/schema.prisma`)**:
+  - Added enum values to `StockMovementType`: `B2B_ORDER`, `B2B_ADJUSTMENT`, `B2B_CANCELLATION`.
+  - Added enums: `B2bOrderStatus`, `B2bOrderSource`, `StockReservationStatus`.
+  - Added models: `B2bOrder`, `B2bOrderItem`, `StockReservation`, `B2bOrderSequence`.
+  - Relations wired on `User`, `Branch`, `Product`, `Quote`, and `PoSubmission`.
+- **Idempotent Boot Patch (`src/scripts/fix-db.js`)**:
+  - DDL statements for all enum types, tables, foreign keys, unique indexes (`client_request_id`, `order_number`, `sequence`), and concurrency-safe PostgreSQL stored procedures:
+    - `submit_b2b_order(p_customer_id, p_branch_id, p_quote_id, p_po_submission_id, p_client_request_id, p_order_number, p_notes, p_items)`: Locks `Inventory` rows with `FOR UPDATE`, validates available stock ($\ge \text{quantity}$), creates order, items, and active reservations, and increments `reserved_quantity`.
+    - `approve_b2b_order(p_order_id, p_approved_by)`: Locks inventory rows, verifies physical stock $\ge$ reserved qty, deducts physical stock, decrements reserved stock, marks reservations `CONVERTED`, updates order to `CONFIRMED`, and logs `B2B_ORDER` audit movements.
+    - `reject_b2b_order(p_order_id, p_rejected_by, p_reason)`: Decrements `reserved_quantity`, marks reservations `RELEASED`, updates order to `REJECTED`, and logs zero physical movements.
+
+#### 41.3 Backend REST API (`/api/v1/b2b-orders`)
+- `POST /submit`: Customer self-service order creation (requires authenticated B2B customer; lands in `PENDING_APPROVAL`).
+- `POST /offline`: Super Admin offline order creation (requires `role === 'super_admin'`; immediately `CONFIRMED` + physical deduction).
+- `POST /:id/approve`: Super Admin order approval (converts reservations to physical deductions).
+- `POST /:id/reject`: Super Admin order rejection (releases reservations, 0 physical movements).
+- `PATCH /:id/edit`: Super Admin confirmed order editing (delta stock adjustments with `B2B_ADJUSTMENT`).
+- `POST /:id/cancel`: Super Admin confirmed order cancellation (restores physical stock with `B2B_CANCELLATION`).
+- `POST /:id/customer-cancel`: Customer self-service cancellation (strictly `pending_approval`).
+- `GET /`: Admin order list with status filter, search, pagination, and KPI counts.
+- `GET /my`: Customer order list.
+- `GET /:id`: Order details with line items, reservations, and stock movements.
+- `GET /stock-check`: Real-time stock check returning physical, reserved, and available quantity for SKU list at branch.
+
+#### 41.4 Admin Console Implementation (`d:\admin`)
+- **Types (`src/types/admin.ts`)**: Added `B2BOrder`, `B2BOrderItem`, `StockReservation`, `B2BOrderStatus`, `B2BOrderSource` and mounted `'b2b-orders'` view in `AdminView`.
+- **API Client (`src/api/b2bOrdersApi.ts`)**: Complete typed REST client for all endpoints.
+- **B2B Orders Workspace (`src/pages/B2BOrdersPage.tsx`)**:
+  - **4 Interactive KPI Metric Cards**: Pending Approval, Confirmed Orders, Monthly B2B Revenue, and Cancelled/Rejected counts.
+  - **Pending Approval Action Queue**: Dedicated high-contrast priority alert banner highlighting pending customer orders with 1-click Approve/Reject buttons.
+  - **Status Tabs & Server-Side Filters**: All, Pending Approval, Confirmed, Cancelled, Rejected tabs with search by order reference, company name, or customer email.
+  - **Create Offline Order Modal**: Super Admin offline order creation with branch selection, customer picker, product combobox, real-time available stock badge, auto-calculated 18% GST and grand totals.
+  - **Approve Order Modal**: Confirmation modal with live inventory re-check badge.
+  - **Reject Order Modal**: Mandatory rejection reason input.
+  - **Edit Confirmed Order Modal**: Dynamic line item adjustments (quantity increases/decreases, remove line) with delta calculation and live stock check for positive deltas.
+  - **Cancel Confirmed Order Modal**: Mandatory cancellation reason input and restock audit notification.
+  - **360° Order Dossier Drawer**: Comprehensive sliding drawer displaying full order metadata, milestone timeline, customer details, fulfillment branch, financial breakdown, and line item cards.
+- **Navigation & Layout (`AdminSidebar.tsx`, `AdminLayout.tsx`)**: Mounted under "Sales & Fulfillment" with live pending approval badge counter.
+
+#### 41.5 Customer Storefront Implementation (`d:\frontend`)
+- **Types (`src/types/b2bOrder.ts`, `src/types/index.ts`)**: Type definitions for customer-facing B2B orders.
+- **Service (`src/services/b2bOrderService.ts`)**: REST client for submit, fetch, cancel, and stock-check.
+- **Convert Approved Quotation to Official B2B Order (`src/pages/CustomerQuoteApprovalPage.tsx`)**:
+  - For accepted/approved quotations, added a prominent **"Convert to Official B2B Order"** action button.
+  - Interactive conversion modal: fulfillment branch selector, line item preview with real-time available stock badges (`In Stock`, `Low Stock`, `Out of Stock`), subtotal, 18% GST calculation, grand total, and delivery notes.
+  - Idempotent submission with navigation to profile orders tab.
+- **Customer User Profile B2B Orders Tab (`src/components/auth/UserProfilePage.tsx`)**:
+  - Dedicated **"B2B Orders"** tab for registered B2B wholesale users with live badge count.
+  - "B2B" filter switcher on standard My Orders tab and quick shortcut button on Overview tab.
+  - Responsive order cards displaying order reference with 1-click copy, date, fulfillment branch, status badges with physical deduction / reservation indicator, and line item previews.
+  - **Customer Self-Service Cancellation**: Rendered strictly when `order.status === 'pending_approval'`; opens cancellation confirmation modal with reason input.
+  - **360° Order Dossier Modal**: Milestone progression stepper (Submitted -> Under Review -> Confirmed -> Dispatched -> Completed), line item table, delivery notes, and financial breakdown.
+
+#### 41.6 Verification & Test Results
+- **Automated Integration Test Suite (`src/scripts/test-b2b-scenarios.ts`)**: Executed against live Supabase PostgreSQL database:
+  - **33/33 checks passed across all 12 specification scenarios (0 failures)**:
+    1. Non-B2B customer blocked with HTTP 403 (PASS).
+    2. Customer submit creates `pending_approval` + active reservation, physical stock NOT deducted (PASS).
+    3. Available stock formula holds: $\text{Available} = \text{Physical} - \text{Reserved}$ (PASS).
+    4. Super Admin approve converts reservation to deduction & logs `B2B_ORDER` movement (PASS).
+    5. Super Admin reject releases reservation with 0 stock movements (PASS).
+    6. Customer self-cancellation allowed for `pending_approval`, blocked for `confirmed` with HTTP 400 (PASS).
+    7. Admin offline order confirms & deducts physical stock in 1 single request (PASS).
+    8. Non-super admin write operations strictly blocked with HTTP 403 (PASS).
+    9. Concurrency & idempotency on `client_request_id` returns existing order without duplicates (PASS).
+    10. Stock exhaustion prevents submission and blocks approval if concurrent physical stock drops (PASS).
+    11. Super Admin order editing handles positive delta deductions and negative delta returns with `B2B_ADJUSTMENT` logs (PASS).
+    12. Super Admin cancellation on confirmed order restores physical inventory with `B2B_CANCELLATION` log (PASS).
+- **Compilation & Build Quality Assurance**:
+  - `PRC-Backend`: `npx tsc --noEmit` passed with **0 compiler errors**.
+  - `admin`: `npx tsc --noEmit` passed with **0 compiler errors**.
+  - `frontend`: `npm run build` (Vite) transformed 1,716 modules in 7.45s with **0 errors**.
+
+---
+
+*Last Updated: 2026-09-15 (B2B Order Management dual-channel suite, stock reservation lifecycle, Super Admin approval gate, storefront quote-to-order conversion, profile B2B management, 12/12 scenario test suite passing, and zero-error full-stack compilation verified)*

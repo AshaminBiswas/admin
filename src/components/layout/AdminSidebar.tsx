@@ -89,6 +89,7 @@ export function AdminSidebar({
 
     // Sales & Fulfillment
     { id: "orders", label: "Orders", category: "Sales & Fulfillment", icon: <ShoppingCart size={18} />, badge: "4" },
+    { id: "b2b-orders", label: "B2B Orders", category: "Sales & Fulfillment", icon: <Boxes size={18} />, badge: "B2B" },
     { id: "po-management", label: "PO Management", category: "Sales & Fulfillment", icon: <Inbox size={18} />, badge: "PO" },
     { id: "proforma-invoices", label: "Proforma Invoices (PI)", category: "Sales & Fulfillment", icon: <FileCheck size={18} />, badge: "PI" },
     { id: "expenses", label: "Cash Expenses", category: "Sales & Fulfillment", icon: <Wallet size={18} />, badge: "CASH" },

@@ -55,6 +55,7 @@ const InstallerPaymentsPage = lazyWithRetry(() => import("../../pages/InstallerP
 const CreateInstallerBillPage = lazyWithRetry(() => import("../../pages/CreateInstallerBillPage").then((m) => ({ default: m.CreateInstallerBillPage })));
 const EmployeeManagementPage = lazyWithRetry(() => import("../../pages/EmployeeManagementPage").then((m) => ({ default: m.EmployeeManagementPage })));
 const ExpensesPage = lazyWithRetry(() => import("../../pages/ExpensesPage").then((m) => ({ default: m.ExpensesPage })));
+const B2BOrdersPage = lazyWithRetry(() => import("../../pages/B2BOrdersPage").then((m) => ({ default: m.B2BOrdersPage })));
 import { AICopilot } from "../ai/AICopilot";
 
 function ViewLoadingSkeleton() {
@@ -193,6 +194,8 @@ export function AdminLayout() {
       // 3. Sales & Fulfillment
       case "orders":
         return <OrdersPage />;
+      case "b2b-orders":
+        return <B2BOrdersPage />;
       case "po-management":
         return (
           <POManagementPage
