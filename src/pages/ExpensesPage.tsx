@@ -92,6 +92,33 @@ function formatDate(dateStr?: string): string {
   return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
+function getTodayDateString(): string {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function formatDisplayDate(dateStr?: string, monthFormat: 'short' | 'long' = 'short'): string {
+  if (!dateStr) return '-';
+  const cleanStr = String(dateStr).split('T')[0];
+  const parts = cleanStr.split('-');
+  if (parts.length === 3) {
+    const y = parseInt(parts[0], 10);
+    const m = parseInt(parts[1], 10) - 1;
+    const d = parseInt(parts[2], 10);
+    const dateObj = new Date(y, m, d);
+    if (!isNaN(dateObj.getTime())) {
+      return dateObj.toLocaleDateString('en-IN', { day: '2-digit', month: monthFormat, year: 'numeric' });
+    }
+  }
+  const fallback = new Date(dateStr);
+  return isNaN(fallback.getTime())
+    ? '-'
+    : fallback.toLocaleDateString('en-IN', { day: '2-digit', month: monthFormat, year: 'numeric' });
+}
+
 const QUICK_AMOUNTS = [50, 100, 200, 500, 1000, 2000];
 const QUICK_NOTES = [
   'Tea & Refreshments',
@@ -178,6 +205,7 @@ export function ExpensesPage() {
 
   // Float Top-Up Modal
   const [isTopUpModalOpen, setIsTopUpModalOpen] = useState(false);
+  const [topUpDate, setTopUpDate] = useState<string>(getTodayDateString);
   const [topUpAmount, setTopUpAmount] = useState('');
   const [topUpSource, setTopUpSource] = useState('Cash from Bank');
   const [topUpRef, setTopUpRef] = useState('');
@@ -234,15 +262,6 @@ export function ExpensesPage() {
   const [catDesc, setCatDesc] = useState('');
   const [catBudget, setCatBudget] = useState('');
   const [isSubmittingCat, setIsSubmittingCat] = useState(false);
-
-  // Date helper (local timezone YYYY-MM-DD)
-  const getTodayDateString = () => {
-    const d = new Date();
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  };
 
   // Fast Entry Form State (Tab 1)
   const [entryDate, setEntryDate] = useState<string>(getTodayDateString);
@@ -1065,6 +1084,7 @@ export function ExpensesPage() {
       await expensesApi.addFloatTopUp({
         branchId: branchToUse,
         amount: amt,
+        date: topUpDate || undefined,
         source: topUpSource,
         referenceNo: topUpRef || null,
         notes: topUpNotes || null,
@@ -1072,6 +1092,7 @@ export function ExpensesPage() {
       });
       setIsTopUpModalOpen(false);
       setTopUpAmount('');
+      setTopUpDate(getTodayDateString());
       setTopUpRef('');
       setTopUpNotes('');
       setTopUpReceiptUrl(null);
@@ -2241,9 +2262,7 @@ export function ExpensesPage() {
                   {floatHistory.map((f) => (
                     <tr key={f.id} className="hover:bg-slate-50/50 dark:hover:bg-[#27272A]/30 transition">
                       <td className="py-2.5 px-3 text-slate-600 dark:text-zinc-300 whitespace-nowrap">
-                        {f.date
-                          ? new Date(f.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
-                          : '-'}
+                        {formatDisplayDate(f.date)}
                       </td>
                       <td className="py-2.5 px-3 text-right font-bold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
                         +{formatRupee(f.amount)}
@@ -3441,6 +3460,33 @@ export function ExpensesPage() {
             </div>
 
             <form onSubmit={handleTopUpSubmit} className="space-y-3.5">
+              {/* Top-Up Date Picker */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-slate-600 dark:text-zinc-400 flex items-center gap-1">
+                    <Calendar size={13} className="text-violet-500" />
+                    <span>Top-Up Date</span>
+                  </label>
+                  {topUpDate !== getTodayDateString() && (
+                    <button
+                      type="button"
+                      onClick={() => setTopUpDate(getTodayDateString())}
+                      className="text-[10px] text-violet-600 dark:text-violet-400 hover:underline font-medium cursor-pointer"
+                    >
+                      Set Today
+                    </button>
+                  )}
+                </div>
+                <input
+                  type="date"
+                  required
+                  value={topUpDate}
+                  max={getTodayDateString()}
+                  onChange={(e) => setTopUpDate(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-[#09090B] border border-slate-300 dark:border-[#27272A] text-xs font-semibold text-slate-900 dark:text-white focus:border-violet-500 focus:outline-none"
+                />
+              </div>
+
               <div className="space-y-1">
                 <label className="text-xs font-semibold text-slate-600 dark:text-zinc-400">
                   Top-Up Amount (₹) <span className="text-rose-500">*</span>
@@ -4238,13 +4284,7 @@ export function ExpensesPage() {
                     <div>
                       <span className="text-slate-400 block">Date of Disbursal</span>
                       <strong className="text-slate-900 dark:text-white font-semibold">
-                        {previewReceipt.floatRecord.date
-                          ? new Date(previewReceipt.floatRecord.date).toLocaleDateString('en-IN', {
-                              day: '2-digit',
-                              month: 'long',
-                              year: 'numeric',
-                            })
-                          : '-'}
+                        {formatDisplayDate(previewReceipt.floatRecord.date, 'long')}
                       </strong>
                     </div>
                     <div>
