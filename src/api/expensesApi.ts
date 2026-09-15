@@ -44,6 +44,7 @@ export interface OfflineQueuedExpense {
   paymentMode: 'CASH' | 'UPI' | 'BANK_TRANSFER';
   description: string;
   paidTo: string;
+  paidBy?: string | null;
   receiptAttachment?: string | null;
   branchId: string;
   branchName?: string;
@@ -143,6 +144,7 @@ export const expensesApi = {
     paymentMode?: 'CASH' | 'UPI' | 'BANK_TRANSFER';
     description: string;
     paidTo: string;
+    paidBy?: string | null;
     receiptAttachment?: string | null;
     branchId: string;
     departmentId?: string | null;
@@ -165,6 +167,7 @@ export const expensesApi = {
         paymentMode: data.paymentMode || 'CASH',
         description: data.description,
         paidTo: data.paidTo,
+        paidBy: data.paidBy,
         receiptAttachment: data.receiptAttachment,
         branchId: data.branchId,
         departmentId: data.departmentId,

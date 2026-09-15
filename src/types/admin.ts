@@ -1193,6 +1193,7 @@ export interface ExpenseEntry {
   paymentMode: ExpensePaymentMode;
   description: string;
   paidTo: string;
+  paidBy?: string | null;
   receiptAttachment?: string | null;
   branchId: string;
   departmentId?: string | null;
@@ -1224,8 +1225,10 @@ export interface UpdateExpenseInput {
   paymentMode?: ExpensePaymentMode;
   description?: string;
   paidTo?: string;
+  paidBy?: string | null;
   receiptAttachment?: string | null;
   employeeId?: string | null;
+  date?: string;
   changeReason?: string;
 }
 

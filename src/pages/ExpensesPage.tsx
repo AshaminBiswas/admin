@@ -201,6 +201,7 @@ export function ExpensesPage() {
   const [reportStartDate, setReportStartDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [reportMonth, setReportMonth] = useState(new Date().getMonth() + 1);
   const [reportYear, setReportYear] = useState(new Date().getFullYear());
+  const [reportBranchId, setReportBranchId] = useState<string>('ALL');
   const [isDownloadingExcel, setIsDownloadingExcel] = useState(false);
 
   // Ledger Filter Tab in Reports
@@ -234,7 +235,17 @@ export function ExpensesPage() {
   const [catBudget, setCatBudget] = useState('');
   const [isSubmittingCat, setIsSubmittingCat] = useState(false);
 
+  // Date helper (local timezone YYYY-MM-DD)
+  const getTodayDateString = () => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   // Fast Entry Form State (Tab 1)
+  const [entryDate, setEntryDate] = useState<string>(getTodayDateString);
   const [entryBranchId, setEntryBranchId] = useState<string>('');
   const [entryAmount, setEntryAmount] = useState<string>('');
   const [entryCategory, setEntryCategory] = useState<string>(() => {
@@ -243,6 +254,7 @@ export function ExpensesPage() {
   const [entryPaymentMode, setEntryPaymentMode] = useState<'CASH' | 'UPI' | 'BANK_TRANSFER'>('CASH');
   const [entryDescription, setEntryDescription] = useState<string>('');
   const [entryPaidTo, setEntryPaidTo] = useState<string>('');
+  const [entryPaidBy, setEntryPaidBy] = useState<string>('');
   const [entryReceiptUrl, setEntryReceiptUrl] = useState<string>('');
   const [isUploadingSlip, setIsUploadingSlip] = useState(false);
   const [uploadedSlipName, setUploadedSlipName] = useState<string | null>(null);
@@ -254,11 +266,13 @@ export function ExpensesPage() {
   // Edit Expense Modal State
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<ExpenseEntry | null>(null);
+  const [editDate, setEditDate] = useState<string>(getTodayDateString);
   const [editAmount, setEditAmount] = useState('');
   const [editCategory, setEditCategory] = useState('');
   const [editPaymentMode, setEditPaymentMode] = useState<'CASH' | 'UPI' | 'BANK_TRANSFER'>('CASH');
   const [editDescription, setEditDescription] = useState('');
   const [editPaidTo, setEditPaidTo] = useState('');
+  const [editPaidBy, setEditPaidBy] = useState('');
   const [editReceiptUrl, setEditReceiptUrl] = useState('');
   const [editSlipName, setEditSlipName] = useState<string | null>(null);
   const [isUploadingEditSlip, setIsUploadingEditSlip] = useState(false);
@@ -648,31 +662,42 @@ export function ExpensesPage() {
         paymentMode: entryPaymentMode,
         description: entryDescription.trim(),
         paidTo: entryPaidTo.trim(),
+        paidBy: entryPaidBy.trim() || undefined,
         receiptAttachment: entryReceiptUrl || null,
         branchId: branchToUse,
+        date: entryDate || undefined,
       });
 
       if (res.isOffline) {
         setEntrySuccessMsg(`Saved to Offline Queue (will auto-sync when online)`);
         refreshOfflineQueue();
       } else {
-        setEntrySuccessMsg(`Expense ${res.expense.entryNumber} logged successfully!`);
+        const isCustomDate = entryDate && entryDate !== getTodayDateString();
+        setEntrySuccessMsg(
+          isCustomDate
+            ? `Expense ${res.expense.entryNumber} logged for ${entryDate}!`
+            : `Expense ${res.expense.entryNumber} logged successfully!`
+        );
         setLastLoggedExpense(res.expense);
         if (res.budgetWarning) {
           setEntryWarningMsg(res.budgetWarning);
         }
       }
 
-      // Prepend to today's list & ledger
-      setTodayEntries((prev) => [res.expense, ...(prev || [])]);
+      // Prepend to today's list if logged for today, and to ledger
+      if (!entryDate || entryDate === getTodayDateString()) {
+        setTodayEntries((prev) => [res.expense, ...(prev || [])]);
+      }
       setLedgerEntries((prev) => [res.expense, ...(prev || [])]);
 
       // Reset form fields
       setEntryAmount('');
       setEntryDescription('');
       setEntryPaidTo('');
+      setEntryPaidBy('');
       setEntryReceiptUrl('');
       setUploadedSlipName(null);
+      setEntryDate(getTodayDateString());
 
       // Refresh live balance from server
       fetchBalance();
@@ -909,11 +934,13 @@ export function ExpensesPage() {
   // ─── Open Edit Modal ────────────────────────────────────────────────────────
   const handleOpenEditModal = (expense: ExpenseEntry) => {
     setEditingExpense(expense);
+    setEditDate(expense.date ? String(expense.date).split('T')[0] : getTodayDateString());
     setEditAmount(String(expense.amount / 100));
     setEditCategory(expense.categoryId);
     setEditPaymentMode(expense.paymentMode);
     setEditDescription(expense.description);
     setEditPaidTo(expense.paidTo);
+    setEditPaidBy(expense.paidBy || '');
     setEditReceiptUrl(expense.receiptAttachment || '');
     setEditSlipName(expense.receiptAttachment ? 'Existing receipt attached' : null);
     setEditChangeReason('');
@@ -939,7 +966,9 @@ export function ExpensesPage() {
         paymentMode: editPaymentMode,
         description: editDescription.trim(),
         paidTo: editPaidTo.trim(),
+        paidBy: editPaidBy.trim() || null,
         receiptAttachment: editReceiptUrl || null,
+        date: editDate || undefined,
         changeReason: editChangeReason.trim() || 'Updated expense details',
       });
 
@@ -1124,12 +1153,13 @@ export function ExpensesPage() {
   };
 
   // ─── Excel Download Handler ────────────────────────────────────────────────
-  const handleDownloadExcel = async () => {
+  const handleDownloadExcel = async (overridePeriod?: 'day' | 'week' | 'month' | 'year') => {
+    const periodToUse = overridePeriod || reportPeriod;
     setIsDownloadingExcel(true);
     try {
       await expensesApi.downloadExcelReport({
-        period: reportPeriod,
-        branchId: isAllBranches ? undefined : selectedBranchId,
+        period: periodToUse,
+        branchId: reportBranchId === 'ALL' ? undefined : reportBranchId,
         date: reportDate,
         startDate: reportStartDate,
         month: reportMonth,
@@ -1432,58 +1462,65 @@ export function ExpensesPage() {
             </div>
           )}
 
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6">
             {/* Left Column: Fast Mobile Entry Form (5 cols on lg) */}
-            <div className="lg:col-span-5 space-y-4">
-              <div className="p-5 sm:p-6 rounded-2xl bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] shadow-sm space-y-4">
-                <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-[#27272A]">
-                  <div>
-                    <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">
-                      Fast Expense Logging
+            <div className="lg:col-span-5 space-y-3">
+              <div className="p-3.5 sm:p-4 rounded-xl sm:rounded-2xl bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] shadow-xs space-y-3">
+                {/* Header */}
+                <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-[#27272A]">
+                  <div className="flex items-center gap-2">
+                    <Receipt size={16} className="text-violet-500 shrink-0" />
+                    <h2 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white">
+                      Fast Expense Entry
                     </h2>
-                    <p className="text-xs text-slate-500 dark:text-zinc-400">Log cash outflow in under 10 seconds</p>
                   </div>
-                  <span className="text-[11px] font-semibold px-2 py-1 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-                    Auto-approves &le; ₹2,000
+                  <span className="text-[10px] font-medium px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                    Auto-approves &le; ₹2k
                   </span>
                 </div>
 
                 {entrySuccessMsg && (
-                  <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs flex items-center gap-2">
-                    <CheckCircle size={16} className="shrink-0" />
-                    <span>{entrySuccessMsg}</span>
+                  <div className="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs flex items-center gap-2">
+                    <CheckCircle size={15} className="shrink-0" />
+                    <span className="font-medium">{entrySuccessMsg}</span>
                   </div>
                 )}
 
                 {entryWarningMsg && (
-                  <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 text-xs flex items-center gap-2">
-                    <AlertCircle size={16} className="shrink-0" />
-                    <span>{entryWarningMsg}</span>
+                  <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 text-xs flex items-center gap-2">
+                    <AlertCircle size={15} className="shrink-0" />
+                    <span className="font-medium">{entryWarningMsg}</span>
                   </div>
                 )}
 
+                {/* Recently Logged Voucher Alert */}
                 {lastLoggedExpense && (
-                  <div className="p-4 rounded-xl bg-violet-50 dark:bg-[#1E182B] border border-violet-200 dark:border-violet-500/30 space-y-2.5">
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono font-bold text-xs text-violet-700 dark:text-violet-300">
+                  <div className="p-2.5 sm:p-3 rounded-lg bg-violet-50/80 dark:bg-[#1E182B]/80 border border-violet-200/80 dark:border-violet-500/30 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-mono font-bold text-[11px] text-violet-700 dark:text-violet-300">
                           {lastLoggedExpense.entryNumber}
                         </span>
                         <span
-                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                          className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
                             lastLoggedExpense.status === 'APPROVED'
-                              ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
+                              ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
                               : lastLoggedExpense.status === 'PENDING'
-                              ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30'
-                              : 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30'
+                              ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
+                              : 'bg-rose-500/15 text-rose-600 dark:text-rose-400'
                           }`}
                         >
                           {lastLoggedExpense.status === 'APPROVED'
-                            ? '✓ Auto-Approved & Deducted'
+                            ? '✓ Approved'
                             : lastLoggedExpense.status === 'PENDING'
-                            ? '⏳ Awaiting Admin Review'
+                            ? '⏳ Pending Review'
                             : lastLoggedExpense.status}
                         </span>
+                        {lastLoggedExpense.date && (
+                          <span className="text-[10px] text-slate-400">
+                            • {String(lastLoggedExpense.date).split('T')[0]}
+                          </span>
+                        )}
                       </div>
                       <button
                         type="button"
@@ -1492,37 +1529,37 @@ export function ExpensesPage() {
                           setEntrySuccessMsg(null);
                         }}
                         className="text-slate-400 hover:text-slate-600 dark:hover:text-zinc-200"
-                        title="Dismiss voucher banner"
+                        title="Dismiss"
                       >
-                        <X size={14} />
+                        <X size={13} />
                       </button>
                     </div>
 
-                    <div className="flex items-baseline justify-between pt-1">
-                      <div>
-                        <p className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
+                    <div className="flex items-baseline justify-between pt-0.5">
+                      <div className="min-w-0 pr-2">
+                        <p className="text-xs font-semibold text-slate-800 dark:text-zinc-200 truncate">
                           {lastLoggedExpense.description}
                         </p>
-                        <p className="text-[11px] text-slate-500 dark:text-zinc-400">
-                          Paid to <strong className="text-slate-700 dark:text-zinc-300">{lastLoggedExpense.paidTo}</strong> ({lastLoggedExpense.category?.name || 'Expense'})
+                        <p className="text-[10px] text-slate-500 dark:text-zinc-400 truncate">
+                          Paid to <strong className="text-slate-700 dark:text-zinc-300">{lastLoggedExpense.paidTo}</strong>
+                          {lastLoggedExpense.paidBy ? ` (by ${lastLoggedExpense.paidBy})` : ''} • {lastLoggedExpense.category?.name || 'Expense'}
                         </p>
                       </div>
-                      <span className="text-base font-extrabold text-slate-900 dark:text-white">
+                      <span className="text-sm font-extrabold text-slate-900 dark:text-white shrink-0">
                         {formatRupee(lastLoggedExpense.amount)}
                       </span>
                     </div>
 
-                    {/* Super Admin Quick Approval on Last Logged Voucher */}
                     {canApprove && lastLoggedExpense.status === 'PENDING' && (
-                      <div className="pt-2 border-t border-violet-200 dark:border-violet-500/20 flex items-center justify-between gap-2">
-                        <span className="text-[11px] font-medium text-amber-600 dark:text-amber-400">
-                          Admin Action Required:
+                      <div className="pt-1.5 border-t border-violet-200/60 dark:border-violet-500/20 flex items-center justify-between gap-1.5">
+                        <span className="text-[10px] font-medium text-amber-600 dark:text-amber-400">
+                          Admin Action:
                         </span>
                         <div className="flex items-center gap-1.5">
                           <button
                             type="button"
                             onClick={() => setSelectedRejectEntry(lastLoggedExpense)}
-                            className="px-2.5 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 text-[11px] font-bold transition"
+                            className="px-2 py-0.5 rounded-md bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 text-[10px] font-bold transition"
                           >
                             Reject
                           </button>
@@ -1530,303 +1567,350 @@ export function ExpensesPage() {
                             type="button"
                             onClick={() => handleApproveEntry(lastLoggedExpense)}
                             disabled={!!approvingId}
-                            className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed text-white text-[11px] font-bold transition flex items-center gap-1 shadow-sm"
+                            className="px-2.5 py-0.5 rounded-md bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white text-[10px] font-bold transition flex items-center gap-1 shadow-xs"
                           >
-                            <Check size={12} />
+                            <Check size={11} />
                             {approvingId === lastLoggedExpense.id ? 'Approving…' : 'Approve Now'}
                           </button>
                         </div>
                       </div>
                     )}
 
-                    <div className="pt-1.5 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500 dark:text-zinc-400">
-                      <div className="flex items-center gap-2">
-                        <span>Logged to Today's Feed</span>
-                        {lastLoggedExpense.receiptAttachment && (
-                          <button
-                            type="button"
-                            onClick={() => setPreviewReceipt({ isOpen: true, url: lastLoggedExpense.receiptAttachment!, entry: lastLoggedExpense })}
-                            className="px-2 py-0.5 rounded-md bg-violet-500/10 hover:bg-violet-500/20 text-violet-600 dark:text-violet-400 font-semibold text-[11px] flex items-center gap-1 transition border border-violet-500/20"
-                          >
-                            <Camera size={12} />
-                            <span>View Uploaded Slip</span>
-                          </button>
-                        )}
-                      </div>
+                    <div className="pt-1 flex items-center justify-between text-[10px] text-slate-400">
+                      <span>Logged to feed</span>
                       <button
                         type="button"
                         onClick={() => setActiveTab('ledger')}
-                        className="text-violet-600 dark:text-violet-400 font-semibold hover:underline flex items-center gap-1"
+                        className="text-violet-600 dark:text-violet-400 font-semibold hover:underline flex items-center gap-0.5"
                       >
-                        <span>View in Full Ledger</span>
-                        <ArrowRight size={12} />
+                        <span>View in Ledger</span>
+                        <ArrowRight size={10} />
                       </button>
                     </div>
                   </div>
                 )}
 
-                <form onSubmit={handleFastEntrySubmit} className="space-y-4">
-                  {/* Branch Location Selection */}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400 flex items-center gap-1.5">
-                      <Building2 size={14} className="text-violet-500" />
-                      <span>Branch Location <span className="text-rose-500">*</span></span>
-                    </label>
-                    <select
-                      value={entryBranchId}
-                      onChange={(e) => setEntryBranchId(e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-[#09090B] border border-slate-300 dark:border-[#27272A] text-sm font-semibold text-slate-900 dark:text-white focus:border-violet-500 focus:outline-none cursor-pointer"
-                    >
-                      {branches.map((b) => (
-                        <option key={b.id} value={b.id} className="dark:bg-[#18181B]">
-                          {b.name} ({b.code})
-                        </option>
-                      ))}
-                    </select>
+                <form onSubmit={handleFastEntrySubmit} className="space-y-2.5 sm:space-y-3">
+                  {/* Row 1: Date & Branch Selection */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5">
+                    {/* Expense Date Picker (Defaults to Current Date) */}
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[11px] font-semibold text-slate-600 dark:text-zinc-300 flex items-center gap-1">
+                          <Calendar size={12} className="text-violet-500" />
+                          <span>Expense Date</span>
+                        </label>
+                        {entryDate !== getTodayDateString() && (
+                          <button
+                            type="button"
+                            onClick={() => setEntryDate(getTodayDateString())}
+                            className="text-[10px] text-violet-600 dark:text-violet-400 hover:underline font-medium"
+                          >
+                            Set Today
+                          </button>
+                        )}
+                      </div>
+                      <input
+                        type="date"
+                        required
+                        value={entryDate}
+                        max={getTodayDateString()}
+                        onChange={(e) => setEntryDate(e.target.value)}
+                        className="w-full px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-[#09090B] border border-slate-300 dark:border-[#27272A] text-xs font-semibold text-slate-900 dark:text-white focus:border-violet-500 focus:outline-none"
+                      />
+                    </div>
+
+                    {/* Branch Location */}
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-semibold text-slate-600 dark:text-zinc-300 flex items-center gap-1">
+                        <Building2 size={12} className="text-violet-500" />
+                        <span>Branch Location</span>
+                      </label>
+                      <select
+                        value={entryBranchId}
+                        onChange={(e) => setEntryBranchId(e.target.value)}
+                        className="w-full px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-[#09090B] border border-slate-300 dark:border-[#27272A] text-xs font-semibold text-slate-900 dark:text-white focus:border-violet-500 focus:outline-none cursor-pointer"
+                      >
+                        {branches.map((b) => (
+                          <option key={b.id} value={b.id} className="dark:bg-[#18181B]">
+                            {b.name} ({b.code})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
 
-                  {/* Amount Input */}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400">
-                      Amount (₹) <span className="text-rose-500">*</span>
-                    </label>
-                  <div className="relative">
-                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-lg font-bold text-slate-400">
-                      ₹
-                    </span>
+                  {/* Row 2: Amount & Payment Mode */}
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 sm:gap-2.5 items-end">
+                    {/* Amount Input */}
+                    <div className="sm:col-span-7 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[11px] font-semibold text-slate-600 dark:text-zinc-300">
+                          Amount (₹) <span className="text-rose-500">*</span>
+                        </label>
+                        <div className="flex gap-1">
+                          {QUICK_AMOUNTS.slice(0, 4).map((amt) => (
+                            <button
+                              type="button"
+                              key={amt}
+                              onClick={() => setEntryAmount(String(amt))}
+                              className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-[#27272A] hover:bg-slate-200 dark:hover:bg-[#3F3F46] text-[10px] font-semibold text-slate-600 dark:text-zinc-300 transition"
+                            >
+                              +{amt}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="relative">
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400">
+                          ₹
+                        </span>
+                        <input
+                          type="number"
+                          step="any"
+                          min="0.01"
+                          required
+                          placeholder="0.00"
+                          value={entryAmount}
+                          onChange={(e) => setEntryAmount(e.target.value)}
+                          className="w-full pl-7 pr-3 py-1.5 rounded-lg bg-slate-50 dark:bg-[#09090B] border border-slate-300 dark:border-[#27272A] text-base font-bold text-slate-900 dark:text-white placeholder:text-slate-400 focus:border-violet-500 focus:outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Payment Mode Pills */}
+                    <div className="sm:col-span-5 space-y-1">
+                      <label className="text-[11px] font-semibold text-slate-600 dark:text-zinc-300">
+                        Payment Mode
+                      </label>
+                      <div className="grid grid-cols-3 gap-1">
+                        {(['CASH', 'UPI', 'BANK_TRANSFER'] as const).map((mode) => (
+                          <button
+                            type="button"
+                            key={mode}
+                            onClick={() => setEntryPaymentMode(mode)}
+                            className={`py-1.5 rounded-lg text-[11px] font-bold transition border text-center ${
+                              entryPaymentMode === mode
+                                ? 'bg-violet-600 border-violet-600 text-white shadow-xs'
+                                : 'bg-slate-50 dark:bg-[#09090B] border-slate-200 dark:border-[#27272A] text-slate-600 dark:text-zinc-400 hover:border-violet-500'
+                            }`}
+                          >
+                            {mode === 'BANK_TRANSFER' ? 'Bank' : mode}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Row 3: Category Ribbon */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] font-semibold text-slate-600 dark:text-zinc-300">
+                        Category <span className="text-rose-500">*</span>
+                      </label>
+                      <span className="text-[10px] font-medium text-violet-600 dark:text-violet-400">
+                        {categories.find((c) => c.id === entryCategory)?.name || 'Select'}
+                      </span>
+                    </div>
+                    <div className="flex gap-1.5 overflow-x-auto pb-1 no-scrollbar -mx-0.5 px-0.5">
+                      {categories.map((c) => (
+                        <button
+                          type="button"
+                          key={c.id}
+                          onClick={() => setEntryCategory(c.id)}
+                          className={`shrink-0 px-2.5 py-1 rounded-lg text-xs font-semibold transition border ${
+                            entryCategory === c.id
+                              ? 'bg-violet-600 border-violet-600 text-white shadow-xs'
+                              : 'bg-slate-50 dark:bg-[#09090B] border-slate-200 dark:border-[#27272A] text-slate-600 dark:text-zinc-300 hover:border-violet-400'
+                          }`}
+                        >
+                          {c.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Row 4: Description / Note */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] font-semibold text-slate-600 dark:text-zinc-300">
+                        Description / Note <span className="text-rose-500">*</span>
+                      </label>
+                      <div className="hidden sm:flex gap-1">
+                        {QUICK_NOTES.slice(0, 4).map((note) => (
+                          <button
+                            type="button"
+                            key={note}
+                            onClick={() => setEntryDescription(note)}
+                            className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-[#27272A] text-slate-500 dark:text-zinc-400 hover:text-violet-500 transition"
+                          >
+                            {note}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                     <input
-                      type="number"
-                      step="any"
-                      min="0.01"
+                      type="text"
                       required
-                      placeholder="0.00"
-                      value={entryAmount}
-                      onChange={(e) => setEntryAmount(e.target.value)}
-                      className="w-full pl-9 pr-4 py-3 rounded-xl bg-slate-50 dark:bg-[#09090B] border border-slate-300 dark:border-[#27272A] text-xl font-bold text-slate-900 dark:text-white placeholder:text-slate-400 focus:border-violet-500 focus:outline-none"
+                      placeholder="e.g. Courier charges, Tea for visitors, Hardware repair"
+                      value={entryDescription}
+                      onChange={(e) => setEntryDescription(e.target.value)}
+                      className="w-full px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-[#09090B] border border-slate-300 dark:border-[#27272A] text-xs text-slate-900 dark:text-white placeholder:text-slate-400 focus:border-violet-500 focus:outline-none"
                     />
                   </div>
-                  {/* Quick amount chips */}
-                  <div className="flex flex-wrap gap-1.5 pt-1">
-                    {QUICK_AMOUNTS.map((amt) => (
-                      <button
-                        type="button"
-                        key={amt}
-                        onClick={() => setEntryAmount(String(amt))}
-                        className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-[#27272A] hover:bg-slate-200 dark:hover:bg-[#3F3F46] text-xs font-semibold text-slate-700 dark:text-zinc-300 transition"
-                      >
-                        +₹{amt}
-                      </button>
-                    ))}
-                  </div>
-                </div>
 
-                {/* Category Selector Chips */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400">
-                    Category <span className="text-rose-500">*</span>
-                  </label>
-                  <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto no-scrollbar">
-                    {categories.map((c) => (
-                      <button
-                        type="button"
-                        key={c.id}
-                        onClick={() => setEntryCategory(c.id)}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition border ${
-                          entryCategory === c.id
-                            ? 'bg-violet-600 border-violet-600 text-white shadow-sm'
-                            : 'bg-slate-50 dark:bg-[#09090B] border-slate-200 dark:border-[#27272A] text-slate-700 dark:text-zinc-300 hover:border-violet-500'
-                        }`}
-                      >
-                        {c.name}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                  {/* Row 5: Who Paid & Paid To (2-column compact grid) */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5">
+                    {/* Who Paid (Payer Name) */}
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-semibold text-slate-600 dark:text-zinc-300">
+                        Who Paid (Name)
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Rahul / Cashier"
+                        value={entryPaidBy}
+                        onChange={(e) => setEntryPaidBy(e.target.value)}
+                        className="w-full px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-[#09090B] border border-slate-300 dark:border-[#27272A] text-xs text-slate-900 dark:text-white placeholder:text-slate-400 focus:border-violet-500 focus:outline-none"
+                      />
+                    </div>
 
-                {/* Payment Mode */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400">
-                    Payment Mode
-                  </label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {(['CASH', 'UPI', 'BANK_TRANSFER'] as const).map((mode) => (
-                      <button
-                        type="button"
-                        key={mode}
-                        onClick={() => setEntryPaymentMode(mode)}
-                        className={`py-2 rounded-xl text-xs font-bold transition border text-center ${
-                          entryPaymentMode === mode
-                            ? 'bg-violet-600 border-violet-600 text-white shadow-sm'
-                            : 'bg-slate-50 dark:bg-[#09090B] border-slate-200 dark:border-[#27272A] text-slate-700 dark:text-zinc-300'
-                        }`}
-                      >
-                        {mode === 'BANK_TRANSFER' ? 'Bank' : mode}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Description & Quick Suggestions */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400">
-                    Description / Note <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Tea for visitors, hardware courier"
-                    value={entryDescription}
-                    onChange={(e) => setEntryDescription(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-[#09090B] border border-slate-300 dark:border-[#27272A] text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:border-violet-500 focus:outline-none"
-                  />
-                  <div className="flex flex-wrap gap-1.5 pt-1">
-                    {QUICK_NOTES.slice(0, 4).map((note) => (
-                      <button
-                        type="button"
-                        key={note}
-                        onClick={() => setEntryDescription(note)}
-                        className="text-[11px] px-2 py-0.5 rounded-md bg-slate-100 dark:bg-[#27272A] text-slate-600 dark:text-zinc-400 hover:text-violet-400 transition"
-                      >
-                        {note}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Paid To */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400">
-                    Paid To (Vendor / Person) <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Ramesh Tea Stall, Blue Dart, Cashier"
-                    value={entryPaidTo}
-                    onChange={(e) => setEntryPaidTo(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-[#09090B] border border-slate-300 dark:border-[#27272A] text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:border-violet-500 focus:outline-none"
-                  />
-                </div>
-
-                {/* Receipt Slip File Upload */}
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400 flex items-center gap-1.5">
-                      <Camera size={14} className="text-violet-500" />
-                      <span>Receipt Slip / Voucher Photo</span>
-                    </label>
-                    {entryReceiptUrl && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEntryReceiptUrl('');
-                          setUploadedSlipName(null);
-                        }}
-                        className="text-[11px] text-rose-500 hover:underline"
-                      >
-                        Remove
-                      </button>
-                    )}
+                    {/* Paid To */}
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-semibold text-slate-600 dark:text-zinc-300">
+                        Paid To (Vendor) <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. BlueDart / Shop / Vendor"
+                        value={entryPaidTo}
+                        onChange={(e) => setEntryPaidTo(e.target.value)}
+                        className="w-full px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-[#09090B] border border-slate-300 dark:border-[#27272A] text-xs text-slate-900 dark:text-white placeholder:text-slate-400 focus:border-violet-500 focus:outline-none"
+                      />
+                    </div>
                   </div>
 
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    accept="image/*,application/pdf"
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) handleSlipFileUpload(file, false);
-                    }}
-                  />
-
-                  {entryReceiptUrl ? (
-                    <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2 overflow-hidden">
-                        <CheckCircle size={16} className="text-emerald-500 shrink-0" />
-                        <span className="text-xs text-emerald-700 dark:text-emerald-300 truncate font-medium">
-                          {uploadedSlipName || 'Receipt Slip Attached'}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <a
-                          href={entryReceiptUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-[11px] font-bold text-violet-600 dark:text-violet-400 hover:underline flex items-center gap-0.5"
+                  {/* Row 6: Receipt Slip Attachment (Compact) */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] font-semibold text-slate-600 dark:text-zinc-300 flex items-center gap-1">
+                        <Camera size={12} className="text-violet-500" />
+                        <span>Receipt Slip (Optional)</span>
+                      </label>
+                      {entryReceiptUrl && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEntryReceiptUrl('');
+                            setUploadedSlipName(null);
+                          }}
+                          className="text-[10px] text-rose-500 hover:underline"
                         >
-                          <ExternalLink size={11} /> View
-                        </a>
+                          Remove
+                        </button>
+                      )}
+                    </div>
+
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      accept="image/*,application/pdf"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleSlipFileUpload(file, false);
+                      }}
+                    />
+
+                    {entryReceiptUrl ? (
+                      <div className="px-2.5 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5 overflow-hidden text-xs">
+                          <CheckCircle size={14} className="text-emerald-500 shrink-0" />
+                          <span className="truncate text-emerald-700 dark:text-emerald-300 font-medium text-[11px]">
+                            {uploadedSlipName || 'Slip Attached'}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0 text-[11px]">
+                          <a
+                            href={entryReceiptUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="font-bold text-violet-600 dark:text-violet-400 hover:underline flex items-center gap-0.5"
+                          >
+                            <ExternalLink size={10} /> View
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => fileInputRef.current?.click()}
+                            className="text-slate-500 hover:text-slate-800 dark:hover:text-white text-[10px]"
+                          >
+                            Replace
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex gap-1.5">
                         <button
                           type="button"
                           onClick={() => fileInputRef.current?.click()}
-                          className="text-[11px] font-semibold text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white"
+                          disabled={isUploadingSlip}
+                          className="flex-1 py-1.5 px-2.5 rounded-lg border border-dashed border-slate-300 dark:border-[#3F3F46] hover:border-violet-500 hover:bg-violet-500/5 transition flex items-center justify-center gap-1.5 text-xs text-slate-600 dark:text-zinc-400 cursor-pointer"
                         >
-                          Replace
+                          {isUploadingSlip ? (
+                            <>
+                              <RefreshCw size={12} className="animate-spin text-violet-500" />
+                              <span className="text-[11px]">Uploading Slip...</span>
+                            </>
+                          ) : (
+                            <>
+                              <UploadCloud size={13} className="text-violet-500" />
+                              <span className="text-[11px]">Attach Slip / Photo</span>
+                            </>
+                          )}
                         </button>
+                        <input
+                          type="text"
+                          placeholder="or paste URL"
+                          value={entryReceiptUrl}
+                          onChange={(e) => setEntryReceiptUrl(e.target.value)}
+                          className="w-28 px-2 py-1 rounded-lg bg-slate-50 dark:bg-[#09090B] border border-slate-200 dark:border-[#27272A] text-[11px] text-slate-800 dark:text-zinc-200 placeholder:text-slate-400 focus:border-violet-500 focus:outline-none"
+                        />
                       </div>
-                    </div>
-                  ) : (
-                    <div className="space-y-1.5">
-                      <button
-                        type="button"
-                        onClick={() => fileInputRef.current?.click()}
-                        disabled={isUploadingSlip}
-                        className="w-full py-2.5 px-3 rounded-xl border border-dashed border-slate-300 dark:border-[#3F3F46] hover:border-violet-500 hover:bg-violet-500/5 transition flex items-center justify-center gap-2 text-xs font-semibold text-slate-600 dark:text-zinc-400 cursor-pointer"
-                      >
-                        {isUploadingSlip ? (
-                          <>
-                            <RefreshCw size={14} className="animate-spin text-violet-500" />
-                            <span>Uploading Slip to Cloud...</span>
-                          </>
-                        ) : (
-                          <>
-                            <UploadCloud size={16} className="text-violet-500" />
-                            <span>Upload Slip / Take Photo (Image or PDF)</span>
-                          </>
-                        )}
-                      </button>
-                      <input
-                        type="text"
-                        placeholder="Or paste receipt link directly"
-                        value={entryReceiptUrl}
-                        onChange={(e) => setEntryReceiptUrl(e.target.value)}
-                        className="w-full px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-[#09090B] border border-slate-200 dark:border-[#27272A] text-[11px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:border-violet-500 focus:outline-none"
-                      />
-                    </div>
-                  )}
-                </div>
+                    )}
+                  </div>
 
-                <button
-                  type="submit"
-                  disabled={isSubmittingEntry}
-                  className="w-full py-3.5 rounded-xl bg-violet-600 hover:bg-violet-700 active:scale-[0.99] text-white font-bold text-sm sm:text-base transition shadow-md flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
-                >
-                  <Check size={18} />
-                  <span>{isSubmittingEntry ? 'Recording...' : 'Log Cash Expense Entry'}</span>
-                </button>
-              </form>
+                  {/* Submit Button */}
+                  <button
+                    type="submit"
+                    disabled={isSubmittingEntry}
+                    className="w-full py-2.5 rounded-lg bg-violet-600 hover:bg-violet-700 active:scale-[0.99] text-white font-bold text-xs sm:text-sm transition shadow-xs flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                  >
+                    <Check size={16} />
+                    <span>{isSubmittingEntry ? 'Recording...' : 'Log Cash Expense Entry'}</span>
+                  </button>
+                </form>
             </div>
           </div>
 
           {/* Right Column: Today's Entries Feed (7 cols on lg) */}
-          <div className="lg:col-span-7 space-y-4">
-            <div className="p-5 sm:p-6 rounded-2xl bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] shadow-sm space-y-4">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-[#27272A]">
+          <div className="lg:col-span-7 space-y-3">
+            <div className="p-3.5 sm:p-4 rounded-xl sm:rounded-2xl bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] shadow-xs space-y-3">
+              <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-[#27272A]">
                 <div>
-                  <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">
+                  <h2 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white">
                     Today's Cash Entries
                   </h2>
-                  <p className="text-xs text-slate-500 dark:text-zinc-400">
-                    Real-time transaction stream for {new Date().toLocaleDateString('en-IN')}
+                  <p className="text-[11px] text-slate-500 dark:text-zinc-400">
+                    Live stream for {new Date().toLocaleDateString('en-IN')}
                   </p>
                 </div>
                 <button
                   onClick={fetchTodayEntries}
-                  className="p-2 rounded-xl text-slate-500 hover:bg-slate-100 dark:hover:bg-[#27272A] transition"
+                  className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-[#27272A] transition"
                   title="Refresh Today's Feed"
                 >
-                  <RefreshCw size={16} className={isLoadingToday ? 'animate-spin' : ''} />
+                  <RefreshCw size={14} className={isLoadingToday ? 'animate-spin' : ''} />
                 </button>
               </div>
 
@@ -1869,7 +1953,7 @@ export function ExpensesPage() {
                             {e.category?.name || 'Category'}
                           </span>
                           <span>•</span>
-                          <span>{e.paidTo}</span>
+                          <span>{e.paidTo}{e.paidBy ? ` (by ${e.paidBy})` : ''}</span>
                           <span>•</span>
                           <span>{e.time}</span>
                           <span>•</span>
@@ -1971,7 +2055,7 @@ export function ExpensesPage() {
                           <th className="py-2.5 px-3">Time</th>
                           <th className="py-2.5 px-3">Category</th>
                           <th className="py-2.5 px-3">Description</th>
-                          <th className="py-2.5 px-3">Paid To</th>
+                          <th className="py-2.5 px-3">Paid To / By</th>
                           <th className="py-2.5 px-3 text-right">Amount</th>
                           <th className="py-2.5 px-3 text-center">Status</th>
                           <th className="py-2.5 px-3 text-center">Receipt</th>
@@ -1991,7 +2075,14 @@ export function ExpensesPage() {
                             <td className="py-2.5 px-3 max-w-[200px] truncate text-slate-700 dark:text-zinc-300">
                               {e.description}
                             </td>
-                            <td className="py-2.5 px-3 text-slate-600 dark:text-zinc-400">{e.paidTo}</td>
+                            <td className="py-2.5 px-3 text-slate-600 dark:text-zinc-400">
+                              <div className="font-medium text-slate-800 dark:text-zinc-200">{e.paidTo}</div>
+                              {e.paidBy && (
+                                <div className="text-[10px] text-slate-400 dark:text-zinc-500">
+                                  By: <span className="text-slate-600 dark:text-zinc-400">{e.paidBy}</span>
+                                </div>
+                              )}
+                            </td>
                             <td className="py-2.5 px-3 text-right font-bold text-slate-900 dark:text-white">
                               {formatRupee(e.amount)}
                             </td>
@@ -2465,7 +2556,7 @@ export function ExpensesPage() {
                       )}
                       <th className="py-3 px-3.5">Category</th>
                       <th className="py-3 px-3.5">Description</th>
-                      <th className="py-3 px-3.5">Paid To</th>
+                      <th className="py-3 px-3.5">Paid To / By</th>
                       <th className="py-3 px-3.5">Mode</th>
                       <th className="py-3 px-3.5 text-right">Amount</th>
                       <th className="py-3 px-3.5 text-center">Status</th>
@@ -2519,9 +2610,14 @@ export function ExpensesPage() {
                           )}
                         </td>
 
-                        {/* Paid To */}
+                        {/* Paid To & Who Paid */}
                         <td className="py-3 px-3.5 text-slate-700 dark:text-zinc-300 whitespace-nowrap">
-                          {e.paidTo}
+                          <div className="font-semibold text-slate-800 dark:text-zinc-200">{e.paidTo}</div>
+                          {e.paidBy && (
+                            <div className="text-[10px] text-slate-400 dark:text-zinc-500">
+                              Paid by: <span className="font-medium text-slate-600 dark:text-zinc-400">{e.paidBy}</span>
+                            </div>
+                          )}
                         </td>
 
                         {/* Payment Mode */}
@@ -2781,6 +2877,12 @@ export function ExpensesPage() {
                       <span>Category: <strong className="text-slate-700 dark:text-zinc-200">{e.category?.name}</strong></span>
                       <span>•</span>
                       <span>Paid To: <strong className="text-slate-700 dark:text-zinc-200">{e.paidTo}</strong></span>
+                      {e.paidBy && (
+                        <>
+                          <span>•</span>
+                          <span>Who Paid: <strong className="text-slate-700 dark:text-zinc-200">{e.paidBy}</strong></span>
+                        </>
+                      )}
                       <span>•</span>
                       <span>Mode: <strong className="text-slate-700 dark:text-zinc-200">{e.paymentMode}</strong></span>
                       <span>•</span>
@@ -3087,13 +3189,33 @@ export function ExpensesPage() {
         <div className="space-y-6">
           {/* 4 One-Click Excel Generator Cards */}
           <div className="p-5 sm:p-6 rounded-2xl bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] shadow-sm space-y-4">
-            <div>
-              <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">
-                Multi-Sheet Excel Report Generator (.xlsx)
-              </h2>
-              <p className="text-xs text-slate-500 dark:text-zinc-400">
-                Server-side generated multi-sheet workbooks with currency formatting, category pivots & frozen headers
-              </p>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100 dark:border-[#27272A]">
+              <div>
+                <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">
+                  Multi-Sheet Excel Report Generator (.xlsx)
+                </h2>
+                <p className="text-xs text-slate-500 dark:text-zinc-400">
+                  Server-side generated multi-sheet workbooks with currency formatting, category pivots & auto-filters
+                </p>
+              </div>
+
+              {/* Branch Selector for Report Download (Kolkata, Delhi HQ, All Branches) */}
+              <div className="flex items-center gap-2 bg-slate-50 dark:bg-[#09090B] px-3 py-1.5 rounded-xl border border-slate-200 dark:border-[#27272A]">
+                <Building2 size={15} className="text-violet-500 shrink-0" />
+                <span className="text-xs font-semibold text-slate-700 dark:text-zinc-300 whitespace-nowrap">Location:</span>
+                <select
+                  value={reportBranchId}
+                  onChange={(e) => setReportBranchId(e.target.value)}
+                  className="bg-transparent text-xs font-bold text-slate-900 dark:text-white focus:outline-none cursor-pointer"
+                >
+                  <option value="ALL" className="dark:bg-[#18181B]">All Branches (Consolidated)</option>
+                  {branches.map((b) => (
+                    <option key={b.id} value={b.id} className="dark:bg-[#18181B]">
+                      {b.name} ({b.code})
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-2">
@@ -3115,10 +3237,10 @@ export function ExpensesPage() {
                 <button
                   onClick={() => {
                     setReportPeriod('day');
-                    handleDownloadExcel();
+                    handleDownloadExcel('day');
                   }}
                   disabled={isDownloadingExcel}
-                  className="w-full py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold transition flex items-center justify-center gap-1.5"
+                  className="w-full py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-sm disabled:opacity-50"
                 >
                   <Download size={14} />
                   <span>Download Day .xlsx</span>
@@ -3143,10 +3265,10 @@ export function ExpensesPage() {
                 <button
                   onClick={() => {
                     setReportPeriod('week');
-                    handleDownloadExcel();
+                    handleDownloadExcel('week');
                   }}
                   disabled={isDownloadingExcel}
-                  className="w-full py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition flex items-center justify-center gap-1.5"
+                  className="w-full py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-sm disabled:opacity-50"
                 >
                   <Download size={14} />
                   <span>Download Week .xlsx</span>
@@ -3197,10 +3319,10 @@ export function ExpensesPage() {
                 <button
                   onClick={() => {
                     setReportPeriod('month');
-                    handleDownloadExcel();
+                    handleDownloadExcel('month');
                   }}
                   disabled={isDownloadingExcel}
-                  className="w-full py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition flex items-center justify-center gap-1.5"
+                  className="w-full py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-sm disabled:opacity-50"
                 >
                   <Download size={14} />
                   <span>Download Month .xlsx</span>
@@ -3225,10 +3347,10 @@ export function ExpensesPage() {
                 <button
                   onClick={() => {
                     setReportPeriod('year');
-                    handleDownloadExcel();
+                    handleDownloadExcel('year');
                   }}
                   disabled={isDownloadingExcel}
-                  className="w-full py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold transition flex items-center justify-center gap-1.5"
+                  className="w-full py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-sm disabled:opacity-50"
                 >
                   <Download size={14} />
                   <span>Download Year .xlsx</span>
@@ -3640,8 +3762,22 @@ export function ExpensesPage() {
             )}
 
             <form onSubmit={handleSaveEdit} className="space-y-3.5">
-              {/* Amount & Category */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* Date, Amount & Category */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-slate-700 dark:text-zinc-300 flex items-center gap-1">
+                    <Calendar size={13} className="text-violet-500" />
+                    <span>Expense Date <span className="text-rose-500">*</span></span>
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={editDate}
+                    onChange={(e) => setEditDate(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-[#09090B] border border-slate-300 dark:border-[#27272A] text-xs font-semibold text-slate-900 dark:text-white focus:border-violet-500 focus:outline-none"
+                  />
+                </div>
+
                 <div className="space-y-1">
                   <label className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
                     Amount (₹) <span className="text-rose-500">*</span>
@@ -3699,19 +3835,33 @@ export function ExpensesPage() {
                 </div>
               </div>
 
-              {/* Paid To */}
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
-                  Paid To / Vendor <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={editPaidTo}
-                  onChange={(e) => setEditPaidTo(e.target.value)}
-                  className="w-full px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-[#09090B] border border-slate-300 dark:border-[#27272A] text-xs text-slate-900 dark:text-white focus:border-violet-500 focus:outline-none"
-                  placeholder="e.g. Swiggy, Cleaner, Supplier"
-                />
+              {/* Who Paid & Paid To (2 columns) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
+                    Who Paid (Name)
+                  </label>
+                  <input
+                    type="text"
+                    value={editPaidBy}
+                    onChange={(e) => setEditPaidBy(e.target.value)}
+                    className="w-full px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-[#09090B] border border-slate-300 dark:border-[#27272A] text-xs text-slate-900 dark:text-white focus:border-violet-500 focus:outline-none"
+                    placeholder="e.g. Cashier, Rahul"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
+                    Paid To / Vendor <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={editPaidTo}
+                    onChange={(e) => setEditPaidTo(e.target.value)}
+                    className="w-full px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-[#09090B] border border-slate-300 dark:border-[#27272A] text-xs text-slate-900 dark:text-white focus:border-violet-500 focus:outline-none"
+                    placeholder="e.g. Swiggy, Cleaner, Supplier"
+                  />
+                </div>
               </div>
 
               {/* Description */}
