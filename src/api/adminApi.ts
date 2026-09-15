@@ -155,23 +155,21 @@ export async function proactiveTokenRefresh(): Promise<boolean> {
  * Uses mode: 'no-cors' so background keep-alive probes never throw or log CORS errors.
  * Uses a 60-second timeout window to reliably wait for sleeping containers.
  */
+let _lastKeepAlivePing = 0;
+
 export async function keepAliveServerPing(): Promise<void> {
+  const now = Date.now();
+  // Prevent flooding: execute at most once every 60 seconds
+  if (now - _lastKeepAlivePing < 60000) return;
+  _lastKeepAlivePing = now;
+
   try {
     await fetch(`${API_BASE_URL}/ping`, {
       method: "GET",
-      mode: "no-cors",
-      signal: AbortSignal.timeout(60000),
+      signal: AbortSignal.timeout(10000),
     });
   } catch {
-    try {
-      await fetch(`${API_BASE_URL}/health`, {
-        method: "GET",
-        mode: "no-cors",
-        signal: AbortSignal.timeout(60000),
-      });
-    } catch {
-      // Silent — ping failures are non-fatal
-    }
+    // Silent — background keep-alive probes are non-fatal
   }
 }
 
