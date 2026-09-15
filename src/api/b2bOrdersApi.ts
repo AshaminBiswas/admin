@@ -50,6 +50,8 @@ export const b2bOrdersApi = {
       quantity: number;
       unitPrice: number;
       discount?: number;
+      taxRate?: number;
+      taxPercent?: number;
       configuration?: any;
     }[];
     notes?: string;
@@ -88,6 +90,8 @@ export const b2bOrdersApi = {
       quantity: number;
       unitPrice?: number;
       discount?: number;
+      taxRate?: number;
+      taxPercent?: number;
       isRemoved?: boolean;
     }[];
     notes?: string;

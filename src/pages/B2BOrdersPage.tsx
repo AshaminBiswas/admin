@@ -922,6 +922,9 @@ function CreateB2BOrderModal({ branches, onClose, onSuccess }: CreateB2BOrderMod
   const [customers, setCustomers] = useState<any[]>([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState('');
   const [selectedBranchId, setSelectedBranchId] = useState(branches[0]?.id || '');
+  const [paymentMethod, setPaymentMethod] = useState('bank_transfer');
+  const [taxRate, setTaxRate] = useState<number>(18);
+  const [orderNotes, setOrderNotes] = useState('');
   const [availableProducts, setAvailableProducts] = useState<any[]>([]);
   const [items, setItems] = useState<
     { productId: string; sku: string; name: string; quantity: number; unitPrice: number; discount: number; maxAvailable: number }[]
@@ -929,6 +932,13 @@ function CreateB2BOrderModal({ branches, onClose, onSuccess }: CreateB2BOrderMod
   const [stockMap, setStockMap] = useState<Map<string, number>>(new Map());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Sync selected branch when branches load
+  useEffect(() => {
+    if (!selectedBranchId && branches.length > 0) {
+      setSelectedBranchId(branches[0].id);
+    }
+  }, [branches, selectedBranchId]);
 
   // Load B2B Customers
   useEffect(() => {
@@ -1017,7 +1027,7 @@ function CreateB2BOrderModal({ branches, onClose, onSuccess }: CreateB2BOrderMod
     );
   };
 
-  // Financial calculations
+  // Dynamic financial calculations based on selected taxRate
   const subtotal = useMemo(() => {
     return items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
   }, [items]);
@@ -1027,8 +1037,9 @@ function CreateB2BOrderModal({ branches, onClose, onSuccess }: CreateB2BOrderMod
   }, [items]);
 
   const taxTotal = useMemo(() => {
-    return Math.round(Math.max(0, subtotal - discountTotal) * 0.18 * 100) / 100;
-  }, [subtotal, discountTotal]);
+    const taxable = Math.max(0, subtotal - discountTotal);
+    return Math.round(taxable * (taxRate / 100) * 100) / 100;
+  }, [subtotal, discountTotal, taxRate]);
 
   const grandTotal = useMemo(() => {
     return Math.round((subtotal - discountTotal + taxTotal) * 100) / 100;
@@ -1060,13 +1071,16 @@ function CreateB2BOrderModal({ branches, onClose, onSuccess }: CreateB2BOrderMod
         clientRequestId,
         customerId: selectedCustomerId,
         branchId: selectedBranchId,
-        paymentMethod: 'bank_transfer',
+        paymentMethod,
+        notes: orderNotes.trim() || undefined,
         items: items.map((i) => ({
           productId: i.productId,
           sku: i.sku,
           quantity: i.quantity,
           unitPrice: i.unitPrice,
           discount: i.discount,
+          taxRate,
+          taxPercent: taxRate,
         })),
       });
 
@@ -1121,6 +1135,7 @@ function CreateB2BOrderModal({ branches, onClose, onSuccess }: CreateB2BOrderMod
                 onChange={(e) => setSelectedCustomerId(e.target.value)}
                 className="w-full p-2.5 rounded-xl bg-[#09090B] border border-[#27272A] text-white focus:outline-none focus:border-emerald-500"
               >
+                {customers.length === 0 && <option value="">No registered customers found</option>}
                 {customers.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.companyName ? `${c.companyName} (${c.firstName} ${c.lastName})` : `${c.firstName} ${c.lastName}`} - {c.email}
@@ -1145,6 +1160,57 @@ function CreateB2BOrderModal({ branches, onClose, onSuccess }: CreateB2BOrderMod
                 ))}
               </select>
             </div>
+          </div>
+
+          {/* Payment Method & GST Rate Configuration */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block font-semibold text-zinc-300 mb-1">
+                Payment Method / Commercial Terms
+              </label>
+              <select
+                value={paymentMethod}
+                onChange={(e) => setPaymentMethod(e.target.value)}
+                className="w-full p-2.5 rounded-xl bg-[#09090B] border border-[#27272A] text-white focus:outline-none focus:border-emerald-500"
+              >
+                <option value="bank_transfer">Bank Transfer / NEFT / RTGS</option>
+                <option value="cheque">Cheque / Demand Draft</option>
+                <option value="credit_terms">Commercial Credit (30 Days)</option>
+                <option value="upi">UPI / Instant Payment</option>
+                <option value="cash">Cash / Cash On Delivery</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block font-semibold text-zinc-300 mb-1">
+                Applicable GST Rate
+              </label>
+              <select
+                value={taxRate}
+                onChange={(e) => setTaxRate(Number(e.target.value))}
+                className="w-full p-2.5 rounded-xl bg-[#09090B] border border-[#27272A] text-white focus:outline-none focus:border-emerald-500 font-medium"
+              >
+                <option value={18}>18% GST (Standard Architectural Hardware)</option>
+                <option value={12}>12% GST (Specified Commercial Fittings)</option>
+                <option value={5}>5% GST (Basic Raw Materials / Scrap)</option>
+                <option value={28}>28% GST (Luxury / Specialized Fixtures)</option>
+                <option value={0}>0% GST (Tax-Exempt / SEZ Supply)</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Order Notes / Project Details */}
+          <div>
+            <label className="block font-semibold text-zinc-300 mb-1">
+              Order Notes / Delivery Instructions
+            </label>
+            <input
+              type="text"
+              value={orderNotes}
+              onChange={(e) => setOrderNotes(e.target.value)}
+              placeholder="e.g. Project site address, contact person, or PO reference..."
+              className="w-full p-2.5 rounded-xl bg-[#09090B] border border-[#27272A] text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500"
+            />
           </div>
 
           {/* Add Products Bar */}
@@ -1184,8 +1250,9 @@ function CreateB2BOrderModal({ branches, onClose, onSuccess }: CreateB2BOrderMod
             ) : (
               <div className="space-y-2">
                 {items.map((it, idx) => {
-                  const lineTax = Math.round(Math.max(0, it.quantity * it.unitPrice - it.discount) * 0.18 * 100) / 100;
-                  const lineTot = Math.round((it.quantity * it.unitPrice - it.discount + lineTax) * 100) / 100;
+                  const taxable = Math.max(0, it.quantity * it.unitPrice - it.discount);
+                  const lineTax = Math.round(taxable * (taxRate / 100) * 100) / 100;
+                  const lineTot = Math.round((taxable + lineTax) * 100) / 100;
 
                   return (
                     <div
@@ -1224,7 +1291,7 @@ function CreateB2BOrderModal({ branches, onClose, onSuccess }: CreateB2BOrderMod
                         </div>
 
                         <div className="text-right min-w-[70px]">
-                          <div className="text-[10px] text-zinc-500">+18% GST</div>
+                          <div className="text-[10px] text-zinc-500">+{taxRate}% GST</div>
                           <div className="font-bold text-emerald-400">₹{lineTot.toLocaleString('en-IN')}</div>
                         </div>
 
@@ -1254,7 +1321,7 @@ function CreateB2BOrderModal({ branches, onClose, onSuccess }: CreateB2BOrderMod
               <span className="text-white font-medium">-₹{discountTotal.toLocaleString('en-IN')}</span>
             </div>
             <div className="flex justify-between text-zinc-400">
-              <span>Applicable GST (18%):</span>
+              <span>Applicable GST ({taxRate}%):</span>
               <span className="text-amber-400 font-medium">+₹{taxTotal.toLocaleString('en-IN')}</span>
             </div>
             <div className="flex justify-between text-sm font-black text-white pt-1.5 border-t border-[#27272A]">
@@ -1515,16 +1582,16 @@ function OrderDossierModal({ order, onClose }: OrderDossierModalProps) {
 
             <div className="p-3 rounded-xl bg-[#09090B] border border-[#27272A] space-y-1">
               <div className="text-[10px] uppercase font-bold text-zinc-500">Fulfilment Facility</div>
-              <div className="font-bold text-white">{order.branch?.name || 'Delhi HQ'}</div>
-              <div className="text-zinc-400">Code: {order.branch?.code || 'DEL'}</div>
-              <div className="text-zinc-400">Location: {order.branch?.city || 'Delhi'}</div>
+              <div className="font-bold text-white">{order.branch?.name || 'Assigned Facility'}</div>
+              {order.branch?.code && <div className="text-zinc-400">Code: {order.branch.code}</div>}
+              {order.branch?.city && <div className="text-zinc-400">Location: {order.branch.city}</div>}
             </div>
 
             <div className="p-3 rounded-xl bg-[#09090B] border border-[#27272A] space-y-1">
               <div className="text-[10px] uppercase font-bold text-zinc-500">Commercial Summary</div>
               <div className="font-bold text-white">Grand Total: ₹{order.grandTotal.toLocaleString('en-IN')}</div>
               <div className="text-zinc-400">Subtotal: ₹{order.subtotal.toLocaleString('en-IN')}</div>
-              <div className="text-amber-400">18% GST: ₹{order.taxTotal.toLocaleString('en-IN')}</div>
+              <div className="text-amber-400">Taxes / GST: ₹{order.taxTotal.toLocaleString('en-IN')}</div>
             </div>
           </div>
 
