@@ -1661,93 +1661,83 @@ export function ExpensesPage() {
                     </div>
                   </div>
 
-                  {/* Row 2: Amount & Payment Mode */}
-                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 sm:gap-2.5 items-end">
-                    {/* Amount Input */}
-                    <div className="sm:col-span-7 space-y-1">
-                      <div className="flex items-center justify-between">
-                        <label className="text-[11px] font-semibold text-slate-600 dark:text-zinc-300">
-                          Amount (₹) <span className="text-rose-500">*</span>
-                        </label>
-                        <div className="flex gap-1">
-                          {QUICK_AMOUNTS.slice(0, 4).map((amt) => (
-                            <button
-                              type="button"
-                              key={amt}
-                              onClick={() => setEntryAmount(String(amt))}
-                              className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-[#27272A] hover:bg-slate-200 dark:hover:bg-[#3F3F46] text-[10px] font-semibold text-slate-600 dark:text-zinc-300 transition"
-                            >
-                              +{amt}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                      <div className="relative">
-                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400">
-                          ₹
-                        </span>
-                        <input
-                          type="number"
-                          step="any"
-                          min="0.01"
-                          required
-                          placeholder="0.00"
-                          value={entryAmount}
-                          onChange={(e) => setEntryAmount(e.target.value)}
-                          className="w-full pl-7 pr-3 py-1.5 rounded-lg bg-slate-50 dark:bg-[#09090B] border border-slate-300 dark:border-[#27272A] text-base font-bold text-slate-900 dark:text-white placeholder:text-slate-400 focus:border-violet-500 focus:outline-none"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Payment Mode Pills */}
-                    <div className="sm:col-span-5 space-y-1">
+                  {/* Row 2: Amount Input */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
                       <label className="text-[11px] font-semibold text-slate-600 dark:text-zinc-300">
-                        Payment Mode
+                        Amount (₹) <span className="text-rose-500">*</span>
                       </label>
-                      <div className="grid grid-cols-3 gap-1">
-                        {(['CASH', 'UPI', 'BANK_TRANSFER'] as const).map((mode) => (
+                      <div className="flex gap-1">
+                        {QUICK_AMOUNTS.slice(0, 5).map((amt) => (
                           <button
                             type="button"
-                            key={mode}
-                            onClick={() => setEntryPaymentMode(mode)}
-                            className={`py-1.5 rounded-lg text-[11px] font-bold transition border text-center ${
-                              entryPaymentMode === mode
-                                ? 'bg-violet-600 border-violet-600 text-white shadow-xs'
-                                : 'bg-slate-50 dark:bg-[#09090B] border-slate-200 dark:border-[#27272A] text-slate-600 dark:text-zinc-400 hover:border-violet-500'
-                            }`}
+                            key={amt}
+                            onClick={() => setEntryAmount(String(amt))}
+                            className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-[#27272A] hover:bg-slate-200 dark:hover:bg-[#3F3F46] text-[10px] font-semibold text-slate-600 dark:text-zinc-300 transition cursor-pointer"
                           >
-                            {mode === 'BANK_TRANSFER' ? 'Bank' : mode}
+                            +{amt}
                           </button>
                         ))}
                       </div>
                     </div>
+                    <div className="relative">
+                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400">
+                        ₹
+                      </span>
+                      <input
+                        type="number"
+                        step="any"
+                        min="0.01"
+                        required
+                        placeholder="0.00"
+                        value={entryAmount}
+                        onChange={(e) => setEntryAmount(e.target.value)}
+                        className="w-full pl-7 pr-3 py-1.5 rounded-lg bg-slate-50 dark:bg-[#09090B] border border-slate-300 dark:border-[#27272A] text-sm font-bold text-slate-900 dark:text-white placeholder:text-slate-400 focus:border-violet-500 focus:outline-none"
+                      />
+                    </div>
                   </div>
 
-                  {/* Row 3: Category Ribbon */}
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between">
-                      <label className="text-[11px] font-semibold text-slate-600 dark:text-zinc-300">
-                        Category <span className="text-rose-500">*</span>
+                  {/* Row 3: Category & Payment Mode Dropdowns */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {/* Category Dropdown */}
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-semibold text-slate-600 dark:text-zinc-300 flex items-center gap-1">
+                        <Tag size={12} className="text-violet-500" />
+                        <span>Category <span className="text-rose-500">*</span></span>
                       </label>
-                      <span className="text-[10px] font-medium text-violet-600 dark:text-violet-400">
-                        {categories.find((c) => c.id === entryCategory)?.name || 'Select'}
-                      </span>
+                      <select
+                        required
+                        value={entryCategory}
+                        onChange={(e) => {
+                          setEntryCategory(e.target.value);
+                          localStorage.setItem('prc_last_expense_category', e.target.value);
+                        }}
+                        className="w-full px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-[#09090B] border border-slate-300 dark:border-[#27272A] text-xs font-semibold text-slate-900 dark:text-white focus:border-violet-500 focus:outline-none cursor-pointer"
+                      >
+                        <option value="" className="dark:bg-[#18181B]">Select Category</option>
+                        {(categories || []).map((cat) => (
+                          <option key={cat.id} value={cat.id} className="dark:bg-[#18181B]">
+                            {cat.name}
+                          </option>
+                        ))}
+                      </select>
                     </div>
-                    <div className="flex gap-1.5 overflow-x-auto pb-1 no-scrollbar -mx-0.5 px-0.5">
-                      {categories.map((c) => (
-                        <button
-                          type="button"
-                          key={c.id}
-                          onClick={() => setEntryCategory(c.id)}
-                          className={`shrink-0 px-2.5 py-1 rounded-lg text-xs font-semibold transition border ${
-                            entryCategory === c.id
-                              ? 'bg-violet-600 border-violet-600 text-white shadow-xs'
-                              : 'bg-slate-50 dark:bg-[#09090B] border-slate-200 dark:border-[#27272A] text-slate-600 dark:text-zinc-300 hover:border-violet-400'
-                          }`}
-                        >
-                          {c.name}
-                        </button>
-                      ))}
+
+                    {/* Payment Mode Dropdown */}
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-semibold text-slate-600 dark:text-zinc-300 flex items-center gap-1">
+                        <Wallet size={12} className="text-violet-500" />
+                        <span>Payment Mode <span className="text-rose-500">*</span></span>
+                      </label>
+                      <select
+                        value={entryPaymentMode}
+                        onChange={(e) => setEntryPaymentMode(e.target.value as 'CASH' | 'UPI' | 'BANK_TRANSFER')}
+                        className="w-full px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-[#09090B] border border-slate-300 dark:border-[#27272A] text-xs font-semibold text-slate-900 dark:text-white focus:border-violet-500 focus:outline-none cursor-pointer"
+                      >
+                        <option value="CASH" className="dark:bg-[#18181B]">Cash (Petty Cash)</option>
+                        <option value="UPI" className="dark:bg-[#18181B]">UPI / Digital QR</option>
+                        <option value="BANK_TRANSFER" className="dark:bg-[#18181B]">Bank Transfer / IMPS</option>
+                      </select>
                     </div>
                   </div>
 
@@ -3862,23 +3852,19 @@ export function ExpensesPage() {
 
               {/* Payment Mode */}
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-700 dark:text-zinc-300">Payment Mode</label>
-                <div className="flex items-center gap-2">
-                  {(['CASH', 'UPI', 'BANK_TRANSFER'] as const).map((mode) => (
-                    <button
-                      key={mode}
-                      type="button"
-                      onClick={() => setEditPaymentMode(mode)}
-                      className={`flex-1 py-1.5 rounded-xl text-xs font-bold transition border ${
-                        editPaymentMode === mode
-                          ? 'bg-violet-600 text-white border-violet-600 shadow-sm'
-                          : 'bg-slate-50 dark:bg-[#09090B] text-slate-600 dark:text-zinc-400 border-slate-200 dark:border-[#27272A] hover:bg-slate-100 dark:hover:bg-[#27272A]'
-                      }`}
-                    >
-                      {mode.replace('_', ' ')}
-                    </button>
-                  ))}
-                </div>
+                <label className="text-xs font-semibold text-slate-700 dark:text-zinc-300 flex items-center gap-1">
+                  <Wallet size={12} className="text-violet-500" />
+                  <span>Payment Mode <span className="text-rose-500">*</span></span>
+                </label>
+                <select
+                  value={editPaymentMode}
+                  onChange={(e) => setEditPaymentMode(e.target.value as 'CASH' | 'UPI' | 'BANK_TRANSFER')}
+                  className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-[#09090B] border border-slate-300 dark:border-[#27272A] text-xs font-semibold text-slate-900 dark:text-white focus:border-violet-500 focus:outline-none cursor-pointer"
+                >
+                  <option value="CASH" className="dark:bg-[#18181B]">Cash (Petty Cash)</option>
+                  <option value="UPI" className="dark:bg-[#18181B]">UPI / Digital QR</option>
+                  <option value="BANK_TRANSFER" className="dark:bg-[#18181B]">Bank Transfer / IMPS</option>
+                </select>
               </div>
 
               {/* Who Paid & Paid To (2 columns) */}
