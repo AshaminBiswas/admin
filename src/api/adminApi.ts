@@ -1934,7 +1934,15 @@ export const barcodeApi = {
     const res = await fetch(url, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
-    if (!res.ok) throw new Error('Failed to generate thermal label PDF');
+    if (!res.ok) {
+      let errMsg = 'Failed to generate thermal label PDF';
+      try {
+        const errJson = await res.json();
+        if (errJson?.error?.message) errMsg = errJson.error.message;
+        else if (errJson?.message) errMsg = errJson.message;
+      } catch {}
+      throw new Error(errMsg);
+    }
     const blob = await res.blob();
     const blobUrl = window.URL.createObjectURL(blob);
     const a = document.createElement('a');

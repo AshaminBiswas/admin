@@ -36,6 +36,9 @@ import {
   FileText,
   Clock,
   ArrowUpRight,
+  Upload,
+  Image as ImageIcon,
+  ShieldAlert,
 } from 'lucide-react';
 import { barcodeApi, inventoryApi, fetchAdminApi, API_BASE_URL } from '../api/adminApi';
 import type { BarcodeScanResult, Branch } from '../types/admin';
@@ -82,6 +85,7 @@ export const BarcodePage: React.FC = () => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const animationFrameId = useRef<number | null>(null);
   const isScanningRef = useRef<boolean>(false);
   const lastScannedCodeRef = useRef<string>('');
@@ -202,6 +206,7 @@ export const BarcodePage: React.FC = () => {
         videoRef.current.setAttribute('playsinline', 'true');
         await videoRef.current.play();
         isScanningRef.current = true;
+        setIsCameraActive(true);
         setScannerStatus('Camera active. Point at barcode...');
 
         // Check torch support
@@ -214,14 +219,81 @@ export const BarcodePage: React.FC = () => {
       }
     } catch (err: any) {
       console.warn('[Barcode Scanner] Camera access error:', err);
-      setCameraError(
-        err.name === 'NotAllowedError'
-          ? 'Camera permission denied. Please allow camera access in browser settings or use manual SKU input.'
-          : 'Unable to start camera. Make sure no other app is using it.'
-      );
       setIsCameraActive(false);
+      const isPermError =
+        err.name === 'NotAllowedError' ||
+        String(err).includes('Permission dismissed') ||
+        String(err).includes('Permission denied');
+      setCameraError(
+        isPermError
+          ? 'PERMISSION_DISMISSED'
+          : err.message || 'Unable to start camera. Make sure no other app is using it.'
+      );
     }
   }, [facingMode]);
+
+  // ─── Photo / File Upload Barcode Scanner ──────────────────────────────────
+  const handleImageFileScan = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setLookupLoading(true);
+    showToast('Analyzing image for barcode...', 'info');
+
+    try {
+      const img = new Image();
+      img.onload = async () => {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext('2d', { willReadFrequently: true });
+          if (!ctx) {
+            setLookupLoading(false);
+            return;
+          }
+
+          ctx.drawImage(img, 0, 0, img.width, img.height);
+          let detectedCode: string | null = null;
+
+          if ('BarcodeDetector' in window) {
+            try {
+              const detector = new (window as any).BarcodeDetector({
+                formats: ['code_128', 'code_39', 'qr_code', 'ean_13', 'upc_a'],
+              });
+              const barcodes = await detector.detect(canvas);
+              if (barcodes && barcodes.length > 0) {
+                detectedCode = barcodes[0].rawValue;
+              }
+            } catch {}
+          }
+
+          if (!detectedCode) {
+            const imgData = ctx.getImageData(0, 0, img.width, img.height);
+            const qr = jsQR(imgData.data, imgData.width, imgData.height);
+            if (qr && qr.data) detectedCode = qr.data;
+          }
+
+          if (detectedCode) {
+            playBeep();
+            if (navigator.vibrate) navigator.vibrate([40, 60, 40]);
+            showToast(`Decoded barcode: ${detectedCode}`, 'success');
+            lookupBarcode(detectedCode);
+          } else {
+            showToast('No readable barcode or QR code detected. Try taking a clearer photo or typing SKU.', 'error');
+            setLookupLoading(false);
+          }
+        } catch (err: any) {
+          showToast(err?.message || 'Error processing image', 'error');
+          setLookupLoading(false);
+        }
+      };
+      img.src = URL.createObjectURL(file);
+    } catch {
+      setLookupLoading(false);
+    }
+    e.target.value = '';
+  };
 
   const stopCamera = useCallback(() => {
     isScanningRef.current = false;
@@ -592,22 +664,98 @@ export const BarcodePage: React.FC = () => {
                       <span className="text-[11px] font-mono text-white/90 truncate block">{scannerStatus}</span>
                     </div>
                   </>
+                ) : cameraError === 'PERMISSION_DISMISSED' ? (
+                  <div className="text-center p-5 text-slate-300 max-w-sm mx-auto space-y-3">
+                    <div className="w-12 h-12 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center mx-auto">
+                      <ShieldAlert className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-white">Camera Access Dismissed</h4>
+                      <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
+                        Camera access was dismissed or blocked. Tap the lock <span className="text-amber-400 font-bold">🔒</span> in your browser address bar to allow camera access, then click below.
+                      </p>
+                    </div>
+                    <div className="flex flex-col gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCameraError(null);
+                          setIsCameraActive(true);
+                          startCamera();
+                        }}
+                        className="w-full py-2 bg-[#8B5CF6] hover:bg-[#7C3AED] text-white rounded-xl text-xs font-bold shadow transition flex items-center justify-center gap-1.5"
+                      >
+                        <Camera className="w-3.5 h-3.5" />
+                        <span>Request Camera Permission</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-semibold transition border border-slate-700 flex items-center justify-center gap-1.5"
+                      >
+                        <Upload className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Upload / Take Photo Instead</span>
+                      </button>
+                    </div>
+                  </div>
                 ) : (
                   <div className="text-center p-6 text-slate-400">
                     <CameraOff className="w-10 h-10 mx-auto mb-2 text-slate-600" />
                     <p className="text-xs font-semibold">Camera is paused</p>
-                    <button
-                      type="button"
-                      onClick={() => setIsCameraActive(true)}
-                      className="mt-3 px-3 py-1.5 bg-[#8B5CF6] text-white rounded-xl text-xs font-bold shadow transition"
-                    >
-                      Start Camera
-                    </button>
+                    <div className="flex items-center justify-center gap-2 mt-3">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCameraError(null);
+                          setIsCameraActive(true);
+                          startCamera();
+                        }}
+                        className="px-3.5 py-1.5 bg-[#8B5CF6] text-white rounded-xl text-xs font-bold shadow transition flex items-center gap-1.5"
+                      >
+                        <Camera className="w-3.5 h-3.5" />
+                        <span>Start Camera</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-semibold border border-slate-700 transition flex items-center gap-1.5"
+                      >
+                        <Upload className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Upload Photo</span>
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
 
-              {cameraError && (
+              {/* Hidden file input for photo/image upload scanning */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={handleImageFileScan}
+              />
+
+              {/* Viewfinder Bottom Action Bar */}
+              <div className="mt-3 flex items-center justify-between gap-2 pt-2 border-t border-slate-100 dark:border-[#27272A]">
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 dark:bg-[#09090B] hover:bg-slate-200 dark:hover:bg-[#27272A] text-slate-700 dark:text-slate-300 rounded-xl text-xs font-semibold border border-slate-200 dark:border-[#27272A] transition"
+                  title="Upload a barcode image or take a photo"
+                >
+                  <Upload className="w-3.5 h-3.5 text-[#8B5CF6]" />
+                  <span>Scan From Photo / File</span>
+                </button>
+
+                <span className="text-[10px] text-slate-400 font-mono">
+                  {isCameraActive ? 'Live 60fps' : 'Standby'}
+                </span>
+              </div>
+
+              {cameraError && cameraError !== 'PERMISSION_DISMISSED' && (
                 <div className="mt-3 p-2.5 bg-rose-500/10 border border-rose-500/30 rounded-xl text-xs text-rose-600 dark:text-rose-400">
                   {cameraError}
                 </div>
@@ -906,7 +1054,14 @@ export const BarcodePage: React.FC = () => {
                     </button>
                     <button
                       type="button"
-                      onClick={() => barcodeApi.downloadLabelPdf(scanResult.product.sku)}
+                      onClick={async () => {
+                        try {
+                          await barcodeApi.downloadLabelPdf(scanResult.product.sku);
+                          showToast('Thermal label PDF downloaded', 'success');
+                        } catch (err: any) {
+                          showToast(err?.message || 'Failed to download thermal label PDF', 'error');
+                        }
+                      }}
                       className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-[#27272A] dark:hover:bg-[#3F3F46] text-slate-700 dark:text-slate-200 rounded-xl text-xs font-semibold transition border border-slate-200 dark:border-[#3F3F46]"
                     >
                       <Download className="w-3.5 h-3.5" />
@@ -1172,7 +1327,15 @@ export const BarcodePage: React.FC = () => {
                 <button
                   type="button"
                   disabled={!selectedStudioProduct}
-                  onClick={() => selectedStudioProduct && barcodeApi.downloadLabelPdf(selectedStudioProduct.sku, labelSize)}
+                  onClick={async () => {
+                    if (!selectedStudioProduct) return;
+                    try {
+                      await barcodeApi.downloadLabelPdf(selectedStudioProduct.sku, labelSize);
+                      showToast('Thermal label PDF downloaded', 'success');
+                    } catch (err: any) {
+                      showToast(err?.message || 'Failed to download thermal label PDF', 'error');
+                    }
+                  }}
                   className="w-full flex items-center justify-center gap-2 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-[#27272A] dark:hover:bg-[#3F3F46] disabled:opacity-50 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-semibold transition border border-slate-200 dark:border-[#3F3F46]"
                 >
                   <Download className="w-4 h-4 text-emerald-500" />
