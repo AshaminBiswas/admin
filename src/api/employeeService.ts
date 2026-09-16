@@ -98,6 +98,16 @@ export const employeeService = {
     return res?.data || res;
   },
 
+  async deleteAttendance(params: { employeeId: string; date: string }): Promise<any> {
+    const query = new URLSearchParams();
+    query.append('employeeId', params.employeeId);
+    query.append('date', params.date);
+    const res = await fetchAdminApi<any>(`/employees/attendance?${query.toString()}`, {
+      method: 'DELETE',
+    });
+    return res?.data || res;
+  },
+
   // ─── Leave Ledger ───────────────────────────────────────────────────────────
   async accrueMonthlyLeave(payload: { month: number; year: number }): Promise<any> {
     const res = await fetchAdminApi<any>('/employees/leave/accrue-monthly', {

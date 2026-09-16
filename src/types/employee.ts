@@ -1,6 +1,6 @@
 export type GovernmentIdType = 'AADHAAR' | 'PAN' | 'VOTER_ID';
 export type EmployeeStatus = 'ACTIVE' | 'INACTIVE' | 'TERMINATED';
-export type AttendanceStatus = 'PRESENT' | 'CL' | 'EL' | 'UL' | 'HALF_DAY' | 'LEAVE';
+export type AttendanceStatus = 'PRESENT' | 'DOUBLE_DUTY' | 'CL' | 'EL' | 'UL' | 'HALF_DAY' | 'LEAVE';
 export type PayrollStatus = 'DRAFT' | 'FINALIZED' | 'PAID';
 export type LeaveType = 'CL' | 'EL';
 export type LeaveTransactionType = 'ACCRUAL' | 'USAGE' | 'ADJUSTMENT';

@@ -90,6 +90,7 @@ const MONTHS = [
 
 const ATTENDANCE_STATUS_LABELS: Record<AttendanceStatus, { label: string; color: string; bg: string }> = {
   PRESENT: { label: 'Present', color: '#10B981', bg: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' },
+  DOUBLE_DUTY: { label: 'Double Duty (2x)', color: '#06B6D4', bg: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/30' },
   CL: { label: 'CL (Casual)', color: '#3B82F6', bg: 'bg-blue-500/10 text-blue-400 border-blue-500/20' },
   EL: { label: 'EL (Earned)', color: '#8B5CF6', bg: 'bg-purple-500/10 text-purple-400 border-purple-500/20' },
   HALF_DAY: { label: 'Half Day', color: '#F59E0B', bg: 'bg-amber-500/10 text-amber-400 border-amber-500/20' },
@@ -348,7 +349,7 @@ export function EmployeeManagementPage() {
       return (
         workerIds.has(r.employeeId) &&
         rDate === targetDateStr &&
-        (r.status === 'PRESENT' || r.status === 'HALF_DAY')
+        (r.status === 'PRESENT' || r.status === 'DOUBLE_DUTY' || r.status === 'HALF_DAY')
       );
     }).length;
 
@@ -433,6 +434,28 @@ export function EmployeeManagementPage() {
     const padMonth = String(selectedMonth).padStart(2, '0');
     const dateStr = `${selectedYear}-${padMonth}-${padDay}`;
     const isSunday = new Date(selectedYear, selectedMonth - 1, day).getDay() === 0;
+
+    // Check if this status is already active for this employee and day
+    const existingRecord = attendanceRecords.find(
+      (r) => r.employeeId === employeeId && new Date(r.date).toISOString().slice(0, 10) === dateStr
+    );
+
+    // TOGGLE-OFF: If user clicks the already active status, toggle it off back to "simple" (Not Recorded)
+    if (existingRecord?.status === status) {
+      setAttendanceRecords((prev) =>
+        prev.filter(
+          (r) => !(r.employeeId === employeeId && new Date(r.date).toISOString().slice(0, 10) === dateStr)
+        )
+      );
+
+      employeeService
+        .deleteAttendance({ employeeId, date: dateStr })
+        .catch((err: any) => {
+          showFeedback('error', err?.message || 'Failed to clear attendance');
+          fetchAttendance();
+        });
+      return;
+    }
 
     // 1. Optimistic 0ms UI update
     setAttendanceRecords((prev) => {
@@ -1345,6 +1368,7 @@ export function EmployeeManagementPage() {
                           // Compute monthly summary counts for this worker
                           const workerMonthRecords = attendanceRecords.filter((r) => r.employeeId === emp.id);
                           const monthPresent = workerMonthRecords.filter((r) => r.status === 'PRESENT').length;
+                          const monthDoubleDuty = workerMonthRecords.filter((r) => r.status === 'DOUBLE_DUTY').length;
                           const monthHalf = workerMonthRecords.filter((r) => r.status === 'HALF_DAY').length;
                           const monthOtHours = workerMonthRecords.reduce(
                             (sum, r) => sum + Number(r.overtimeHours || 0),
@@ -1389,7 +1413,7 @@ export function EmployeeManagementPage() {
 
                               <td className="px-4 py-3.5">
                                 <div className="flex flex-wrap items-center gap-1">
-                                  {(['PRESENT', 'HALF_DAY', 'UL', 'CL'] as AttendanceStatus[]).map((st) => (
+                                  {(['PRESENT', 'DOUBLE_DUTY', 'HALF_DAY', 'UL', 'CL'] as AttendanceStatus[]).map((st) => (
                                     <button
                                       key={st}
                                       type="button"
@@ -1399,9 +1423,9 @@ export function EmployeeManagementPage() {
                                           ? ATTENDANCE_STATUS_LABELS[st].bg + ' font-bold shadow-sm'
                                           : 'bg-[#09090B] text-[#A1A1AA] border-[#27272A] hover:bg-[#27272A] hover:text-[#FAFAFA]'
                                       }`}
-                                      title={`Mark as ${st}`}
+                                      title={st === 'DOUBLE_DUTY' ? 'Mark as Double Duty (2x Shifts)' : `Mark as ${st}`}
                                     >
-                                      {st === 'PRESENT' ? 'P' : st === 'HALF_DAY' ? 'HD' : st === 'UL' ? 'UL' : 'CL'}
+                                      {st === 'PRESENT' ? 'P' : st === 'DOUBLE_DUTY' ? 'DD' : st === 'HALF_DAY' ? 'HD' : st === 'UL' ? 'UL' : 'CL'}
                                     </button>
                                   ))}
                                 </div>
@@ -1445,7 +1469,7 @@ export function EmployeeManagementPage() {
 
                               <td className="px-4 py-3.5 text-xs text-[#A1A1AA]">
                                 <div className="font-medium text-[#FAFAFA]">
-                                  {monthPresent} P | {monthHalf} Half
+                                  {monthPresent} P {monthDoubleDuty > 0 && <span className="text-cyan-400 font-semibold">| {monthDoubleDuty} DD</span>} | {monthHalf} Half
                                 </div>
                                 <div className="text-[11px] text-emerald-400">
                                   {monthOtHours > 0 ? `+${monthOtHours} hrs OT` : '0 OT hrs'}
@@ -1922,17 +1946,19 @@ export function EmployeeManagementPage() {
                           </td>
                           <td className="px-4 py-3.5">
                             <div className="flex flex-wrap items-center gap-1">
-                              {(['PRESENT', 'CL', 'EL', 'HALF_DAY', 'UL'] as AttendanceStatus[]).map((st) => (
+                              {(['PRESENT', 'DOUBLE_DUTY', 'CL', 'EL', 'HALF_DAY', 'UL'] as AttendanceStatus[]).map((st) => (
                                 <button
                                   key={st}
+                                  type="button"
                                   onClick={() => handleQuickStatusChange(emp.id, selectedAttendanceDay, st)}
                                   className={`px-2 py-1 text-xs rounded-lg border transition ${
                                     record?.status === st
-                                      ? ATTENDANCE_STATUS_LABELS[st].bg + ' font-semibold'
+                                      ? ATTENDANCE_STATUS_LABELS[st].bg + ' font-semibold shadow-sm'
                                       : 'bg-[#09090B] text-[#A1A1AA] border-[#27272A] hover:bg-[#27272A] hover:text-[#FAFAFA]'
                                   }`}
+                                  title={st === 'DOUBLE_DUTY' ? 'Mark as Double Duty (2x Shifts)' : `Mark as ${st}`}
                                 >
-                                  {st}
+                                  {st === 'PRESENT' ? 'P' : st === 'DOUBLE_DUTY' ? 'DD' : st === 'HALF_DAY' ? 'HD' : st}
                                 </button>
                               ))}
                             </div>
@@ -3563,6 +3589,7 @@ export function EmployeeManagementPage() {
                   className="w-full px-3 py-2 bg-[#09090B] border border-[#27272A] rounded-xl text-[#FAFAFA] text-xs"
                 >
                   <option value="PRESENT">Present (Full Day)</option>
+                  <option value="DOUBLE_DUTY">Double Duty (2x Shifts / 2 Duties)</option>
                   <option value="CL">CL (Casual Leave)</option>
                   <option value="EL">EL (Earned Leave)</option>
                   <option value="HALF_DAY">Half Day</option>
