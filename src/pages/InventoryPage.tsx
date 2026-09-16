@@ -85,6 +85,16 @@ const getWeekSpanDisplay = (dateStr: string) => {
   return `${monday.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} – ${sunday.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`;
 };
 
+function getColourSwatch(c?: string): string {
+  if (!c) return "#71717A";
+  const lower = c.toLowerCase();
+  if (lower.includes("gold")) return "#D4AF37";
+  if (lower.includes("black")) return "#18181B";
+  if (lower.includes("na") || lower.includes("alum")) return "#CBD5E1";
+  if (lower.includes("ss") || lower.includes("steel") || lower.includes("silver")) return "#94A3B8";
+  return "#8B5CF6";
+}
+
 export const InventoryPage: React.FC = () => {
   const { setCurrentView } = useAdminAuth();
 
@@ -710,7 +720,7 @@ export const InventoryPage: React.FC = () => {
         {/* Global Action Buttons */}
         <div className="flex flex-wrap items-center gap-2 pt-1 sm:pt-0">
           <button
-            onClick={() => setIsQuickStockModalOpen(true)}
+            onClick={() => setCurrentView('inventory-add-sku')}
             className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white text-xs font-bold rounded-xl shadow-md shadow-violet-500/25 transition-all active:scale-95"
           >
             <Sparkles className="w-3.5 h-3.5" />
@@ -1104,7 +1114,7 @@ export const InventoryPage: React.FC = () => {
                 <Boxes className="w-8 h-8 mx-auto mb-2 text-slate-300 dark:text-[#52525B]" />
                 <p className="font-semibold text-xs text-slate-600 dark:text-[#A1A1AA]">No inventory records found</p>
                 <button
-                  onClick={() => setIsQuickStockModalOpen(true)}
+                  onClick={() => setCurrentView('inventory-add-sku')}
                   className="mt-3 px-3 py-1.5 bg-[#8B5CF6] text-white rounded-xl text-xs font-bold"
                 >
                   + Add SKU & Stock
@@ -1162,6 +1172,33 @@ export const InventoryPage: React.FC = () => {
                             [{item.branch?.code || 'DEL'}] {item.branch?.name || 'Facility'}
                           </span>
                         </div>
+
+                        {(((item.product as any)?.finish || (item.product?.attributes as any)?.finish) ||
+                          ((item.product as any)?.colour || (item.product?.attributes as any)?.colour || (item.product?.attributes as any)?.color || (item.product?.colours && item.product?.colours[0])) ||
+                          ((item.product as any)?.dimensions?.height || (item.product as any)?.dimensions?.width || (item.product as any)?.dimensions?.length || (item.product?.attributes as any)?.height || (item.product?.attributes as any)?.width || (item.product?.attributes as any)?.length)) && (
+                          <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
+                            {((item.product as any)?.finish || (item.product?.attributes as any)?.finish) && (
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-[#8B5CF6]/15 text-[#8B5CF6] dark:text-[#A855F7] border border-[#8B5CF6]/25">
+                                {(item.product as any)?.finish || (item.product?.attributes as any)?.finish}
+                              </span>
+                            )}
+                            {((item.product as any)?.colour || (item.product?.attributes as any)?.colour || (item.product?.attributes as any)?.color || (item.product?.colours && item.product?.colours[0])) && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-200/80 dark:bg-[#27272A] text-slate-700 dark:text-[#D4D4D8] border border-slate-300 dark:border-[#3F3F46]">
+                                <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: getColourSwatch((item.product as any)?.colour || (item.product?.attributes as any)?.colour || (item.product?.attributes as any)?.color || (item.product?.colours && item.product?.colours[0])) }} />
+                                {(item.product as any)?.colour || (item.product?.attributes as any)?.colour || (item.product?.attributes as any)?.color || (item.product?.colours && item.product?.colours[0])}
+                              </span>
+                            )}
+                            {((item.product as any)?.dimensions?.height || (item.product as any)?.dimensions?.width || (item.product as any)?.dimensions?.length || (item.product?.attributes as any)?.height || (item.product?.attributes as any)?.width || (item.product?.attributes as any)?.length) && (
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-mono text-slate-600 dark:text-[#A1A1AA] bg-slate-100 dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A]">
+                                {[
+                                  ((item.product as any)?.dimensions?.height || (item.product?.attributes as any)?.height) ? `${(item.product as any)?.dimensions?.height || (item.product?.attributes as any)?.height}H` : '',
+                                  ((item.product as any)?.dimensions?.width || (item.product?.attributes as any)?.width) ? `${(item.product as any)?.dimensions?.width || (item.product?.attributes as any)?.width}W` : '',
+                                  ((item.product as any)?.dimensions?.length || (item.product?.attributes as any)?.length) ? `${(item.product as any)?.dimensions?.length || (item.product?.attributes as any)?.length}L` : '',
+                                ].filter(Boolean).join(' × ')} {((item.product as any)?.dimensions?.unit || (item.product?.attributes as any)?.unit || 'mm')}
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -1284,7 +1321,7 @@ export const InventoryPage: React.FC = () => {
                         </button>
                       ) : (
                         <button
-                          onClick={() => setIsQuickStockModalOpen(true)}
+                          onClick={() => setCurrentView('inventory-add-sku')}
                           className="mt-3 px-3 py-1 bg-[#8B5CF6] text-white hover:bg-[#7C3AED] rounded-lg text-xs font-bold transition"
                         >
                           + Add New SKU & Stock
@@ -1342,6 +1379,32 @@ export const InventoryPage: React.FC = () => {
                                   </>
                                 )}
                               </div>
+                              {(((item.product as any)?.finish || (item.product?.attributes as any)?.finish) ||
+                                ((item.product as any)?.colour || (item.product?.attributes as any)?.colour || (item.product?.attributes as any)?.color || (item.product?.colours && item.product?.colours[0])) ||
+                                ((item.product as any)?.dimensions?.height || (item.product as any)?.dimensions?.width || (item.product as any)?.dimensions?.length || (item.product?.attributes as any)?.height || (item.product?.attributes as any)?.width || (item.product?.attributes as any)?.length)) && (
+                                <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                                  {((item.product as any)?.finish || (item.product?.attributes as any)?.finish) && (
+                                    <span className="px-1.5 py-0.2 rounded text-[9px] font-black bg-[#8B5CF6]/15 text-[#8B5CF6] dark:text-[#A855F7] border border-[#8B5CF6]/25">
+                                      {(item.product as any)?.finish || (item.product?.attributes as any)?.finish}
+                                    </span>
+                                  )}
+                                  {((item.product as any)?.colour || (item.product?.attributes as any)?.colour || (item.product?.attributes as any)?.color || (item.product?.colours && item.product?.colours[0])) && (
+                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-bold bg-slate-100 dark:bg-[#27272A] text-slate-700 dark:text-[#D4D4D8] border border-slate-200 dark:border-[#3F3F46]">
+                                      <span className="w-1.5 h-1.5 rounded-full border border-black/20 dark:border-white/20" style={{ backgroundColor: getColourSwatch((item.product as any)?.colour || (item.product?.attributes as any)?.colour || (item.product?.attributes as any)?.color || (item.product?.colours && item.product?.colours[0])) }} />
+                                      {(item.product as any)?.colour || (item.product?.attributes as any)?.colour || (item.product?.attributes as any)?.color || (item.product?.colours && item.product?.colours[0])}
+                                    </span>
+                                  )}
+                                  {((item.product as any)?.dimensions?.height || (item.product as any)?.dimensions?.width || (item.product as any)?.dimensions?.length || (item.product?.attributes as any)?.height || (item.product?.attributes as any)?.width || (item.product?.attributes as any)?.length) && (
+                                    <span className="px-1.5 py-0.2 rounded text-[9px] font-mono text-slate-600 dark:text-[#A1A1AA] bg-slate-100/80 dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A]">
+                                      {[
+                                        ((item.product as any)?.dimensions?.height || (item.product?.attributes as any)?.height) ? `${(item.product as any)?.dimensions?.height || (item.product?.attributes as any)?.height}H` : '',
+                                        ((item.product as any)?.dimensions?.width || (item.product?.attributes as any)?.width) ? `${(item.product as any)?.dimensions?.width || (item.product?.attributes as any)?.width}W` : '',
+                                        ((item.product as any)?.dimensions?.length || (item.product?.attributes as any)?.length) ? `${(item.product as any)?.dimensions?.length || (item.product?.attributes as any)?.length}L` : '',
+                                      ].filter(Boolean).join(' × ')} {((item.product as any)?.dimensions?.unit || (item.product?.attributes as any)?.unit || 'mm')}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           </div>
                         </td>

@@ -29,6 +29,9 @@ import {
   Sparkles,
   Flame,
   Percent,
+  Palette,
+  Ruler,
+  Layers,
 } from "lucide-react";
 import { fetchAdminApi } from "../api/adminApi";
 import { useAdminAuth } from "../context/AdminAuthContext";
@@ -46,6 +49,32 @@ function normalizeStatus(status: string): "ACTIVE" | "INACTIVE" | "OUT_OF_STOCK"
   if (s === "ACTIVE") return "ACTIVE";
   if (s === "OUT_OF_STOCK") return "OUT_OF_STOCK";
   return "INACTIVE";
+}
+
+function getColourSwatch(c?: string): string {
+  if (!c) return "#71717A";
+  const lower = c.toLowerCase();
+  if (lower.includes("gold")) return "#D4AF37";
+  if (lower.includes("black")) return "#18181B";
+  if (lower.includes("na") || lower.includes("alum")) return "#CBD5E1";
+  if (lower.includes("ss") || lower.includes("steel") || lower.includes("silver")) return "#94A3B8";
+  return "#8B5CF6";
+}
+
+function formatDims(dims?: any, attrs?: any): string | null {
+  const d = dims || (attrs && (attrs.height || attrs.width || attrs.length) ? {
+    height: attrs.height,
+    width: attrs.width,
+    length: attrs.length,
+    unit: attrs.unit || 'mm',
+  } : null);
+  if (!d) return null;
+  const parts: string[] = [];
+  if (d.height) parts.push(`${d.height}H`);
+  if (d.width) parts.push(`${d.width}W`);
+  if (d.length) parts.push(`${d.length}L`);
+  if (parts.length === 0) return null;
+  return `${parts.join(' × ')} ${d.unit || 'mm'}`;
 }
 
 const PAGE_SIZE = 5;
@@ -146,9 +175,20 @@ function ViewDrawer({ product: viewProduct, categories, onClose, onEdit }: ViewD
 
   const catName = categories.find((c) => String(c.id) === String(viewProduct.categoryId))?.name || viewProduct.categoryId || "Unknown Category";
 
+  const finish = viewProduct.finish || (viewProduct.attributes as any)?.finish;
+  const colour = viewProduct.colour || (viewProduct.attributes as any)?.colour || (viewProduct.attributes as any)?.color || (viewProduct.colours && viewProduct.colours[0]);
+  const dims = viewProduct.dimensions || ((viewProduct.attributes as any)?.height || (viewProduct.attributes as any)?.width || (viewProduct.attributes as any)?.length ? { height: (viewProduct.attributes as any).height, width: (viewProduct.attributes as any).width, length: (viewProduct.attributes as any).length, unit: (viewProduct.attributes as any).unit || 'mm' } : undefined);
+  const dimStr = formatDims(dims, viewProduct.attributes);
+
   const details = [
     { icon: <Hash size={14} />, label: "Product ID", value: String(viewProduct.id), mono: true },
     { icon: <Tag size={14} />, label: "SKU", value: viewProduct.sku || "—", mono: true },
+    ...(finish ? [{ icon: <Sparkles size={14} />, label: "Finish", value: finish, mono: false, badge: true }] : []),
+    ...(colour ? [{ icon: <Palette size={14} />, label: "Colour", value: colour, mono: false, colourDot: getColourSwatch(colour) }] : []),
+    ...(dimStr ? [{ icon: <Ruler size={14} />, label: "Dimensions", value: dimStr, mono: true }] : []),
+    ...(dims?.height ? [{ icon: <Ruler size={14} />, label: "Height", value: `${dims.height} mm`, mono: true }] : []),
+    ...(dims?.width ? [{ icon: <Ruler size={14} />, label: "Width", value: `${dims.width} mm`, mono: true }] : []),
+    ...(dims?.length ? [{ icon: <Ruler size={14} />, label: "Length", value: `${dims.length} mm`, mono: true }] : []),
     { icon: <IndianRupee size={14} />, label: "Price", value: `₹${viewProduct.price?.toLocaleString('en-IN')}`, mono: true },
     { icon: <IndianRupee size={14} />, label: "Sale Price", value: (viewProduct.salesPrice || viewProduct.salePrice) ? `₹${(viewProduct.salesPrice || viewProduct.salePrice)?.toLocaleString('en-IN')}` : "—", mono: true },
     { icon: <Package size={14} />, label: "Stock Level", value: `${viewProduct.stock} units`, mono: false },
@@ -233,15 +273,26 @@ function ViewDrawer({ product: viewProduct, categories, onClose, onEdit }: ViewD
 
           <div className="px-5 py-4 space-y-1">
             <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-[#52525B] mb-3">Product Information</p>
-            {details.map(({ icon, label, value, mono }) => (
+            {details.map(({ icon, label, value, mono, badge, colourDot }: any) => (
               <div key={label} className="flex items-center justify-between py-2.5 border-b border-slate-100 dark:border-[#27272A] last:border-0">
                 <div className="flex items-center gap-2 text-slate-400 dark:text-[#71717A]">
                   <span className="text-[#8B5CF6]/70">{icon}</span>
                   <span className="text-[11px] font-semibold uppercase tracking-wide">{label}</span>
                 </div>
-                <span className={`text-xs font-bold text-right max-w-[55%] truncate ${
-                  mono ? "font-mono text-[#8B5CF6] dark:text-[#A855F7]" : "text-slate-800 dark:text-[#FAFAFA]"
-                }`}>{value}</span>
+                {colourDot ? (
+                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-bold bg-slate-100 dark:bg-[#27272A] text-slate-800 dark:text-[#FAFAFA] border border-slate-200 dark:border-[#3F3F46]">
+                    <span className="w-2.5 h-2.5 rounded-full border border-black/20 dark:border-white/20" style={{ backgroundColor: colourDot }} />
+                    {value}
+                  </span>
+                ) : badge ? (
+                  <span className="px-2 py-0.5 rounded-md text-xs font-black bg-[#8B5CF6]/15 text-[#8B5CF6] dark:text-[#A855F7] border border-[#8B5CF6]/30">
+                    {value}
+                  </span>
+                ) : (
+                  <span className={`text-xs font-bold text-right max-w-[55%] truncate ${
+                    mono ? "font-mono text-[#8B5CF6] dark:text-[#A855F7]" : "text-slate-800 dark:text-[#FAFAFA]"
+                  }`}>{value}</span>
+                )}
               </div>
             ))}
           </div>
@@ -327,6 +378,7 @@ export function ProductsPage() {
   const [statusFilter, setStatusFilter] = useState<"ALL" | "ACTIVE" | "INACTIVE" | "OUT_OF_STOCK">("ALL");
   const [categoryFilter, setCategoryFilter] = useState<string>("ALL");
   const [quickFilter, setQuickFilter] = useState<"ALL" | "IN_STOCK" | "OUT_OF_STOCK" | "FEATURED" | "BESTSELLER" | "OFFER" | "NEW">("ALL");
+  const [finishFilter, setFinishFilter] = useState<"ALL" | "SS" | "NA" | "NYLON">("ALL");
   const [sortField, setSortField] = useState<"name" | "price" | "stock" | "id">("id");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [showFilters, setShowFilters] = useState(false);
@@ -340,7 +392,7 @@ export function ProductsPage() {
   // Reset page on filter changes
   useEffect(() => {
     setPage(1);
-  }, [debouncedSearch, statusFilter, categoryFilter, quickFilter]);
+  }, [debouncedSearch, statusFilter, categoryFilter, quickFilter, finishFilter]);
 
   // Modals
   const [deleteModal, setDeleteModal] = useState<ProductItem | null>(null);
@@ -365,6 +417,7 @@ export function ProductsPage() {
       if (debouncedSearch.trim()) params.set("search", debouncedSearch.trim());
       if (statusFilter !== "ALL") params.set("status", statusFilter);
       if (categoryFilter !== "ALL") params.set("categoryId", categoryFilter);
+      if (finishFilter !== "ALL") params.set("finish", finishFilter);
       if (quickFilter === "IN_STOCK") params.set("inStock", "true");
       if (quickFilter === "OUT_OF_STOCK") params.set("inStock", "false");
       if (quickFilter === "FEATURED") params.set("isFeatured", "true");
@@ -398,7 +451,7 @@ export function ProductsPage() {
       setLoading(false);
       setIsSyncing(false);
     }
-  }, [page, debouncedSearch, statusFilter, categoryFilter, quickFilter, sortField, sortDir]);
+  }, [page, debouncedSearch, statusFilter, categoryFilter, quickFilter, finishFilter, sortField, sortDir]);
 
   useEffect(() => {
     fetchData();
@@ -556,6 +609,23 @@ export function ProductsPage() {
                 </button>
               ))}
             </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-[#71717A]">Finish:</span>
+              {(["ALL", "SS", "NA", "NYLON"]).map((f) => (
+                <button
+                  key={f}
+                  type="button"
+                  onClick={() => { setFinishFilter(f as any); setPage(1); }}
+                  className={`px-3 py-1 rounded-lg text-[11px] font-bold border transition-colors ${
+                    finishFilter === f
+                      ? "bg-[#8B5CF6] text-white border-[#8B5CF6]"
+                      : "bg-slate-50 dark:bg-[#09090B] text-slate-600 dark:text-[#A1A1AA] border-slate-200 dark:border-[#27272A] hover:border-[#8B5CF6] hover:text-[#8B5CF6]"
+                  }`}
+                >
+                  {f === "ALL" ? "All Finishes" : f}
+                </button>
+              ))}
+            </div>
           </div>
         )}
 
@@ -583,6 +653,10 @@ export function ProductsPage() {
                 const st = normalizeStatus(p.status);
                 const catName = categories.find((c) => String(c.id) === String(p.categoryId))?.name || "Uncategorized";
                 const stockInfo = getStockStatus(p.stock, p.reorderLevel);
+                const finish = p.finish || (p.attributes as any)?.finish;
+                const colour = p.colour || (p.attributes as any)?.colour || (p.attributes as any)?.color || (p.colours && p.colours[0]);
+                const dims = p.dimensions || ((p.attributes as any)?.height || (p.attributes as any)?.width || (p.attributes as any)?.length ? { height: (p.attributes as any).height, width: (p.attributes as any).width, length: (p.attributes as any).length, unit: (p.attributes as any).unit || 'mm' } : undefined);
+                const dimStr = formatDims(dims, p.attributes);
 
                 return (
                   <div
@@ -614,6 +688,26 @@ export function ProductsPage() {
                           {p.name}
                         </h4>
                         <p className="text-[10px] text-slate-500 dark:text-[#A1A1AA] mt-0.5">{catName}</p>
+                        {(finish || colour || dimStr) && (
+                          <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
+                            {finish && (
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-[#8B5CF6]/15 text-[#8B5CF6] dark:text-[#A855F7] border border-[#8B5CF6]/25">
+                                {finish}
+                              </span>
+                            )}
+                            {colour && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-200/80 dark:bg-[#27272A] text-slate-700 dark:text-[#D4D4D8] border border-slate-300 dark:border-[#3F3F46]">
+                                <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: getColourSwatch(colour) }} />
+                                {colour}
+                              </span>
+                            )}
+                            {dimStr && (
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-mono text-slate-600 dark:text-[#A1A1AA] bg-slate-100 dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A]">
+                                {dimStr}
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -730,6 +824,10 @@ export function ProductsPage() {
                     const st = normalizeStatus(p.status);
                     const catName = categories.find(c => String(c.id) === String(p.categoryId))?.name || "Uncategorized";
                     const stockInfo = getStockStatus(p.stock, p.reorderLevel);
+                    const finish = p.finish || (p.attributes as any)?.finish;
+                    const colour = p.colour || (p.attributes as any)?.colour || (p.attributes as any)?.color || (p.colours && p.colours[0]);
+                    const dims = p.dimensions || ((p.attributes as any)?.height || (p.attributes as any)?.width || (p.attributes as any)?.length ? { height: (p.attributes as any).height, width: (p.attributes as any).width, length: (p.attributes as any).length, unit: (p.attributes as any).unit || 'mm' } : undefined);
+                    const dimStr = formatDims(dims, p.attributes);
 
                     return (
                       <tr key={p.id} className="hover:bg-slate-50 dark:hover:bg-[#27272A]/40 transition-colors group">
@@ -742,9 +840,27 @@ export function ProductsPage() {
                                 {p.name?.[0]?.toUpperCase() || "P"}
                               </div>
                             )}
-                            <div>
+                            <div className="min-w-0">
                               <p className="font-bold text-slate-900 dark:text-[#FAFAFA] line-clamp-1">{p.name}</p>
-                              <p className="text-[10px] font-mono text-[#8B5CF6] dark:text-[#A855F7]">{p.sku}</p>
+                              <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                                <span className="text-[10px] font-mono text-[#8B5CF6] dark:text-[#A855F7]">{p.sku}</span>
+                                {finish && (
+                                  <span className="px-1.5 py-0.2 rounded text-[9px] font-black bg-[#8B5CF6]/15 text-[#8B5CF6] dark:text-[#A855F7] border border-[#8B5CF6]/25">
+                                    {finish}
+                                  </span>
+                                )}
+                                {colour && (
+                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-bold bg-slate-100 dark:bg-[#27272A] text-slate-700 dark:text-[#D4D4D8] border border-slate-200 dark:border-[#3F3F46]">
+                                    <span className="w-1.5 h-1.5 rounded-full border border-black/20 dark:border-white/20" style={{ backgroundColor: getColourSwatch(colour) }} />
+                                    {colour}
+                                  </span>
+                                )}
+                                {dimStr && (
+                                  <span className="px-1.5 py-0.2 rounded text-[9px] font-mono text-slate-600 dark:text-[#A1A1AA] bg-slate-100/80 dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A]">
+                                    {dimStr}
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </div>
                         </td>

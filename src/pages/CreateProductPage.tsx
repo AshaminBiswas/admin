@@ -28,9 +28,28 @@ import {
   Globe,
   Copy,
   Check,
+  Palette,
+  Ruler,
 } from "lucide-react";
 import { Category, MaterialItem } from "../types/admin";
 import { materialsApi } from "../api/adminApi";
+
+export type FinishType = 'SS' | 'NA' | 'NYLON';
+
+export const FINISH_COLOUR_MAP: Record<FinishType, { name: string; hex: string }[]> = {
+  SS: [
+    { name: 'Golden', hex: '#F59E0B' },
+    { name: 'Black', hex: '#18181B' },
+    { name: 'SS', hex: '#94A3B8' },
+  ],
+  NA: [
+    { name: 'Black', hex: '#18181B' },
+    { name: 'NA Aluminium', hex: '#CBD5E1' },
+  ],
+  NYLON: [
+    { name: 'Black', hex: '#18181B' },
+  ],
+};
 
 export function CreateProductPage() {
   const { setCurrentView } = useAdminAuth();
@@ -105,6 +124,19 @@ export function CreateProductPage() {
   const [compatibleFor, setCompatibleFor] = useState(""); // Comma separated
   const [warranty, setWarranty] = useState("");
   const [weight, setWeight] = useState("");
+  
+  // Hardware Finish & Dependent Colour
+  const [finish, setFinish] = useState<FinishType | "">("SS");
+  const [colour, setColour] = useState<string>("Golden");
+
+  const handleFinishChange = (newFinish: FinishType) => {
+    setFinish(newFinish);
+    const validColours = FINISH_COLOUR_MAP[newFinish];
+    const stillValid = validColours.some((c) => c.name.toLowerCase() === colour.toLowerCase());
+    if (!stillValid) {
+      setColour(validColours[0].name);
+    }
+  };
   
   // Dimensions
   const [dimLength, setDimLength] = useState("");
@@ -307,6 +339,12 @@ export function CreateProductPage() {
     if (p.dimWidth) setDimWidth(String(p.dimWidth));
     if (p.dimHeight) setDimHeight(String(p.dimHeight));
     if (p.dimUnit) setDimUnit(p.dimUnit);
+    const selFinish = p.finish || p.attributes?.finish;
+    if (selFinish && ['SS', 'NA', 'NYLON'].includes(selFinish)) {
+      setFinish(selFinish);
+    }
+    const selCol = p.colour || (Array.isArray(p.colours) && p.colours[0]) || p.attributes?.colour;
+    if (selCol) setColour(String(selCol));
     if (p.colours) setColours(Array.isArray(p.colours) ? p.colours.join(", ") : p.colours);
     if (p.tags) setTags(Array.isArray(p.tags) ? p.tags.join(", ") : p.tags);
     if (p.metaKeywords || p.seo?.metaKeywords) setMetaKeywords(p.metaKeywords || p.seo?.metaKeywords || "");
@@ -326,6 +364,7 @@ export function CreateProductPage() {
     if (categories.length > 0) setCategoryId(String(categories[0].id));
     setPrice(""); setSalesPrice(""); setOfferPrice("");
     setStock(""); setReorderLevel("");
+    setFinish("SS"); setColour("Golden");
     setThumbnail(""); setImages("");
     setStatus("ACTIVE"); setIsVisible(true); setIsFeatured(false); setIsBestseller(false); setIsInOffer(false); setIsNewArrival(false);
     setMfgGenericName(""); setMfgCountry("India"); setMfgName(""); setMfgAddress("");
@@ -401,6 +440,14 @@ export function CreateProductPage() {
       }
     });
 
+    if (finish) attrsObj.finish = finish;
+    if (colour) attrsObj.colour = colour;
+
+    let finalColours = colours.split(",").map(c => c.trim()).filter(Boolean);
+    if (colour && !finalColours.some(c => c.toLowerCase() === colour.toLowerCase())) {
+      finalColours = [colour, ...finalColours];
+    }
+
     const cleanPayload: Record<string, any> = {
       name: name.trim(),
       slug: slug.trim() || undefined,
@@ -414,6 +461,8 @@ export function CreateProductPage() {
       offerPrice: offerPrice ? Number(offerPrice) : undefined,
       stock: Number(stock) || 0,
       reorderLevel: reorderLevel ? Number(reorderLevel) : undefined,
+      finish: finish || undefined,
+      colour: colour || undefined,
       thumbnail: thumbnail.trim() || undefined,
       image: thumbnail.trim() || (images.split(",").map(i => i.trim()).filter(Boolean)[0]) || undefined,
       images: images.split(",").map(i => i.trim()).filter(Boolean),
@@ -432,14 +481,14 @@ export function CreateProductPage() {
       compatibleFor: compatibleFor.split(",").map(c => c.trim()).filter(Boolean),
       warranty: warranty.trim() || undefined,
       weight: weight ? Number(weight) : undefined,
-      dimensions: (dimLength && dimWidth && dimHeight) ? {
-        length: Number(dimLength),
-        width: Number(dimWidth),
-        height: Number(dimHeight),
-        unit: dimUnit
+      dimensions: (dimLength || dimWidth || dimHeight) ? {
+        length: dimLength ? Number(dimLength) : undefined,
+        width: dimWidth ? Number(dimWidth) : undefined,
+        height: dimHeight ? Number(dimHeight) : undefined,
+        unit: dimUnit || "mm"
       } : undefined,
       attributes: Object.keys(attrsObj).length > 0 ? attrsObj : undefined,
-      colours: colours.split(",").map(c => c.trim()).filter(Boolean),
+      colours: finalColours,
       tags: tags.split(",").map(t => t.trim()).filter(Boolean),
       metaKeywords: metaKeywords.trim() || undefined,
       metaTitle: metaTitle.trim() || undefined,
@@ -792,6 +841,104 @@ export function CreateProductPage() {
             </div>
           </div>
 
+          {/* Hardware Finish & Dynamic Colour Specification */}
+          <div className={sectionContainerClass}>
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-[#27272A]">
+              <h4 className={sectionTitleClass}>
+                <Palette size={16} className="text-[#8B5CF6]" />
+                Hardware Finish & Colour Specification
+              </h4>
+              {finish && (
+                <span className="text-xs font-mono px-2 py-0.5 rounded bg-[#8B5CF6]/10 text-[#8B5CF6] border border-[#8B5CF6]/20 font-bold">
+                  {finish} {colour ? `• ${colour}` : ''}
+                </span>
+              )}
+            </div>
+
+            <div className="space-y-4 pt-1">
+              <div>
+                <label className={labelClass}>
+                  Material Finish <span className="text-slate-400 font-normal">(SS, NA, NYLON)</span>
+                </label>
+                <div className="grid grid-cols-3 gap-3">
+                  {(
+                    [
+                      { id: 'SS', label: 'SS', title: 'Stainless Steel', desc: 'Grade 304/316 Steel' },
+                      { id: 'NA', label: 'NA', title: 'Natural Anodised', desc: 'Anodised Aluminium' },
+                      { id: 'NYLON', label: 'NYLON', title: 'Nylon', desc: 'Polyamide 6 Polymer' },
+                    ] as const
+                  ).map((f) => {
+                    const isSelected = finish === f.id;
+                    return (
+                      <button
+                        key={f.id}
+                        type="button"
+                        onClick={() => handleFinishChange(f.id)}
+                        className={`p-3 rounded-xl border text-left transition-all ${
+                          isSelected
+                            ? 'border-[#8B5CF6] bg-[#8B5CF6]/10 text-slate-900 dark:text-[#FAFAFA] shadow-sm ring-1 ring-[#8B5CF6]'
+                            : 'border-slate-200 dark:border-[#27272A] bg-slate-50 dark:bg-[#09090B] text-slate-600 dark:text-[#A1A1AA] hover:border-slate-300 dark:hover:border-[#3F3F46]'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className={`text-xs font-bold ${isSelected ? 'text-[#8B5CF6]' : ''}`}>
+                            {f.label}
+                          </span>
+                          {isSelected && <CheckCircle2 className="w-3.5 h-3.5 text-[#8B5CF6]" />}
+                        </div>
+                        <p className="text-[11px] font-semibold text-slate-800 dark:text-[#FAFAFA] mt-1">
+                          {f.title}
+                        </p>
+                        <p className="text-[10px] text-slate-400 dark:text-[#71717A] mt-0.5">
+                          {f.desc}
+                        </p>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {finish && (
+                <div>
+                  <label className={labelClass}>
+                    Surface Colour / Shade <span className="text-slate-400 font-normal">(Dynamic for {finish})</span>
+                  </label>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {FINISH_COLOUR_MAP[finish].map((c) => {
+                      const isSelected = colour.toLowerCase() === c.name.toLowerCase();
+                      return (
+                        <button
+                          key={c.name}
+                          type="button"
+                          onClick={() => setColour(c.name)}
+                          className={`p-3 rounded-xl border flex items-center gap-3 text-left transition-all ${
+                            isSelected
+                              ? 'border-[#8B5CF6] bg-[#8B5CF6]/10 text-slate-900 dark:text-[#FAFAFA] shadow-sm ring-1 ring-[#8B5CF6]'
+                              : 'border-slate-200 dark:border-[#27272A] bg-slate-50 dark:bg-[#09090B] text-slate-600 dark:text-[#A1A1AA] hover:border-slate-300 dark:hover:border-[#3F3F46]'
+                          }`}
+                        >
+                          <div
+                            className="w-4 h-4 rounded-full border border-black/10 dark:border-white/20 shadow-inner flex-shrink-0"
+                            style={{ backgroundColor: c.hex }}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <p className={`text-xs font-bold truncate ${isSelected ? 'text-[#8B5CF6]' : ''}`}>
+                              {c.name}
+                            </p>
+                            <p className="text-[10px] text-slate-400 dark:text-[#71717A]">
+                              For {finish}
+                            </p>
+                          </div>
+                          {isSelected && <CheckCircle2 className="w-3.5 h-3.5 text-[#8B5CF6] flex-shrink-0" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* Specifications */}
           <div className={sectionContainerClass}>
             <h4 className={sectionTitleClass}><Box size={16} className="text-fuchsia-500" />Specifications & Dimensions</h4>
@@ -808,18 +955,23 @@ export function CreateProductPage() {
               </div>
               
               <div>
-                <label className={labelClass}>Dimensions</label>
-                <div className="flex items-center gap-2">
-                  <input type="number" step="0.1" value={dimLength} onChange={(e) => setDimLength(e.target.value)} placeholder="Length" className={inputClass} />
-                  <span className="text-slate-400">×</span>
-                  <input type="number" step="0.1" value={dimWidth} onChange={(e) => setDimWidth(e.target.value)} placeholder="Width" className={inputClass} />
-                  <span className="text-slate-400">×</span>
-                  <input type="number" step="0.1" value={dimHeight} onChange={(e) => setDimHeight(e.target.value)} placeholder="Height" className={inputClass} />
-                  <select value={dimUnit} onChange={(e) => setDimUnit(e.target.value)} className="bg-slate-50 dark:bg-[#09090B] px-3 py-2.5 rounded-xl text-sm border border-slate-200 dark:border-[#27272A] outline-none">
-                    <option value="mm">mm</option>
-                    <option value="cm">cm</option>
-                    <option value="in">in</option>
-                  </select>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className={labelClass}>Size & Dimensions <span className="text-slate-400 font-normal">(Optional — all in mm)</span></label>
+                  <span className="text-[11px] text-slate-400 font-mono">Unit: {dimUnit}</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="relative">
+                    <input type="number" step="any" min="0" value={dimHeight} onChange={(e) => setDimHeight(e.target.value)} placeholder="Height (optional)" className={`${inputClass} pr-10`} />
+                    <span className="absolute right-3 top-2.5 text-xs text-slate-400 font-mono">H mm</span>
+                  </div>
+                  <div className="relative">
+                    <input type="number" step="any" min="0" value={dimWidth} onChange={(e) => setDimWidth(e.target.value)} placeholder="Width (optional)" className={`${inputClass} pr-10`} />
+                    <span className="absolute right-3 top-2.5 text-xs text-slate-400 font-mono">W mm</span>
+                  </div>
+                  <div className="relative">
+                    <input type="number" step="any" min="0" value={dimLength} onChange={(e) => setDimLength(e.target.value)} placeholder="Length (optional)" className={`${inputClass} pr-10`} />
+                    <span className="absolute right-3 top-2.5 text-xs text-slate-400 font-mono">L mm</span>
+                  </div>
                 </div>
               </div>
 

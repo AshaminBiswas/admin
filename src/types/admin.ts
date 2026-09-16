@@ -158,7 +158,9 @@ export interface ProductItem {
     height?: number;
     unit?: string;
   };
-  attributes?: Record<string, string>;
+  attributes?: Record<string, any>;
+  finish?: 'SS' | 'NA' | 'NYLON' | string;
+  colour?: string;
   colours?: string[];
   tags?: string[];
   metaTitle?: string;
@@ -274,6 +276,8 @@ export type AdminView =
   | 'homepage'
   | 'invoice'
   | 'inventory'
+  | 'inventory-add-sku'
+  | 'add-sku'
   | 'logistics'
   | 'materials'
   | 'notification'
@@ -826,6 +830,16 @@ export interface InventoryItem {
     reorderLevel?: number | null;
     status: string;
     category?: { id: string; name: string } | null;
+    finish?: 'SS' | 'NA' | 'NYLON' | string | null;
+    colour?: string | null;
+    colours?: string[];
+    dimensions?: {
+      height?: number;
+      width?: number;
+      length?: number;
+      unit?: string;
+    } | null;
+    attributes?: Record<string, any> | null;
   };
   branch: {
     id: string;
@@ -1066,6 +1080,8 @@ export interface ProductDossier {
     thumbnail?: string | null;
     images?: string[];
     colours?: string[];
+    finish?: string | null;
+    colour?: string | null;
     createdAt: string;
     updatedAt: string;
     listedByName: string;

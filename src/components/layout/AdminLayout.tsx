@@ -43,6 +43,7 @@ const B2BPricingPage = lazyWithRetry(() => import("../../pages/B2BPricingPage").
 const VariantsPage = lazyWithRetry(() => import("../../pages/VariantsPage").then((m) => ({ default: m.VariantsPage })));
 const NotificationsPage = lazyWithRetry(() => import("../../pages/NotificationsPage").then((m) => ({ default: m.NotificationsPage })));
 const InventoryPage = lazyWithRetry(() => import("../../pages/InventoryPage").then((m) => ({ default: m.InventoryPage })));
+const AddSkuPage = lazyWithRetry(() => import("../../pages/AddSkuPage").then((m) => ({ default: m.AddSkuPage })));
 const ProductDossierPage = lazyWithRetry(() => import("../../pages/ProductDossierPage").then((m) => ({ default: m.ProductDossierPage })));
 const GSTInvoiceHub = lazyWithRetry(() => import("../../pages/GSTInvoiceHub"));
 const ProjectsPage = lazyWithRetry(() => import("../../pages/ProjectsPage").then((m) => ({ default: m.ProjectsPage })));
@@ -171,6 +172,9 @@ export function AdminLayout() {
         return <VariantsPage />;
       case "inventory":
         return <InventoryPage />;
+      case "inventory-add-sku":
+      case "add-sku":
+        return <AddSkuPage />;
       case "product-dossier":
       case "product-audit":
       case "inventory-dossier":

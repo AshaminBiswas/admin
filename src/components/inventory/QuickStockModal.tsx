@@ -11,6 +11,13 @@ export interface QuickStockModalProps {
   onSuccess: (data?: any) => void;
 }
 
+type FinishType = 'SS' | 'NA' | 'NYLON';
+const FINISH_COLOUR_MAP: Record<FinishType, string[]> = {
+  SS: ['Golden', 'Black', 'SS'],
+  NA: ['Black', 'NA Aluminium'],
+  NYLON: ['Black'],
+};
+
 export const QuickStockModal: React.FC<QuickStockModalProps> = ({ branches, categories, onClose, onSuccess }) => {
   const [sku, setSku] = useState<string>('');
   const [name, setName] = useState<string>('');
@@ -21,6 +28,20 @@ export const QuickStockModal: React.FC<QuickStockModalProps> = ({ branches, cate
   const [reorderLevel, setReorderLevel] = useState<number>(10);
   const [categoryId, setCategoryId] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
+
+  const [finish, setFinish] = useState<FinishType>('SS');
+  const [colour, setColour] = useState<string>('Golden');
+  const [height, setHeight] = useState<string>('');
+  const [width, setWidth] = useState<string>('');
+  const [length, setLength] = useState<string>('');
+
+  const handleFinishChange = (newFinish: FinishType) => {
+    setFinish(newFinish);
+    const validColours = FINISH_COLOUR_MAP[newFinish];
+    if (!validColours.includes(colour)) {
+      setColour(validColours[0]);
+    }
+  };
 
   const [existingProductInfo, setExistingProductInfo] = useState<{ id: string; name: string; stock: number; price?: number; reorderLevel?: number } | null>(null);
   const [checkingSku, setCheckingSku] = useState<boolean>(false);
@@ -103,6 +124,11 @@ export const QuickStockModal: React.FC<QuickStockModalProps> = ({ branches, cate
         reorderLevel: Number(reorderLevel) || 10,
         categoryId: categoryId || undefined,
         notes: notes.trim() || undefined,
+        finish,
+        colour,
+        height: height ? parseFloat(height) : undefined,
+        width: width ? parseFloat(width) : undefined,
+        length: length ? parseFloat(length) : undefined,
       });
 
       if (res && res.success !== false) {
@@ -193,6 +219,86 @@ export const QuickStockModal: React.FC<QuickStockModalProps> = ({ branches, cate
               onChange={(e) => setName(e.target.value)}
               className="w-full px-3 py-2 bg-slate-50 dark:bg-[#09090B] border border-slate-200 dark:border-[#27272A] rounded-xl text-xs font-medium text-slate-900 dark:text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
             />
+          </div>
+
+          {/* Finish & Colour */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-[#A1A1AA] mb-1">
+                Finish
+              </label>
+              <select
+                value={finish}
+                onChange={(e) => handleFinishChange(e.target.value as FinishType)}
+                className="w-full px-3 py-2 bg-slate-50 dark:bg-[#09090B] border border-slate-200 dark:border-[#27272A] rounded-xl text-xs font-semibold text-slate-800 dark:text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
+              >
+                <option value="SS">SS (Stainless Steel)</option>
+                <option value="NA">NA (Natural Anodised)</option>
+                <option value="NYLON">NYLON</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-[#A1A1AA] mb-1">
+                Colour
+              </label>
+              <select
+                value={colour}
+                onChange={(e) => setColour(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-50 dark:bg-[#09090B] border border-slate-200 dark:border-[#27272A] rounded-xl text-xs font-semibold text-slate-800 dark:text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
+              >
+                {FINISH_COLOUR_MAP[finish].map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Dimensions (in mm, not mandatory) */}
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-700 dark:text-[#A1A1AA] mb-1">
+                Height (mm)
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="any"
+                placeholder="Optional"
+                value={height}
+                onChange={(e) => setHeight(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-50 dark:bg-[#09090B] border border-slate-200 dark:border-[#27272A] rounded-xl text-xs text-slate-900 dark:text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-700 dark:text-[#A1A1AA] mb-1">
+                Width (mm)
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="any"
+                placeholder="Optional"
+                value={width}
+                onChange={(e) => setWidth(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-50 dark:bg-[#09090B] border border-slate-200 dark:border-[#27272A] rounded-xl text-xs text-slate-900 dark:text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-700 dark:text-[#A1A1AA] mb-1">
+                Length (mm)
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="any"
+                placeholder="Optional"
+                value={length}
+                onChange={(e) => setLength(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-50 dark:bg-[#09090B] border border-slate-200 dark:border-[#27272A] rounded-xl text-xs text-slate-900 dark:text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
+              />
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">

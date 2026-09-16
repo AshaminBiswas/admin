@@ -1096,12 +1096,17 @@ export const inventoryApi = {
     sku: string;
     name: string;
     branchId: string;
-    quantity: number;
+    quantity?: number;
     unitCost?: number;
     sellingPrice?: number;
     reorderLevel?: number;
     categoryId?: string;
     notes?: string;
+    finish?: 'SS' | 'NA' | 'NYLON';
+    colour?: string;
+    height?: number;
+    width?: number;
+    length?: number;
   }) => {
     try {
       const res = await fetchAdminApi<{ product: any; inventory: InventoryItem; movement: StockMovement }>(`/inventory/quick-stock`, {

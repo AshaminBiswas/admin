@@ -51,6 +51,16 @@ interface ProductDossierModalProps {
 
 type DossierTab = 'overview' | 'purchases' | 'sales' | 'movements' | 'timeline' | 'customers';
 
+function getColourSwatch(c?: string): string {
+  if (!c) return "#71717A";
+  const lower = c.toLowerCase();
+  if (lower.includes("gold")) return "#D4AF37";
+  if (lower.includes("black")) return "#18181B";
+  if (lower.includes("na") || lower.includes("alum")) return "#CBD5E1";
+  if (lower.includes("ss") || lower.includes("steel") || lower.includes("silver")) return "#94A3B8";
+  return "#8B5CF6";
+}
+
 export const ProductDossierModal: React.FC<ProductDossierModalProps> = ({
   isOpen,
   onClose,
@@ -500,6 +510,35 @@ export const ProductDossierModal: React.FC<ProductDossierModalProps> = ({
                           <span className="text-slate-500">SKU / Product Code:</span>
                           <span className="font-mono font-bold text-[#8B5CF6]">{prod.sku}</span>
                         </div>
+                        {((prod as any)?.finish || (prod?.attributes as any)?.finish) && (
+                          <div className="flex justify-between py-1.5">
+                            <span className="text-slate-500">Hardware Finish:</span>
+                            <span className="font-black px-2 py-0.5 rounded text-[10px] bg-[#8B5CF6]/15 text-[#8B5CF6] dark:text-[#A855F7] border border-[#8B5CF6]/25">
+                              {(prod as any)?.finish || (prod?.attributes as any)?.finish}
+                            </span>
+                          </div>
+                        )}
+                        {((prod as any)?.colour || (prod?.attributes as any)?.colour || (prod?.attributes as any)?.color || (prod?.colours && prod?.colours[0])) && (
+                          <div className="flex justify-between py-1.5">
+                            <span className="text-slate-500">Surface Colour:</span>
+                            <span className="font-bold text-slate-800 dark:text-[#FAFAFA] inline-flex items-center gap-1.5">
+                              <span className="w-2.5 h-2.5 rounded-full border border-black/20 dark:border-white/20" style={{ backgroundColor: getColourSwatch((prod as any)?.colour || (prod?.attributes as any)?.colour || (prod?.attributes as any)?.color || (prod?.colours && prod?.colours[0])) }} />
+                              {(prod as any)?.colour || (prod?.attributes as any)?.colour || (prod?.attributes as any)?.color || (prod?.colours && prod?.colours[0])}
+                            </span>
+                          </div>
+                        )}
+                        {(prod?.dimensions?.height || prod?.dimensions?.width || prod?.dimensions?.length || (prod?.attributes as any)?.height || (prod?.attributes as any)?.width || (prod?.attributes as any)?.length) && (
+                          <div className="flex justify-between py-1.5">
+                            <span className="text-slate-500">Dimensions (mm):</span>
+                            <span className="font-mono font-bold text-slate-800 dark:text-[#FAFAFA]">
+                              {[
+                                (prod?.dimensions?.height || (prod?.attributes as any)?.height) ? `${prod?.dimensions?.height || (prod?.attributes as any)?.height}H` : '',
+                                (prod?.dimensions?.width || (prod?.attributes as any)?.width) ? `${prod?.dimensions?.width || (prod?.attributes as any)?.width}W` : '',
+                                (prod?.dimensions?.length || (prod?.attributes as any)?.length) ? `${prod?.dimensions?.length || (prod?.attributes as any)?.length}L` : '',
+                              ].filter(Boolean).join(' × ')} {prod?.dimensions?.unit || (prod?.attributes as any)?.unit || 'mm'}
+                            </span>
+                          </div>
+                        )}
                         <div className="flex justify-between py-1.5">
                           <span className="text-slate-500">Category / Hierarchy:</span>
                           <span className="font-semibold text-slate-800 dark:text-[#FAFAFA]">{prod.categoryName}</span>
