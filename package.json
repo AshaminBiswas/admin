@@ -11,8 +11,10 @@
   },
   "dependencies": {
     "@types/dompurify": "^3.0.5",
+    "@types/jsbarcode": "^3.11.4",
     "clsx": "^2.1.1",
     "dompurify": "^3.4.14",
+    "jsbarcode": "^3.12.3",
     "jsqr": "^1.4.0",
     "lucide-react": "^0.475.0",
     "pdfjs-dist": "^6.3.289",

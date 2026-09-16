@@ -40,11 +40,50 @@ import {
   Image as ImageIcon,
   ShieldAlert,
 } from 'lucide-react';
+import JsBarcode from 'jsbarcode';
 import { barcodeApi, inventoryApi, fetchAdminApi, API_BASE_URL } from '../api/adminApi';
 import type { BarcodeScanResult, Branch } from '../types/admin';
 import { useAdminAuth } from '../context/AdminAuthContext';
 
 type TabMode = 'scanner' | 'studio' | 'dispatch-queue';
+
+/**
+ * High-performance vector Code-128 SVG generator.
+ * Completely offline, zero network requests, 100% crisp vector output for thermal printers.
+ */
+const BarcodeSvg: React.FC<{
+  value: string;
+  className?: string;
+  width?: number;
+  height?: number;
+  displayValue?: boolean;
+}> = ({ value, className = '', width = 2, height = 50, displayValue = true }) => {
+  const svgRef = useRef<SVGSVGElement | null>(null);
+
+  useEffect(() => {
+    if (svgRef.current && value && value.trim()) {
+      try {
+        JsBarcode(svgRef.current, value.trim().toUpperCase(), {
+          format: 'CODE128',
+          lineColor: '#000000',
+          width,
+          height,
+          displayValue,
+          font: 'monospace',
+          fontSize: 13,
+          textMargin: 2,
+          margin: 0,
+        });
+      } catch (err) {
+        console.warn('[BarcodeSvg] Error generating barcode:', err);
+      }
+    }
+  }, [value, width, height, displayValue]);
+
+  if (!value) return null;
+
+  return <svg ref={svgRef} className={className} />;
+};
 
 export const BarcodePage: React.FC = () => {
   const { setCurrentView } = useAdminAuth();
@@ -922,14 +961,16 @@ export const BarcodePage: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Barcode & QR Code Inline Preview */}
-                    <div className="flex sm:flex-col items-center sm:items-end gap-2 shrink-0">
-                      <img
-                        src={`${API_BASE_URL}${scanResult.barcodeUrl}`}
-                        alt="Barcode"
-                        className="h-9 max-w-[150px] object-contain bg-white p-1 rounded border border-slate-200 dark:border-[#27272A]"
+                    {/* Barcode Inline Preview (Vector SVG - 100% Reliable) */}
+                    <div className="flex sm:flex-col items-center sm:items-end gap-1 shrink-0 bg-white p-2 rounded-xl border border-slate-200 dark:border-[#27272A] shadow-sm">
+                      <BarcodeSvg
+                        value={scanResult.product.sku}
+                        width={1.6}
+                        height={34}
+                        displayValue={true}
+                        className="max-w-[160px] h-auto"
                       />
-                      <span className="text-[9px] font-mono text-slate-400 uppercase tracking-wider">
+                      <span className="text-[9px] font-mono text-slate-500 uppercase tracking-wider font-bold">
                         Code-128 Verified
                       </span>
                     </div>
@@ -1365,26 +1406,14 @@ export const BarcodePage: React.FC = () => {
                       aspectRatio: labelSize === '80x40' ? '80/40' : '58/40',
                     }}
                   >
-                    {/* Top Row: Brand & Product Info + QR */}
-                    <div className="flex items-start justify-between gap-2 border-b border-black/80 pb-1.5">
+                    {/* Top Row: Brand & Bold SKU + QR */}
+                    <div className="flex items-start justify-between gap-2 border-b-2 border-black pb-2">
                       <div className="min-w-0 flex-1">
-                        <div className="text-[9px] font-black uppercase tracking-wider text-black/70">
+                        <div className="text-[10px] font-black uppercase tracking-wider text-black/70">
                           PACIFIC HARDWARE (PRC)
                         </div>
-                        <div className="text-xs font-black truncate text-black leading-tight mt-0.5">
-                          {selectedStudioProduct.name}
-                        </div>
-                        <div className="flex items-center gap-2 mt-0.5 text-[9px] text-black/80">
-                          <span>Fin: {selectedStudioProduct.finish || 'SS'}</span>
-                          <span>Col: {selectedStudioProduct.colour || 'Golden'}</span>
-                          <span>
-                            {selectedStudioProduct.dimensions?.height
-                              ? `${selectedStudioProduct.dimensions.height}×${selectedStudioProduct.dimensions.width}mm`
-                              : ''}
-                          </span>
-                        </div>
-                        <div className="text-[11px] font-black text-black mt-0.5">
-                          MRP: ₹{Number(selectedStudioProduct.price || 0).toLocaleString('en-IN')}
+                        <div className="text-sm sm:text-base font-black font-mono tracking-tight text-black mt-1">
+                          SKU: {selectedStudioProduct.sku}
                         </div>
                       </div>
 
@@ -1395,16 +1424,18 @@ export const BarcodePage: React.FC = () => {
                           `https://pacificrestroomcubicles.com/product/${selectedStudioProduct.slug || selectedStudioProduct.sku}`
                         )}
                         alt="QR Code"
-                        className="w-11 h-11 border border-black/60 p-0.5 shrink-0"
+                        className="w-12 h-12 border border-black/60 p-0.5 shrink-0 bg-white"
                       />
                     </div>
 
-                    {/* Bottom: Code-128 Linear Barcode */}
-                    <div className="mt-2 text-center">
-                      <img
-                        src={barcodeApi.getBarcodeImageUrl(selectedStudioProduct.sku)}
-                        alt={selectedStudioProduct.sku}
-                        className="w-full h-12 object-contain mx-auto"
+                    {/* Bottom: Code-128 Linear Barcode (Vector SVG - 100% Crisp & Reliable) */}
+                    <div className="mt-3 text-center flex items-center justify-center">
+                      <BarcodeSvg
+                        value={selectedStudioProduct.sku}
+                        width={labelSize === '80x40' ? 2.4 : 1.9}
+                        height={labelSize === '80x40' ? 52 : 44}
+                        displayValue={true}
+                        className="max-w-full h-auto mx-auto"
                       />
                     </div>
                   </div>
@@ -1476,10 +1507,10 @@ export const BarcodePage: React.FC = () => {
             position: fixed;
             left: 0;
             top: 0;
-            width: 58mm !important;
-            max-width: 58mm !important;
+            width: ${labelSize === '80x40' ? '80mm' : '58mm'} !important;
+            max-width: ${labelSize === '80x40' ? '80mm' : '58mm'} !important;
             margin: 0 !important;
-            padding: 2mm !important;
+            padding: 3mm !important;
             box-shadow: none !important;
             border: none !important;
           }
