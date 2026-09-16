@@ -951,7 +951,7 @@ export const inventoryApi = {
       method: 'DELETE',
     }),
 
-  // 3. Inventory Stock
+  // 3. Inventory Stock (Fast path without redundant secondary catalog fetch)
   getInventory: async (params?: { page?: number; limit?: number; branchId?: string; productId?: string; search?: string; lowStock?: boolean; sortBy?: string; sortOrder?: 'asc' | 'desc' }) => {
     const query = new URLSearchParams();
     if (params?.page) query.append('page', String(params.page));
@@ -974,44 +974,47 @@ export const inventoryApi = {
         invItems = res.data;
         totalCount = (res as any)?.pagination?.total || (res as any)?.total || res.data.length;
         pagesCount = (res as any)?.pagination?.totalPages || (res as any)?.totalPages || 1;
+
+        return {
+          success: true,
+          data: invItems,
+          total: totalCount,
+          totalPages: pagesCount,
+        };
       }
-    } catch {}
+    } catch (err) {
+      console.warn('[inventoryApi.getInventory] DB fetch warning:', err);
+    }
 
-    // Always ensure catalog products are merged in so newly created products are immediately visible
-    try {
-      const prodRes = await fetchAdminApi<any>(`/products?page=${params?.page || 1}&limit=${params?.limit || 50}${params?.search ? `&search=${encodeURIComponent(params.search)}` : ''}`);
-      const prodList = Array.isArray(prodRes?.data) ? prodRes.data : Array.isArray(prodRes?.products) ? prodRes.products : Array.isArray(prodRes) ? prodRes : [];
+    // Only if inventory table is completely empty, fallback once to active catalog products
+    if (invItems.length === 0 && !params?.search && !params?.lowStock) {
+      try {
+        const prodRes = await fetchAdminApi<any>(`/products?page=${params?.page || 1}&limit=${params?.limit || 25}`);
+        const prodList = Array.isArray(prodRes?.data) ? prodRes.data : Array.isArray(prodRes?.products) ? prodRes.products : Array.isArray(prodRes) ? prodRes : [];
 
-      if (prodList.length > 0) {
-        const existingProductIds = new Set(invItems.map((item) => item.productId || item.product?.id));
-        const missingProducts = prodList.filter(
-          (p: any) =>
-            !existingProductIds.has(p.id) &&
-            (Number(p.stock) || 0) > 0 &&
-            p.status !== 'INACTIVE' &&
-            !p.deletedAt
-        );
+        if (prodList.length > 0) {
+          const missingProducts = prodList.filter((p: any) => (Number(p.stock) || 0) > 0 && p.status !== 'INACTIVE' && !p.deletedAt);
+          const mappedMissing: InventoryItem[] = missingProducts.map((p: any) => ({
+            id: `inv-${p.id}`,
+            productId: p.id,
+            branchId: 'branch-del-01',
+            quantity: Number(p.stock) || 0,
+            reservedQuantity: 0,
+            reorderLevel: p.reorderLevel || 10,
+            product: p,
+            branch: { id: 'branch-del-01', name: 'Delhi Central Depot', code: 'DEL', city: 'New Delhi' } as any,
+            stockStatus: (Number(p.stock) || 0) <= 0 ? 'OUT_OF_STOCK' : (Number(p.stock) || 0) <= (p.reorderLevel || 10) ? 'LOW_STOCK' : 'IN_STOCK',
+            stockStatusLabel: (Number(p.stock) || 0) <= 0 ? 'Out of Stock' : (Number(p.stock) || 0) <= (p.reorderLevel || 10) ? 'Low Stock' : 'In Stock',
+            isLowStock: (Number(p.stock) || 0) <= (p.reorderLevel || 10) && (Number(p.stock) || 0) > 0,
+            isOutOfStock: (Number(p.stock) || 0) <= 0,
+          } as any));
 
-        const mappedMissing: InventoryItem[] = missingProducts.map((p: any) => ({
-          id: `inv-${p.id}`,
-          productId: p.id,
-          branchId: 'branch-del-01',
-          quantity: Number(p.stock) || 0,
-          reservedQuantity: 0,
-          reorderLevel: p.reorderLevel || 10,
-          product: p,
-          branch: { id: 'branch-del-01', name: 'Delhi Central Depot', code: 'DEL', city: 'New Delhi' } as any,
-          stockStatus: (Number(p.stock) || 0) <= 0 ? 'OUT_OF_STOCK' : (Number(p.stock) || 0) <= (p.reorderLevel || 10) ? 'LOW_STOCK' : 'IN_STOCK',
-          stockStatusLabel: (Number(p.stock) || 0) <= 0 ? 'Out of Stock' : (Number(p.stock) || 0) <= (p.reorderLevel || 10) ? 'Low Stock' : 'In Stock',
-          isLowStock: (Number(p.stock) || 0) <= (p.reorderLevel || 10) && (Number(p.stock) || 0) > 0,
-          isOutOfStock: (Number(p.stock) || 0) <= 0,
-        } as any));
-
-        invItems = [...invItems, ...mappedMissing];
-        totalCount = Math.max(totalCount, invItems.length, (prodRes as any)?.pagination?.total || 0);
-        pagesCount = Math.max(pagesCount, Math.ceil(totalCount / (params?.limit || 25)));
-      }
-    } catch {}
+          invItems = mappedMissing;
+          totalCount = (prodRes as any)?.pagination?.total || invItems.length;
+          pagesCount = Math.max(1, Math.ceil(totalCount / (params?.limit || 25)));
+        }
+      } catch {}
+    }
 
     return {
       success: true,
