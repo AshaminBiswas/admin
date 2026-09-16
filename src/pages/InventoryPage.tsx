@@ -165,15 +165,33 @@ export const InventoryPage: React.FC = () => {
     }
   });
 
-  const [purchasesList, setPurchasesList] = useState<Purchase[]>([]);
-  const [transfersList, setTransfersList] = useState<StockTransfer[]>([]);
-  const [movementsList, setMovementsList] = useState<StockMovement[]>([]);
+  const [purchasesList, setPurchasesList] = useState<Purchase[]>(() => {
+    try {
+      const cached = localStorage.getItem('prc_cached_purchases_snapshot');
+      return cached ? JSON.parse(cached) : [];
+    } catch { return []; }
+  });
+  const [transfersList, setTransfersList] = useState<StockTransfer[]>(() => {
+    try {
+      const cached = localStorage.getItem('prc_cached_transfers_snapshot');
+      return cached ? JSON.parse(cached) : [];
+    } catch { return []; }
+  });
+  const [movementsList, setMovementsList] = useState<StockMovement[]>(() => {
+    try {
+      const cached = localStorage.getItem('prc_cached_movements_snapshot');
+      return cached ? JSON.parse(cached) : [];
+    } catch { return []; }
+  });
 
   // Pagination & Loading
+  // isRefreshing = background silent refresh (never blocks UI rendering)
+  // loading = kept for pagination button disable only
   const [page, setPage] = useState<number>(1);
   const [totalPages, setTotalPages] = useState<number>(1);
   const [totalItems, setTotalItems] = useState<number>(() => inventoryList.length);
   const [loading, setLoading] = useState<boolean>(false);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [actionLoading, setActionLoading] = useState<boolean>(false);
   const [exportLoading, setExportLoading] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
@@ -252,169 +270,128 @@ export const InventoryPage: React.FC = () => {
     loadReferenceData();
   }, [loadReferenceData]);
 
-  // ─── 2. Tab-Specific Data Fetching with 0ms SWR Cache ───────────────────────
+  // ─── 2. Tab-Specific Data Fetching with True SWR (0ms UI, Background Refresh) ─
   const fetchTabData = useCallback(
     async (forceRefresh = false) => {
       const branchParam = selectedBranchId !== 'ALL' ? selectedBranchId : undefined;
       const cacheKey = `${activeTab}_${selectedBranchId}_${page}_${debouncedSearch}_${lowStockOnly}_${transferStatusFilter}_${movementTypeFilter}_${purchaseSupplierFilter}`;
 
-      // 0ms Cache Hit Check
+      // ── SWR Phase 1: Serve stale data immediately (0ms, no spinner) ──────────
       if (!forceRefresh && tabCacheRef.current[cacheKey]) {
         const cached = tabCacheRef.current[cacheKey];
-        if (Date.now() - cached.timestamp < 30000) {
-          // Serve immediately from memory
-          if (activeTab === 'stock') setInventoryList(cached.data);
-          else if (activeTab === 'purchases') setPurchasesList(cached.data);
-          else if (activeTab === 'transfers') setTransfersList(cached.data);
-          else if (activeTab === 'movements') setMovementsList(cached.data);
-          else if (activeTab === 'suppliers') setSuppliers(cached.data);
-          else if (activeTab === 'branches') setBranches(cached.data);
-
-          setTotalPages(cached.totalPages);
-          setTotalItems(cached.total);
-          return;
-        }
+        // Always render cached data right away — never wait for the network
+        if (activeTab === 'stock') setInventoryList(cached.data);
+        else if (activeTab === 'purchases') setPurchasesList(cached.data);
+        else if (activeTab === 'transfers') setTransfersList(cached.data);
+        else if (activeTab === 'movements') setMovementsList(cached.data);
+        else if (activeTab === 'suppliers') setSuppliers(cached.data);
+        else if (activeTab === 'branches') setBranches(cached.data);
+        setTotalPages(cached.totalPages);
+        setTotalItems(cached.total);
+        // Fresh enough — no network call needed
+        if (Date.now() - cached.timestamp < 30000) return;
       }
 
-      setLoading(true);
+      // ── SWR Phase 2: Background silent refresh (never blocks rendering) ──────
+      setIsRefreshing(true);
+      setLoading(true); // kept only for pagination button disable
       try {
         if (activeTab === 'stock') {
           const res = await inventoryApi.getInventory({
-            page,
-            limit: 30,
-            branchId: branchParam,
+            page, limit: 30, branchId: branchParam,
             search: debouncedSearch || undefined,
             lowStock: lowStockOnly || undefined,
           });
-
           if (res.success) {
             const list = Array.isArray(res.data) ? res.data : (res as any).items || [];
             setInventoryList(list);
             const tPages = (res as any).totalPages || 1;
             const tCount = (res as any).total || list.length;
-            setTotalPages(tPages);
-            setTotalItems(tCount);
-
-            tabCacheRef.current[cacheKey] = {
-              data: list,
-              total: tCount,
-              totalPages: tPages,
-              timestamp: Date.now(),
-            };
-
-            // Persist page 1 initial snapshot for instant 0ms mount next time
+            setTotalPages(tPages); setTotalItems(tCount);
+            tabCacheRef.current[cacheKey] = { data: list, total: tCount, totalPages: tPages, timestamp: Date.now() };
             if (page === 1 && !debouncedSearch && selectedBranchId === 'ALL') {
               localStorage.setItem('prc_cached_inventory_snapshot', JSON.stringify(list.slice(0, 25)));
             }
           }
         } else if (activeTab === 'purchases') {
           const res = await inventoryApi.getPurchases({
-            page,
-            limit: 20,
-            branchId: branchParam,
+            page, limit: 20, branchId: branchParam,
             supplierId: purchaseSupplierFilter !== 'ALL' ? purchaseSupplierFilter : undefined,
             search: debouncedSearch || undefined,
           });
-
           if (res.success) {
             const list = Array.isArray(res.data) ? res.data : (res as any).items || [];
             setPurchasesList(list);
             const tPages = (res as any).totalPages || 1;
             const tCount = (res as any).total || list.length;
-            setTotalPages(tPages);
-            setTotalItems(tCount);
-
-            tabCacheRef.current[cacheKey] = {
-              data: list,
-              total: tCount,
-              totalPages: tPages,
-              timestamp: Date.now(),
-            };
+            setTotalPages(tPages); setTotalItems(tCount);
+            tabCacheRef.current[cacheKey] = { data: list, total: tCount, totalPages: tPages, timestamp: Date.now() };
+            if (page === 1 && !debouncedSearch) {
+              localStorage.setItem('prc_cached_purchases_snapshot', JSON.stringify(list.slice(0, 20)));
+            }
           }
         } else if (activeTab === 'transfers') {
           const res = await inventoryApi.getStockTransfers({
-            page,
-            limit: 20,
-            branchId: branchParam,
+            page, limit: 20, branchId: branchParam,
             status: transferStatusFilter !== 'ALL' ? transferStatusFilter : undefined,
           });
-
           if (res.success) {
             const list = Array.isArray(res.data) ? res.data : (res as any).items || [];
             setTransfersList(list);
             const tPages = (res as any).totalPages || 1;
             const tCount = (res as any).total || list.length;
-            setTotalPages(tPages);
-            setTotalItems(tCount);
-
-            tabCacheRef.current[cacheKey] = {
-              data: list,
-              total: tCount,
-              totalPages: tPages,
-              timestamp: Date.now(),
-            };
+            setTotalPages(tPages); setTotalItems(tCount);
+            tabCacheRef.current[cacheKey] = { data: list, total: tCount, totalPages: tPages, timestamp: Date.now() };
+            if (page === 1 && transferStatusFilter === 'ALL') {
+              localStorage.setItem('prc_cached_transfers_snapshot', JSON.stringify(list.slice(0, 20)));
+            }
           }
         } else if (activeTab === 'movements') {
           const res = await inventoryApi.getStockMovements({
-            page,
-            limit: 30,
-            branchId: branchParam,
+            page, limit: 30, branchId: branchParam,
             type: movementTypeFilter !== 'ALL' ? movementTypeFilter : undefined,
           });
-
           if (res.success) {
             const list = Array.isArray(res.data) ? res.data : (res as any).items || [];
             setMovementsList(list);
             const tPages = (res as any).totalPages || 1;
             const tCount = (res as any).total || list.length;
-            setTotalPages(tPages);
-            setTotalItems(tCount);
-
-            tabCacheRef.current[cacheKey] = {
-              data: list,
-              total: tCount,
-              totalPages: tPages,
-              timestamp: Date.now(),
-            };
+            setTotalPages(tPages); setTotalItems(tCount);
+            tabCacheRef.current[cacheKey] = { data: list, total: tCount, totalPages: tPages, timestamp: Date.now() };
+            if (page === 1 && movementTypeFilter === 'ALL') {
+              localStorage.setItem('prc_cached_movements_snapshot', JSON.stringify(list.slice(0, 30)));
+            }
           }
         } else if (activeTab === 'suppliers') {
-          const res = await inventoryApi.getSuppliers({
-            search: debouncedSearch || undefined,
-          });
-
+          const res = await inventoryApi.getSuppliers({ search: debouncedSearch || undefined });
           if (res.success) {
             const list = Array.isArray(res.data) ? res.data : (res as any).items || [];
             setSuppliers(list);
-            setTotalPages(1);
-            setTotalItems(list.length);
+            setTotalPages(1); setTotalItems(list.length);
+            tabCacheRef.current[cacheKey] = { data: list, total: list.length, totalPages: 1, timestamp: Date.now() };
+            if (!debouncedSearch) localStorage.setItem('prc_cached_suppliers', JSON.stringify(list));
           }
         } else if (activeTab === 'branches') {
-          const res = await inventoryApi.getBranches({
-            search: debouncedSearch || undefined,
-          });
-
+          const res = await inventoryApi.getBranches({ search: debouncedSearch || undefined });
           if (res.success && res.data) {
             const list = Array.isArray(res.data) ? res.data : (res as any).items || [];
             setBranches(list);
-            setTotalPages(1);
-            setTotalItems(list.length);
+            setTotalPages(1); setTotalItems(list.length);
+            tabCacheRef.current[cacheKey] = { data: list, total: list.length, totalPages: 1, timestamp: Date.now() };
+            if (!debouncedSearch) localStorage.setItem('prc_cached_branches', JSON.stringify(list));
           }
         }
       } catch (err: any) {
-        showToast(err?.message || 'Failed to fetch inventory records', 'error');
+        // Silent fail on background refresh — never disrupt the user's view
+        console.warn('[Inventory] Background refresh warning:', err?.message || err);
       } finally {
         setLoading(false);
+        setIsRefreshing(false);
       }
     },
     [
-      activeTab,
-      selectedBranchId,
-      page,
-      debouncedSearch,
-      lowStockOnly,
-      transferStatusFilter,
-      movementTypeFilter,
-      purchaseSupplierFilter,
+      activeTab, selectedBranchId, page, debouncedSearch,
+      lowStockOnly, transferStatusFilter, movementTypeFilter, purchaseSupplierFilter,
     ]
   );
 
@@ -675,6 +652,10 @@ export const InventoryPage: React.FC = () => {
 
   return (
     <div className="space-y-4 sm:space-y-5 pb-16 sm:pb-12 animate-in fade-in">
+      {/* Subtle SWR refresh indicator — 2px bar, never blocks UI */}
+      {isRefreshing && (
+        <div className="fixed top-0 left-0 right-0 z-[9999] h-0.5 bg-gradient-to-r from-[#8B5CF6] via-violet-400 to-[#8B5CF6] animate-pulse" />
+      )}
       {/* Toast Alert */}
       {toastMessage && (
         <div
@@ -1011,7 +992,7 @@ export const InventoryPage: React.FC = () => {
             title="Refresh Live Data"
             className="p-1.5 border bg-slate-50 dark:bg-[#09090B] text-slate-600 dark:text-[#A1A1AA] border-slate-200 dark:border-[#27272A] hover:border-[#8B5CF6] hover:text-[#8B5CF6] rounded-xl transition"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-[#8B5CF6]' : ''}`} />
+            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-[#8B5CF6]' : ''}`} />
           </button>
         </div>
       </div>
@@ -1104,7 +1085,7 @@ export const InventoryPage: React.FC = () => {
 
           {/* DUAL MODE 1: MOBILE TOUCH CARDS (sm:hidden) */}
           <div className="md:hidden divide-y divide-slate-100 dark:divide-[#27272A]">
-            {loading && filteredInventoryList.length === 0 ? (
+            {isRefreshing && filteredInventoryList.length === 0 ? (
               <div className="py-12 text-center text-slate-400">
                 <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-[#8B5CF6]" />
                 <span className="text-xs font-medium">Loading stock matrix...</span>
@@ -1298,7 +1279,7 @@ export const InventoryPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-[#27272A] text-slate-800 dark:text-[#FAFAFA]">
-                {loading && filteredInventoryList.length === 0 ? (
+                {isRefreshing && filteredInventoryList.length === 0 ? (
                   <tr>
                     <td colSpan={8} className="py-16 text-center text-slate-400">
                       <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-[#8B5CF6]" />
@@ -1596,7 +1577,7 @@ export const InventoryPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-[#27272A] text-slate-800 dark:text-[#FAFAFA]">
-                {loading && purchasesList.length === 0 ? (
+                {isRefreshing && purchasesList.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="py-12 text-center text-slate-400">
                       <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-[#8B5CF6]" />
@@ -1683,7 +1664,7 @@ export const InventoryPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-[#27272A] text-slate-800 dark:text-[#FAFAFA]">
-                {loading && transfersList.length === 0 ? (
+                {isRefreshing && transfersList.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="py-12 text-center text-slate-400">
                       <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-[#8B5CF6]" />
@@ -1802,7 +1783,7 @@ export const InventoryPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-[#27272A] text-slate-800 dark:text-[#FAFAFA]">
-                {loading && movementsList.length === 0 ? (
+                {isRefreshing && movementsList.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="py-12 text-center text-slate-400">
                       <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-[#8B5CF6]" />
