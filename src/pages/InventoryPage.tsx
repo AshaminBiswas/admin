@@ -32,6 +32,12 @@ import {
   Trash2,
   Sparkles,
   ExternalLink,
+  Calendar,
+  CalendarDays,
+  Download,
+  ShoppingCart,
+  UserCheck,
+  BarChart3,
 } from 'lucide-react';
 import { inventoryApi, fetchAdminApi } from '../api/adminApi';
 import type {
@@ -58,7 +64,8 @@ import { AdjustmentModal } from '../components/inventory/AdjustmentModal';
 import { BranchModal } from '../components/inventory/BranchModal';
 import { QuickStockModal } from '../components/inventory/QuickStockModal';
 
-type TabType = 'stock' | 'purchases' | 'transfers' | 'movements' | 'suppliers' | 'branches';
+type TabType = 'stock' | 'purchases' | 'transfers' | 'movements' | 'suppliers' | 'branches' | 'reports';
+type ReportHorizon = 'day' | 'week' | 'month' | 'year' | 'range';
 
 interface TabCacheItem<T> {
   data: T[];
@@ -66,6 +73,17 @@ interface TabCacheItem<T> {
   totalPages: number;
   timestamp: number;
 }
+
+const getWeekSpanDisplay = (dateStr: string) => {
+  const target = dateStr ? new Date(dateStr) : new Date();
+  const day = target.getDay();
+  const diffToMonday = (day + 6) % 7;
+  const monday = new Date(target);
+  monday.setDate(target.getDate() - diffToMonday);
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  return `${monday.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} – ${sunday.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+};
 
 export const InventoryPage: React.FC = () => {
   const { setCurrentView } = useAdminAuth();
@@ -85,6 +103,20 @@ export const InventoryPage: React.FC = () => {
   const [transferStatusFilter, setTransferStatusFilter] = useState<string>('ALL');
   const [movementTypeFilter, setMovementTypeFilter] = useState<string>('ALL');
   const [purchaseSupplierFilter, setPurchaseSupplierFilter] = useState<string>('ALL');
+
+  // Production Reports & Analytics State
+  const [reportHorizon, setReportHorizon] = useState<ReportHorizon>('month');
+  const [reportDate, setReportDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
+  const [reportMonth, setReportMonth] = useState<number>(() => new Date().getMonth() + 1);
+  const [reportYear, setReportYear] = useState<number>(() => new Date().getFullYear());
+  const [reportRangeFrom, setReportRangeFrom] = useState<string>(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 30);
+    return d.toISOString().split('T')[0];
+  });
+  const [reportRangeTo, setReportRangeTo] = useState<string>(() => new Date().toISOString().split('T')[0]);
+  const [reportChannel, setReportChannel] = useState<'all' | 'b2c' | 'b2b'>('all');
+  const [reportDownloading, setReportDownloading] = useState<string | null>(null);
 
   // SWR Instant Boot States from LocalStorage / Session Cache
   const [branches, setBranches] = useState<Branch[]>(() => {
@@ -554,6 +586,43 @@ export const InventoryPage: React.FC = () => {
     }
   };
 
+  const handleDownloadProductionReport = async (
+    reportType: 'stock' | 'audit' | 'purchases' | 'orders',
+    format: 'xlsx' | 'pdf' = 'xlsx'
+  ) => {
+    try {
+      setReportDownloading(`${reportType}-${format}`);
+      const branchParam = selectedBranchId !== 'ALL' ? selectedBranchId : undefined;
+      const baseParams: any = {
+        branchId: branchParam,
+        period: reportHorizon,
+        date: reportDate,
+        month: reportMonth,
+        year: reportYear,
+        from: reportHorizon === 'range' ? reportRangeFrom : undefined,
+        to: reportHorizon === 'range' ? reportRangeTo : undefined,
+      };
+
+      if (reportType === 'stock') {
+        await inventoryApi.downloadStockReport({ ...baseParams, format });
+        showToast(`Stock matrix & valuation report downloaded (${format.toUpperCase()})`, 'success');
+      } else if (reportType === 'audit') {
+        await inventoryApi.downloadMovementsReport(baseParams);
+        showToast('Stock movements audit ledger downloaded (Excel)', 'success');
+      } else if (reportType === 'purchases') {
+        await inventoryApi.downloadPurchasesReport(baseParams);
+        showToast('Itemized purchases & procurement report downloaded (Excel)', 'success');
+      } else if (reportType === 'orders') {
+        await inventoryApi.downloadOrdersConsumptionReport({ ...baseParams, channel: reportChannel });
+        showToast('Customer orders & consumption report downloaded (Excel)', 'success');
+      }
+    } catch (err: any) {
+      showToast(err?.message || 'Failed to download report', 'error');
+    } finally {
+      setReportDownloading(null);
+    }
+  };
+
   // ─── 6. Transfer Actions ────────────────────────────────────────────────────
   const handleTransferDispatch = async (id: string) => {
     try {
@@ -860,7 +929,7 @@ export const InventoryPage: React.FC = () => {
         </div>
       </div>
 
-      {/* 6-Tab Navigation Bar */}
+      {/* 7-Tab Navigation Bar */}
       <div className="bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] rounded-2xl p-2 sm:p-2.5 flex flex-col md:flex-row md:items-center justify-between gap-2.5 shadow-sm">
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 scrollbar-none text-xs">
           {[
@@ -870,6 +939,7 @@ export const InventoryPage: React.FC = () => {
             { id: 'movements', label: 'Stock Ledger Audit', icon: History },
             { id: 'suppliers', label: 'Vendors & Suppliers', icon: Building2, badge: suppliers.length },
             { id: 'branches', label: 'Facilities', icon: Warehouse, badge: branches.length },
+            { id: 'reports', label: 'Reports & Analytics', icon: FileSpreadsheet, badge: 'PROD' },
           ].map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -1434,6 +1504,15 @@ export const InventoryPage: React.FC = () => {
                 <Plus className="w-3.5 h-3.5" />
                 <span>+ Record Stock-In Purchase</span>
               </button>
+              <button
+                onClick={() => handleDownloadProductionReport('purchases', 'xlsx')}
+                disabled={reportDownloading === 'purchases-xlsx'}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-[#27272A] dark:hover:bg-[#3F3F46] text-slate-700 dark:text-slate-200 rounded-xl text-xs font-semibold transition border border-slate-200 dark:border-[#3F3F46]"
+                title="Download Itemized Procurement Report"
+              >
+                <Download className="w-3.5 h-3.5 text-emerald-500" />
+                <span>{reportDownloading === 'purchases-xlsx' ? 'Exporting...' : 'Export Purchases'}</span>
+              </button>
             </div>
             <span className="text-[11px] text-slate-500">
               Showing <strong>{purchasesList.length}</strong> purchase orders
@@ -1631,7 +1710,18 @@ export const InventoryPage: React.FC = () => {
       {activeTab === 'movements' && (
         <div className="bg-white dark:bg-[#18181B] rounded-2xl border border-slate-200 dark:border-[#27272A] shadow-sm overflow-hidden">
           <div className="p-3.5 bg-slate-50/60 dark:bg-[#09090B]/60 border-b border-slate-200 dark:border-[#27272A] flex items-center justify-between text-xs">
-            <span className="font-bold text-slate-800 dark:text-[#FAFAFA]">Chronological Stock Movement Audit Ledger</span>
+            <div className="flex items-center gap-3">
+              <span className="font-bold text-slate-800 dark:text-[#FAFAFA]">Chronological Stock Movement Audit Ledger</span>
+              <button
+                onClick={() => handleDownloadProductionReport('audit', 'xlsx')}
+                disabled={reportDownloading === 'audit-xlsx'}
+                className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 hover:bg-slate-200 dark:bg-[#27272A] dark:hover:bg-[#3F3F46] text-slate-700 dark:text-slate-200 rounded-lg text-[11px] font-semibold transition border border-slate-200 dark:border-[#3F3F46]"
+                title="Download Stock Movement Audit Ledger"
+              >
+                <Download className="w-3 h-3 text-sky-500" />
+                <span>{reportDownloading === 'audit-xlsx' ? 'Exporting...' : 'Export Audit Ledger'}</span>
+              </button>
+            </div>
             <span className="text-[11px] text-slate-500">Showing {movementsList.length} movements</span>
           </div>
 
@@ -1882,6 +1972,373 @@ export const InventoryPage: React.FC = () => {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* ─── TAB 7: REPORTS & ANALYTICS ────────────────────────────────────────── */}
+      {activeTab === 'reports' && (
+        <div className="space-y-6">
+          {/* Time Horizon & Parameters Control Dock */}
+          <div className="bg-white dark:bg-[#18181B] rounded-2xl border border-slate-200 dark:border-[#27272A] p-5 shadow-sm space-y-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 dark:border-[#27272A] pb-4">
+              <div>
+                <h3 className="font-bold text-slate-900 dark:text-[#FAFAFA] text-base flex items-center gap-2">
+                  <BarChart3 className="w-5 h-5 text-[#8B5CF6]" />
+                  <span>Production Report Generator & Audit Center</span>
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-[#71717A] mt-0.5">
+                  Download itemized, auditor-grade spreadsheets with live balance verification and user attribution
+                </p>
+              </div>
+
+              {/* Time Horizon Selector Chips */}
+              <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-[#09090B] p-1.5 rounded-xl border border-slate-200 dark:border-[#27272A]">
+                {(
+                  [
+                    { id: 'day', label: 'Day-Wise' },
+                    { id: 'week', label: 'Week-Wise' },
+                    { id: 'month', label: 'Month-Wise' },
+                    { id: 'year', label: 'Year-Wise' },
+                    { id: 'range', label: 'Custom Range' },
+                  ] as const
+                ).map((h) => (
+                  <button
+                    key={h.id}
+                    type="button"
+                    onClick={() => setReportHorizon(h.id)}
+                    className={`px-3 py-1.5 rounded-lg font-semibold text-xs transition-all ${
+                      reportHorizon === h.id
+                        ? 'bg-[#8B5CF6] text-white shadow-sm font-bold'
+                        : 'text-slate-600 dark:text-[#A1A1AA] hover:text-slate-900 dark:hover:text-[#FAFAFA]'
+                    }`}
+                  >
+                    {h.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Dynamic Controls based on Horizon */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-center">
+              {reportHorizon === 'day' && (
+                <div className="space-y-1">
+                  <label className="text-[11px] font-semibold text-slate-500 flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-[#8B5CF6]" />
+                    Select Specific Date
+                  </label>
+                  <input
+                    type="date"
+                    value={reportDate}
+                    onChange={(e) => setReportDate(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-[#09090B] border border-slate-200 dark:border-[#27272A] rounded-xl text-xs text-slate-800 dark:text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
+                  />
+                </div>
+              )}
+
+              {reportHorizon === 'week' && (
+                <div className="space-y-1 sm:col-span-2">
+                  <label className="text-[11px] font-semibold text-slate-500 flex items-center gap-1.5">
+                    <CalendarDays className="w-3.5 h-3.5 text-[#8B5CF6]" />
+                    Select Any Date Within Week
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="date"
+                      value={reportDate}
+                      onChange={(e) => setReportDate(e.target.value)}
+                      className="px-3 py-2 bg-slate-50 dark:bg-[#09090B] border border-slate-200 dark:border-[#27272A] rounded-xl text-xs text-slate-800 dark:text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
+                    />
+                    <span className="text-xs font-semibold px-2.5 py-1.5 bg-[#8B5CF6]/10 text-[#8B5CF6] border border-[#8B5CF6]/20 rounded-xl">
+                      Week: {getWeekSpanDisplay(reportDate)}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {reportHorizon === 'month' && (
+                <>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold text-slate-500">Select Month</label>
+                    <select
+                      value={reportMonth}
+                      onChange={(e) => setReportMonth(Number(e.target.value))}
+                      className="w-full px-3 py-2 bg-slate-50 dark:bg-[#09090B] border border-slate-200 dark:border-[#27272A] rounded-xl text-xs text-slate-800 dark:text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
+                    >
+                      {[
+                        { val: 1, name: 'January' },
+                        { val: 2, name: 'February' },
+                        { val: 3, name: 'March' },
+                        { val: 4, name: 'April' },
+                        { val: 5, name: 'May' },
+                        { val: 6, name: 'June' },
+                        { val: 7, name: 'July' },
+                        { val: 8, name: 'August' },
+                        { val: 9, name: 'September' },
+                        { val: 10, name: 'October' },
+                        { val: 11, name: 'November' },
+                        { val: 12, name: 'December' },
+                      ].map((m) => (
+                        <option key={m.val} value={m.val}>
+                          {m.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold text-slate-500">Select Year</label>
+                    <select
+                      value={reportYear}
+                      onChange={(e) => setReportYear(Number(e.target.value))}
+                      className="w-full px-3 py-2 bg-slate-50 dark:bg-[#09090B] border border-slate-200 dark:border-[#27272A] rounded-xl text-xs text-slate-800 dark:text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
+                    >
+                      {[2024, 2025, 2026, 2027, 2028].map((yr) => (
+                        <option key={yr} value={yr}>
+                          {yr}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </>
+              )}
+
+              {reportHorizon === 'year' && (
+                <div className="space-y-1">
+                  <label className="text-[11px] font-semibold text-slate-500">Select Calendar Year</label>
+                  <select
+                    value={reportYear}
+                    onChange={(e) => setReportYear(Number(e.target.value))}
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-[#09090B] border border-slate-200 dark:border-[#27272A] rounded-xl text-xs text-slate-800 dark:text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
+                  >
+                    {[2024, 2025, 2026, 2027, 2028].map((yr) => (
+                      <option key={yr} value={yr}>
+                        {yr}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {reportHorizon === 'range' && (
+                <>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold text-slate-500">From Date</label>
+                    <input
+                      type="date"
+                      value={reportRangeFrom}
+                      onChange={(e) => setReportRangeFrom(e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-50 dark:bg-[#09090B] border border-slate-200 dark:border-[#27272A] rounded-xl text-xs text-slate-800 dark:text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold text-slate-500">To Date</label>
+                    <input
+                      type="date"
+                      value={reportRangeTo}
+                      onChange={(e) => setReportRangeTo(e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-50 dark:bg-[#09090B] border border-slate-200 dark:border-[#27272A] rounded-xl text-xs text-slate-800 dark:text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
+                    />
+                  </div>
+                </>
+              )}
+
+              {/* Facility Filter */}
+              <div className="space-y-1">
+                <label className="text-[11px] font-semibold text-slate-500">Facility / Depot Scope</label>
+                <select
+                  value={selectedBranchId}
+                  onChange={(e) => setSelectedBranchId(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-[#09090B] border border-slate-200 dark:border-[#27272A] rounded-xl text-xs text-slate-800 dark:text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
+                >
+                  <option value="ALL">All Depots / Facilities ({branches.length})</option>
+                  {branches.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.name} {b.code ? `(${b.code})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Channel Scope (for Orders) */}
+              <div className="space-y-1">
+                <label className="text-[11px] font-semibold text-slate-500">Sales Channel Scope</label>
+                <select
+                  value={reportChannel}
+                  onChange={(e) => setReportChannel(e.target.value as any)}
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-[#09090B] border border-slate-200 dark:border-[#27272A] rounded-xl text-xs text-slate-800 dark:text-[#FAFAFA] focus:outline-none focus:border-[#8B5CF6]"
+                >
+                  <option value="all">All Channels (B2C + B2B Wholesale)</option>
+                  <option value="b2c">B2C Retail Storefront</option>
+                  <option value="b2b">B2B Wholesale Portal</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* 4 Dedicated Production Report Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            {/* Report 1: Stock Matrix & Valuation */}
+            <div className="bg-white dark:bg-[#18181B] rounded-2xl border border-slate-200 dark:border-[#27272A] p-5 shadow-sm flex flex-col justify-between space-y-4 hover:border-[#8B5CF6]/50 transition">
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="w-10 h-10 rounded-xl bg-violet-500/10 text-[#8B5CF6] flex items-center justify-center">
+                    <Boxes className="w-5 h-5" />
+                  </div>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-50 dark:bg-violet-950/40 text-[#8B5CF6] border border-violet-200 dark:border-violet-800/40 uppercase tracking-wide">
+                    Live Balance & Value
+                  </span>
+                </div>
+                <div>
+                  <h4 className="font-bold text-slate-900 dark:text-[#FAFAFA] text-sm">
+                    Stock Matrix & Valuation Report
+                  </h4>
+                  <p className="text-xs text-slate-500 dark:text-[#71717A] mt-1 leading-relaxed">
+                    Complete multi-depot stock position breakdown detailing on-hand units, reserved balances, available quantities, reorder thresholds, and unit valuation in INR.
+                  </p>
+                </div>
+                <div className="bg-slate-50 dark:bg-[#09090B] p-2.5 rounded-xl border border-slate-200/60 dark:border-[#27272A] text-[11px] text-slate-600 dark:text-[#A1A1AA] flex items-center justify-between">
+                  <span>Tracked SKUs: <strong className="text-slate-900 dark:text-[#FAFAFA]">{inventoryList.length}</strong></span>
+                  <span>Low Stock: <strong className="text-amber-500">{metrics.lowStockCount}</strong></span>
+                  <span>Depots: <strong className="text-[#8B5CF6]">{branches.length}</strong></span>
+                </div>
+              </div>
+
+              <div className="pt-2 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleDownloadProductionReport('stock', 'xlsx')}
+                  disabled={reportDownloading === 'stock-xlsx'}
+                  className="flex-1 flex items-center justify-center gap-2 py-2.5 px-3 bg-[#8B5CF6] hover:bg-[#7C3AED] disabled:opacity-50 text-white rounded-xl text-xs font-bold shadow-md shadow-[#8B5CF6]/20 transition"
+                >
+                  <FileSpreadsheet className="w-4 h-4" />
+                  <span>{reportDownloading === 'stock-xlsx' ? 'Generating Excel...' : 'Download Excel (.xlsx)'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDownloadProductionReport('stock', 'pdf')}
+                  disabled={reportDownloading === 'stock-pdf'}
+                  className="flex items-center justify-center gap-1.5 py-2.5 px-3 bg-slate-100 hover:bg-slate-200 dark:bg-[#27272A] dark:hover:bg-[#3F3F46] text-slate-700 dark:text-slate-200 rounded-xl text-xs font-semibold transition border border-slate-200 dark:border-[#3F3F46]"
+                  title="Download PDF"
+                >
+                  <FileText className="w-4 h-4 text-rose-500" />
+                  <span>PDF</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Report 2: Stock Movements Audit Ledger */}
+            <div className="bg-white dark:bg-[#18181B] rounded-2xl border border-slate-200 dark:border-[#27272A] p-5 shadow-sm flex flex-col justify-between space-y-4 hover:border-sky-500/50 transition">
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="w-10 h-10 rounded-xl bg-sky-500/10 text-sky-500 flex items-center justify-center">
+                    <History className="w-5 h-5" />
+                  </div>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-50 dark:bg-sky-950/40 text-sky-500 border border-sky-200 dark:border-sky-800/40 uppercase tracking-wide">
+                    Immutable Audit
+                  </span>
+                </div>
+                <div>
+                  <h4 className="font-bold text-slate-900 dark:text-[#FAFAFA] text-sm">
+                    Stock Movements Audit Ledger
+                  </h4>
+                  <p className="text-xs text-slate-500 dark:text-[#71717A] mt-1 leading-relaxed">
+                    Granular chronological audit trail tracking quantity delta (+/-), staff actor attribution (full name & email), before/after progression, reference IDs, and audit notes.
+                  </p>
+                </div>
+                <div className="bg-slate-50 dark:bg-[#09090B] p-2.5 rounded-xl border border-slate-200/60 dark:border-[#27272A] text-[11px] text-slate-600 dark:text-[#A1A1AA] flex items-center justify-between">
+                  <span>Action Types: <strong className="text-slate-900 dark:text-[#FAFAFA]">In / Out / Transfer / Adj</strong></span>
+                  <span>Attribution: <strong className="text-sky-500">Staff & Email</strong></span>
+                </div>
+              </div>
+
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={() => handleDownloadProductionReport('audit', 'xlsx')}
+                  disabled={reportDownloading === 'audit-xlsx'}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 px-3 bg-sky-600 hover:bg-sky-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold shadow-md shadow-sky-600/20 transition"
+                >
+                  <FileSpreadsheet className="w-4 h-4" />
+                  <span>{reportDownloading === 'audit-xlsx' ? 'Generating Audit Ledger...' : 'Download Audit Ledger (.xlsx)'}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Report 3: Itemized Purchases & Procurement Report */}
+            <div className="bg-white dark:bg-[#18181B] rounded-2xl border border-slate-200 dark:border-[#27272A] p-5 shadow-sm flex flex-col justify-between space-y-4 hover:border-emerald-500/50 transition">
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
+                    <ShoppingBag className="w-5 h-5" />
+                  </div>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-500 border border-emerald-200 dark:border-emerald-800/40 uppercase tracking-wide">
+                    Procurement Trail
+                  </span>
+                </div>
+                <div>
+                  <h4 className="font-bold text-slate-900 dark:text-[#FAFAFA] text-sm">
+                    Itemized Purchases & Procurement Report
+                  </h4>
+                  <p className="text-xs text-slate-500 dark:text-[#71717A] mt-1 leading-relaxed">
+                    Answers specifically <strong>who purchased, in which date, how much quantity</strong>, unit purchase price, line total, vendor/supplier, buyer staff member, and destination branch.
+                  </p>
+                </div>
+                <div className="bg-slate-50 dark:bg-[#09090B] p-2.5 rounded-xl border border-slate-200/60 dark:border-[#27272A] text-[11px] text-slate-600 dark:text-[#A1A1AA] flex items-center justify-between">
+                  <span>Breakdown: <strong className="text-slate-900 dark:text-[#FAFAFA]">Line-by-Line</strong></span>
+                  <span>Suppliers: <strong className="text-emerald-500">{suppliers.length} Active</strong></span>
+                </div>
+              </div>
+
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={() => handleDownloadProductionReport('purchases', 'xlsx')}
+                  disabled={reportDownloading === 'purchases-xlsx'}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/20 transition"
+                >
+                  <FileSpreadsheet className="w-4 h-4" />
+                  <span>{reportDownloading === 'purchases-xlsx' ? 'Generating Purchases...' : 'Download Purchases Report (.xlsx)'}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Report 4: Customer Orders & Stock Consumption Report */}
+            <div className="bg-white dark:bg-[#18181B] rounded-2xl border border-slate-200 dark:border-[#27272A] p-5 shadow-sm flex flex-col justify-between space-y-4 hover:border-amber-500/50 transition">
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center">
+                    <ShoppingCart className="w-5 h-5" />
+                  </div>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/40 text-amber-500 border border-amber-200 dark:border-amber-800/40 uppercase tracking-wide">
+                    Sales & Outward Stock
+                  </span>
+                </div>
+                <div>
+                  <h4 className="font-bold text-slate-900 dark:text-[#FAFAFA] text-sm">
+                    Customer Orders & Stock Consumption Report
+                  </h4>
+                  <p className="text-xs text-slate-500 dark:text-[#71717A] mt-1 leading-relaxed">
+                    Answers specifically <strong>who placed the order, in which date, how much quantity</strong>, customer name, email, phone, company, SKU, selling price, line total, and warehouse.
+                  </p>
+                </div>
+                <div className="bg-slate-50 dark:bg-[#09090B] p-2.5 rounded-xl border border-slate-200/60 dark:border-[#27272A] text-[11px] text-slate-600 dark:text-[#A1A1AA] flex items-center justify-between">
+                  <span>Channels: <strong className="text-slate-900 dark:text-[#FAFAFA]">B2C + B2B</strong></span>
+                  <span>Attribution: <strong className="text-amber-500">Customer & Company</strong></span>
+                </div>
+              </div>
+
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={() => handleDownloadProductionReport('orders', 'xlsx')}
+                  disabled={reportDownloading === 'orders-xlsx'}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 px-3 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold shadow-md shadow-amber-600/20 transition"
+                >
+                  <FileSpreadsheet className="w-4 h-4" />
+                  <span>{reportDownloading === 'orders-xlsx' ? 'Generating Consumption...' : 'Download Consumption Report (.xlsx)'}</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

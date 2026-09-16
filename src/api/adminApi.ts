@@ -1083,7 +1083,7 @@ export const inventoryApi = {
 
     return { success: false, data: null };
   },
-  updateInventoryItem: (id: string, payload: { reorderLevel?: number; quantity?: number; reservedQuantity?: number }) =>
+  updateInventoryItem: (id: string, payload: { reorderLevel?: number; quantity?: number; reservedQuantity?: number; notes?: string }) =>
     fetchAdminApi<InventoryItem>(`/inventory/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(payload),
@@ -1424,14 +1424,52 @@ export const inventoryApi = {
   },
 
   // 8. Download Exports (Excel & PDF)
-  downloadStockReport: async (params?: { branchId?: string; lowStock?: boolean; format?: 'xlsx' | 'pdf' }) => {
+  downloadStockReport: async (params?: {
+    branchId?: string;
+    lowStock?: boolean;
+    format?: 'xlsx' | 'pdf';
+    period?: string;
+    date?: string;
+    month?: number | string;
+    year?: number | string;
+    from?: string;
+    to?: string;
+  }) => {
     const query = new URLSearchParams();
     if (params?.branchId && params.branchId !== 'ALL' && params.branchId !== 'PRC_STOCK') query.append('branchId', params.branchId);
     if (params?.lowStock) query.append('lowStock', 'true');
     if (params?.format) query.append('format', params.format);
+    if (params?.period) query.append('period', params.period);
+    if (params?.date) query.append('date', params.date);
+    if (params?.month) query.append('month', String(params.month));
+    if (params?.year) query.append('year', String(params.year));
+    if (params?.from) query.append('from', params.from);
+    if (params?.to) query.append('to', params.to);
     const token = getAdminToken();
 
-    // 1. Try backend inventory export route
+    // 1. Try reports/stock route
+    try {
+      const res = await fetch(`${API_BASE_URL}/reports/stock?${query.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const blob = await res.blob();
+        if (blob.size > 0) {
+          const ext = params?.format === 'pdf' ? 'pdf' : 'xlsx';
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `Stock-Matrix-Report-${Date.now()}.${ext}`;
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+          return;
+        }
+      }
+    } catch {}
+
+    // 2. Try backend inventory export route
     try {
       const exportPath = params?.format === 'pdf' ? '/inventory/export/pdf' : '/inventory/export/excel';
       const res = await fetch(`${API_BASE_URL}${exportPath}?${query.toString()}`, {
@@ -1444,29 +1482,7 @@ export const inventoryApi = {
           const url = window.URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
-          a.download = `Stock-Report-${Date.now()}.${ext}`;
-          document.body.appendChild(a);
-          a.click();
-          window.URL.revokeObjectURL(url);
-          document.body.removeChild(a);
-          return;
-        }
-      }
-    } catch {}
-
-    // 2. Try reports/stock route
-    try {
-      const res = await fetch(`${API_BASE_URL}/reports/stock?${query.toString()}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        const blob = await res.blob();
-        if (blob.size > 0) {
-          const ext = params?.format === 'pdf' ? 'pdf' : 'xlsx';
-          const url = window.URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `Stock-Report-${Date.now()}.${ext}`;
+          a.download = `Stock-Matrix-Report-${Date.now()}.${ext}`;
           document.body.appendChild(a);
           a.click();
           window.URL.revokeObjectURL(url);
@@ -1513,17 +1529,30 @@ export const inventoryApi = {
     }
   },
 
-  downloadPurchasesReport: async (params?: { branchId?: string; supplierId?: string; from?: string; to?: string }) => {
+  downloadPurchasesReport: async (params?: {
+    branchId?: string;
+    supplierId?: string;
+    period?: string;
+    date?: string;
+    month?: number | string;
+    year?: number | string;
+    from?: string;
+    to?: string;
+  }) => {
     const query = new URLSearchParams();
     if (params?.branchId && params.branchId !== 'ALL' && params.branchId !== 'PRC_STOCK') query.append('branchId', params.branchId);
     if (params?.supplierId && params.supplierId !== 'ALL') query.append('supplierId', params.supplierId);
+    if (params?.period) query.append('period', params.period);
+    if (params?.date) query.append('date', params.date);
+    if (params?.month) query.append('month', String(params.month));
+    if (params?.year) query.append('year', String(params.year));
     if (params?.from) query.append('from', params.from);
     if (params?.to) query.append('to', params.to);
     const token = getAdminToken();
 
-    // 1. Try purchases/export/excel route
+    // 1. Try reports/purchases route
     try {
-      const res = await fetch(`${API_BASE_URL}/purchases/export/excel?${query.toString()}`, {
+      const res = await fetch(`${API_BASE_URL}/reports/purchases?${query.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
@@ -1532,7 +1561,7 @@ export const inventoryApi = {
           const url = window.URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
-          a.download = `Purchases-Report-${Date.now()}.xlsx`;
+          a.download = `Itemized-Purchases-Report-${Date.now()}.xlsx`;
           document.body.appendChild(a);
           a.click();
           window.URL.revokeObjectURL(url);
@@ -1542,9 +1571,9 @@ export const inventoryApi = {
       }
     } catch {}
 
-    // 2. Try reports/purchases route
+    // 2. Try purchases/export/excel route
     try {
-      const res = await fetch(`${API_BASE_URL}/reports/purchases?${query.toString()}`, {
+      const res = await fetch(`${API_BASE_URL}/purchases/export/excel?${query.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
@@ -1591,17 +1620,30 @@ export const inventoryApi = {
     }
   },
 
-  downloadMovementsReport: async (params?: { branchId?: string; productId?: string; from?: string; to?: string }) => {
+  downloadMovementsReport: async (params?: {
+    branchId?: string;
+    productId?: string;
+    period?: string;
+    date?: string;
+    month?: number | string;
+    year?: number | string;
+    from?: string;
+    to?: string;
+  }) => {
     const query = new URLSearchParams();
     if (params?.branchId && params.branchId !== 'ALL' && params.branchId !== 'PRC_STOCK') query.append('branchId', params.branchId);
     if (params?.productId) query.append('productId', params.productId);
+    if (params?.period) query.append('period', params.period);
+    if (params?.date) query.append('date', params.date);
+    if (params?.month) query.append('month', String(params.month));
+    if (params?.year) query.append('year', String(params.year));
     if (params?.from) query.append('from', params.from);
     if (params?.to) query.append('to', params.to);
     const token = getAdminToken();
 
-    // 1. Try stock-movements/export/excel route
+    // 1. Try reports/movements route
     try {
-      const res = await fetch(`${API_BASE_URL}/stock-movements/export/excel?${query.toString()}`, {
+      const res = await fetch(`${API_BASE_URL}/reports/movements?${query.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
@@ -1610,7 +1652,7 @@ export const inventoryApi = {
           const url = window.URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
-          a.download = `Stock-Movements-${Date.now()}.xlsx`;
+          a.download = `Stock-Audit-Ledger-${Date.now()}.xlsx`;
           document.body.appendChild(a);
           a.click();
           window.URL.revokeObjectURL(url);
@@ -1620,9 +1662,9 @@ export const inventoryApi = {
       }
     } catch {}
 
-    // 2. Try reports/movements route
+    // 2. Try stock-movements/export/excel route
     try {
-      const res = await fetch(`${API_BASE_URL}/reports/movements?${query.toString()}`, {
+      const res = await fetch(`${API_BASE_URL}/stock-movements/export/excel?${query.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
@@ -1671,6 +1713,52 @@ export const inventoryApi = {
       throw new Error('Failed to download movements report');
     }
   },
+
+  downloadOrdersConsumptionReport: async (params?: {
+    branchId?: string;
+    channel?: 'all' | 'b2c' | 'b2b';
+    period?: string;
+    date?: string;
+    month?: number | string;
+    year?: number | string;
+    from?: string;
+    to?: string;
+  }) => {
+    const query = new URLSearchParams();
+    if (params?.branchId && params.branchId !== 'ALL' && params.branchId !== 'PRC_STOCK') query.append('branchId', params.branchId);
+    if (params?.channel && params.channel !== 'all') query.append('channel', params.channel);
+    if (params?.period) query.append('period', params.period);
+    if (params?.date) query.append('date', params.date);
+    if (params?.month) query.append('month', String(params.month));
+    if (params?.year) query.append('year', String(params.year));
+    if (params?.from) query.append('from', params.from);
+    if (params?.to) query.append('to', params.to);
+    const token = getAdminToken();
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/reports/orders?${query.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const blob = await res.blob();
+        if (blob.size > 0) {
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `Orders-Consumption-Ledger-${Date.now()}.xlsx`;
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+          return;
+        }
+      }
+    } catch (e: any) {
+      console.warn('[downloadOrdersConsumptionReport] fetch error:', e?.message || e);
+    }
+  },
+
+  downloadAuditReport: async (params?: any) => inventoryApi.downloadMovementsReport(params),
 
   // 9. Product-Wise Complete Traceability & Inventory Dossier
   getProductDossier: async (productId: string) => {
