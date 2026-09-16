@@ -264,6 +264,9 @@ export type AdminView =
   | 'appointments'
   | 'auth'
   | 'banner'
+  | 'barcode'
+  | 'barcode-scanner'
+  | 'barcode-hub'
   | 'cart'
   | 'categories'
   | 'categories-create'
@@ -1439,6 +1442,82 @@ export interface ExpenseRollupAnalytics {
     amountRupees: number;
   }[];
   branchesCount: number;
+}
+
+export interface BarcodeScanResult {
+  found: boolean;
+  product: {
+    id: string;
+    name: string;
+    sku: string;
+    slug: string;
+    thumbnail?: string | null;
+    images: string[];
+    category?: { id: string; name: string } | null;
+    status: string;
+    isVisible: boolean;
+    reorderLevel: number;
+    weight?: number | null;
+  };
+  specs: {
+    finish: string;
+    colour: string;
+    colours: string[];
+    dimensions?: {
+      height?: number;
+      width?: number;
+      length?: number;
+      unit?: string;
+    } | null;
+    attributes?: any;
+  };
+  pricing: {
+    price: number;
+    salePrice?: number | null;
+    offerPrice?: number | null;
+  };
+  inventories: Array<{
+    branchId: string;
+    branchName: string;
+    branchCode: string;
+    quantity: number;
+    reservedQuantity: number;
+    availableQuantity: number;
+    reorderLevel: number;
+    health: 'IN_STOCK' | 'LOW_STOCK' | 'OUT_OF_STOCK';
+  }>;
+  metrics: {
+    totalStock: number;
+    totalReserved: number;
+    totalAvailable: number;
+    healthStatus: 'IN_STOCK' | 'LOW_STOCK' | 'OUT_OF_STOCK';
+    branchCount: number;
+  };
+  dispatchOrders: Array<{
+    orderId: string;
+    orderItemId: string;
+    orderNumber: string;
+    orderStatus: string;
+    orderDate: string;
+    customerName: string;
+    customerPhone?: string;
+    city?: string;
+    orderedQuantity: number;
+    unitPrice: number;
+    totalPrice: number;
+    canDispatch: boolean;
+  }>;
+  recentMovements: Array<{
+    id: string;
+    type: string;
+    quantity: number;
+    branchName: string;
+    notes?: string | null;
+    createdAt: string;
+  }>;
+  barcodeUrl: string;
+  qrCodeUrl: string;
+  labelPdfUrl: string;
 }
 
 

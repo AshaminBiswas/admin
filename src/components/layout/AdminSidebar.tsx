@@ -42,6 +42,7 @@ import {
   Wrench,
   BadgeCheck,
   Wallet,
+  ScanLine,
   X,
 } from "lucide-react";
 import { useAdminAuth } from "../../context/AdminAuthContext";
@@ -80,6 +81,7 @@ export function AdminSidebar({
 
     // Catalog & Stock
     { id: "inventory", label: "Multi-Branch Stock", category: "Catalog & Stock", icon: <Boxes size={18} />, badge: "DEL/KOL" },
+    { id: "barcode", label: "Barcode & Scanner", category: "Catalog & Stock", icon: <ScanLine size={18} />, badge: "SCAN" },
     { id: "products", label: "Products Catalog", category: "Catalog & Stock", icon: <Package size={18} />, badge: "5" },
     { id: "categories", label: "Categories", category: "Catalog & Stock", icon: <FolderTree size={18} /> },
     { id: "materials", label: "Materials Master", category: "Catalog & Stock", icon: <Sparkles size={18} /> },

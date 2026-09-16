@@ -2,7 +2,7 @@ import React, { useState, Suspense } from "react";
 import { AdminSidebar } from "./AdminSidebar";
 import { AdminHeader } from "./AdminHeader";
 import { useAdminAuth } from "../../context/AdminAuthContext";
-import { RefreshCw, LayoutDashboard, ShoppingCart, Package, FileText, Menu } from "lucide-react";
+import { RefreshCw, LayoutDashboard, ShoppingCart, Package, FileText, Menu, ScanLine } from "lucide-react";
 import { lazyWithRetry } from "../../utils/lazyWithRetry";
 import { ViewErrorBoundary } from "../common/ViewErrorBoundary";
 
@@ -45,6 +45,7 @@ const NotificationsPage = lazyWithRetry(() => import("../../pages/NotificationsP
 const InventoryPage = lazyWithRetry(() => import("../../pages/InventoryPage").then((m) => ({ default: m.InventoryPage })));
 const AddSkuPage = lazyWithRetry(() => import("../../pages/AddSkuPage").then((m) => ({ default: m.AddSkuPage })));
 const ProductDossierPage = lazyWithRetry(() => import("../../pages/ProductDossierPage").then((m) => ({ default: m.ProductDossierPage })));
+const BarcodePage = lazyWithRetry(() => import("../../pages/BarcodePage").then((m) => ({ default: m.BarcodePage })));
 const GSTInvoiceHub = lazyWithRetry(() => import("../../pages/GSTInvoiceHub"));
 const ProjectsPage = lazyWithRetry(() => import("../../pages/ProjectsPage").then((m) => ({ default: m.ProjectsPage })));
 const POManagementPage = lazyWithRetry(() => import("../../pages/POManagementPage").then((m) => ({ default: m.POManagementPage })));
@@ -175,6 +176,10 @@ export function AdminLayout() {
       case "inventory-add-sku":
       case "add-sku":
         return <AddSkuPage />;
+      case "barcode":
+      case "barcode-scanner":
+      case "barcode-hub":
+        return <BarcodePage />;
       case "product-dossier":
       case "product-audit":
       case "inventory-dossier":
@@ -428,6 +433,7 @@ export function AdminLayout() {
         {[
           { id: "dashboard", label: "Home", icon: <LayoutDashboard size={16} /> },
           { id: "orders", label: "Orders", icon: <ShoppingCart size={16} /> },
+          { id: "barcode", label: "Scan", icon: <ScanLine size={16} /> },
           { id: "products", label: "Products", icon: <Package size={16} /> },
           { id: "quotes", label: "Quotes", icon: <FileText size={16} /> },
           { id: "menu", label: "All Menu", icon: <Menu size={16} />, isAction: true },

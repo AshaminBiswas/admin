@@ -1,4 +1,4 @@
-import type { Branch, Supplier, InventoryItem, Purchase, StockTransfer, StockMovement, ProductDossier } from '../types/admin';
+import type { Branch, Supplier, InventoryItem, Purchase, StockTransfer, StockMovement, ProductDossier, BarcodeScanResult } from '../types/admin';
 
 // Dynamic API Base URL — default to local backend or production fallback
 export const API_BASE_URL =
@@ -1908,6 +1908,59 @@ export const proformaInvoicesApi = {
     });
   },
 };
+
+// ─── Production Barcode & Dispatch API ────────────────────────────────────────
+export const barcodeApi = {
+  scanLookup: async (code: string) => {
+    return fetchAdminApi<BarcodeScanResult>(`/barcode/scan/${encodeURIComponent(code)}`);
+  },
+
+  getBarcodeImageUrl: (sku: string) => {
+    return `${API_BASE_URL}/barcode/${encodeURIComponent(sku)}/image`;
+  },
+
+  getQrImageUrl: (sku: string, targetUrl?: string) => {
+    const q = targetUrl ? `?url=${encodeURIComponent(targetUrl)}` : '';
+    return `${API_BASE_URL}/barcode/${encodeURIComponent(sku)}/qr${q}`;
+  },
+
+  getLabelPdfUrl: (sku: string, size: '58x40' | '80x40' = '58x40') => {
+    return `${API_BASE_URL}/barcode/${encodeURIComponent(sku)}/label?size=${size}`;
+  },
+
+  downloadLabelPdf: async (sku: string, size: '58x40' | '80x40' = '58x40') => {
+    const token = getAdminToken();
+    const url = `${API_BASE_URL}/barcode/${encodeURIComponent(sku)}/label?size=${size}`;
+    const res = await fetch(url, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) throw new Error('Failed to generate thermal label PDF');
+    const blob = await res.blob();
+    const blobUrl = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = `label-${sku}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(blobUrl);
+    document.body.removeChild(a);
+  },
+
+  dispatchOrder: async (payload: {
+    orderId: string;
+    orderItemId?: string;
+    sku: string;
+    quantity: number;
+    branchId: string;
+    notes?: string;
+  }) => {
+    return fetchAdminApi<any>('/barcode/dispatch', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+};
+
 
 
 
