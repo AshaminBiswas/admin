@@ -1515,11 +1515,53 @@ export interface BarcodeScanResult {
     notes?: string | null;
     createdAt: string;
   }>;
+  lifecycle: {
+    id?: string;
+    status: 'PENDING_PACK' | 'PACKED' | 'RECEIVED';
+    scanCount: number;
+    canPack: boolean;
+    canReceive: boolean;
+    isCompleted: boolean;
+    stage1: {
+      packedAt: string;
+      packedBy?: string | null;
+      packedByName?: string | null;
+      packedDeviceId?: string | null;
+      packedBranchId?: string | null;
+      notes?: string | null;
+    } | null;
+    stage2: {
+      receivedAt: string;
+      receivedBy?: string | null;
+      receivedByName?: string | null;
+      receivedDeviceId?: string | null;
+      receivedBranchId?: string | null;
+      notes?: string | null;
+    } | null;
+  };
   barcodeUrl: string;
   qrCodeUrl: string;
   labelPdfUrl: string;
 }
 
+export interface StageScanPayload {
+  sku: string;
+  stage: 'PACKING' | 'RECEIVED';
+  trackingCode?: string;
+  orderId?: string;
+  orderItemId?: string;
+  branchId?: string;
+  deviceId: string;
+  deviceName?: string;
+  notes?: string;
+}
 
-
-
+export interface StageScanResult {
+  success: boolean;
+  stage: 'PACKING' | 'RECEIVED';
+  status: 'PACKED' | 'RECEIVED';
+  scanCount: number;
+  isCompleted?: boolean;
+  message: string;
+  lifecycle: any;
+}

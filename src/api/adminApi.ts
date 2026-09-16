@@ -1,4 +1,4 @@
-import type { Branch, Supplier, InventoryItem, Purchase, StockTransfer, StockMovement, ProductDossier, BarcodeScanResult } from '../types/admin';
+import type { Branch, Supplier, InventoryItem, Purchase, StockTransfer, StockMovement, ProductDossier, BarcodeScanResult, StageScanPayload, StageScanResult } from '../types/admin';
 
 // Dynamic API Base URL — default to local backend or production fallback
 export const API_BASE_URL =
@@ -1963,6 +1963,13 @@ export const barcodeApi = {
     notes?: string;
   }) => {
     return fetchAdminApi<any>('/barcode/dispatch', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  executeStageScan: async (payload: StageScanPayload) => {
+    return fetchAdminApi<StageScanResult>('/barcode/stage-scan', {
       method: 'POST',
       body: JSON.stringify(payload),
     });

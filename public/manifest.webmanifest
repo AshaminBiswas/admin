@@ -1,0 +1,25 @@
+{
+  "name": "PRC Barcode Scanner & Dispatch Station",
+  "short_name": "PRC Scan",
+  "description": "Production Barcode Scanner, 2-Stage Fulfillment Lifecycle (Packing & Received), and Order Dispatch Hub",
+  "start_url": "/?view=barcode",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#09090B",
+  "theme_color": "#8B5CF6",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "192x192 512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/prc-logo.png",
+      "sizes": "192x192 512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
