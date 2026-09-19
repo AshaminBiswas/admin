@@ -32,6 +32,19 @@ import {
   FileCheck,
   CheckSquare,
   Copy,
+  UserPlus,
+  Send,
+  MessageSquare,
+  Ban,
+  FileWarning,
+  Sparkles,
+  Sliders,
+  RotateCcw,
+  IndianRupee,
+  Square,
+  Printer,
+  PhoneCall,
+  Loader2,
 } from 'lucide-react';
 import { ProformaInvoice } from '../../types/proforma';
 import { GSTInvoice, B2BOrder } from '../../types/admin';
@@ -44,6 +57,23 @@ import { PoSubmissionItem, PoSubmissionDetail } from '../../types/poManagement';
 import { fetchAdminApi } from '../../api/adminApi';
 import { ProformaInvoiceDetailView } from './ProformaInvoiceDetailView';
 import { ProformaInvoiceCreateView } from './ProformaInvoiceCreateView';
+import { paymentFollowupApi } from '../../api/paymentFollowupApi';
+import type {
+  CustomerDueSummary,
+  DuesDashboardMetrics,
+  FollowupRule,
+} from '../../types/paymentFollowup';
+import {
+  AddOldCustomerModal,
+  RecordPaymentAllocationModal,
+  LogFollowupModal,
+  SendLedgerModal,
+  SendSmsReminderModal,
+  DeclineDisputeModal,
+  BulkCommunicationModal,
+  CustomerDuesDetailDrawer,
+} from '../../components/payment-followup';
+import { printStatementOfAccount } from '../../utils/customerLedgerPdfGenerator';
 
 // ─── Unified B2B Commercial Payment Record ─────────────────────────────────────
 export interface B2BPaymentRecord {
@@ -255,9 +285,105 @@ www.prchardware.com`
   return `mailto:${record.customerEmail || ''}?subject=${subject}&body=${body}`;
 }
 
+export type CockpitTab =
+  | 'DUES_RECOVERY'
+  | 'DOCUMENTS_LEDGER'
+  | 'CUSTOMER_ACCOUNTS'
+  | 'DISPUTED_ACCOUNTS'
+  | 'AUTOMATION_RULES';
+
 export function AdvancePaymentsTrackerPage() {
-  // Active Tab: 'DOCUMENTS_LEDGER' | 'CUSTOMER_ACCOUNTS'
-  const [activeTab, setActiveTab] = useState<'DOCUMENTS_LEDGER' | 'CUSTOMER_ACCOUNTS'>('DOCUMENTS_LEDGER');
+  // Active Cockpit Tab
+  const [activeTab, setActiveTab] = useState<CockpitTab>('DUES_RECOVERY');
+
+  // Dues Recovery & Aging Data States
+  const [duesCustomers, setDuesCustomers] = useState<CustomerDueSummary[]>([]);
+  const [duesMetrics, setDuesMetrics] = useState<DuesDashboardMetrics | null>(null);
+  const [loadingDues, setLoadingDues] = useState(false);
+  const [duesSearchQuery, setDuesSearchQuery] = useState('');
+  const [agingBucketFilter, setAgingBucketFilter] = useState<string>('ALL');
+  const [followupStatusFilter, setFollowupStatusFilter] = useState<string>('ALL');
+  const [selectedCustomerIds, setSelectedCustomerIds] = useState<string[]>([]);
+
+  // Follow-up Rules Data States
+  const [followupRules, setFollowupRules] = useState<FollowupRule[]>([]);
+  const [loadingRules, setLoadingRules] = useState(false);
+  const [runningTrigger, setRunningTrigger] = useState(false);
+
+  // New Modals State
+  const [isAddOldCustomerOpen, setIsAddOldCustomerOpen] = useState(false);
+  const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
+  const [drawerCustomerId, setDrawerCustomerId] = useState<string | null>(null);
+
+  const [allocationModal, setAllocationModal] = useState<{
+    isOpen: boolean;
+    customerId: string;
+    customerName: string;
+    companyName?: string | null;
+    totalOutstanding: number;
+    initialDueId?: string;
+  }>({
+    isOpen: false,
+    customerId: '',
+    customerName: '',
+    totalOutstanding: 0,
+  });
+
+  const [logFollowupModal, setLogFollowupModal] = useState<{
+    isOpen: boolean;
+    customerId: string;
+    customerName: string;
+    companyName?: string | null;
+    phone?: string | null;
+    email?: string | null;
+    outstandingAmount: number;
+  }>({
+    isOpen: false,
+    customerId: '',
+    customerName: '',
+    outstandingAmount: 0,
+  });
+
+  const [sendLedgerModal, setSendLedgerModal] = useState<{
+    isOpen: boolean;
+    customerId: string;
+    customerName: string;
+    companyName?: string | null;
+    email?: string | null;
+    totalOutstanding: number;
+  }>({
+    isOpen: false,
+    customerId: '',
+    customerName: '',
+    totalOutstanding: 0,
+  });
+
+  const [sendSmsModal, setSendSmsModal] = useState<{
+    isOpen: boolean;
+    customerId: string;
+    customerName: string;
+    companyName?: string | null;
+    phone?: string | null;
+    totalOutstanding: number;
+  }>({
+    isOpen: false,
+    customerId: '',
+    customerName: '',
+    totalOutstanding: 0,
+  });
+
+  const [declineDisputeModal, setDeclineDisputeModal] = useState<{
+    isOpen: boolean;
+    customerId: string;
+    customerName: string;
+    companyName?: string | null;
+    totalOutstanding: number;
+  }>({
+    isOpen: false,
+    customerId: '',
+    customerName: '',
+    totalOutstanding: 0,
+  });
 
   // Multi-Source Data States
   const [proformaInvoices, setProformaInvoices] = useState<ProformaInvoice[]>([]);
@@ -417,12 +543,14 @@ export function AdvancePaymentsTrackerPage() {
     setLoading(true);
     setError(null);
     try {
-      const [piRes, gstRes, b2bRes, quoteRes, poRes] = await Promise.allSettled([
+      const [piRes, gstRes, b2bRes, quoteRes, poRes, metricsRes, duesRes] = await Promise.allSettled([
         proformaService.listProformaInvoices({ limit: 100 }),
         listGSTInvoices({ limit: 100 }),
         b2bOrdersApi.listB2BOrders({ limit: 100 }),
         quotesService.listQuotes({ limit: 100 }),
         getPoSubmissions({ limit: 100 }),
+        paymentFollowupApi.getDashboardMetrics(),
+        paymentFollowupApi.listCustomerDues({ limit: 150 }),
       ]);
 
       if (piRes.status === 'fulfilled' && piRes.value) {
@@ -457,6 +585,14 @@ export function AdvancePaymentsTrackerPage() {
         const poList = poRes.value.items || [];
         setPoSubmissions(Array.isArray(poList) ? poList : []);
       }
+
+      if (metricsRes.status === 'fulfilled' && metricsRes.value?.success) {
+        setDuesMetrics(metricsRes.value.data);
+      }
+
+      if (duesRes.status === 'fulfilled' && duesRes.value?.success) {
+        setDuesCustomers(duesRes.value.data.items || []);
+      }
     } catch (err: any) {
       console.error('[AdvancePaymentsTracker] Load error:', err);
       setError(err?.message || 'Failed to aggregate commercial payment records.');
@@ -465,9 +601,123 @@ export function AdvancePaymentsTrackerPage() {
     }
   };
 
+  const fetchDuesData = async () => {
+    setLoadingDues(true);
+    try {
+      const [metricsRes, duesRes] = await Promise.allSettled([
+        paymentFollowupApi.getDashboardMetrics(),
+        paymentFollowupApi.listCustomerDues({
+          search: duesSearchQuery || undefined,
+          agingBucket: agingBucketFilter !== 'ALL' ? agingBucketFilter : undefined,
+          followupStatus: followupStatusFilter !== 'ALL' ? followupStatusFilter : undefined,
+          limit: 150,
+        }),
+      ]);
+
+      if (metricsRes.status === 'fulfilled' && metricsRes.value?.success) {
+        setDuesMetrics(metricsRes.value.data);
+      }
+      if (duesRes.status === 'fulfilled' && duesRes.value?.success) {
+        setDuesCustomers(duesRes.value.data.items || []);
+      }
+    } catch (e) {
+      console.error('Failed to fetch dues recovery data:', e);
+    } finally {
+      setLoadingDues(false);
+    }
+  };
+
+  const fetchFollowupRules = async () => {
+    setLoadingRules(true);
+    try {
+      const res = await paymentFollowupApi.listRules();
+      if (res.success && res.data) {
+        setFollowupRules(res.data);
+      }
+    } catch (e) {
+      console.error('Failed to load rules:', e);
+    } finally {
+      setLoadingRules(false);
+    }
+  };
+
+  const handleRunScheduledTrigger = async () => {
+    setRunningTrigger(true);
+    try {
+      const res = await paymentFollowupApi.runScheduledTrigger();
+      if (res.success) {
+        showToast(res.data?.message || 'Scheduled follow-up reminder cycle executed successfully!');
+        fetchDuesData();
+      } else {
+        showToast('Failed to trigger scheduled reminders', 'error');
+      }
+    } catch (e: any) {
+      showToast(e?.message || 'Error running trigger', 'error');
+    } finally {
+      setRunningTrigger(false);
+    }
+  };
+
+  const handleToggleRule = async (rule: FollowupRule) => {
+    try {
+      await paymentFollowupApi.upsertRule({
+        id: rule.id,
+        name: rule.name,
+        isEnabled: !rule.isEnabled,
+        agingThresholdDays: rule.agingThresholdDays,
+        repeatIntervalDays: rule.repeatIntervalDays,
+        communicationType: rule.communicationType,
+        maxReminders: rule.maxReminders,
+        templateSubject: rule.templateSubject || undefined,
+        templateBody: rule.templateBody,
+      });
+      showToast(`Rule "${rule.name}" ${!rule.isEnabled ? 'activated' : 'paused'}`);
+      fetchFollowupRules();
+    } catch (e: any) {
+      showToast(e?.message || 'Failed to update rule', 'error');
+    }
+  };
+
+  const handleResumeCustomer = async (customerId: string) => {
+    try {
+      await paymentFollowupApi.resumeFollowup(customerId);
+      showToast('Customer returned to active payment follow-up cycle!');
+      fetchDuesData();
+      fetchAllCommercialData();
+    } catch (e: any) {
+      showToast(e?.message || 'Failed to resume follow-up', 'error');
+    }
+  };
+
+  const handleToggleSelectCustomer = (customerId: string) => {
+    setSelectedCustomerIds((prev) =>
+      prev.includes(customerId) ? prev.filter((id) => id !== customerId) : [...prev, customerId]
+    );
+  };
+
+  const handleSelectAllFilteredDues = () => {
+    if (selectedCustomerIds.length === filteredDuesCustomers.length) {
+      setSelectedCustomerIds([]);
+    } else {
+      setSelectedCustomerIds(filteredDuesCustomers.map((c) => c.customerId));
+    }
+  };
+
   useEffect(() => {
     fetchAllCommercialData();
   }, []);
+
+  useEffect(() => {
+    if (activeTab === 'AUTOMATION_RULES') {
+      fetchFollowupRules();
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (activeTab === 'DUES_RECOVERY') {
+      fetchDuesData();
+    }
+  }, [agingBucketFilter, followupStatusFilter]);
 
   // ─── Normalize Unified Commercial Records ────────────────────────────────────
   const unifiedRecords: B2BPaymentRecord[] = useMemo(() => {
@@ -1118,6 +1368,29 @@ export function AdvancePaymentsTrackerPage() {
       });
   }, [unifiedRecords, searchQuery, sourceTypeFilter, statusFilter, agingFilter, selectedCustomerIdFilter, sortBy, sortOrder]);
 
+  // ─── Filtered Dues Recovery Customers ───────────────────────────────────────
+  const filteredDuesCustomers = useMemo(() => {
+    let list = duesCustomers;
+    if (duesSearchQuery.trim()) {
+      const q = duesSearchQuery.toLowerCase().trim();
+      list = list.filter(
+        (c) =>
+          (c.customerName || '').toLowerCase().includes(q) ||
+          (c.companyName || '').toLowerCase().includes(q) ||
+          (c.phone || '').includes(q) ||
+          (c.email || '').toLowerCase().includes(q) ||
+          (c.gstin || '').toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }, [duesCustomers, duesSearchQuery]);
+
+  const disputedCustomers = useMemo(() => {
+    return duesCustomers.filter(
+      (c) => c.followupStatus === 'DISPUTED' || c.followupStatus === 'DECLINED'
+    );
+  }, [duesCustomers]);
+
   // ─── Actions & Handlers ─────────────────────────────────────────────────────
   const handleOpenRecordPaymentModal = (record: B2BPaymentRecord) => {
     setPaymentModalRecord(record);
@@ -1433,6 +1706,668 @@ export function AdvancePaymentsTrackerPage() {
     );
   }
 
+  // ─── Render Sub-Views for Payment Follow-up Cockpit ────────────────────────
+  const renderDuesRecoveryTab = () => (
+    <div className="p-4 sm:p-6 rounded-2xl bg-[#18181B] border border-[#27272A] shadow-md space-y-4">
+      {/* Selection Action Bar if items exist */}
+      {filteredDuesCustomers.length > 0 && (
+        <div className="flex items-center justify-between p-2.5 rounded-xl bg-[#09090B] border border-[#27272A] text-xs">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={handleSelectAllFilteredDues}
+              className="flex items-center gap-1.5 text-zinc-300 hover:text-white font-medium"
+            >
+              {selectedCustomerIds.length === filteredDuesCustomers.length && filteredDuesCustomers.length > 0 ? (
+                <CheckSquare size={16} className="text-purple-400" />
+              ) : (
+                <Square size={16} className="text-zinc-500" />
+              )}
+              <span>Select All ({filteredDuesCustomers.length})</span>
+            </button>
+
+            {selectedCustomerIds.length > 0 && (
+              <span className="px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 font-bold text-[11px]">
+                {selectedCustomerIds.length} Selected
+              </span>
+            )}
+          </div>
+
+          {selectedCustomerIds.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setIsBulkModalOpen(true)}
+              className="px-3 py-1 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold transition-all flex items-center gap-1.5 shadow"
+            >
+              <Send size={13} />
+              <span>Launch Bulk Reminder ({selectedCustomerIds.length})</span>
+            </button>
+          )}
+        </div>
+      )}
+
+      {filteredDuesCustomers.length === 0 ? (
+        <div className="py-16 text-center text-zinc-500 flex flex-col items-center justify-center gap-2">
+          <CheckCircle2 size={36} className="text-emerald-500" />
+          <div className="text-sm font-semibold text-zinc-300">No customers found matching filter criteria</div>
+          <div className="text-xs">All customers are either fully settled or do not match the current filters.</div>
+        </div>
+      ) : (
+        <>
+          {/* Mobile Touch Cards (< lg) */}
+          <div className="block lg:hidden space-y-3.5">
+            {filteredDuesCustomers.map((c) => {
+              const isSelected = selectedCustomerIds.includes(c.customerId);
+              const cleanPhone = c.phone?.replace(/\D/g, '') || '';
+              return (
+                <div
+                  key={c.customerId}
+                  className={`p-4 rounded-2xl bg-[#09090B] border transition-all space-y-3 shadow-md ${
+                    isSelected ? 'border-purple-500 bg-purple-950/10' : 'border-[#27272A] hover:border-[#3F3F46]'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2.5">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleSelectCustomer(c.customerId)}
+                        className="p-1 text-zinc-400 hover:text-white"
+                      >
+                        {isSelected ? (
+                          <CheckSquare size={18} className="text-purple-400" />
+                        ) : (
+                          <Square size={18} className="text-zinc-600" />
+                        )}
+                      </button>
+                      <div>
+                        <h3 className="font-extrabold text-white text-sm">
+                          {c.companyName || c.customerName}
+                        </h3>
+                        {c.companyName && c.customerName && (
+                          <div className="text-[11px] text-zinc-400">{c.customerName}</div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col items-end gap-1">
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase border ${
+                          c.agingBucket === '90_PLUS'
+                            ? 'bg-rose-500/15 text-rose-300 border-rose-500/30'
+                            : c.agingBucket === '61_90'
+                            ? 'bg-orange-500/15 text-orange-300 border-orange-500/30'
+                            : c.agingBucket === '31_60'
+                            ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                            : 'bg-zinc-500/15 text-zinc-300 border-zinc-500/30'
+                        }`}
+                      >
+                        {c.agingBucket.replace('_', '-')} Days
+                      </span>
+                      {c.source === 'OLD_CUSTOMER' && (
+                        <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                          Legacy
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Direct Phone & WhatsApp */}
+                  <div className="p-2.5 rounded-xl bg-[#141417] border border-[#27272A] flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-3">
+                      {cleanPhone ? (
+                        <a
+                          href={`tel:+91${cleanPhone}`}
+                          className="text-emerald-400 font-bold flex items-center gap-1 hover:underline"
+                        >
+                          <PhoneCall size={12} />
+                          <span>+91 {cleanPhone}</span>
+                        </a>
+                      ) : (
+                        <span className="text-zinc-500 italic text-[11px]">No phone</span>
+                      )}
+                      {c.gstin && <span className="text-zinc-500 font-mono text-[10px]">GST: {c.gstin}</span>}
+                    </div>
+
+                    {cleanPhone && (
+                      <a
+                        href={`https://wa.me/91${cleanPhone}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="p-1 rounded bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20"
+                        title="WhatsApp"
+                      >
+                        <MessageCircle size={14} />
+                      </a>
+                    )}
+                  </div>
+
+                  {/* Financial Breakdown */}
+                  <div className="grid grid-cols-2 gap-2 text-xs pt-1 border-t border-[#27272A]">
+                    <div>
+                      <span className="text-[10px] text-zinc-500 uppercase block">Open Documents</span>
+                      <span className="text-zinc-300 font-mono">
+                        {c.invoicesCount} doc(s)
+                      </span>
+                      {c.overdueAmount > 0 && (
+                        <span className="block text-[10px] text-amber-400 font-bold">
+                          ₹{Math.round(c.overdueAmount).toLocaleString('en-IN')} overdue
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[10px] text-zinc-500 uppercase block">Outstanding Balance</span>
+                      <span className="font-black text-sm font-mono text-rose-400">
+                        ₹{Math.round(c.totalOutstanding).toLocaleString('en-IN')}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Follow-up / PTP status */}
+                  {(c.lastFollowupDate || c.ptpDate) && (
+                    <div className="p-2 rounded-xl bg-[#18181B] text-[11px] text-zinc-400 flex items-center justify-between border border-[#27272A]">
+                      {c.lastFollowupDate && (
+                        <span>Last: {new Date(c.lastFollowupDate).toLocaleDateString('en-IN')} ({c.lastFollowupOutcome || c.lastFollowupChannel || 'TOUCHPOINT'})</span>
+                      )}
+                      {c.ptpDate && (
+                        <span className="text-purple-300 font-bold">
+                          PTP: {new Date(c.ptpDate).toLocaleDateString('en-IN')} {c.ptpAmount ? `(₹${c.ptpAmount.toLocaleString('en-IN')})` : ''}
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Action Buttons */}
+                  <div className="grid grid-cols-4 gap-1.5 pt-2 border-t border-[#27272A]">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setAllocationModal({
+                          isOpen: true,
+                          customerId: c.customerId,
+                          customerName: c.customerName,
+                          companyName: c.companyName,
+                          totalOutstanding: c.totalOutstanding,
+                        })
+                      }
+                      className="py-1.5 px-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold text-center"
+                    >
+                      Pay
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setLogFollowupModal({
+                          isOpen: true,
+                          customerId: c.customerId,
+                          customerName: c.customerName,
+                          companyName: c.companyName,
+                          phone: c.phone,
+                          email: c.email,
+                          outstandingAmount: c.totalOutstanding,
+                        })
+                      }
+                      className="py-1.5 px-2 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-[11px] font-bold text-center"
+                    >
+                      Log Call
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setSendLedgerModal({
+                          isOpen: true,
+                          customerId: c.customerId,
+                          customerName: c.customerName,
+                          companyName: c.companyName,
+                          email: c.email,
+                          totalOutstanding: c.totalOutstanding,
+                        })
+                      }
+                      className="py-1.5 px-2 rounded-lg bg-[#27272A] hover:bg-[#3F3F46] text-zinc-300 text-[11px] font-bold text-center"
+                    >
+                      Email
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDrawerCustomerId(c.customerId)}
+                      className="py-1.5 px-2 rounded-lg bg-[#27272A] hover:bg-[#3F3F46] text-purple-300 text-[11px] font-bold text-center"
+                    >
+                      360 Dues
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Desktop Table View (>= lg) */}
+          <div className="hidden lg:block overflow-x-auto rounded-2xl border border-[#27272A]">
+            <table className="w-full text-left text-xs text-zinc-300 divide-y divide-[#27272A]">
+              <thead className="bg-[#09090B] text-zinc-400 font-extrabold uppercase text-[10px] tracking-wider">
+                <tr>
+                  <th className="py-3 px-3 w-10 text-center">
+                    <button
+                      type="button"
+                      onClick={handleSelectAllFilteredDues}
+                      className="p-1 hover:text-white"
+                    >
+                      {selectedCustomerIds.length === filteredDuesCustomers.length && filteredDuesCustomers.length > 0 ? (
+                        <CheckSquare size={16} className="text-purple-400" />
+                      ) : (
+                        <Square size={16} className="text-zinc-600" />
+                      )}
+                    </button>
+                  </th>
+                  <th className="py-3 px-3">Customer & Company</th>
+                  <th className="py-3 px-3">Direct Contact</th>
+                  <th className="py-3 px-3 text-right">Invoiced / Paid</th>
+                  <th className="py-3 px-3 text-right">Outstanding Dues</th>
+                  <th className="py-3 px-3 text-center">Aging</th>
+                  <th className="py-3 px-3">Follow-up / PTP Status</th>
+                  <th className="py-3 px-3 text-right">Quick Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#27272A] bg-[#121214]">
+                {filteredDuesCustomers.map((c) => {
+                  const isSelected = selectedCustomerIds.includes(c.customerId);
+                  const cleanPhone = c.phone?.replace(/\D/g, '') || '';
+                  return (
+                    <tr
+                      key={c.customerId}
+                      className={`hover:bg-[#18181B] transition-colors ${
+                        isSelected ? 'bg-purple-950/20' : ''
+                      }`}
+                    >
+                      <td className="py-3 px-3 text-center">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleSelectCustomer(c.customerId)}
+                          className="p-1 hover:text-white"
+                        >
+                          {isSelected ? (
+                            <CheckSquare size={16} className="text-purple-400" />
+                          ) : (
+                            <Square size={16} className="text-zinc-600" />
+                          )}
+                        </button>
+                      </td>
+                      <td className="py-3 px-3">
+                        <div className="font-bold text-white flex items-center gap-1.5">
+                          <span>{c.companyName || c.customerName}</span>
+                          {c.source === 'OLD_CUSTOMER' && (
+                            <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                              Legacy
+                            </span>
+                          )}
+                        </div>
+                        {c.companyName && c.customerName && (
+                          <div className="text-[11px] text-zinc-400">{c.customerName}</div>
+                        )}
+                        {c.gstin && (
+                          <div className="text-[10px] font-mono text-zinc-500">GST: {c.gstin}</div>
+                        )}
+                      </td>
+                      <td className="py-3 px-3">
+                        <div className="flex items-center gap-2">
+                          {cleanPhone ? (
+                            <a
+                              href={`tel:+91${cleanPhone}`}
+                              className="text-emerald-400 font-bold hover:underline flex items-center gap-1"
+                            >
+                              <PhoneCall size={12} />
+                              <span className="font-mono">+91 {cleanPhone}</span>
+                            </a>
+                          ) : (
+                            <span className="text-zinc-500 text-[11px] italic">No phone</span>
+                          )}
+                          {cleanPhone && (
+                            <a
+                              href={`https://wa.me/91${cleanPhone}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="p-1 rounded bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20"
+                              title="WhatsApp"
+                            >
+                              <MessageCircle size={13} />
+                            </a>
+                          )}
+                        </div>
+                        {c.email && !c.email.includes('@internal.prc') && (
+                          <div className="text-[10px] text-zinc-400 truncate max-w-[150px]">
+                            {c.email}
+                          </div>
+                        )}
+                      </td>
+                      <td className="py-3 px-3 text-right font-mono">
+                        <div className="text-zinc-300">{c.invoicesCount} doc(s)</div>
+                        {c.overdueAmount > 0 && (
+                          <div className="text-[10px] text-amber-400 font-bold">
+                            ₹{Math.round(c.overdueAmount).toLocaleString('en-IN')} overdue
+                          </div>
+                        )}
+                      </td>
+                      <td className="py-3 px-3 text-right font-mono">
+                        <div className="text-base font-black text-rose-400">
+                          ₹{Math.round(c.totalOutstanding).toLocaleString('en-IN')}
+                        </div>
+                      </td>
+                      <td className="py-3 px-3 text-center">
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase border ${
+                            c.agingBucket === '90_PLUS'
+                              ? 'bg-rose-500/15 text-rose-300 border-rose-500/30'
+                              : c.agingBucket === '61_90'
+                              ? 'bg-orange-500/15 text-orange-300 border-orange-500/30'
+                              : c.agingBucket === '31_60'
+                              ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                              : 'bg-zinc-500/15 text-zinc-300 border-zinc-500/30'
+                          }`}
+                        >
+                          {c.agingBucket.replace('_', '-')} Days
+                        </span>
+                        <div className="text-[10px] text-zinc-500 mt-0.5">{c.maxDaysOverdue}d overdue</div>
+                      </td>
+                      <td className="py-3 px-3">
+                        <div className="flex items-center gap-1.5">
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                              c.followupStatus === 'OVERDUE'
+                                ? 'bg-rose-500/15 text-rose-300 border-rose-500/30'
+                                : c.followupStatus === 'PAYMENT_PROMISED'
+                                ? 'bg-purple-500/15 text-purple-300 border-purple-500/30'
+                                : c.followupStatus === 'PARTIALLY_PAID'
+                                ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                                : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                            }`}
+                          >
+                            {c.followupStatus.replace('_', ' ')}
+                          </span>
+                        </div>
+                        {c.ptpDate && (
+                          <div className="text-[10px] text-purple-300 font-bold mt-0.5">
+                            PTP: {new Date(c.ptpDate).toLocaleDateString('en-IN')} (₹
+                            {c.ptpAmount?.toLocaleString('en-IN')})
+                          </div>
+                        )}
+                      </td>
+                      <td className="py-3 px-3 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setAllocationModal({
+                                isOpen: true,
+                                customerId: c.customerId,
+                                customerName: c.customerName,
+                                companyName: c.companyName,
+                                totalOutstanding: c.totalOutstanding,
+                              })
+                            }
+                            className="px-2 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold transition-all shadow"
+                            title="Allocate Payment"
+                          >
+                            Pay
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setLogFollowupModal({
+                                isOpen: true,
+                                customerId: c.customerId,
+                                customerName: c.customerName,
+                                companyName: c.companyName,
+                                phone: c.phone,
+                                email: c.email,
+                                outstandingAmount: c.totalOutstanding,
+                              })
+                            }
+                            className="px-2 py-1 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-[11px] font-bold transition-all shadow"
+                            title="Log Follow-up Touchpoint"
+                          >
+                            Log
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setSendLedgerModal({
+                                isOpen: true,
+                                customerId: c.customerId,
+                                customerName: c.customerName,
+                                companyName: c.companyName,
+                                email: c.email,
+                                totalOutstanding: c.totalOutstanding,
+                              })
+                            }
+                            className="p-1 rounded-lg bg-[#27272A] hover:bg-[#3F3F46] text-zinc-300 hover:text-white"
+                            title="Send Statement of Account Email"
+                          >
+                            <Mail size={13} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setSendSmsModal({
+                                isOpen: true,
+                                customerId: c.customerId,
+                                customerName: c.customerName,
+                                companyName: c.companyName,
+                                phone: c.phone,
+                                totalOutstanding: c.totalOutstanding,
+                              })
+                            }
+                            className="p-1 rounded-lg bg-[#27272A] hover:bg-[#3F3F46] text-zinc-300 hover:text-white"
+                            title="Send SMS Reminder"
+                          >
+                            <MessageSquare size={13} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDrawerCustomerId(c.customerId)}
+                            className="p-1 rounded-lg bg-[#27272A] hover:bg-[#3F3F46] text-purple-300 hover:text-white"
+                            title="Inspect 360 Dues"
+                          >
+                            <Eye size={13} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setDeclineDisputeModal({
+                                isOpen: true,
+                                customerId: c.customerId,
+                                customerName: c.customerName,
+                                companyName: c.companyName,
+                                totalOutstanding: c.totalOutstanding,
+                              })
+                            }
+                            className="p-1 rounded-lg bg-[#27272A] hover:bg-[#3F3F46] text-rose-400 hover:text-white"
+                            title="Mark Disputed or Declined"
+                          >
+                            <Ban size={13} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </div>
+  );
+
+  const renderDisputedAccountsTab = () => (
+    <div className="p-4 sm:p-6 rounded-2xl bg-[#18181B] border border-[#27272A] shadow-md space-y-4">
+      <div className="flex items-center justify-between pb-3 border-b border-[#27272A]">
+        <div>
+          <h3 className="text-base font-bold text-white flex items-center gap-2">
+            <Ban size={18} className="text-rose-400" />
+            <span>Declined & Disputed Accounts Queue ({disputedCustomers.length})</span>
+          </h3>
+          <p className="text-xs text-zinc-400">
+            Accounts manually flagged for disputes, rate reconciliations, or collection suspensions.
+            These accounts are isolated from automated communications.
+          </p>
+        </div>
+      </div>
+
+      {disputedCustomers.length === 0 ? (
+        <div className="py-16 text-center text-zinc-500 flex flex-col items-center justify-center gap-2">
+          <ShieldCheck size={36} className="text-emerald-500" />
+          <div className="text-sm font-semibold text-zinc-300">No Disputed or Declined Accounts</div>
+          <div className="text-xs">All active client receivables are moving through regular recovery cycles.</div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+          {disputedCustomers.map((c) => (
+            <div
+              key={c.customerId}
+              className="p-4 rounded-2xl bg-[#09090B] border border-rose-900/40 space-y-3 shadow-md"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <h4 className="font-extrabold text-white text-sm">{c.companyName || c.customerName}</h4>
+                  <div className="text-xs text-zinc-400">{c.customerName} • {c.phone}</div>
+                </div>
+                <span
+                  className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase border ${
+                    c.followupStatus === 'DISPUTED'
+                      ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                      : 'bg-rose-500/15 text-rose-300 border-rose-500/30'
+                  }`}
+                >
+                  {c.followupStatus}
+                </span>
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-[#18181B] border border-[#27272A] text-xs space-y-1">
+                <div className="text-[10px] text-zinc-500 uppercase font-bold">Dispute / Suspension Reason</div>
+                <div className="text-zinc-200">{c.declineReason || 'No detailed reason specified'}</div>
+              </div>
+
+              <div className="flex items-center justify-between text-xs pt-1 border-t border-[#27272A]">
+                <div>
+                  <span className="text-[10px] text-zinc-500 block uppercase">Disputed Balance</span>
+                  <span className="text-sm font-black font-mono text-rose-400">
+                    ₹{Math.round(c.totalOutstanding).toLocaleString('en-IN')}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setDrawerCustomerId(c.customerId)}
+                    className="px-2.5 py-1 rounded-lg bg-[#27272A] hover:bg-[#3F3F46] text-zinc-300 text-xs font-bold"
+                  >
+                    Inspect 360
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleResumeCustomer(c.customerId)}
+                    className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1 shadow"
+                  >
+                    <RotateCcw size={12} />
+                    <span>Resume Recovery</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  const renderAutomationRulesTab = () => (
+    <div className="p-4 sm:p-6 rounded-2xl bg-[#18181B] border border-[#27272A] shadow-md space-y-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#27272A]">
+        <div>
+          <h3 className="text-base font-bold text-white flex items-center gap-2">
+            <Sparkles size={18} className="text-purple-400" />
+            <span>Follow-up Automation & Scheduled Rules</span>
+          </h3>
+          <p className="text-xs text-zinc-400">
+            Configured triggers send automated SMS and Email reminders based on invoice maturity and overdue SLA.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={handleRunScheduledTrigger}
+          disabled={runningTrigger}
+          className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow-md shadow-purple-900/30 disabled:opacity-50"
+        >
+          {runningTrigger ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+          <span>Run Scheduled Trigger Now</span>
+        </button>
+      </div>
+
+      {loadingRules ? (
+        <div className="py-12 flex flex-col items-center justify-center text-xs text-zinc-400 gap-2">
+          <Loader2 size={20} className="animate-spin text-purple-500" />
+          <span>Loading configured automation rules...</span>
+        </div>
+      ) : followupRules.length === 0 ? (
+        <div className="py-12 text-center text-zinc-500 text-xs">
+          No rules found. Rules are automatically initialized on startup.
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+          {followupRules.map((rule) => (
+            <div
+              key={rule.id}
+              className="p-4 rounded-2xl bg-[#09090B] border border-[#27272A] hover:border-[#3F3F46] transition-all space-y-3 shadow-md"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <h4 className="font-bold text-white text-sm">{rule.name}</h4>
+                  <div className="text-[11px] text-zinc-400 mt-0.5 line-clamp-1">
+                    {rule.templateSubject || rule.templateBody || 'Automated customer touchpoint rule'}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleToggleRule(rule)}
+                  className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold transition-all border ${
+                    rule.isEnabled
+                      ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                      : 'bg-zinc-500/15 text-zinc-400 border-zinc-500/30'
+                  }`}
+                >
+                  {rule.isEnabled ? 'Active' : 'Paused'}
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 text-xs p-2.5 rounded-xl bg-[#18181B] border border-[#27272A]">
+                <div>
+                  <span className="text-[10px] text-zinc-500 uppercase block">Trigger Schedule</span>
+                  <span className="font-bold text-zinc-200">
+                    {rule.agingThresholdDays === 0
+                      ? 'On Due Date'
+                      : rule.agingThresholdDays < 0
+                      ? `${Math.abs(rule.agingThresholdDays)} Days Before Due`
+                      : `${rule.agingThresholdDays} Days Overdue`}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-zinc-500 uppercase block">Communication Channel</span>
+                  <span className="font-mono text-purple-300 font-bold">
+                    {rule.communicationType.replace('_', ' ')}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between text-[11px] text-zinc-400 pt-1">
+                <span>Repeat: Every {rule.repeatIntervalDays} days</span>
+                <span>Max Reminders: {rule.maxReminders}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
   // ─── Main View ──────────────────────────────────────────────────────────────
   return (
     <div className="space-y-5">
@@ -1458,91 +2393,131 @@ export function AdvancePaymentsTrackerPage() {
               <Landmark size={20} />
             </span>
             <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white">
-              B2B Payments & Receivables
+              Payment Follow-up & Dues Recovery Cockpit
             </h1>
-            <span className="px-2.5 py-0.5 text-[11px] font-extrabold uppercase rounded-full bg-purple-500/10 text-purple-300 border border-purple-500/20">
-              Accounts Ledger
+            <span className="px-2.5 py-0.5 text-[11px] font-extrabold uppercase rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">
+              Receivables Recovery
             </span>
           </div>
           <p className="text-xs sm:text-sm text-zinc-400">
-            Track commercial dues, reconcile advance remittances, manage B2B account balances, and send instant payment reminders.
+            Track customer receivables across Delivered Goods & Opening Balances, dynamic aging buckets, automated reminders, and partial payment allocation.
           </p>
         </div>
 
-        <div className="flex items-center gap-2 flex-shrink-0">
+        <div className="flex items-center flex-wrap gap-2 flex-shrink-0">
+          <button
+            type="button"
+            onClick={() => setIsAddOldCustomerOpen(true)}
+            className="px-3.5 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow-md shadow-purple-900/30"
+          >
+            <UserPlus size={14} />
+            <span>+ Add Old Customer</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsBulkModalOpen(true)}
+            disabled={selectedCustomerIds.length === 0}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all border ${
+              selectedCustomerIds.length > 0
+                ? 'bg-amber-600 hover:bg-amber-500 text-white border-amber-500 shadow-md shadow-amber-900/30'
+                : 'bg-[#27272A] text-zinc-500 border-transparent cursor-not-allowed opacity-60'
+            }`}
+          >
+            <Send size={14} />
+            <span>Bulk Reminder {selectedCustomerIds.length > 0 && `(${selectedCustomerIds.length})`}</span>
+          </button>
           <button
             type="button"
             onClick={handleExportCSV}
             className="px-3.5 py-2 rounded-xl bg-[#27272A] hover:bg-[#3F3F46] text-zinc-300 text-xs font-bold flex items-center gap-1.5 transition-colors"
           >
             <Download size={14} />
-            <span className="hidden sm:inline">Export Ledger</span>
+            <span className="hidden sm:inline">Export</span>
           </button>
           <button
             type="button"
-            onClick={fetchAllCommercialData}
-            disabled={loading}
-            className="px-3.5 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow-md shadow-purple-900/30 disabled:opacity-50"
+            onClick={() => {
+              fetchAllCommercialData();
+              fetchDuesData();
+            }}
+            disabled={loading || loadingDues}
+            className="px-3.5 py-2 rounded-xl bg-[#27272A] hover:bg-[#3F3F46] text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow-md disabled:opacity-50"
           >
-            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+            <RefreshCw size={14} className={loading || loadingDues ? 'animate-spin' : ''} />
             <span>Refresh</span>
           </button>
         </div>
       </div>
 
-      {/* 4 Executive KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+      {/* 5 Executive KPI Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-3.5">
         {/* Total Outstanding */}
-        <div className="p-4 rounded-2xl bg-[#18181B] border border-[#27272A] shadow-md flex items-center gap-3.5">
-          <div className="p-3 rounded-xl bg-rose-500/15 text-rose-400 border border-rose-500/30">
-            <AlertTriangle size={20} />
+        <div className="p-3.5 sm:p-4 rounded-2xl bg-[#18181B] border border-[#27272A] shadow-md flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-rose-500/15 text-rose-400 border border-rose-500/30">
+            <AlertTriangle size={18} />
           </div>
           <div>
-            <div className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Total Outstanding</div>
-            <div className="text-xl sm:text-2xl font-black text-rose-400">
-              ₹{Math.round(executiveKpis.totalOutstanding).toLocaleString('en-IN')}
+            <div className="text-[10px] sm:text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Total Outstanding</div>
+            <div className="text-lg sm:text-xl font-black text-rose-400">
+              ₹{Math.round(duesMetrics?.totalOutstanding ?? executiveKpis.totalOutstanding).toLocaleString('en-IN')}
             </div>
-            <div className="text-[10px] text-zinc-500">Across all open receivables</div>
+            <div className="text-[10px] text-zinc-500">Across open dues & balances</div>
           </div>
         </div>
 
         {/* Overdue Receivables */}
-        <div className="p-4 rounded-2xl bg-[#18181B] border border-[#27272A] shadow-md flex items-center gap-3.5">
-          <div className="p-3 rounded-xl bg-amber-500/15 text-amber-400 border border-amber-500/30">
-            <Clock size={20} />
+        <div className="p-3.5 sm:p-4 rounded-2xl bg-[#18181B] border border-[#27272A] shadow-md flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-amber-500/15 text-amber-400 border border-amber-500/30">
+            <Clock size={18} />
           </div>
           <div>
-            <div className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Overdue Dues</div>
-            <div className="text-xl sm:text-2xl font-black text-amber-400">
-              ₹{Math.round(executiveKpis.overdueValue).toLocaleString('en-IN')}
+            <div className="text-[10px] sm:text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Overdue Dues</div>
+            <div className="text-lg sm:text-xl font-black text-amber-400">
+              ₹{Math.round(duesMetrics?.overdueAmount ?? executiveKpis.overdueValue).toLocaleString('en-IN')}
             </div>
-            <div className="text-[10px] text-zinc-500">{executiveKpis.overdueCount} document(s) past SLA</div>
+            <div className="text-[10px] text-zinc-500">{executiveKpis.overdueCount} account(s) overdue</div>
           </div>
         </div>
 
         {/* Total Collected */}
-        <div className="p-4 rounded-2xl bg-[#18181B] border border-[#27272A] shadow-md flex items-center gap-3.5">
-          <div className="p-3 rounded-xl bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-            <CheckCircle2 size={20} />
+        <div className="p-3.5 sm:p-4 rounded-2xl bg-[#18181B] border border-[#27272A] shadow-md flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+            <CheckCircle2 size={18} />
           </div>
           <div>
-            <div className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Collections Received</div>
-            <div className="text-xl sm:text-2xl font-black text-emerald-400">
+            <div className="text-[10px] sm:text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Collections Received</div>
+            <div className="text-lg sm:text-xl font-black text-emerald-400">
               ₹{Math.round(executiveKpis.totalCollected).toLocaleString('en-IN')}
             </div>
             <div className="text-[10px] text-zinc-500">{executiveKpis.collectionRatio.toFixed(1)}% recovery rate</div>
           </div>
         </div>
 
-        {/* Active Accounts */}
-        <div className="p-4 rounded-2xl bg-[#18181B] border border-[#27272A] shadow-md flex items-center gap-3.5">
-          <div className="p-3 rounded-xl bg-purple-500/15 text-purple-400 border border-purple-500/30">
-            <Building2 size={20} />
+        {/* Active Debtors */}
+        <div className="p-3.5 sm:p-4 rounded-2xl bg-[#18181B] border border-[#27272A] shadow-md flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-purple-500/15 text-purple-400 border border-purple-500/30">
+            <Building2 size={18} />
           </div>
           <div>
-            <div className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Active B2B Accounts</div>
-            <div className="text-xl sm:text-2xl font-black text-purple-300">{executiveKpis.activeDebtorsCount}</div>
+            <div className="text-[10px] sm:text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Active Debtors</div>
+            <div className="text-lg sm:text-xl font-black text-purple-300">
+              {duesMetrics?.customersWithDuesCount ?? executiveKpis.activeDebtorsCount}
+            </div>
             <div className="text-[10px] text-zinc-500">Commercial enterprise clients</div>
+          </div>
+        </div>
+
+        {/* Disputed / Declined */}
+        <div className="p-3.5 sm:p-4 rounded-2xl bg-[#18181B] border border-[#27272A] shadow-md flex items-center gap-3 col-span-2 lg:col-span-1">
+          <div className="p-2.5 rounded-xl bg-zinc-500/15 text-zinc-400 border border-zinc-500/30">
+            <Ban size={18} />
+          </div>
+          <div>
+            <div className="text-[10px] sm:text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Declined / Disputed</div>
+            <div className="text-lg sm:text-xl font-black text-zinc-300">
+              {duesMetrics?.declinedDisputedCount ?? disputedCustomers.length}
+            </div>
+            <div className="text-[10px] text-zinc-500">Excluded from auto queues</div>
           </div>
         </div>
       </div>
@@ -1551,7 +2526,19 @@ export function AdvancePaymentsTrackerPage() {
       <div className="p-3.5 sm:p-4 rounded-2xl bg-[#18181B] border border-[#27272A] space-y-3.5 shadow-md">
         {/* Navigation Tabs + 1-Click Customer Filter Reset */}
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-1.5 p-1 bg-[#09090B] rounded-xl border border-[#27272A]">
+          <div className="flex items-center flex-wrap gap-1.5 p-1 bg-[#09090B] rounded-xl border border-[#27272A]">
+            <button
+              type="button"
+              onClick={() => setActiveTab('DUES_RECOVERY')}
+              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 ${
+                activeTab === 'DUES_RECOVERY'
+                  ? 'bg-purple-600 text-white shadow'
+                  : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              <AlertTriangle size={13} />
+              <span>Dues Recovery & Aging ({duesCustomers.length})</span>
+            </button>
             <button
               type="button"
               onClick={() => setActiveTab('DOCUMENTS_LEDGER')}
@@ -1562,7 +2549,7 @@ export function AdvancePaymentsTrackerPage() {
               }`}
             >
               <FileText size={13} />
-              <span>Invoices Ledger ({filteredRecords.length})</span>
+              <span>Advance Payments & PI ({filteredRecords.length})</span>
             </button>
             <button
               type="button"
@@ -1574,7 +2561,31 @@ export function AdvancePaymentsTrackerPage() {
               }`}
             >
               <Building2 size={13} />
-              <span>Company Balances ({customerAccounts.length})</span>
+              <span>Company Ledgers ({customerAccounts.length})</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('DISPUTED_ACCOUNTS')}
+              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 ${
+                activeTab === 'DISPUTED_ACCOUNTS'
+                  ? 'bg-purple-600 text-white shadow'
+                  : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              <Ban size={13} />
+              <span>Declined & Disputed ({disputedCustomers.length})</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('AUTOMATION_RULES')}
+              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 ${
+                activeTab === 'AUTOMATION_RULES'
+                  ? 'bg-purple-600 text-white shadow'
+                  : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              <Sparkles size={13} />
+              <span>Follow-up Rules ({followupRules.length})</span>
             </button>
           </div>
 
@@ -1592,7 +2603,49 @@ export function AdvancePaymentsTrackerPage() {
           )}
         </div>
 
-        {/* Search & Select Filters */}
+        {/* Search & Select Filters for DUES_RECOVERY */}
+        {activeTab === 'DUES_RECOVERY' && (
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 pt-2 border-t border-[#27272A]">
+            <div className="relative flex-1">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+              <input
+                type="text"
+                placeholder="Search Customer, Company, Phone, Email, GSTIN..."
+                value={duesSearchQuery}
+                onChange={(e) => setDuesSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-[#09090B] border border-[#27272A] text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-purple-500"
+              />
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                value={agingBucketFilter}
+                onChange={(e) => setAgingBucketFilter(e.target.value)}
+                className="px-2.5 py-1.5 rounded-xl bg-[#09090B] border border-[#27272A] text-xs text-zinc-300 focus:outline-none focus:border-purple-500"
+              >
+                <option value="ALL">All Aging Buckets</option>
+                <option value="0-30">0 - 30 Days (Current)</option>
+                <option value="31-60">31 - 60 Days</option>
+                <option value="61-90">61 - 90 Days</option>
+                <option value="90+">&gt; 90 Days Overdue</option>
+              </select>
+
+              <select
+                value={followupStatusFilter}
+                onChange={(e) => setFollowupStatusFilter(e.target.value)}
+                className="px-2.5 py-1.5 rounded-xl bg-[#09090B] border border-[#27272A] text-xs text-zinc-300 focus:outline-none focus:border-purple-500"
+              >
+                <option value="ALL">All Follow-up Statuses</option>
+                <option value="OVERDUE">Overdue Only</option>
+                <option value="DUE">Due for Follow-up</option>
+                <option value="PTP_PROMISED">Promise-To-Pay (PTP)</option>
+                <option value="CURRENT">Current / On-Time</option>
+              </select>
+            </div>
+          </div>
+        )}
+
+        {/* Search & Select Filters for DOCUMENTS_LEDGER */}
         {activeTab === 'DOCUMENTS_LEDGER' && (
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 pt-2 border-t border-[#27272A]">
             <div className="relative flex-1">
@@ -1657,8 +2710,11 @@ export function AdvancePaymentsTrackerPage() {
           <span>{error}</span>
           <button onClick={fetchAllCommercialData} className="underline font-bold">Retry</button>
         </div>
+      ) : activeTab === 'DUES_RECOVERY' ? (
+        /* ─── TAB 1: DUES RECOVERY & AGING COCKPIT ─── */
+        renderDuesRecoveryTab()
       ) : activeTab === 'DOCUMENTS_LEDGER' ? (
-        /* ─── TAB 1: INVOICES LEDGER ─── */
+        /* ─── TAB 2: INVOICES LEDGER ─── */
         <div className="p-4 sm:p-6 rounded-2xl bg-[#18181B] border border-[#27272A] shadow-md space-y-4">
           {filteredRecords.length === 0 ? (
             <div className="py-16 text-center text-zinc-500 flex flex-col items-center justify-center gap-2">
@@ -1965,8 +3021,8 @@ export function AdvancePaymentsTrackerPage() {
             </>
           )}
         </div>
-      ) : (
-        /* ─── TAB 2: COMPANY BALANCES ─── */
+      ) : activeTab === 'CUSTOMER_ACCOUNTS' ? (
+        /* ─── TAB 3: COMPANY BALANCES & LEDGERS ─── */
         <div className="p-4 sm:p-6 rounded-2xl bg-[#18181B] border border-[#27272A] shadow-md space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3.5">
             {customerAccounts.map((c) => (
@@ -2031,6 +3087,12 @@ export function AdvancePaymentsTrackerPage() {
             ))}
           </div>
         </div>
+      ) : activeTab === 'DISPUTED_ACCOUNTS' ? (
+        /* ─── TAB 4: DECLINED & DISPUTED ACCOUNTS ─── */
+        renderDisputedAccountsTab()
+      ) : (
+        /* ─── TAB 5: AUTOMATION & FOLLOW-UP RULES ─── */
+        renderAutomationRulesTab()
       )}
 
       {/* ─── RECORD PAYMENT MODAL ────────────────────────────────────────── */}
@@ -2883,6 +3945,163 @@ export function AdvancePaymentsTrackerPage() {
           </div>
         </div>
       )}
+
+      {/* ─── PAYMENT FOLLOW-UP & DUES RECOVERY MODALS ─────────────────────── */}
+      <AddOldCustomerModal
+        isOpen={isAddOldCustomerOpen}
+        onClose={() => setIsAddOldCustomerOpen(false)}
+        onSuccess={() => {
+          showToast('Legacy customer onboarded with opening balance!');
+          fetchDuesData();
+          fetchAllCommercialData();
+        }}
+      />
+
+      <RecordPaymentAllocationModal
+        isOpen={allocationModal.isOpen}
+        customerId={allocationModal.customerId}
+        customerName={allocationModal.customerName}
+        companyName={allocationModal.companyName}
+        totalOutstanding={allocationModal.totalOutstanding}
+        initialDueId={allocationModal.initialDueId}
+        onClose={() => setAllocationModal((prev) => ({ ...prev, isOpen: false }))}
+        onSuccess={() => {
+          showToast('Payment allocated and recorded successfully!');
+          fetchDuesData();
+          fetchAllCommercialData();
+        }}
+      />
+
+      <LogFollowupModal
+        isOpen={logFollowupModal.isOpen}
+        customerId={logFollowupModal.customerId}
+        customerName={logFollowupModal.customerName}
+        companyName={logFollowupModal.companyName}
+        phone={logFollowupModal.phone}
+        email={logFollowupModal.email}
+        outstandingAmount={logFollowupModal.outstandingAmount}
+        onClose={() => setLogFollowupModal((prev) => ({ ...prev, isOpen: false }))}
+        onSuccess={() => {
+          showToast('Follow-up touchpoint recorded!');
+          fetchDuesData();
+        }}
+      />
+
+      <SendLedgerModal
+        isOpen={sendLedgerModal.isOpen}
+        customerId={sendLedgerModal.customerId}
+        customerName={sendLedgerModal.customerName}
+        companyName={sendLedgerModal.companyName}
+        email={sendLedgerModal.email}
+        totalOutstanding={sendLedgerModal.totalOutstanding}
+        onClose={() => setSendLedgerModal((prev) => ({ ...prev, isOpen: false }))}
+        onSuccess={() => {
+          showToast('Statement of Account PDF dispatched via email!');
+          fetchDuesData();
+        }}
+      />
+
+      <SendSmsReminderModal
+        isOpen={sendSmsModal.isOpen}
+        customerId={sendSmsModal.customerId}
+        customerName={sendSmsModal.customerName}
+        companyName={sendSmsModal.companyName}
+        phone={sendSmsModal.phone}
+        totalOutstanding={sendSmsModal.totalOutstanding}
+        onClose={() => setSendSmsModal((prev) => ({ ...prev, isOpen: false }))}
+        onSuccess={() => {
+          showToast('SMS payment reminder dispatched!');
+          fetchDuesData();
+        }}
+      />
+
+      <DeclineDisputeModal
+        isOpen={declineDisputeModal.isOpen}
+        customerId={declineDisputeModal.customerId}
+        customerName={declineDisputeModal.customerName}
+        companyName={declineDisputeModal.companyName}
+        totalOutstanding={declineDisputeModal.totalOutstanding}
+        onClose={() => setDeclineDisputeModal((prev) => ({ ...prev, isOpen: false }))}
+        onSuccess={() => {
+          showToast('Account status updated. Excluded from automated reminders.');
+          fetchDuesData();
+          fetchAllCommercialData();
+        }}
+      />
+
+      <BulkCommunicationModal
+        isOpen={isBulkModalOpen}
+        selectedCustomerIds={selectedCustomerIds}
+        onClose={() => setIsBulkModalOpen(false)}
+        onSuccess={() => {
+          showToast('Bulk communication batch completed!');
+          setSelectedCustomerIds([]);
+          fetchDuesData();
+        }}
+      />
+
+      <CustomerDuesDetailDrawer
+        isOpen={Boolean(drawerCustomerId)}
+        customerId={drawerCustomerId}
+        onClose={() => setDrawerCustomerId(null)}
+        onRecordPayment={(cId, outAmt, dId) => {
+          const cust = duesCustomers.find((c) => c.customerId === cId);
+          setAllocationModal({
+            isOpen: true,
+            customerId: cId,
+            customerName: cust?.customerName || '',
+            companyName: cust?.companyName,
+            totalOutstanding: outAmt,
+            initialDueId: dId,
+          });
+        }}
+        onLogFollowup={(cId, outAmt) => {
+          const cust = duesCustomers.find((c) => c.customerId === cId);
+          setLogFollowupModal({
+            isOpen: true,
+            customerId: cId,
+            customerName: cust?.customerName || '',
+            companyName: cust?.companyName,
+            phone: cust?.phone,
+            email: cust?.email,
+            outstandingAmount: outAmt,
+          });
+        }}
+        onSendLedger={(cId, outAmt) => {
+          const cust = duesCustomers.find((c) => c.customerId === cId);
+          setSendLedgerModal({
+            isOpen: true,
+            customerId: cId,
+            customerName: cust?.customerName || '',
+            companyName: cust?.companyName,
+            email: cust?.email,
+            totalOutstanding: outAmt,
+          });
+        }}
+        onSendSms={(cId, outAmt) => {
+          const cust = duesCustomers.find((c) => c.customerId === cId);
+          setSendSmsModal({
+            isOpen: true,
+            customerId: cId,
+            customerName: cust?.customerName || '',
+            companyName: cust?.companyName,
+            phone: cust?.phone,
+            totalOutstanding: outAmt,
+          });
+        }}
+        onDeclineDispute={(cId, outAmt) => {
+          const cust = duesCustomers.find((c) => c.customerId === cId);
+          setDeclineDisputeModal({
+            isOpen: true,
+            customerId: cId,
+            customerName: cust?.customerName || '',
+            companyName: cust?.companyName,
+            totalOutstanding: outAmt,
+          });
+        }}
+        onResumeFollowup={handleResumeCustomer}
+        onRefreshParent={fetchDuesData}
+      />
     </div>
   );
 }

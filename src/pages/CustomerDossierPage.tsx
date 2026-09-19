@@ -30,9 +30,28 @@ import {
   ArrowLeft,
   Home,
   ChevronRight,
+  CreditCard,
+  Printer,
+  Send,
+  History,
+  IndianRupee,
+  FileCheck2,
+  Ban,
+  RotateCcw,
+  MessageSquare,
 } from "lucide-react";
 import { usersApi } from "../api/adminApi";
 import { useAdminAuth } from "../context/AdminAuthContext";
+import { paymentFollowupApi } from "../api/paymentFollowupApi";
+import { printStatementOfAccount } from "../utils/customerLedgerPdfGenerator";
+import type { CustomerDuesDetail } from "../types/paymentFollowup";
+import {
+  RecordPaymentAllocationModal,
+  LogFollowupModal,
+  SendLedgerModal,
+  SendSmsReminderModal,
+  DeclineDisputeModal,
+} from "../components/payment-followup";
 
 interface CustomerDossierPageProps {
   userId?: string | null;
@@ -56,9 +75,18 @@ export function CustomerDossierPage({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<
-    "overview" | "addresses" | "orders" | "quotes" | "financials" | "b2b_rates" | "activity_logs"
+    "overview" | "addresses" | "orders" | "quotes" | "financials" | "b2b_rates" | "activity_logs" | "dues_recovery"
   >("overview");
   const [copiedField, setCopiedField] = useState<string | null>(null);
+
+  // Dues Recovery State
+  const [duesDetail, setDuesDetail] = useState<CustomerDuesDetail | null>(null);
+  const [loadingDuesDetail, setLoadingDuesDetail] = useState(false);
+  const [isAllocationOpen, setIsAllocationOpen] = useState(false);
+  const [isLogFollowupOpen, setIsLogFollowupOpen] = useState(false);
+  const [isSendLedgerOpen, setIsSendLedgerOpen] = useState(false);
+  const [isSendSmsOpen, setIsSendSmsOpen] = useState(false);
+  const [isDeclineDisputeOpen, setIsDeclineDisputeOpen] = useState(false);
 
   const fetchDossier = async (id: string, isRetry = false) => {
     setLoading(true);
@@ -133,6 +161,26 @@ export function CustomerDossierPage({
       setLoading(false);
     }
   }, [activeUserId]);
+
+  const fetchCustomerDues = async (customerId: string) => {
+    setLoadingDuesDetail(true);
+    try {
+      const res = await paymentFollowupApi.getCustomerDuesDetail(customerId);
+      if (res.success && res.data) {
+        setDuesDetail(res.data);
+      }
+    } catch (e) {
+      console.error("Failed to load customer dues detail:", e);
+    } finally {
+      setLoadingDuesDetail(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeUserId && activeTab === "dues_recovery") {
+      fetchCustomerDues(activeUserId);
+    }
+  }, [activeUserId, activeTab]);
 
   const handleBack = () => {
     if (onBack) {
@@ -414,6 +462,7 @@ export function CustomerDossierPage({
               { id: "orders", label: `Orders (${data.orders?.length || 0})`, icon: <ShoppingBag size={13} /> },
               { id: "quotes", label: `RFQ Quotes (${data.quotes?.length || 0})`, icon: <FileText size={13} /> },
               { id: "financials", label: `Invoices & PO/PI (${data.invoices?.length || 0})`, icon: <Receipt size={13} /> },
+              { id: "dues_recovery", label: "Dues & Recovery", icon: <CreditCard size={13} /> },
               // Only show B2B Rates tab for verified B2B enterprise customers (those with company name or GSTIN)
               ...(user.companyName || user.gstin
                 ? [{ id: "b2b_rates", label: `B2B Rates (${data.b2bPrices?.length || 0})`, icon: <Coins size={13} /> }]
@@ -999,9 +1048,384 @@ export function CustomerDossierPage({
               </div>
             )}
 
+            {/* ──────── TAB: DUES & RECOVERY ──────── */}
+            {activeTab === "dues_recovery" && (
+              <div className="space-y-5">
+                {/* Header & Quick Action Bar */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#27272A]">
+                  <div>
+                    <h3 className="text-sm sm:text-base font-bold text-white flex items-center gap-2">
+                      <CreditCard size={18} className="text-purple-400" />
+                      <span>Receivables, Aging &amp; Recovery Dues</span>
+                    </h3>
+                    <p className="text-xs text-zinc-400">
+                      Delivered goods, open tax invoices, opening balances, and chronological payment allocations.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsAllocationOpen(true)}
+                      className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1.5 shadow"
+                    >
+                      <IndianRupee size={13} />
+                      <span>Record Payment</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsLogFollowupOpen(true)}
+                      className="px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold flex items-center gap-1.5 shadow"
+                    >
+                      <Phone size={13} />
+                      <span>Log Touchpoint</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsSendLedgerOpen(true)}
+                      className="px-3 py-1.5 rounded-xl bg-[#27272A] hover:bg-[#3F3F46] text-zinc-200 text-xs font-bold flex items-center gap-1.5"
+                    >
+                      <Mail size={13} />
+                      <span>Send Statement</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsSendSmsOpen(true)}
+                      className="px-3 py-1.5 rounded-xl bg-[#27272A] hover:bg-[#3F3F46] text-zinc-200 text-xs font-bold flex items-center gap-1.5"
+                    >
+                      <MessageSquare size={13} />
+                      <span>Send SMS</span>
+                    </button>
+                    {duesDetail && (
+                      <button
+                        type="button"
+                        onClick={() => printStatementOfAccount(duesDetail)}
+                        className="px-3 py-1.5 rounded-xl bg-[#27272A] hover:bg-[#3F3F46] text-zinc-200 text-xs font-bold flex items-center gap-1.5"
+                        title="Print B&W Statement of Account"
+                      >
+                        <Printer size={13} />
+                        <span>Print Ledger</span>
+                      </button>
+                    )}
+                    {duesDetail && (duesDetail.summary.followupStatus === 'DISPUTED' || duesDetail.summary.followupStatus === 'DECLINED') ? (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          await paymentFollowupApi.resumeFollowup(duesDetail.customer.id);
+                          fetchCustomerDues(duesDetail.customer.id);
+                        }}
+                        className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1.5"
+                      >
+                        <RotateCcw size={13} />
+                        <span>Resume Recovery</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setIsDeclineDisputeOpen(true)}
+                        className="p-1.5 rounded-xl bg-[#27272A] hover:bg-rose-950/40 text-rose-400 border border-transparent hover:border-rose-900/50"
+                        title="Mark Disputed or Declined"
+                      >
+                        <Ban size={15} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {loadingDuesDetail ? (
+                  <div className="py-12 flex flex-col items-center justify-center text-xs text-zinc-400 gap-2">
+                    <RefreshCw size={20} className="animate-spin text-purple-400" />
+                    <span>Loading customer dues statement...</span>
+                  </div>
+                ) : !duesDetail ? (
+                  <div className="py-12 text-center text-xs text-zinc-500">
+                    No outstanding balance records found for this account.
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {/* Disputed Warning Banner */}
+                    {(duesDetail.summary.followupStatus === 'DISPUTED' || duesDetail.summary.followupStatus === 'DECLINED') && (
+                      <div className="p-3.5 rounded-2xl bg-rose-950/30 border border-rose-900/50 text-xs text-rose-300 flex items-start gap-2.5">
+                        <Ban size={16} className="text-rose-400 shrink-0 mt-0.5" />
+                        <div>
+                          <span className="font-extrabold uppercase tracking-wider block text-[11px]">
+                            Account is currently {duesDetail.summary.followupStatus}
+                          </span>
+                          <p className="text-zinc-300 mt-0.5">
+                            {duesDetail.summary.declineReason || 'Account collection is suspended. Automated notifications are disabled.'}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Summary Metric Cards */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      <div className="p-3.5 rounded-xl bg-[#09090B] border border-[#27272A]">
+                        <span className="text-[10px] text-zinc-500 uppercase font-bold block">Total Outstanding</span>
+                        <span className="text-lg font-black font-mono text-rose-400">
+                          ₹{Math.round(duesDetail.summary.totalOutstanding).toLocaleString('en-IN')}
+                        </span>
+                      </div>
+                      <div className="p-3.5 rounded-xl bg-[#09090B] border border-[#27272A]">
+                        <span className="text-[10px] text-zinc-500 uppercase font-bold block">Overdue Amount</span>
+                        <span className="text-lg font-black font-mono text-amber-400">
+                          ₹{Math.round(duesDetail.summary.overdueAmount).toLocaleString('en-IN')}
+                        </span>
+                      </div>
+                      <div className="p-3.5 rounded-xl bg-[#09090B] border border-[#27272A]">
+                        <span className="text-[10px] text-zinc-500 uppercase font-bold block">Aging Bracket</span>
+                        <span className="text-sm font-bold text-white block mt-1">
+                          {duesDetail.summary.agingBucket.replace('_', '-')} Days ({duesDetail.summary.maxDaysOverdue}d overdue)
+                        </span>
+                      </div>
+                      <div className="p-3.5 rounded-xl bg-[#09090B] border border-[#27272A]">
+                        <span className="text-[10px] text-zinc-500 uppercase font-bold block">Follow-up Status</span>
+                        <span className="inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-extrabold uppercase bg-purple-500/15 text-purple-300 border border-purple-500/30">
+                          {duesDetail.summary.followupStatus.replace('_', ' ')}
+                        </span>
+                        {duesDetail.summary.ptpDate && (
+                          <div className="text-[10px] text-purple-300 mt-0.5">
+                            PTP: {new Date(duesDetail.summary.ptpDate).toLocaleDateString('en-IN')} {duesDetail.summary.ptpAmount ? `(₹${duesDetail.summary.ptpAmount.toLocaleString('en-IN')})` : ''}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Aging Buckets Breakdown */}
+                    <div className="p-3.5 rounded-2xl bg-[#09090B] border border-[#27272A] space-y-2">
+                      <div className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Dynamic Aging Breakdown</div>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                        <div className="p-2.5 rounded-xl bg-[#18181B] border border-[#27272A]">
+                          <span className="text-[10px] text-zinc-500 block">0-30 Days</span>
+                          <span className="font-mono font-bold text-zinc-200">
+                            ₹{Math.round(duesDetail.agingBreakdown.bucket0_30).toLocaleString('en-IN')}
+                          </span>
+                        </div>
+                        <div className="p-2.5 rounded-xl bg-[#18181B] border border-[#27272A]">
+                          <span className="text-[10px] text-amber-500/80 block">31-60 Days</span>
+                          <span className="font-mono font-bold text-amber-300">
+                            ₹{Math.round(duesDetail.agingBreakdown.bucket31_60).toLocaleString('en-IN')}
+                          </span>
+                        </div>
+                        <div className="p-2.5 rounded-xl bg-[#18181B] border border-[#27272A]">
+                          <span className="text-[10px] text-orange-500/80 block">61-90 Days</span>
+                          <span className="font-mono font-bold text-orange-300">
+                            ₹{Math.round(duesDetail.agingBreakdown.bucket61_90).toLocaleString('en-IN')}
+                          </span>
+                        </div>
+                        <div className="p-2.5 rounded-xl bg-[#18181B] border border-[#27272A]">
+                          <span className="text-[10px] text-rose-500/80 block">90+ Days</span>
+                          <span className="font-mono font-bold text-rose-400">
+                            ₹{Math.round(duesDetail.agingBreakdown.bucket90_plus).toLocaleString('en-IN')}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Traceable Dues Table */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-xs font-bold text-zinc-400 uppercase tracking-wider">
+                        <span>Open Receivables ({duesDetail.dues.length})</span>
+                      </div>
+                      <div className="overflow-x-auto rounded-xl border border-[#27272A]">
+                        <table className="w-full text-left text-xs text-zinc-300 divide-y divide-[#27272A]">
+                          <thead className="bg-[#09090B] text-zinc-400 font-extrabold uppercase text-[10px]">
+                            <tr>
+                              <th className="py-2.5 px-3">Document #</th>
+                              <th className="py-2.5 px-3">Source</th>
+                              <th className="py-2.5 px-3">Due Date</th>
+                              <th className="py-2.5 px-3 text-right">Total</th>
+                              <th className="py-2.5 px-3 text-right">Paid</th>
+                              <th className="py-2.5 px-3 text-right">Balance Due</th>
+                              <th className="py-2.5 px-3 text-center">Overdue</th>
+                              <th className="py-2.5 px-3 text-right">Action</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-[#27272A] bg-[#121214]">
+                            {duesDetail.dues.map((due) => (
+                              <tr key={due.id} className="hover:bg-[#18181B]">
+                                <td className="py-2 px-3 font-mono font-bold text-white">{due.documentNumber}</td>
+                                <td className="py-2 px-3 text-[11px] text-zinc-400">{due.sourceType.replace('_', ' ')}</td>
+                                <td className="py-2 px-3 text-zinc-300">{new Date(due.dueDate).toLocaleDateString('en-IN')}</td>
+                                <td className="py-2 px-3 text-right font-mono">₹{Math.round(due.totalAmount).toLocaleString('en-IN')}</td>
+                                <td className="py-2 px-3 text-right font-mono text-emerald-400">₹{Math.round(due.paidAmount).toLocaleString('en-IN')}</td>
+                                <td className="py-2 px-3 text-right font-mono font-bold text-rose-400">₹{Math.round(due.balanceDue).toLocaleString('en-IN')}</td>
+                                <td className="py-2 px-3 text-center">
+                                  {due.daysOverdue > 0 ? (
+                                    <span className="text-amber-400 font-bold">{due.daysOverdue}d</span>
+                                  ) : (
+                                    <span className="text-emerald-400">Current</span>
+                                  )}
+                                </td>
+                                <td className="py-2 px-3 text-right">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setIsAllocationOpen(true);
+                                    }}
+                                    className="px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold"
+                                  >
+                                    Pay
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    {/* Payment Allocations History */}
+                    {duesDetail.paymentAllocations.length > 0 && (
+                      <div className="space-y-2">
+                        <div className="text-xs font-bold text-zinc-400 uppercase tracking-wider">
+                          Payment Allocations History ({duesDetail.paymentAllocations.length})
+                        </div>
+                        <div className="overflow-x-auto rounded-xl border border-[#27272A]">
+                          <table className="w-full text-left text-xs text-zinc-300 divide-y divide-[#27272A]">
+                            <thead className="bg-[#09090B] text-zinc-400 font-extrabold uppercase text-[10px]">
+                              <tr>
+                                <th className="py-2.5 px-3">Date</th>
+                                <th className="py-2.5 px-3">Mode</th>
+                                <th className="py-2.5 px-3">Target Doc</th>
+                                <th className="py-2.5 px-3 text-right">Allocated Amount</th>
+                                <th className="py-2.5 px-3">Reference</th>
+                                <th className="py-2.5 px-3">Recorded By</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-[#27272A] bg-[#121214]">
+                              {duesDetail.paymentAllocations.map((pa) => (
+                                <tr key={pa.id} className="hover:bg-[#18181B]">
+                                  <td className="py-2 px-3">{new Date(pa.paymentDate).toLocaleDateString('en-IN')}</td>
+                                  <td className="py-2 px-3 font-bold">{pa.paymentMode}</td>
+                                  <td className="py-2 px-3 font-mono text-purple-300">{pa.targetDocumentNumber || pa.targetId}</td>
+                                  <td className="py-2 px-3 text-right font-mono font-bold text-emerald-400">
+                                    ₹{Math.round(pa.allocatedAmount).toLocaleString('en-IN')}
+                                  </td>
+                                  <td className="py-2 px-3 font-mono text-[11px] text-zinc-400">{pa.transactionRef || '-'}</td>
+                                  <td className="py-2 px-3 text-zinc-400 text-[11px]">{pa.recordedByName || 'Admin'}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Follow-up Touchpoints History */}
+                    {duesDetail.followupHistory.length > 0 && (
+                      <div className="space-y-2">
+                        <div className="text-xs font-bold text-zinc-400 uppercase tracking-wider">
+                          Follow-up &amp; Contact History ({duesDetail.followupHistory.length})
+                        </div>
+                        <div className="space-y-2">
+                          {duesDetail.followupHistory.map((h) => (
+                            <div key={h.id} className="p-3 rounded-xl bg-[#09090B] border border-[#27272A] flex items-start justify-between gap-3 text-xs">
+                              <div>
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-500/15 text-purple-300 border border-purple-500/30 uppercase">
+                                    {h.followupType}
+                                  </span>
+                                  <span className="font-bold text-white">{h.outcome.replace('_', ' ')}</span>
+                                </div>
+                                <p className="text-zinc-300">{h.notes}</p>
+                                {h.ptpDate && (
+                                  <div className="text-[11px] text-purple-300 font-bold mt-1">
+                                    PTP: {new Date(h.ptpDate).toLocaleDateString('en-IN')} {h.ptpAmount ? `(₹${h.ptpAmount.toLocaleString('en-IN')})` : ''}
+                                  </div>
+                                )}
+                              </div>
+                              <div className="text-right text-[10px] text-zinc-500 shrink-0">
+                                <div>{new Date(h.createdAt).toLocaleDateString('en-IN')}</div>
+                                <div>{h.performedByName || 'Officer'}</div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
           </div>
 
         </div>
+      )}
+
+      {/* Dues Recovery Modals */}
+      {duesDetail && (
+        <>
+          <RecordPaymentAllocationModal
+            isOpen={isAllocationOpen}
+            customerId={duesDetail.customer.id}
+            customerName={duesDetail.customer.name}
+            companyName={duesDetail.customer.companyName}
+            totalOutstanding={duesDetail.summary.totalOutstanding}
+            onClose={() => setIsAllocationOpen(false)}
+            onSuccess={() => {
+              setIsAllocationOpen(false);
+              fetchCustomerDues(duesDetail.customer.id);
+            }}
+          />
+
+          <LogFollowupModal
+            isOpen={isLogFollowupOpen}
+            customerId={duesDetail.customer.id}
+            customerName={duesDetail.customer.name}
+            companyName={duesDetail.customer.companyName}
+            phone={duesDetail.customer.phone}
+            email={duesDetail.customer.email}
+            outstandingAmount={duesDetail.summary.totalOutstanding}
+            onClose={() => setIsLogFollowupOpen(false)}
+            onSuccess={() => {
+              setIsLogFollowupOpen(false);
+              fetchCustomerDues(duesDetail.customer.id);
+            }}
+          />
+
+          <SendLedgerModal
+            isOpen={isSendLedgerOpen}
+            customerId={duesDetail.customer.id}
+            customerName={duesDetail.customer.name}
+            companyName={duesDetail.customer.companyName}
+            email={duesDetail.customer.email}
+            totalOutstanding={duesDetail.summary.totalOutstanding}
+            onClose={() => setIsSendLedgerOpen(false)}
+            onSuccess={() => {
+              setIsSendLedgerOpen(false);
+              fetchCustomerDues(duesDetail.customer.id);
+            }}
+          />
+
+          <SendSmsReminderModal
+            isOpen={isSendSmsOpen}
+            customerId={duesDetail.customer.id}
+            customerName={duesDetail.customer.name}
+            companyName={duesDetail.customer.companyName}
+            phone={duesDetail.customer.phone}
+            totalOutstanding={duesDetail.summary.totalOutstanding}
+            onClose={() => setIsSendSmsOpen(false)}
+            onSuccess={() => {
+              setIsSendSmsOpen(false);
+              fetchCustomerDues(duesDetail.customer.id);
+            }}
+          />
+
+          <DeclineDisputeModal
+            isOpen={isDeclineDisputeOpen}
+            customerId={duesDetail.customer.id}
+            customerName={duesDetail.customer.name}
+            companyName={duesDetail.customer.companyName}
+            totalOutstanding={duesDetail.summary.totalOutstanding}
+            onClose={() => setIsDeclineDisputeOpen(false)}
+            onSuccess={() => {
+              setIsDeclineDisputeOpen(false);
+              fetchCustomerDues(duesDetail.customer.id);
+            }}
+          />
+        </>
       )}
 
     </div>
