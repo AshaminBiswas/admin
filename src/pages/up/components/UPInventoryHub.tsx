@@ -58,6 +58,7 @@ type InvSubTab =
   | 'overview'
   | 'stock'
   | 'finished-goods'
+  | 'semi-finished-goods'
   | 'raw-materials'
   | 'prc-dispatches'
   | 'movements'
@@ -146,7 +147,7 @@ export function UPInventoryHub({ isSuperAdmin, onShowSuccess, onShowError }: UPI
   const [newProdName, setNewProdName] = useState('');
   const [newProdSku, setNewProdSku] = useState('');
   const [newProdBarcode, setNewProdBarcode] = useState('');
-  const [newProdType, setNewProdType] = useState<'FINISHED_GOOD' | 'RAW_MATERIAL'>('FINISHED_GOOD');
+  const [newProdType, setNewProdType] = useState<'FINISHED_GOOD' | 'SEMI_FINISHED_GOOD' | 'RAW_MATERIAL'>('FINISHED_GOOD');
   const [newProdCategory, setNewProdCategory] = useState('');
   const [newProdFinish, setNewProdFinish] = useState('SS');
   const [newProdColour, setNewProdColour] = useState('');
@@ -305,7 +306,7 @@ export function UPInventoryHub({ isSuperAdmin, onShowSuccess, onShowError }: UPI
   const fetchStock = async () => {
     setLoadingStock(true);
     try {
-      const itemType = subTab === 'raw-materials' ? 'RAW_MATERIAL' : subTab === 'finished-goods' ? 'FINISHED_GOOD' : 'ALL';
+      const itemType = subTab === 'raw-materials' ? 'RAW_MATERIAL' : subTab === 'finished-goods' ? 'FINISHED_GOOD' : subTab === 'semi-finished-goods' ? 'SEMI_FINISHED_GOOD' : 'ALL';
       const res = await upApi.listStock({
         page: stockPage,
         limit: 25,
@@ -328,7 +329,7 @@ export function UPInventoryHub({ isSuperAdmin, onShowSuccess, onShowError }: UPI
   };
 
   useEffect(() => {
-    if (['stock', 'raw-materials', 'finished-goods', 'movements'].includes(subTab)) {
+    if (['stock', 'raw-materials', 'finished-goods', 'semi-finished-goods', 'movements'].includes(subTab)) {
       fetchStock();
     }
   }, [subTab, stockPage, stockStatusFilter, selectedBranchId]);
@@ -532,12 +533,12 @@ export function UPInventoryHub({ isSuperAdmin, onShowSuccess, onShowError }: UPI
     }
   };
 
-  const openAddProductModal = (type: 'FINISHED_GOOD' | 'RAW_MATERIAL' = 'FINISHED_GOOD') => {
+  const openAddProductModal = (type: 'FINISHED_GOOD' | 'SEMI_FINISHED_GOOD' | 'RAW_MATERIAL' = 'FINISHED_GOOD') => {
     setNewProdType(type);
     setNewProdName('');
     setNewProdSku('');
     setNewProdBarcode('');
-    setNewProdCategory(type === 'RAW_MATERIAL' ? 'Raw Materials' : 'Hardware');
+    setNewProdCategory(type === 'RAW_MATERIAL' ? 'Raw Materials' : type === 'SEMI_FINISHED_GOOD' ? 'Semi-Finished Goods' : 'Hardware');
     setNewProdFinish('SS');
     setNewProdColour('');
     setNewProdDimensions('');
@@ -1117,7 +1118,8 @@ export function UPInventoryHub({ isSuperAdmin, onShowSuccess, onShowError }: UPI
           { id: 'overview', label: 'Dashboard', icon: Boxes },
           { id: 'stock', label: 'All Stock', icon: Package },
           { id: 'finished-goods', label: 'Finished Goods (PRC Supply)', icon: Sparkles },
-          { id: 'raw-materials', label: 'Raw Materials', icon: Layers },
+          { id: 'semi-finished-goods', label: 'Semi-Finished Goods', icon: Layers },
+          { id: 'raw-materials', label: 'Raw Materials', icon: Boxes },
           { id: 'prc-dispatches', label: 'PRC Dispatches', icon: Truck },
           { id: 'movements', label: 'Stock Movements', icon: ArrowRightLeft },
           { id: 'bom', label: 'BOM Master', icon: Wrench },
@@ -1337,8 +1339,8 @@ export function UPInventoryHub({ isSuperAdmin, onShowSuccess, onShowError }: UPI
         </div>
       )}
 
-      {/* ─── TAB CONTENT 2: STOCK LISTING (ALL / RAW / FINISHED) ─────────────── */}
-      {['stock', 'raw-materials', 'finished-goods'].includes(subTab) && (
+      {/* ─── TAB CONTENT 2: STOCK LISTING (ALL / RAW / SFG / FINISHED) ─────────────── */}
+      {['stock', 'raw-materials', 'finished-goods', 'semi-finished-goods'].includes(subTab) && (
         <div className="space-y-4 animate-fadeIn">
           {/* Controls Bar */}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-[#18181B] p-3.5 rounded-2xl border border-[#27272A]">
@@ -1424,10 +1426,12 @@ export function UPInventoryHub({ isSuperAdmin, onShowSuccess, onShowError }: UPI
                           className={`text-[9.5px] font-bold px-2 py-0.5 rounded-full ${
                             item.itemType === 'FINISHED_GOOD'
                               ? 'bg-purple-950/60 text-purple-300 border border-purple-500/20'
+                              : item.itemType === 'SEMI_FINISHED_GOOD'
+                              ? 'bg-amber-950/60 text-amber-300 border border-amber-500/20'
                               : 'bg-zinc-800 text-zinc-300'
                           }`}
                         >
-                          {item.itemType === 'FINISHED_GOOD' ? 'Finished Good' : 'Raw / Part'}
+                          {item.itemType === 'FINISHED_GOOD' ? 'Finished Good' : item.itemType === 'SEMI_FINISHED_GOOD' ? 'Semi-Finished' : 'Raw / Part'}
                         </span>
                       </td>
                       <td className="py-3 px-3 text-right font-mono font-bold text-white">{item.onHand}</td>
@@ -2306,12 +2310,12 @@ export function UPInventoryHub({ isSuperAdmin, onShowSuccess, onShowError }: UPI
               {/* Product Type Toggle */}
               <div>
                 <label className="text-[11px] font-bold text-zinc-300 block mb-1">Product Classification</label>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-3 gap-2">
                   <button
                     type="button"
                     onClick={() => {
                       setNewProdType('FINISHED_GOOD');
-                      if (newProdCategory === 'Raw Materials') setNewProdCategory('Hardware');
+                      if (newProdCategory === 'Raw Materials' || newProdCategory === 'Semi-Finished Goods') setNewProdCategory('Hardware');
                     }}
                     className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all text-left flex items-center gap-2 ${
                       newProdType === 'FINISHED_GOOD'
@@ -2329,16 +2333,35 @@ export function UPInventoryHub({ isSuperAdmin, onShowSuccess, onShowError }: UPI
                   <button
                     type="button"
                     onClick={() => {
-                      setNewProdType('RAW_MATERIAL');
-                      setNewProdCategory('Raw Materials');
+                      setNewProdType('SEMI_FINISHED_GOOD');
+                      setNewProdCategory('Semi-Finished Goods');
                     }}
                     className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all text-left flex items-center gap-2 ${
-                      newProdType === 'RAW_MATERIAL'
+                      newProdType === 'SEMI_FINISHED_GOOD'
                         ? 'bg-amber-950/60 border-amber-500/50 text-amber-300'
                         : 'bg-[#09090B] border-zinc-800 text-zinc-400 hover:text-white'
                     }`}
                   >
                     <Layers size={14} className="text-amber-400" />
+                    <div>
+                      <div>Semi-Finished</div>
+                      <div className="text-[9px] text-zinc-400 font-normal">Intermediate Assembly (SFG)</div>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewProdType('RAW_MATERIAL');
+                      setNewProdCategory('Raw Materials');
+                    }}
+                    className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all text-left flex items-center gap-2 ${
+                      newProdType === 'RAW_MATERIAL'
+                        ? 'bg-zinc-700/60 border-zinc-500/50 text-zinc-200'
+                        : 'bg-[#09090B] border-zinc-800 text-zinc-400 hover:text-white'
+                    }`}
+                  >
+                    <Boxes size={14} className="text-zinc-400" />
                     <div>
                       <div>Raw Material</div>
                       <div className="text-[9px] text-zinc-400 font-normal">Factory BOM Assembly</div>
@@ -2572,29 +2595,33 @@ export function UPInventoryHub({ isSuperAdmin, onShowSuccess, onShowError }: UPI
                 <select
                   value={supplyProductId}
                   onChange={(e) => {
-                    const chosen = catalogProducts.find((p) => p.id === e.target.value) || stockItems.find((s) => s.id === e.target.value);
+                    const chosen = stockItems.find((s) => s.id === e.target.value);
                     if (chosen) {
                       setSupplyProductId(chosen.id);
                       setSupplyProductSku(chosen.sku);
                       setSupplyProductName(chosen.name);
-                      setSupplyRate(String(chosen.salesPrice || chosen.price || chosen.unitCost || ''));
+                      setSupplyRate(String(chosen.salesPrice || chosen.price || ''));
                     }
                   }}
                   className="w-full bg-[#09090B] text-white text-xs p-2.5 rounded-xl border border-zinc-700 outline-none focus:border-indigo-500"
                   required
                 >
-                  <option value="">-- Select Product --</option>
-                  {stockItems.length > 0
-                    ? stockItems.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          [{s.sku}] {s.name} ({s.onHand} units on floor)
-                        </option>
-                      ))
-                    : catalogProducts.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          [{p.sku}] {p.name}
-                        </option>
-                      ))}
+                  <option value="">-- Select UP Factory Product --</option>
+                  {stockItems.filter((s) => s.itemType === 'FINISHED_GOOD').length > 0
+                    ? stockItems
+                        .filter((s) => s.itemType === 'FINISHED_GOOD')
+                        .map((s) => (
+                          <option key={s.id} value={s.id}>
+                            [{s.sku}] {s.name} — {s.onHand} units available on floor
+                          </option>
+                        ))
+                    : stockItems.length > 0
+                    ? (
+                      <option value="" disabled>No finished goods in stock (only raw materials registered)</option>
+                    )
+                    : (
+                      <option value="" disabled>No UP factory products registered yet</option>
+                    )}
                 </select>
               </div>
 

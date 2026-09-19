@@ -429,7 +429,7 @@ export const upApi = {
     name: string;
     sku: string;
     barcode?: string;
-    productType?: 'FINISHED_GOOD' | 'RAW_MATERIAL';
+    productType?: 'FINISHED_GOOD' | 'SEMI_FINISHED_GOOD' | 'RAW_MATERIAL';
     categoryName?: string;
     finish?: string;
     colour?: string;
@@ -567,7 +567,7 @@ export interface UPStockItem {
   availableQuantity: number;
   reorderLevel: number;
   status: 'IN_STOCK' | 'LOW_STOCK' | 'OUT_OF_STOCK';
-  itemType: 'ALL' | 'RAW_MATERIAL' | 'FINISHED_GOOD';
+  itemType: 'ALL' | 'RAW_MATERIAL' | 'SEMI_FINISHED_GOOD' | 'FINISHED_GOOD';
 }
 
 export interface UPBom {
