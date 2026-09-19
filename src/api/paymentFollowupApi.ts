@@ -4,7 +4,7 @@
  * Client API methods for Payment Follow-up & Dues Recovery module.
  */
 
-import { fetchAdminApi } from './adminApi';
+import { fetchAdminApi, API_BASE_URL, getAdminToken } from './adminApi';
 import type {
   CustomerDueSummary,
   CustomerDuesDetail,
@@ -17,6 +17,9 @@ import type {
   FollowupRule,
   BulkActionPreviewResult,
   BulkActionResult,
+  AddCustomerBalanceEntryInput,
+  SendCustomerCommunicationInput,
+  CustomerLedgerData,
 } from '../types/paymentFollowup';
 
 export const paymentFollowupApi = {
@@ -141,6 +144,84 @@ export const paymentFollowupApi = {
   resumeFollowup: async (customerId: string): Promise<{ success: boolean; data: any }> => {
     return (await fetchAdminApi(`/payment-followup/customers/${customerId}/resume`, {
       method: 'POST',
+    })) as any;
+  },
+
+  /**
+   * Add opening dues balance (Debit) or past payment (Credit) with custom date
+   */
+  addCustomerBalanceEntry: async (
+    customerId: string,
+    input: AddCustomerBalanceEntryInput
+  ): Promise<{ success: boolean; data: any; message: string }> => {
+    return (await fetchAdminApi(`/payment-followup/customers/${customerId}/balance-entry`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    })) as any;
+  },
+
+  /**
+   * Get dynamic ledger / Statement of Account data with date filtering
+   */
+  getCustomerLedger: async (
+    customerId: string,
+    params?: { fromDate?: string; toDate?: string }
+  ): Promise<{ success: boolean; data: CustomerLedgerData }> => {
+    const qs = new URLSearchParams();
+    if (params?.fromDate) qs.append('fromDate', params.fromDate);
+    if (params?.toDate) qs.append('toDate', params.toDate);
+    const query = qs.toString() ? `?${qs.toString()}` : '';
+    return (await fetchAdminApi(`/payment-followup/customers/${customerId}/ledger${query}`)) as any;
+  },
+
+  /**
+   * Download Statement of Account PDF
+   */
+  downloadLedgerPdf: async (
+    customerId: string,
+    params?: { fromDate?: string; toDate?: string; filename?: string }
+  ): Promise<void> => {
+    const token = getAdminToken();
+    const qs = new URLSearchParams();
+    if (params?.fromDate) qs.append('fromDate', params.fromDate);
+    if (params?.toDate) qs.append('toDate', params.toDate);
+    const query = qs.toString() ? `?${qs.toString()}` : '';
+
+    const res = await fetch(`${API_BASE_URL}/payment-followup/customers/${customerId}/ledger-pdf${query}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error('Failed to download Statement of Account PDF');
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = params?.filename || `Statement-of-Account-${customerId.slice(0, 8)}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  },
+
+  /**
+   * Dispatch multi-channel communication (Email, WhatsApp, SMS) with dynamic document selection
+   */
+  sendCustomerCommunication: async (
+    customerId: string,
+    input: SendCustomerCommunicationInput
+  ): Promise<{
+    success: boolean;
+    data: {
+      emailSent?: boolean;
+      smsSent?: boolean;
+      whatsappUrl?: string;
+      whatsappMessage?: string;
+      attachmentsCount: number;
+      message: string;
+    };
+  }> => {
+    return (await fetchAdminApi(`/payment-followup/customers/${customerId}/send-communication`, {
+      method: 'POST',
+      body: JSON.stringify(input),
     })) as any;
   },
 

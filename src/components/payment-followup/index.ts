@@ -6,3 +6,5 @@ export * from './SendSmsReminderModal';
 export * from './DeclineDisputeModal';
 export * from './BulkCommunicationModal';
 export * from './CustomerDuesDetailDrawer';
+export * from './AddCustomerBalanceModal';
+export * from './SendCommunicationModal';

@@ -1762,7 +1762,8 @@ export function AdvancePaymentsTrackerPage() {
               return (
                 <div
                   key={c.customerId}
-                  className={`p-4 rounded-2xl bg-[#09090B] border transition-all space-y-3 shadow-md ${
+                  onClick={() => setDrawerCustomerId(c.customerId)}
+                  className={`p-4 rounded-2xl bg-[#09090B] border transition-all space-y-3 shadow-md cursor-pointer hover:border-purple-500/50 ${
                     isSelected ? 'border-purple-500 bg-purple-950/10' : 'border-[#27272A] hover:border-[#3F3F46]'
                   }`}
                 >
@@ -1770,7 +1771,10 @@ export function AdvancePaymentsTrackerPage() {
                     <div className="flex items-center gap-2.5">
                       <button
                         type="button"
-                        onClick={() => handleToggleSelectCustomer(c.customerId)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleToggleSelectCustomer(c.customerId);
+                        }}
                         className="p-1 text-zinc-400 hover:text-white"
                       >
                         {isSelected ? (
@@ -1780,8 +1784,9 @@ export function AdvancePaymentsTrackerPage() {
                         )}
                       </button>
                       <div>
-                        <h3 className="font-extrabold text-white text-sm">
-                          {c.companyName || c.customerName}
+                        <h3 className="font-extrabold text-white text-sm hover:text-purple-300 transition-colors flex items-center gap-1.5">
+                          <span>{c.companyName || c.customerName}</span>
+                          <ChevronRight size={13} className="text-zinc-500" />
                         </h3>
                         {c.companyName && c.customerName && (
                           <div className="text-[11px] text-zinc-400">{c.customerName}</div>
@@ -1973,11 +1978,12 @@ export function AdvancePaymentsTrackerPage() {
                   return (
                     <tr
                       key={c.customerId}
-                      className={`hover:bg-[#18181B] transition-colors ${
+                      onClick={() => setDrawerCustomerId(c.customerId)}
+                      className={`hover:bg-[#18181B] transition-colors cursor-pointer ${
                         isSelected ? 'bg-purple-950/20' : ''
                       }`}
                     >
-                      <td className="py-3 px-3 text-center">
+                      <td className="py-3 px-3 text-center" onClick={(e) => e.stopPropagation()}>
                         <button
                           type="button"
                           onClick={() => handleToggleSelectCustomer(c.customerId)}
@@ -1991,8 +1997,9 @@ export function AdvancePaymentsTrackerPage() {
                         </button>
                       </td>
                       <td className="py-3 px-3">
-                        <div className="font-bold text-white flex items-center gap-1.5">
+                        <div className="font-bold text-white hover:text-purple-300 transition-colors flex items-center gap-1.5">
                           <span>{c.companyName || c.customerName}</span>
+                          <ChevronRight size={13} className="text-zinc-500 opacity-60" />
                           {c.source === 'OLD_CUSTOMER' && (
                             <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
                               Legacy
@@ -2089,7 +2096,7 @@ export function AdvancePaymentsTrackerPage() {
                           </div>
                         )}
                       </td>
-                      <td className="py-3 px-3 text-right">
+                      <td className="py-3 px-3 text-right" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-1.5">
                           <button
                             type="button"
@@ -2222,11 +2229,12 @@ export function AdvancePaymentsTrackerPage() {
           {disputedCustomers.map((c) => (
             <div
               key={c.customerId}
-              className="p-4 rounded-2xl bg-[#09090B] border border-rose-900/40 space-y-3 shadow-md"
+              onClick={() => setDrawerCustomerId(c.customerId)}
+              className="p-4 rounded-2xl bg-[#09090B] border border-rose-900/40 space-y-3 shadow-md cursor-pointer hover:border-rose-500/60 transition-all"
             >
               <div className="flex items-start justify-between gap-2">
                 <div>
-                  <h4 className="font-extrabold text-white text-sm">{c.companyName || c.customerName}</h4>
+                  <h4 className="font-extrabold text-white text-sm hover:text-rose-300 transition-colors">{c.companyName || c.customerName}</h4>
                   <div className="text-xs text-zinc-400">{c.customerName} • {c.phone}</div>
                 </div>
                 <span
@@ -2256,14 +2264,20 @@ export function AdvancePaymentsTrackerPage() {
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => setDrawerCustomerId(c.customerId)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDrawerCustomerId(c.customerId);
+                    }}
                     className="px-2.5 py-1 rounded-lg bg-[#27272A] hover:bg-[#3F3F46] text-zinc-300 text-xs font-bold"
                   >
                     Inspect 360
                   </button>
                   <button
                     type="button"
-                    onClick={() => handleResumeCustomer(c.customerId)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleResumeCustomer(c.customerId);
+                    }}
                     className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1 shadow"
                   >
                     <RotateCcw size={12} />
@@ -2787,9 +2801,17 @@ export function AdvancePaymentsTrackerPage() {
                       </div>
 
                       {/* Customer Details Box */}
-                      <div className="p-2.5 rounded-xl bg-[#18181B] border border-[#27272A] space-y-1 text-xs">
-                        <div className="font-bold text-zinc-200">
-                          {r.companyName || r.customerName}
+                      <div
+                        onClick={() => r.customerId && setDrawerCustomerId(r.customerId)}
+                        className={`p-2.5 rounded-xl bg-[#18181B] border border-[#27272A] space-y-1 text-xs ${
+                          r.customerId ? 'cursor-pointer hover:border-purple-500/50 hover:bg-[#202024] transition-all' : ''
+                        }`}
+                      >
+                        <div className="font-bold text-zinc-200 flex items-center justify-between">
+                          <span>{r.companyName || r.customerName}</span>
+                          {r.customerId && (
+                            <span className="text-[10px] text-purple-400 font-normal">360° Dues &rarr;</span>
+                          )}
                         </div>
                         <div className="text-[11px] text-zinc-400 flex flex-wrap gap-2">
                           {r.customerPhone && <span>📞 {r.customerPhone}</span>}
@@ -2917,9 +2939,17 @@ export function AdvancePaymentsTrackerPage() {
                           </td>
 
                           {/* Customer & Company */}
-                          <td className="py-3.5 px-3">
-                            <div className="font-bold text-zinc-200">
-                              {r.companyName || r.customerName}
+                          <td
+                            className={`py-3.5 px-3 ${r.customerId ? 'cursor-pointer group' : ''}`}
+                            onClick={() => r.customerId && setDrawerCustomerId(r.customerId)}
+                          >
+                            <div className="font-bold text-zinc-200 group-hover:text-purple-300 transition-colors flex items-center gap-1.5">
+                              <span>{r.companyName || r.customerName}</span>
+                              {r.customerId && (
+                                <span className="opacity-0 group-hover:opacity-100 text-[10px] text-purple-400 transition-opacity font-normal">
+                                  360°
+                                </span>
+                              )}
                             </div>
                             <div className="text-[11px] text-zinc-400 flex items-center gap-1.5 mt-0.5">
                               {r.customerPhone && <span>{r.customerPhone}</span>}
@@ -3028,11 +3058,15 @@ export function AdvancePaymentsTrackerPage() {
             {customerAccounts.map((c) => (
               <div
                 key={c.customerId}
-                className="p-4 rounded-2xl bg-[#09090B] border border-[#27272A] hover:border-[#3F3F46] transition-all space-y-3"
+                onClick={() => setDrawerCustomerId(c.customerId)}
+                className="p-4 rounded-2xl bg-[#09090B] border border-[#27272A] hover:border-purple-500/50 transition-all space-y-3 cursor-pointer shadow-md"
               >
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <h3 className="font-extrabold text-white text-sm">{c.companyName || c.customerName}</h3>
+                    <h3 className="font-extrabold text-white text-sm hover:text-purple-300 transition-colors flex items-center gap-1.5">
+                      <span>{c.companyName || c.customerName}</span>
+                      <ChevronRight size={13} className="text-zinc-500 opacity-60" />
+                    </h3>
                     <div className="text-[11px] text-zinc-400 mt-0.5">{c.customerName}</div>
                   </div>
                   <span
@@ -3073,7 +3107,8 @@ export function AdvancePaymentsTrackerPage() {
                   </span>
                   <button
                     type="button"
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.stopPropagation();
                       setSelectedCustomerIdFilter(c.companyName || c.customerName);
                       setActiveTab('DOCUMENTS_LEDGER');
                     }}

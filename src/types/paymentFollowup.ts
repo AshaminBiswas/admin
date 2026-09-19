@@ -99,6 +99,22 @@ export interface CustomerDuesDetail {
     missingPhone: boolean;
     missingGstin: boolean;
   };
+  billingAddressDetails?: {
+    addressLine1: string;
+    addressLine2?: string;
+    city: string;
+    state: string;
+    postalCode: string;
+    country?: string;
+  };
+  shippingAddressDetails?: {
+    addressLine1: string;
+    addressLine2?: string;
+    city: string;
+    state: string;
+    postalCode: string;
+    country?: string;
+  };
   summary: {
     totalOutstanding: number;
     overdueAmount: number;
@@ -112,12 +128,23 @@ export interface CustomerDuesDetail {
     followupStatus: FollowupProfileStatus;
     declineReason?: string | null;
     declinedAt?: string | null;
+    totalBilledAmount?: number;
+    totalAdvancePaid?: number;
+    totalPaymentsCollected?: number;
+    netBalanceDue?: number;
   };
   agingBreakdown: {
     bucket0_30: number;
     bucket31_60: number;
     bucket61_90: number;
     bucket90_plus: number;
+  };
+  ledgerEntries?: StatementLedgerRow[];
+  selectableDocuments?: {
+    proformas: SelectableDocumentItem[];
+    purchaseOrders: SelectableDocumentItem[];
+    quotations: SelectableDocumentItem[];
+    invoices: SelectableDocumentItem[];
   };
   dues: TraceableDueItem[];
   paymentAllocations: Array<{
@@ -285,4 +312,72 @@ export interface BulkActionResult {
     status: 'SUCCESS' | 'FAILED' | 'SKIPPED';
     reason?: string;
   }>;
+}
+
+export interface StatementLedgerRow {
+  date: string;
+  refNo: string;
+  description: string;
+  debit: number;
+  credit: number;
+  balance: number;
+}
+
+export interface SelectableDocumentItem {
+  id: string;
+  type: 'PROFORMA_INVOICE' | 'PURCHASE_ORDER' | 'QUOTATION' | 'TAX_INVOICE';
+  documentNumber: string;
+  date: string;
+  amount: number;
+  balanceDue?: number;
+  status: string;
+  viewUrl?: string;
+}
+
+export interface AddCustomerBalanceEntryInput {
+  amount: number;
+  entryType: 'DEBIT' | 'CREDIT'; // DEBIT = Opening balance dues, CREDIT = Payment received
+  referenceDate: string; // YYYY-MM-DD
+  referenceNumber?: string;
+  notes?: string;
+  paymentMode?: string; // CASH, NEFT, RTGS, UPI, CHEQUE
+}
+
+export interface SendCustomerCommunicationInput {
+  channels: Array<'EMAIL' | 'WHATSAPP' | 'SMS'>;
+  emailSubject?: string;
+  emailBody?: string;
+  smsMessage?: string;
+  whatsappMessage?: string;
+  attachLedgerPdf?: boolean;
+  selectedDocumentIds?: Array<{
+    type: 'PROFORMA_INVOICE' | 'PURCHASE_ORDER' | 'QUOTATION' | 'TAX_INVOICE';
+    id: string;
+    documentNumber?: string;
+  }>;
+}
+
+export interface CustomerLedgerData {
+  customer: {
+    name: string;
+    companyName?: string | null;
+    phone?: string | null;
+    email?: string | null;
+    gstin?: string | null;
+    billingAddress?: string | null;
+  };
+  statementDate: string;
+  periodStart?: string;
+  periodEnd?: string;
+  openingBalance: number;
+  transactions: StatementLedgerRow[];
+  totalDebit: number;
+  totalCredit: number;
+  closingBalance: number;
+  agingBreakdown?: {
+    bucket0_30: number;
+    bucket31_60: number;
+    bucket61_90: number;
+    bucket90_plus: number;
+  };
 }
