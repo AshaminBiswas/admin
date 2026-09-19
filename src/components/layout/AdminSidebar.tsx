@@ -48,6 +48,7 @@ import {
 import { useAdminAuth } from "../../context/AdminAuthContext";
 import { AdminView } from "../../types/admin";
 import { API_BASE_URL, getAdminToken, fetchAdminApi, usersApi } from "../../api/adminApi";
+import { upApi } from "../../api/upApi";
 
 interface NavItem {
   id: AdminView;
@@ -73,6 +74,7 @@ export function AdminSidebar({
   const { currentView, setCurrentView } = useAdminAuth();
   const [navSearch, setNavSearch] = useState("");
   const [liveCounts, setLiveCounts] = useState<Record<string, number>>({});
+  const [hasUpAccess, setHasUpAccess] = useState<boolean>(false);
 
   // Live Notification Counter for B2B & Commercial Modules
   useEffect(() => {
@@ -141,6 +143,18 @@ export function AdminSidebar({
         if (isMounted) {
           setLiveCounts(counts);
         }
+
+        // Check UP Independent Module Access
+        try {
+          const upRes = await upApi.checkAccess();
+          if (isMounted && upRes.success && upRes.data?.hasAccess) {
+            setHasUpAccess(true);
+          } else if (isMounted) {
+            setHasUpAccess(false);
+          }
+        } catch (_) {
+          if (isMounted) setHasUpAccess(false);
+        }
       } catch (_) {}
     };
 
@@ -162,7 +176,8 @@ export function AdminSidebar({
             type.startsWith("order.") ||
             type.startsWith("proforma.") ||
             type.startsWith("user.") ||
-            type.startsWith("b2b.")
+            type.startsWith("b2b.") ||
+            type.startsWith("up.")
           ) {
             fetchLiveCounts();
           }
@@ -207,6 +222,7 @@ export function AdminSidebar({
     // Sales & Fulfillment
     { id: "orders", label: "Orders", category: "Sales & Fulfillment", icon: <ShoppingCart size={18} />, badge: "4" },
     { id: "expenses", label: "Cash Expenses", category: "Sales & Fulfillment", icon: <Wallet size={18} />, badge: "CASH" },
+    ...(hasUpAccess ? [{ id: "up" as AdminView, label: "UP", category: "Sales & Fulfillment", icon: <Coins size={18} /> }] : []),
     { id: "installer-payments", label: "Installer Payments", category: "Sales & Fulfillment", icon: <Wrench size={18} />, badge: "PAY" },
     { id: "checkouts", label: "Checkout Sessions", category: "Sales & Fulfillment", icon: <CreditCard size={18} /> },
     { id: "cart", label: "Shopping Carts", category: "Sales & Fulfillment", icon: <ShoppingBag size={18} /> },

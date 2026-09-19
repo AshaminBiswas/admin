@@ -334,7 +334,8 @@ export type AdminView =
   | 'b2b-orders'
   | 'create-b2b-order'
   | 'b2b-order-create'
-  | 'b2b-customers';
+  | 'b2b-customers'
+  | 'up';
 
 /* ─── B2B Order Management Types ─────────────────────────────────────────── */
 
@@ -1568,3 +1569,109 @@ export interface StageScanResult {
   message: string;
   lifecycle: any;
 }
+
+/* ─── UP Daily Cash Expense Module Interfaces ────────────────────────────── */
+
+export interface UPExpense {
+  id: string;
+  expenseDate: string;
+  amount: number;
+  categoryId: string;
+  categoryName: string;
+  paymentMode: string;
+  paidTo: string;
+  note?: string | null;
+  receiptPath?: string | null;
+  verified: boolean;
+  verifiedBy?: string | null;
+  verifiedByName?: string | null;
+  verifiedAt?: string | null;
+  createdBy: string;
+  createdByName?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UPCategory {
+  id: string;
+  name: string;
+  active: boolean;
+  sortOrder: number;
+  expenseCount?: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface UPCashDay {
+  id?: string;
+  cashDate: string;
+  openingBalance: number;
+  cashExpenses: number;
+  expectedClosingBalance: number;
+  actualClosing: number | null;
+  difference: number | null;
+  notes?: string | null;
+  closed: boolean;
+  closedBy?: string | null;
+  closedByName?: string | null;
+  closedAt?: string | null;
+}
+
+export interface UPAuditRecord {
+  id: string;
+  expenseId: string;
+  action: 'CREATE' | 'UPDATE' | 'DELETE' | 'VERIFY' | 'UNVERIFY' | string;
+  changedBy: string;
+  changedByName?: string;
+  beforeJson?: any;
+  afterJson?: any;
+  createdAt: string;
+}
+
+export interface UPAccessUser {
+  adminId: string;
+  name: string;
+  email: string;
+  phone?: string;
+  role: string;
+  roleSlug: string;
+  isSuperAdmin: boolean;
+  upAccessStatus: 'SUPER_ADMIN' | 'ACTIVE' | 'REVOKED' | 'NONE';
+  hasAccess: boolean;
+  grantedAt?: string | null;
+  revokedAt?: string | null;
+  grantedBy?: string | null;
+}
+
+export interface UPDashboardData {
+  kpis: {
+    currentMonthTotal: number;
+    todayTotal: number;
+    previousMonthTotal: number;
+    verifiedTotal: number;
+    unverifiedTotal: number;
+    rangeTotal: number;
+    transactionCount: number;
+    highestExpense: number;
+    averageDailyExpense: number;
+    topCategory: string;
+  };
+  categoryBreakdown: {
+    id: string;
+    name: string;
+    total: number;
+    count: number;
+    percentage: number;
+  }[];
+  trend: {
+    date: string;
+    total: number;
+    count: number;
+  }[];
+  range: {
+    type: string;
+    startDate: string;
+    endDate: string;
+  };
+}
+

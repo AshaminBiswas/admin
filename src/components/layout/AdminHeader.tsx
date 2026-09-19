@@ -105,6 +105,7 @@ export function AdminHeader({ isCollapsed, onToggleCollapse, onToggleMobile }: A
       case "installer-bill-create": return "New Installer Bill";
       case "expenses":
       case "cash-expenses": return "Daily Cash Expense Tracker";
+      case "up": return "UP";
       case "settings": return "Security & Two-Factor Authentication (2FA)";
       default: return "PRC Admin Console";
     }
