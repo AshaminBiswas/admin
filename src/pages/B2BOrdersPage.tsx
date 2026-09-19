@@ -1227,13 +1227,24 @@ function CreateB2BOrderModal({ branches, onClose, onSuccess }: CreateB2BOrderMod
   useEffect(() => {
     const fetchCustomers = async () => {
       try {
-        const res = await fetchAdminApi('/users?limit=100');
+        const res = await fetchAdminApi('/users?limit=250');
         if (res.success && res.data) {
           const list = res.data.users || res.data.items || res.data;
           if (Array.isArray(list)) {
-            // Filter to B2B customers
-            const b2bList = list.filter((u: any) => Boolean(u.companyName || u.gstin));
-            setCustomers(b2bList.length > 0 ? b2bList : list);
+            // Strict B2B filter — companyName, gstin, or B2B role
+            const b2bList = list.filter((u: any) => {
+              const hasCompany = Boolean(u.companyName && String(u.companyName).trim().length > 0);
+              const hasGstin = Boolean(u.gstin && String(u.gstin).trim().length > 0);
+              const roleSlug =
+                typeof u.role === 'object' && u.role !== null
+                  ? String(u.role.slug || u.role.name || '')
+                  : String(u.role || u.roleSlug || '');
+              const cleanRole = roleSlug.toLowerCase().replace(/[-_]/g, '');
+              const isB2bRole = ['b2bbuyer', 'b2bcustomer', 'enterprise', 'wholesale', 'commercial'].includes(cleanRole);
+              return hasCompany || hasGstin || isB2bRole;
+            });
+            // NEVER fall back to the full list — only B2B accounts are valid here
+            setCustomers(b2bList);
             if (b2bList.length > 0) setSelectedCustomerId(b2bList[0].id);
           }
         }

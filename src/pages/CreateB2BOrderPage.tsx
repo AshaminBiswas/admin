@@ -69,8 +69,9 @@ export function CreateB2BOrderPage({ onBack, onOrderCreated }: CreateB2BOrderPag
 
   // ─── Product Catalog & Selection State ──────────────────────────────────────
   const [catalogProducts, setCatalogProducts] = useState<any[]>([]);
-  const [stockMatrix, setStockMatrix] = useState<any[]>([]);
+  const [stockMap, setStockMap] = useState<Map<string, number>>(new Map());
   const [loadingCatalog, setLoadingCatalog] = useState(false);
+  const [loadingStock, setLoadingStock] = useState(false);
   const [productSearch, setProductSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('ALL');
   const [categories, setCategories] = useState<string[]>([]);
@@ -89,6 +90,20 @@ export function CreateB2BOrderPage({ onBack, onOrderCreated }: CreateB2BOrderPag
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
+  // ─── Helper: Strict B2B Customer Validator ───────────────────────────────────
+  const isB2BCustomer = (u: any): boolean => {
+    if (!u) return false;
+    const hasCompany = Boolean(u.companyName && String(u.companyName).trim().length > 0);
+    const hasGstin = Boolean(u.gstin && String(u.gstin).trim().length > 0);
+    const roleSlug =
+      typeof u.role === 'object' && u.role !== null
+        ? String(u.role.slug || u.role.name || '')
+        : String(u.role || u.roleSlug || '');
+    const cleanRole = roleSlug.toLowerCase().replace(/[-_]/g, '');
+    const isB2bRole = ['b2bbuyer', 'b2bcustomer', 'enterprise', 'wholesale', 'commercial'].includes(cleanRole);
+    return hasCompany || hasGstin || isB2bRole;
+  };
+
   // ─── 1. Load Initial Data (Customers, Branches, Catalog) ───────────────────
   useEffect(() => {
     const initData = async () => {
@@ -106,29 +121,44 @@ export function CreateB2BOrderPage({ onBack, onOrderCreated }: CreateB2BOrderPag
           }
         }
 
-        // Load Customers
-        const custRes = await usersApi.list({ type: 'customer', limit: 100 });
+        // Load Customers — strictly filter to B2B enterprise accounts only
+        const custRes = await usersApi.list({ type: 'customer', limit: 250 });
         if (custRes?.success && custRes.data) {
-          const cList = Array.isArray(custRes.data) ? custRes.data : custRes.data.items || custRes.data.users || [];
-          setCustomers(cList);
+          const cList = Array.isArray(custRes.data)
+            ? custRes.data
+            : custRes.data.items || custRes.data.users || [];
+          // Strictly keep only B2B enterprise accounts — NO B2C retail customers
+          const b2bOnly = cList.filter(isB2BCustomer);
+          setCustomers(b2bOnly);
         }
 
-        // Load Catalog & Multi-Branch Stock Matrix
-        const [stockRes, catRes] = await Promise.allSettled([
-          inventoryApi.getInventory({ limit: 200 }),
+        // Load Master Product Catalog from /products (correct IDs, names, prices, stock)
+        const [prodRes, catRes] = await Promise.allSettled([
+          fetchAdminApi<any>('/products?limit=250'),
           fetchAdminApi<any>('/categories'),
         ]);
 
-        if (stockRes.status === 'fulfilled' && stockRes.value && (stockRes.value as any).data) {
-          const rawData = (stockRes.value as any).data;
-          const items = Array.isArray(rawData) ? rawData : rawData.items || rawData.inventory || [];
-          setStockMatrix(items);
+        if (prodRes.status === 'fulfilled' && prodRes.value) {
+          const raw = prodRes.value;
+          const items: any[] = Array.isArray(raw.data)
+            ? raw.data
+            : raw.data?.items || raw.data?.products || raw.items || raw.products || [];
           setCatalogProducts(items);
-        }
-
-        if (catRes.status === 'fulfilled' && catRes.value.success && catRes.value.data) {
-          const cats = Array.isArray(catRes.value.data) ? catRes.value.data : catRes.value.data.categories || [];
-          setCategories(cats.map((c: any) => c.name || c.title).filter(Boolean));
+          if (catRes.status === 'fulfilled') {
+            const catRaw = catRes.value;
+            const cats: any[] = Array.isArray(catRaw.data)
+              ? catRaw.data
+              : catRaw.data?.categories || catRaw.categories || [];
+            setCategories(cats.map((c: any) => c.name || c.title).filter(Boolean));
+          } else {
+            // Derive unique categories from product catalog
+            const catSet = new Set<string>();
+            items.forEach((p: any) => {
+              const cat = p.category?.name || p.categoryName;
+              if (cat) catSet.add(cat);
+            });
+            setCategories(Array.from(catSet));
+          }
         }
       } catch (err: any) {
         console.warn('[CreateB2BOrderPage] Init error:', err);
@@ -141,7 +171,49 @@ export function CreateB2BOrderPage({ onBack, onOrderCreated }: CreateB2BOrderPag
     initData();
   }, []);
 
-  // ─── 2. Fetch Customer Negotiated B2B Rates When Customer Changes ───────────
+  // ─── 2. Fetch Live Branch Stock Whenever Branch or Catalog Changes ───────────
+  useEffect(() => {
+    if (!selectedBranchId || catalogProducts.length === 0) return;
+
+    const fetchBranchStock = async () => {
+      setLoadingStock(true);
+      try {
+        const productIds = catalogProducts.map((p: any) => p.id).filter(Boolean);
+        if (productIds.length === 0) return;
+
+        const res = await b2bOrdersApi.checkProductStock(selectedBranchId, productIds);
+        if (res.success && Array.isArray(res.data)) {
+          const map = new Map<string, number>();
+          res.data.forEach((s: any) => {
+            map.set(s.productId, Number(s.availableStock ?? 0));
+          });
+          // For products not returned by checkProductStock, fall back to catalog stock
+          catalogProducts.forEach((p: any) => {
+            if (!map.has(p.id)) {
+              map.set(p.id, Number(p.stock || 0));
+            }
+          });
+          setStockMap(map);
+        } else {
+          // Fallback: use catalog stock for all products
+          const fallback = new Map<string, number>();
+          catalogProducts.forEach((p: any) => fallback.set(p.id, Number(p.stock || 0)));
+          setStockMap(fallback);
+        }
+      } catch (err) {
+        console.warn('[CreateB2BOrderPage] Stock check error:', err);
+        const fallback = new Map<string, number>();
+        catalogProducts.forEach((p: any) => fallback.set(p.id, Number(p.stock || 0)));
+        setStockMap(fallback);
+      } finally {
+        setLoadingStock(false);
+      }
+    };
+
+    fetchBranchStock();
+  }, [selectedBranchId, catalogProducts]);
+
+  // ─── 3. Fetch Customer Negotiated B2B Rates When Customer Changes ────────────
   useEffect(() => {
     if (!selectedCustomer) {
       setCustomerB2bPrices(new Map());
@@ -181,12 +253,12 @@ export function CreateB2BOrderPage({ onBack, onOrderCreated }: CreateB2BOrderPag
 
   // ─── Helper: Get Available Stock for Product in Selected Branch ─────────────
   const getBranchAvailableStock = (prod: any): number => {
-    if (!selectedBranchId || !prod) return 0;
-    // Check if item has facility allocations
-    if (prod.allocations && Array.isArray(prod.allocations)) {
-      const match = prod.allocations.find((a: any) => a.branchId === selectedBranchId || a.branch?.id === selectedBranchId);
-      if (match) return Number(match.available || match.stock || 0);
+    if (!prod) return 0;
+    // Prefer live branch-specific stock from stockMap
+    if (stockMap.has(prod.id)) {
+      return stockMap.get(prod.id) ?? 0;
     }
+    // Fallback to catalog master stock
     return Number(prod.stock || prod.availableStock || 0);
   };
 
@@ -200,10 +272,10 @@ export function CreateB2BOrderPage({ onBack, onOrderCreated }: CreateB2BOrderPag
     return { price: original, isCustom: false, original };
   };
 
-  // ─── Filtered Customers for Autocomplete ─────────────────────────────────────
+  // ─── Filtered Customers for Autocomplete (B2B only, already pre-filtered) ───
   const filteredCustomers = useMemo(() => {
     const q = customerSearch.toLowerCase().trim();
-    if (!q) return customers.slice(0, 10);
+    if (!q) return customers.slice(0, 12);
     return customers.filter((c: any) => {
       const company = (c.companyName || '').toLowerCase();
       const gstin = (c.gstin || '').toLowerCase();
@@ -783,22 +855,37 @@ export function CreateB2BOrderPage({ onBack, onOrderCreated }: CreateB2BOrderPag
 
                       {/* Stock & Add Action */}
                       <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
-                        <span
-                          className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
-                            availStock > 10
-                              ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20'
+                        {loadingStock ? (
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-zinc-700/40 text-zinc-400 border border-zinc-600/20 flex items-center gap-1">
+                            <RefreshCw size={8} className="animate-spin" /> Checking...
+                          </span>
+                        ) : (
+                          <span
+                            className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                              availStock > 10
+                                ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20'
+                                : availStock > 0
+                                ? 'bg-amber-500/15 text-amber-400 border border-amber-500/20'
+                                : 'bg-rose-500/15 text-rose-400 border border-rose-500/20'
+                            }`}
+                          >
+                            {availStock > 10
+                              ? `✓ ${availStock} in Stock`
                               : availStock > 0
-                              ? 'bg-amber-500/15 text-amber-400 border border-amber-500/20'
-                              : 'bg-rose-500/15 text-rose-400 border border-rose-500/20'
-                          }`}
-                        >
-                          {availStock > 0 ? `${availStock} Available` : 'Out of Stock'}
-                        </span>
+                              ? `⚠ Only ${availStock} Left`
+                              : '✕ Out of Stock'}
+                          </span>
+                        )}
 
                         <button
                           type="button"
                           onClick={() => handleAddProduct(prod, 1)}
-                          className="px-3 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-500 text-white font-bold text-xs shadow-sm transition-all flex items-center gap-1"
+                          disabled={availStock <= 0 && !loadingStock}
+                          className={`px-3 py-1.5 rounded-lg font-bold text-xs shadow-sm transition-all flex items-center gap-1 ${
+                            availStock <= 0 && !loadingStock
+                              ? 'bg-zinc-700 text-zinc-500 cursor-not-allowed'
+                              : 'bg-violet-600 hover:bg-violet-500 text-white'
+                          }`}
                         >
                           <Plus size={12} /> Add
                         </button>
