@@ -268,6 +268,21 @@ export function EmployeeManagementPage() {
     }
   }, [selectedMonth, selectedYear]);
 
+  // Silent background sync after backend debounced payroll calculation commits
+  const triggerPayrollSync = useCallback(() => {
+    setTimeout(async () => {
+      try {
+        const res = await employeeService.listPayroll({
+          month: selectedMonth,
+          year: selectedYear,
+        });
+        setPayrollRuns(res);
+      } catch (e) {
+        // Silent catch for background update
+      }
+    }, 700);
+  }, [selectedMonth, selectedYear]);
+
   // Initial loads
   useEffect(() => {
     fetchEmployees();
@@ -449,6 +464,7 @@ export function EmployeeManagementPage() {
       })
       .then(() => {
         showFeedback('success', `Sunday work status updated: ${newOverride ? 'Approved (Paid)' : 'Off'}`);
+        triggerPayrollSync();
       })
       .catch((err: any) => {
         showFeedback('error', err?.message || 'Failed to update Sunday status');
@@ -477,6 +493,9 @@ export function EmployeeManagementPage() {
 
       employeeService
         .deleteAttendance({ employeeId, date: dateStr })
+        .then(() => {
+          triggerPayrollSync();
+        })
         .catch((err: any) => {
           showFeedback('error', err?.message || 'Failed to clear attendance');
           fetchAttendance();
@@ -514,6 +533,9 @@ export function EmployeeManagementPage() {
         employeeId,
         date: dateStr,
         status,
+      })
+      .then(() => {
+        triggerPayrollSync();
       })
       .catch((err: any) => {
         showFeedback('error', err?.message || 'Failed to update status');
@@ -562,6 +584,9 @@ export function EmployeeManagementPage() {
         overtimeHours: hours,
         isSundayOverride: record?.isSundayOverride || false,
         notes: record?.notes || undefined,
+      })
+      .then(() => {
+        triggerPayrollSync();
       })
       .catch((err: any) => {
         showFeedback('error', err?.message || 'Failed to update overtime hours');
@@ -613,6 +638,7 @@ export function EmployeeManagementPage() {
           status: 'PRESENT',
         })),
       });
+      triggerPayrollSync();
     } catch (err: any) {
       showFeedback('error', err?.message || 'Failed to batch mark attendance');
       fetchAttendance();
@@ -663,6 +689,7 @@ export function EmployeeManagementPage() {
           status: 'PRESENT',
         })),
       });
+      triggerPayrollSync();
     } catch (err: any) {
       showFeedback('error', err?.message || 'Failed to batch mark worker attendance');
       fetchAttendance();
@@ -723,6 +750,7 @@ export function EmployeeManagementPage() {
         isSundayOverride: formData.isSundayOverride,
         notes: formData.notes,
       });
+      triggerPayrollSync();
     } catch (err: any) {
       showFeedback('error', err?.message || 'Failed to save attendance record');
       fetchAttendance();
@@ -736,6 +764,7 @@ export function EmployeeManagementPage() {
       showFeedback('success', 'Advance record updated successfully');
       setEditingAdvance(null);
       fetchAdvancesAndDeductions();
+      triggerPayrollSync();
     } catch (err: any) {
       showFeedback('error', err?.message || 'Failed to update advance');
     }
@@ -748,6 +777,7 @@ export function EmployeeManagementPage() {
       showFeedback('success', 'Deduction record updated successfully');
       setEditingDeduction(null);
       fetchAdvancesAndDeductions();
+      triggerPayrollSync();
     } catch (err: any) {
       showFeedback('error', err?.message || 'Failed to update deduction');
     }
@@ -1798,9 +1828,15 @@ export function EmployeeManagementPage() {
             <div className="space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-3 bg-[#18181B] p-3.5 rounded-2xl border border-[#27272A]">
                 <div>
-                  <h3 className="text-base font-semibold text-[#FAFAFA]">
-                    Worker Wage Computation: {MONTHS[selectedMonth - 1]?.label} {selectedYear}
-                  </h3>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base font-semibold text-[#FAFAFA]">
+                      Worker Wage Computation: {MONTHS[selectedMonth - 1]?.label} {selectedYear}
+                    </h3>
+                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      Live Auto-Sync
+                    </span>
+                  </div>
                   <p className="text-xs text-[#A1A1AA]">
                     Net Pay = (Days Worked × Daily Rate) + Overtime Pay - Advances Auto-Recovered - Deductions.
                   </p>
@@ -2591,9 +2627,15 @@ export function EmployeeManagementPage() {
         <div className="space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3 bg-[#18181B] p-3.5 rounded-2xl border border-[#27272A]">
             <div>
-              <h3 className="text-base font-semibold text-[#FAFAFA]">
-                Payroll Computation: {MONTHS[selectedMonth - 1]?.label} {selectedYear}
-              </h3>
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-semibold text-[#FAFAFA]">
+                  Payroll Computation: {MONTHS[selectedMonth - 1]?.label} {selectedYear}
+                </h3>
+                <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  Live Auto-Sync
+                </span>
+              </div>
               <p className="text-xs text-[#A1A1AA]">
                 Formula: Payable Days = Total Days - Default Sundays + Approved Sundays. Net = Gross - Advance - Deductions.
               </p>
