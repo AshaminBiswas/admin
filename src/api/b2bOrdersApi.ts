@@ -126,4 +126,20 @@ export const b2bOrdersApi = {
       availableStock: number;
     }[]>(`/b2b-orders/check-stock?${query.toString()}`);
   },
+
+  recordPayment: async (
+    id: string,
+    payload: {
+      amountPaid: number;
+      paymentMode: string;
+      transactionRef?: string;
+      paymentDate?: string;
+      notes?: string;
+    }
+  ) => {
+    return fetchAdminApi<B2BOrder>(`/b2b-orders/${id}/record-payment`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
 };

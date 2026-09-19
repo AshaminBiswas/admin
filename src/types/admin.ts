@@ -406,6 +406,33 @@ export interface B2BOrder {
   status: B2BOrderStatus;
   sourceQuotationId?: string | null;
   sourcePoId?: string | null;
+  sourcePiId?: string | null;
+  sourceQuotation?: {
+    id: string;
+    quoteNumber: string;
+    referenceNo?: string | null;
+    status: string;
+    grandTotal?: number;
+    createdAt?: string;
+  };
+  sourcePo?: {
+    id: string;
+    poNumber: string;
+    customerPoNumber?: string | null;
+    poSubmissionId?: string | null;
+    status: string;
+    subject?: string;
+    receivedAt?: string;
+  };
+  sourcePi?: {
+    id: string;
+    piNumber: string;
+    status: string;
+    grandTotal?: number;
+    advanceAmount?: number;
+    balanceDue?: number;
+    createdAt?: string;
+  };
   paymentStatus: string;
   paymentMethod: string;
   paidAmount: number;

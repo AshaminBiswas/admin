@@ -24,11 +24,23 @@ import {
   Calendar,
   AlertCircle,
   ExternalLink,
+  Layers,
+  Link2,
+  PackageCheck,
+  ArrowUpRight,
+  ShoppingBag,
+  FileCheck,
+  CheckSquare,
+  Copy,
 } from 'lucide-react';
 import { ProformaInvoice } from '../../types/proforma';
-import { GSTInvoice } from '../../types/admin';
+import { GSTInvoice, B2BOrder } from '../../types/admin';
 import { proformaService } from '../../api/proformaService';
 import { listGSTInvoices } from '../../api/gstInvoiceService';
+import { b2bOrdersApi } from '../../api/b2bOrdersApi';
+import { quotesService, AdminQuoteDetail } from '../../api/quotesService';
+import { getPoSubmissions, getPoSubmissionById } from '../../api/poManagementService';
+import { PoSubmissionItem, PoSubmissionDetail } from '../../types/poManagement';
 import { fetchAdminApi } from '../../api/adminApi';
 import { ProformaInvoiceDetailView } from './ProformaInvoiceDetailView';
 import { ProformaInvoiceCreateView } from './ProformaInvoiceCreateView';
@@ -105,6 +117,47 @@ export interface B2BPaymentRecord {
     metadata?: any;
     createdAt?: string;
   }>;
+
+  // Linked Upstream & Downstream Commercial Documents
+  linkedDocuments: {
+    quotation?: {
+      id?: string;
+      quoteNumber: string;
+      referenceNo?: string | null;
+      grandTotal?: number;
+      status?: string;
+      createdAt?: string;
+    } | null;
+    po?: {
+      id?: string;
+      poNumber: string;
+      customerPoNumber?: string | null;
+      poSubmissionId?: string | null;
+      status?: string;
+      subject?: string;
+      receivedAt?: string;
+    } | null;
+    pi?: {
+      id?: string;
+      piNumber: string;
+      grandTotal?: number;
+      advanceAmount?: number;
+      balanceDue?: number;
+      status?: string;
+      createdAt?: string;
+    } | null;
+    b2bOrder?: {
+      id?: string;
+      orderNumber: string;
+      grandTotal?: number;
+      paidAmount?: number;
+      dueAmount?: number;
+      status?: string;
+      paymentStatus?: string;
+      branchName?: string;
+      createdAt?: string;
+    } | null;
+  };
 
   // Underlying Raw Document for Deep Navigation
   rawDoc?: any;
@@ -209,7 +262,9 @@ export function AdvancePaymentsTrackerPage() {
   // Multi-Source Data States
   const [proformaInvoices, setProformaInvoices] = useState<ProformaInvoice[]>([]);
   const [gstInvoices, setGstInvoices] = useState<GSTInvoice[]>([]);
-  const [orders, setOrders] = useState<any[]>([]);
+  const [b2bOrders, setB2bOrders] = useState<B2BOrder[]>([]);
+  const [quotes, setQuotes] = useState<AdminQuoteDetail[]>([]);
+  const [poSubmissions, setPoSubmissions] = useState<PoSubmissionItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -227,6 +282,19 @@ export function AdvancePaymentsTrackerPage() {
   const [editingProforma, setEditingProforma] = useState<ProformaInvoice | null>(null);
   const [paymentModalRecord, setPaymentModalRecord] = useState<B2BPaymentRecord | null>(null);
   const [detailsModalRecord, setDetailsModalRecord] = useState<B2BPaymentRecord | null>(null);
+
+  // Quick Document Inspectors
+  const [inspectingQuoteId, setInspectingQuoteId] = useState<string | null>(null);
+  const [quoteDetail, setQuoteDetail] = useState<AdminQuoteDetail | null>(null);
+  const [loadingQuoteDetail, setLoadingQuoteDetail] = useState(false);
+
+  const [inspectingPoId, setInspectingPoId] = useState<string | null>(null);
+  const [poDetail, setPoDetail] = useState<PoSubmissionDetail | null>(null);
+  const [loadingPoDetail, setLoadingPoDetail] = useState(false);
+
+  const [inspectingB2bOrderId, setInspectingB2bOrderId] = useState<string | null>(null);
+  const [b2bOrderDetail, setB2bOrderDetail] = useState<B2BOrder | null>(null);
+  const [loadingB2bOrderDetail, setLoadingB2bOrderDetail] = useState(false);
 
   // Payment Form States
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
@@ -253,15 +321,108 @@ export function AdvancePaymentsTrackerPage() {
     setTimeout(() => setToastMessage(null), 4000);
   };
 
-  // ─── Fetch Multi-Source Data ────────────────────────────────────────────────
+  // ─── Quick Document Inspectors Handlers ─────────────────────────────────────
+  const handleInspectQuote = async (quoteIdOrNum: string) => {
+    setInspectingQuoteId(quoteIdOrNum);
+    setLoadingQuoteDetail(true);
+    try {
+      const existing = quotes.find(
+        (q) => q.id === quoteIdOrNum || q.quoteNumber === quoteIdOrNum || q.referenceNo === quoteIdOrNum
+      );
+      if (existing && existing.items && existing.items.length > 0) {
+        setQuoteDetail(existing);
+      } else {
+        const qId = existing?.id || quoteIdOrNum;
+        const fetched = await quotesService.getQuoteById(qId);
+        setQuoteDetail(fetched || existing || null);
+      }
+    } catch (e: any) {
+      console.error('Failed to load quote detail:', e);
+      const fallback = quotes.find((q) => q.id === quoteIdOrNum || q.quoteNumber === quoteIdOrNum);
+      if (fallback) setQuoteDetail(fallback);
+      else showToast('Could not fetch quotation details', 'error');
+    } finally {
+      setLoadingQuoteDetail(false);
+    }
+  };
+
+  const handleInspectPo = async (poIdOrNum: string) => {
+    setInspectingPoId(poIdOrNum);
+    setLoadingPoDetail(true);
+    try {
+      const existing = poSubmissions.find(
+        (p) => p.id === poIdOrNum || p.poSubmissionId === poIdOrNum || p.customerPoNumber === poIdOrNum
+      );
+      const poId = existing?.id || poIdOrNum;
+      const detail = await getPoSubmissionById(poId);
+      setPoDetail(detail);
+    } catch (e: any) {
+      console.error('Failed to load PO detail:', e);
+      const existing = poSubmissions.find(
+        (p) => p.id === poIdOrNum || p.poSubmissionId === poIdOrNum || p.customerPoNumber === poIdOrNum
+      );
+      if (existing) {
+        setPoDetail({
+          ...existing,
+          emails: [],
+          attachments: [],
+          internalNotes: [],
+          activityLogs: [],
+        });
+      } else {
+        showToast('Could not fetch PO details', 'error');
+      }
+    } finally {
+      setLoadingPoDetail(false);
+    }
+  };
+
+  const handleInspectB2bOrder = async (orderIdOrNum: string) => {
+    setInspectingB2bOrderId(orderIdOrNum);
+    setLoadingB2bOrderDetail(true);
+    try {
+      const existing = b2bOrders.find((o) => o.id === orderIdOrNum || o.orderNumber === orderIdOrNum);
+      if (existing && existing.items && existing.items.length > 0) {
+        setB2bOrderDetail(existing);
+      } else {
+        const ordId = existing?.id || orderIdOrNum;
+        const res = await b2bOrdersApi.getB2BOrder(ordId);
+        if (res.success && res.data) {
+          setB2bOrderDetail(res.data);
+        } else if (existing) {
+          setB2bOrderDetail(existing);
+        }
+      }
+    } catch (e: any) {
+      console.error('Failed to load B2B order detail:', e);
+      const existing = b2bOrders.find((o) => o.id === orderIdOrNum || o.orderNumber === orderIdOrNum);
+      if (existing) setB2bOrderDetail(existing);
+      else showToast('Could not fetch B2B order details', 'error');
+    } finally {
+      setLoadingB2bOrderDetail(false);
+    }
+  };
+
+  const handleInspectPi = (piIdOrNum: string) => {
+    const pi = proformaInvoices.find((p) => p.id === piIdOrNum || p.piNumber === piIdOrNum);
+    if (pi) {
+      setSelectedProforma(pi);
+    } else {
+      showToast(`Proforma ${piIdOrNum} not found in current ledger`, 'error');
+    }
+  };
+
+  // ─── Fetch Multi-Source Commercial Data ──────────────────────────────────────
   const fetchAllCommercialData = async () => {
     setLoading(true);
     setError(null);
     try {
-      const [piRes, gstRes, orderRes] = await Promise.allSettled([
+      const [piRes, gstRes, b2bRes, quoteRes, poRes] = await Promise.allSettled([
         proformaService.listProformaInvoices({ limit: 100 }),
         listGSTInvoices({ limit: 100 }),
-        fetchAdminApi('/orders?limit=100'),
+        b2bOrdersApi.listB2BOrders({ limit: 100 }),
+        quotesService.listQuotes({ limit: 100 }),
+        getPoSubmissions({ limit: 100 }),
       ]);
 
       if (piRes.status === 'fulfilled' && piRes.value) {
@@ -282,13 +443,19 @@ export function AdvancePaymentsTrackerPage() {
         setGstInvoices(gsts);
       }
 
-      if (orderRes.status === 'fulfilled' && orderRes.value) {
-        const rawOrders =
-          orderRes.value.data?.items ||
-          orderRes.value.data?.orders ||
-          orderRes.value.data ||
-          orderRes.value;
-        setOrders(Array.isArray(rawOrders) ? rawOrders : []);
+      if (b2bRes.status === 'fulfilled' && b2bRes.value) {
+        const ordersList = b2bRes.value.data?.items || [];
+        setB2bOrders(Array.isArray(ordersList) ? ordersList : []);
+      }
+
+      if (quoteRes.status === 'fulfilled' && quoteRes.value) {
+        const quotesList = quoteRes.value.data || [];
+        setQuotes(Array.isArray(quotesList) ? quotesList : []);
+      }
+
+      if (poRes.status === 'fulfilled' && poRes.value) {
+        const poList = poRes.value.items || [];
+        setPoSubmissions(Array.isArray(poList) ? poList : []);
       }
     } catch (err: any) {
       console.error('[AdvancePaymentsTracker] Load error:', err);
@@ -306,6 +473,50 @@ export function AdvancePaymentsTrackerPage() {
   const unifiedRecords: B2BPaymentRecord[] = useMemo(() => {
     const records: B2BPaymentRecord[] = [];
     const now = Date.now();
+
+    // 0. Lookup HashMaps for O(1) cross-document linking
+    const quotesById = new Map<string, AdminQuoteDetail>();
+    const quotesByNum = new Map<string, AdminQuoteDetail>();
+    quotes.forEach((q) => {
+      if (q.id) quotesById.set(q.id, q);
+      if (q.quoteNumber) quotesByNum.set(q.quoteNumber.toLowerCase(), q);
+      if (q.referenceNo) quotesByNum.set(q.referenceNo.toLowerCase(), q);
+    });
+
+    const posById = new Map<string, PoSubmissionItem>();
+    const posByNum = new Map<string, PoSubmissionItem>();
+    const posBySubId = new Map<string, PoSubmissionItem>();
+    poSubmissions.forEach((p) => {
+      if (p.id) posById.set(p.id, p);
+      if (p.poSubmissionId) posBySubId.set(p.poSubmissionId.toLowerCase(), p);
+      if (p.customerPoNumber) posByNum.set(p.customerPoNumber.toLowerCase(), p);
+    });
+
+    const pisById = new Map<string, ProformaInvoice>();
+    const pisByNum = new Map<string, ProformaInvoice>();
+    const pisByQuoteId = new Map<string, ProformaInvoice>();
+    const pisByPoId = new Map<string, ProformaInvoice>();
+    proformaInvoices.forEach((pi) => {
+      if (pi.id) pisById.set(pi.id, pi);
+      if (pi.piNumber) pisByNum.set(pi.piNumber.toLowerCase(), pi);
+      if ((pi as any).quoteId) pisByQuoteId.set((pi as any).quoteId, pi);
+      if (pi.quoteReference) pisByQuoteId.set(pi.quoteReference.toLowerCase(), pi);
+      if ((pi as any).poId) pisByPoId.set((pi as any).poId, pi);
+      if (pi.poReference) pisByPoId.set(pi.poReference.toLowerCase(), pi);
+    });
+
+    const b2bOrdersById = new Map<string, B2BOrder>();
+    const b2bOrdersByNum = new Map<string, B2BOrder>();
+    const b2bOrdersByPiId = new Map<string, B2BOrder>();
+    const b2bOrdersByQuoteId = new Map<string, B2BOrder>();
+    const b2bOrdersByPoId = new Map<string, B2BOrder>();
+    b2bOrders.forEach((o) => {
+      if (o.id) b2bOrdersById.set(o.id, o);
+      if (o.orderNumber) b2bOrdersByNum.set(o.orderNumber.toLowerCase(), o);
+      if (o.sourcePiId) b2bOrdersByPiId.set(o.sourcePiId, o);
+      if (o.sourceQuotationId) b2bOrdersByQuoteId.set(o.sourceQuotationId, o);
+      if (o.sourcePoId) b2bOrdersByPoId.set(o.sourcePoId, o);
+    });
 
     // 1. Proforma Invoices (PIs)
     proformaInvoices.forEach((pi) => {
@@ -342,6 +553,27 @@ export function AdvancePaymentsTrackerPage() {
       else if (pi.status === 'ACCEPTED' || Boolean(customerUtr)) paymentStatus = 'CUSTOMER_SUBMITTED';
       else if (isOverdue) paymentStatus = 'OVERDUE';
 
+      // Cross-link Quotation
+      const rawQuoteNum = (pi as any).quoteNumber || pi.quoteReference;
+      const rawQuoteId = (pi as any).quoteId;
+      const linkedQuote =
+        (rawQuoteId ? quotesById.get(rawQuoteId) : undefined) ||
+        (rawQuoteNum ? quotesByNum.get(rawQuoteNum.toLowerCase()) : undefined);
+
+      // Cross-link PO
+      const rawPoNum = (pi as any).customerPoNumber || (pi as any).poNumber || pi.poReference;
+      const rawPoId = (pi as any).poId;
+      const linkedPo =
+        (rawPoId ? posById.get(rawPoId) : undefined) ||
+        (rawPoNum ? posByNum.get(rawPoNum.toLowerCase()) : undefined);
+
+      // Cross-link B2B Order
+      const linkedOrder =
+        b2bOrdersByPiId.get(pi.id) ||
+        ((pi as any).orderId ? b2bOrdersById.get((pi as any).orderId) : undefined) ||
+        (rawQuoteId ? b2bOrdersByQuoteId.get(rawQuoteId) : undefined) ||
+        (rawPoId ? b2bOrdersByPoId.get(rawPoId) : undefined);
+
       records.push({
         id: `PI-${pi.id}`,
         sourceType: 'PROFORMA_INVOICE',
@@ -372,6 +604,65 @@ export function AdvancePaymentsTrackerPage() {
         notes: pi.notes,
         history: pi.history || [],
         rawDoc: pi,
+        linkedDocuments: {
+          quotation: linkedQuote
+            ? {
+                id: linkedQuote.id,
+                quoteNumber: linkedQuote.quoteNumber,
+                referenceNo: linkedQuote.referenceNo,
+                grandTotal: linkedQuote.grandTotal,
+                status: linkedQuote.status,
+                createdAt: linkedQuote.createdAt,
+              }
+            : rawQuoteNum
+            ? {
+                id: rawQuoteId,
+                quoteNumber: rawQuoteNum,
+                referenceNo: rawQuoteNum,
+                status: 'LINKED',
+              }
+            : null,
+          po: linkedPo
+            ? {
+                id: linkedPo.id,
+                poNumber: linkedPo.customerPoNumber || linkedPo.poSubmissionId || linkedPo.id,
+                customerPoNumber: linkedPo.customerPoNumber,
+                poSubmissionId: linkedPo.poSubmissionId,
+                status: linkedPo.status,
+                subject: linkedPo.subject,
+                receivedAt: linkedPo.receivedAt,
+              }
+            : rawPoNum
+            ? {
+                id: rawPoId,
+                poNumber: rawPoNum,
+                customerPoNumber: rawPoNum,
+                status: 'ATTACHED',
+              }
+            : null,
+          pi: {
+            id: pi.id,
+            piNumber: pi.piNumber,
+            grandTotal: pi.grandTotal,
+            advanceAmount: pi.advancePayable,
+            balanceDue: pi.balancePayable,
+            status: pi.status,
+            createdAt: pi.issueDate || (pi as any).createdAt,
+          },
+          b2bOrder: linkedOrder
+            ? {
+                id: linkedOrder.id,
+                orderNumber: linkedOrder.orderNumber,
+                grandTotal: linkedOrder.grandTotal,
+                paidAmount: linkedOrder.paidAmount,
+                dueAmount: linkedOrder.dueAmount,
+                status: linkedOrder.status,
+                paymentStatus: linkedOrder.paymentStatus,
+                branchName: linkedOrder.branch?.name,
+                createdAt: linkedOrder.createdAt,
+              }
+            : null,
+        },
       });
     });
 
@@ -395,6 +686,25 @@ export function AdvancePaymentsTrackerPage() {
       else if (isPaid) paymentStatus = 'FULLY_PAID';
       else if (isOverdue) paymentStatus = 'OVERDUE';
       else paymentStatus = 'PARTIALLY_PAID';
+
+      const rawPiId = (inv as any).proforma_invoice_id;
+      const rawOrderId = (inv as any).order_id;
+      const linkedPi = rawPiId ? pisById.get(rawPiId) : undefined;
+      const linkedOrder = rawOrderId
+        ? b2bOrdersById.get(rawOrderId)
+        : linkedPi
+        ? b2bOrdersByPiId.get(linkedPi.id)
+        : undefined;
+      const linkedQuote = (linkedPi as any)?.quoteId
+        ? quotesById.get((linkedPi as any).quoteId)
+        : linkedOrder?.sourceQuotationId
+        ? quotesById.get(linkedOrder.sourceQuotationId)
+        : undefined;
+      const linkedPo = (linkedPi as any)?.poId
+        ? posById.get((linkedPi as any).poId)
+        : linkedOrder?.sourcePoId
+        ? posById.get(linkedOrder.sourcePoId)
+        : undefined;
 
       records.push({
         id: `GST-${inv.id}`,
@@ -422,54 +732,205 @@ export function AdvancePaymentsTrackerPage() {
         paymentMode: isPaid ? 'RTGS' : undefined,
         notes: inv.notes,
         rawDoc: inv,
+        linkedDocuments: {
+          quotation: linkedQuote
+            ? {
+                id: linkedQuote.id,
+                quoteNumber: linkedQuote.quoteNumber,
+                referenceNo: linkedQuote.referenceNo,
+                grandTotal: linkedQuote.grandTotal,
+                status: linkedQuote.status,
+                createdAt: linkedQuote.createdAt,
+              }
+            : null,
+          po: linkedPo
+            ? {
+                id: linkedPo.id,
+                poNumber: linkedPo.customerPoNumber || linkedPo.poSubmissionId || linkedPo.id,
+                customerPoNumber: linkedPo.customerPoNumber,
+                poSubmissionId: linkedPo.poSubmissionId,
+                status: linkedPo.status,
+                subject: linkedPo.subject,
+                receivedAt: linkedPo.receivedAt,
+              }
+            : null,
+          pi: linkedPi
+            ? {
+                id: linkedPi.id,
+                piNumber: linkedPi.piNumber,
+                grandTotal: linkedPi.grandTotal,
+                advanceAmount: linkedPi.advancePayable,
+                balanceDue: linkedPi.balancePayable,
+                status: linkedPi.status,
+                createdAt: linkedPi.issueDate,
+              }
+            : null,
+          b2bOrder: linkedOrder
+            ? {
+                id: linkedOrder.id,
+                orderNumber: linkedOrder.orderNumber,
+                grandTotal: linkedOrder.grandTotal,
+                paidAmount: linkedOrder.paidAmount,
+                dueAmount: linkedOrder.dueAmount,
+                status: linkedOrder.status,
+                paymentStatus: linkedOrder.paymentStatus,
+                branchName: linkedOrder.branch?.name,
+                createdAt: linkedOrder.createdAt,
+              }
+            : null,
+        },
       });
     });
 
-    // 3. Storefront / B2B Orders
-    orders.forEach((ord) => {
+    // 3. Official B2B Wholesale Orders (b2b_orders)
+    b2bOrders.forEach((ord) => {
       const issueTime = new Date(ord.createdAt || now).getTime();
       const daysElapsed = Math.max(0, Math.floor((now - issueTime) / (1000 * 60 * 60 * 24)));
-      const isPaid = ord.paymentStatus === 'PAID' || ord.status === 'COMPLETED';
-      const grandTotal = Number(ord.grandTotal || ord.totalAmount || 0);
-      const totalPaid = isPaid ? grandTotal : 0;
-      const balanceDue = isPaid ? 0 : grandTotal;
+      const isPaid = ord.paymentStatus === 'PAID' || ord.status === 'completed';
+      const grandTotal = Number(ord.grandTotal || 0);
+      const totalPaid = Number(ord.paidAmount || 0);
+      const balanceDue = Number(
+        ord.dueAmount !== undefined && ord.dueAmount !== null ? ord.dueAmount : Math.max(0, grandTotal - totalPaid)
+      );
+      const advancePayable = isPaid ? 0 : balanceDue;
       const isOverdue = !isPaid && daysElapsed > 15;
 
-      const custName = ord.user ? `${ord.user.firstName || ''} ${ord.user.lastName || ''}`.trim() : (ord.shippingAddress?.name || 'Store Customer');
-      const compName = ord.user?.companyName || ord.billingAddress?.company || custName;
+      const custName = ord.customer
+        ? `${ord.customer.firstName || ''} ${ord.customer.lastName || ''}`.trim() ||
+          ord.customer.companyName ||
+          (ord.branch ? ord.branch.name : 'B2B Wholesale Buyer')
+        : ord.branch
+        ? ord.branch.name
+        : 'B2B Wholesale Buyer';
+      const compName = ord.customer?.companyName || ord.branch?.name || custName;
+      const custPhone = ord.customer?.phone || undefined;
+      const custEmail = ord.customer?.email || undefined;
+      const custGstin = ord.customer?.gstin || undefined;
+      const placeOfSupply = ord.branch?.city || 'Delhi';
+
+      // Cross-link Quotation
+      const linkedQuote =
+        (ord.sourceQuotationId ? quotesById.get(ord.sourceQuotationId) : undefined) ||
+        (ord.sourceQuotation
+          ? {
+              id: ord.sourceQuotation.id,
+              quoteNumber: ord.sourceQuotation.quoteNumber,
+              referenceNo: ord.sourceQuotation.referenceNo,
+              grandTotal: ord.sourceQuotation.grandTotal,
+              status: ord.sourceQuotation.status,
+              createdAt: ord.sourceQuotation.createdAt,
+            }
+          : undefined);
+
+      // Cross-link PO
+      const linkedPo =
+        (ord.sourcePoId ? posById.get(ord.sourcePoId) : undefined) ||
+        (ord.sourcePo
+          ? {
+              id: ord.sourcePo.id,
+              poNumber: ord.sourcePo.customerPoNumber || ord.sourcePo.poSubmissionId || ord.sourcePo.id,
+              customerPoNumber: ord.sourcePo.customerPoNumber,
+              poSubmissionId: ord.sourcePo.poSubmissionId,
+              status: ord.sourcePo.status,
+              subject: ord.sourcePo.subject,
+              receivedAt: ord.sourcePo.receivedAt,
+            }
+          : undefined);
+
+      // Cross-link PI
+      const linkedPi =
+        (ord.sourcePiId ? pisById.get(ord.sourcePiId) : undefined) ||
+        (ord.sourcePi
+          ? {
+              id: ord.sourcePi.id,
+              piNumber: ord.sourcePi.piNumber,
+              grandTotal: ord.sourcePi.grandTotal,
+              status: ord.sourcePi.status,
+            }
+          : undefined) ||
+        (ord.sourceQuotationId ? pisByQuoteId.get(ord.sourceQuotationId) : undefined) ||
+        (ord.sourcePoId ? pisByPoId.get(ord.sourcePoId) : undefined);
+
+      let paymentStatus: B2BPaymentRecord['paymentStatus'] = 'AWAITING_ADVANCE';
+      if (ord.status === 'cancelled') paymentStatus = 'CANCELLED';
+      else if (isPaid) paymentStatus = 'FULLY_PAID';
+      else if (ord.paymentStatus === 'PARTIAL') paymentStatus = 'PARTIALLY_PAID';
+      else if (isOverdue) paymentStatus = 'OVERDUE';
 
       records.push({
-        id: `ORD-${ord.id}`,
+        id: `B2B-${ord.id}`,
         sourceType: 'B2B_ORDER',
-        documentNumber: ord.orderNumber || `ORD-${ord.id.slice(0, 8)}`,
+        documentNumber: ord.orderNumber,
         issueDate: new Date(issueTime).toISOString().slice(0, 10),
         dueDate: new Date(issueTime + 15 * 86400000).toISOString().slice(0, 10),
         daysElapsed,
         daysRemaining: 15 - daysElapsed,
         isOverdue,
         isExpiringSoon: !isPaid && daysElapsed >= 10 && daysElapsed <= 15,
-        customerId: ord.userId || ord.user?.id,
+        customerId: ord.customerId,
         customerName: custName,
         companyName: compName,
-        customerGstin: ord.user?.gstin,
-        customerPhone: ord.user?.phone || ord.shippingAddress?.phone,
-        customerEmail: ord.user?.email,
-        placeOfSupply: ord.shippingAddress?.state || 'Delhi',
+        customerGstin: custGstin,
+        customerPhone: custPhone,
+        customerEmail: custEmail,
+        placeOfSupply,
         grandTotal,
-        advancePayable: 0,
+        advancePayable,
         advancePaid: totalPaid,
         balanceDue,
         totalPaid,
-        paymentStatus: isPaid ? 'FULLY_PAID' : isOverdue ? 'OVERDUE' : 'AWAITING_ADVANCE',
+        paymentStatus,
         paymentType: 'DIRECT_ORDER_PAYMENT',
-        paymentMode: ord.paymentMethod || 'RAZORPAY',
-        notes: ord.notes,
+        paymentMode: ord.paymentMethod || 'BANK_TRANSFER',
+        notes: (ord as any).notes || ord.rejectedReason || ord.cancellationReason || undefined,
         rawDoc: ord,
+        linkedDocuments: {
+          quotation: linkedQuote
+            ? {
+                id: linkedQuote.id,
+                quoteNumber: linkedQuote.quoteNumber,
+                referenceNo: linkedQuote.referenceNo,
+                grandTotal: linkedQuote.grandTotal,
+                status: linkedQuote.status,
+                createdAt: linkedQuote.createdAt,
+              }
+            : null,
+          po: linkedPo
+            ? {
+                id: linkedPo.id,
+                poNumber: (linkedPo as any).customerPoNumber || (linkedPo as any).poSubmissionId || linkedPo.id,
+                customerPoNumber: (linkedPo as any).customerPoNumber,
+                poSubmissionId: (linkedPo as any).poSubmissionId,
+                status: linkedPo.status,
+                subject: (linkedPo as any).subject,
+                receivedAt: (linkedPo as any).receivedAt,
+              }
+            : null,
+          pi: linkedPi
+            ? {
+                id: linkedPi.id,
+                piNumber: linkedPi.piNumber,
+                grandTotal: linkedPi.grandTotal,
+                status: linkedPi.status,
+              }
+            : null,
+          b2bOrder: {
+            id: ord.id,
+            orderNumber: ord.orderNumber,
+            grandTotal: ord.grandTotal,
+            paidAmount: ord.paidAmount,
+            dueAmount: ord.dueAmount,
+            status: ord.status,
+            paymentStatus: ord.paymentStatus,
+            branchName: ord.branch?.name,
+            createdAt: ord.createdAt,
+          },
+        },
       });
     });
 
     return records;
-  }, [proformaInvoices, gstInvoices, orders]);
+  }, [proformaInvoices, gstInvoices, b2bOrders, quotes, poSubmissions]);
 
   // ─── Customer Accounts Aggregation ──────────────────────────────────────────
   const customerAccounts: B2BCustomerAccountSummary[] = useMemo(() => {
@@ -596,7 +1057,38 @@ export function AdvancePaymentsTrackerPage() {
           const matchPhone = (rec.customerPhone || '').toLowerCase().includes(q);
           const matchGstin = (rec.customerGstin || '').toLowerCase().includes(q);
           const matchUtr = (rec.transactionRef || '').toLowerCase().includes(q);
-          if (!matchDoc && !matchCust && !matchComp && !matchPhone && !matchGstin && !matchUtr) return false;
+
+          // Multi-document search: Quote, PO, PI, B2B Order
+          const matchQuote = Boolean(
+            rec.linkedDocuments?.quotation?.quoteNumber?.toLowerCase().includes(q) ||
+            rec.linkedDocuments?.quotation?.referenceNo?.toLowerCase().includes(q)
+          );
+          const matchPo = Boolean(
+            rec.linkedDocuments?.po?.customerPoNumber?.toLowerCase().includes(q) ||
+            rec.linkedDocuments?.po?.poNumber?.toLowerCase().includes(q) ||
+            rec.linkedDocuments?.po?.poSubmissionId?.toLowerCase().includes(q)
+          );
+          const matchPi = Boolean(
+            rec.linkedDocuments?.pi?.piNumber?.toLowerCase().includes(q)
+          );
+          const matchB2b = Boolean(
+            rec.linkedDocuments?.b2bOrder?.orderNumber?.toLowerCase().includes(q)
+          );
+
+          if (
+            !matchDoc &&
+            !matchCust &&
+            !matchComp &&
+            !matchPhone &&
+            !matchGstin &&
+            !matchUtr &&
+            !matchQuote &&
+            !matchPo &&
+            !matchPi &&
+            !matchB2b
+          ) {
+            return false;
+          }
         }
 
         if (statusFilter === 'AWAITING') {
@@ -682,6 +1174,15 @@ export function AdvancePaymentsTrackerPage() {
           transactionRef: paymentUtr.trim(),
           paymentDate,
           status: targetStatus,
+          notes: `${paymentNotes ? `${paymentNotes} | ` : ''}Credited to: ${bankAccountCredited}`,
+        });
+      } else if (paymentModalRecord.sourceType === 'B2B_ORDER') {
+        const rawOrd = paymentModalRecord.rawDoc as B2BOrder;
+        await b2bOrdersApi.recordPayment(rawOrd.id, {
+          amountPaid: Number(paymentAmount),
+          paymentMode,
+          transactionRef: paymentUtr.trim(),
+          paymentDate,
           notes: `${paymentNotes ? `${paymentNotes} | ` : ''}Credited to: ${bankAccountCredited}`,
         });
       } else if (paymentModalRecord.sourceType === 'GST_TAX_INVOICE') {
@@ -782,6 +1283,121 @@ export function AdvancePaymentsTrackerPage() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  // ─── Interactive Commercial Document Pipeline Chain ─────────────────────────
+  const renderDocumentChain = (record: B2BPaymentRecord, isCompact = false) => {
+    const { quotation, po, pi, b2bOrder } = record.linkedDocuments || {};
+
+    return (
+      <div className={`flex items-center flex-wrap gap-1.5 ${isCompact ? 'text-[10px]' : 'text-xs'}`}>
+        {/* 1. Quotation Node */}
+        {quotation ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleInspectQuote(quotation.id || quotation.quoteNumber);
+            }}
+            className="group inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-medium transition-all shadow-sm"
+            title={`View Quotation ${quotation.quoteNumber}`}
+          >
+            <FileText size={11} className="text-indigo-400 group-hover:scale-110 transition-transform" />
+            <span className="font-bold">{quotation.quoteNumber}</span>
+            {quotation.status && (
+              <span className="text-[9px] px-1 py-0.2 rounded bg-indigo-900/60 text-indigo-200 uppercase font-mono">
+                {quotation.status}
+              </span>
+            )}
+          </button>
+        ) : (
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-zinc-600 border border-dashed border-zinc-800 text-[10px]">
+            No QT
+          </span>
+        )}
+
+        <ArrowRight size={10} className="text-zinc-600 flex-shrink-0" />
+
+        {/* 2. Purchase Order Node */}
+        {po ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleInspectPo(po.id || po.poSubmissionId || po.customerPoNumber || po.poNumber);
+            }}
+            className="group inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 font-medium transition-all shadow-sm"
+            title={`View Purchase Order ${po.customerPoNumber || po.poNumber}`}
+          >
+            <Layers size={11} className="text-amber-400 group-hover:scale-110 transition-transform" />
+            <span className="font-bold">{po.customerPoNumber || po.poNumber || 'PO Attached'}</span>
+            {po.status && (
+              <span className="text-[9px] px-1 py-0.2 rounded bg-amber-900/60 text-amber-200 uppercase font-mono">
+                {po.status}
+              </span>
+            )}
+          </button>
+        ) : (
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-zinc-600 border border-dashed border-zinc-800 text-[10px]">
+            No PO
+          </span>
+        )}
+
+        <ArrowRight size={10} className="text-zinc-600 flex-shrink-0" />
+
+        {/* 3. Proforma Invoice Node */}
+        {pi ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleInspectPi(pi.id || pi.piNumber);
+            }}
+            className="group inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/30 font-medium transition-all shadow-sm"
+            title={`View Proforma Invoice ${pi.piNumber}`}
+          >
+            <FileCheck size={11} className="text-purple-400 group-hover:scale-110 transition-transform" />
+            <span className="font-bold">{pi.piNumber}</span>
+            {pi.status && (
+              <span className="text-[9px] px-1 py-0.2 rounded bg-purple-900/60 text-purple-200 uppercase font-mono">
+                {pi.status}
+              </span>
+            )}
+          </button>
+        ) : (
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-zinc-600 border border-dashed border-zinc-800 text-[10px]">
+            No PI
+          </span>
+        )}
+
+        <ArrowRight size={10} className="text-zinc-600 flex-shrink-0" />
+
+        {/* 4. B2B Wholesale Order Node */}
+        {b2bOrder ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleInspectB2bOrder(b2bOrder.id || b2bOrder.orderNumber);
+            }}
+            className="group inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-medium transition-all shadow-sm"
+            title={`View B2B Wholesale Order ${b2bOrder.orderNumber}`}
+          >
+            <ShoppingBag size={11} className="text-emerald-400 group-hover:scale-110 transition-transform" />
+            <span className="font-bold">{b2bOrder.orderNumber}</span>
+            {b2bOrder.paymentStatus && (
+              <span className="text-[9px] px-1 py-0.2 rounded bg-emerald-900/60 text-emerald-200 uppercase font-mono">
+                {b2bOrder.paymentStatus}
+              </span>
+            )}
+          </button>
+        ) : (
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-zinc-600 border border-dashed border-zinc-800 text-[10px]">
+            No Order
+          </span>
+        )}
+      </div>
+    );
   };
 
   // ─── Proforma Sub-Views (Edit & Detail) ──────────────────────────────────────
@@ -1102,6 +1718,18 @@ export function AdvancePaymentsTrackerPage() {
                         </div>
                       </div>
 
+                      {/* Commercial Document Chain */}
+                      <div className="p-2.5 rounded-xl bg-[#141417] border border-[#27272A] space-y-1.5">
+                        <div className="text-[10px] uppercase font-bold tracking-wider text-zinc-400 flex items-center justify-between">
+                          <span className="flex items-center gap-1">
+                            <Link2 size={11} className="text-purple-400" />
+                            <span>Commercial Document Chain</span>
+                          </span>
+                          <span className="text-[9px] text-zinc-500">Tap to inspect</span>
+                        </div>
+                        {renderDocumentChain(r, true)}
+                      </div>
+
                       {/* Customer Details Box */}
                       <div className="p-2.5 rounded-xl bg-[#18181B] border border-[#27272A] space-y-1 text-xs">
                         <div className="font-bold text-zinc-200">
@@ -1189,6 +1817,7 @@ export function AdvancePaymentsTrackerPage() {
                   <thead className="bg-[#09090B] text-zinc-400 uppercase text-[10px] font-black border-b border-[#27272A]">
                     <tr>
                       <th className="py-3.5 px-3">Document & Date</th>
+                      <th className="py-3.5 px-3">Commercial Pipeline (QT ➔ PO ➔ PI ➔ Order)</th>
                       <th className="py-3.5 px-3">Customer / Enterprise</th>
                       <th className="py-3.5 px-3">Invoiced Value</th>
                       <th className="py-3.5 px-3">Total Paid</th>
@@ -1205,7 +1834,7 @@ export function AdvancePaymentsTrackerPage() {
                       return (
                         <tr key={r.id} className="hover:bg-white/[0.02] transition-colors">
                           {/* Document # & Date */}
-                          <td className="py-3.5 px-3">
+                          <td className="py-3.5 px-3 whitespace-nowrap">
                             <div className="font-bold text-white flex items-center gap-1.5">
                               <span>{r.documentNumber}</span>
                             </div>
@@ -1221,9 +1850,14 @@ export function AdvancePaymentsTrackerPage() {
                                     : 'bg-emerald-500/15 text-emerald-300'
                                 }`}
                               >
-                                {isPi ? 'PI' : isGst ? 'GST' : 'Order'}
+                                {isPi ? 'PI' : isGst ? 'GST' : 'B2B Ord'}
                               </span>
                             </div>
+                          </td>
+
+                          {/* Commercial Pipeline */}
+                          <td className="py-3.5 px-3">
+                            {renderDocumentChain(r, true)}
                           </td>
 
                           {/* Customer & Company */}
@@ -1436,6 +2070,18 @@ export function AdvancePaymentsTrackerPage() {
               </div>
             </div>
 
+            {/* Linked Commercial Pipeline Chain */}
+            <div className="p-3 rounded-xl bg-[#09090B] border border-[#27272A] space-y-1.5">
+              <div className="text-[10px] uppercase font-bold tracking-wider text-zinc-400 flex items-center justify-between">
+                <span className="flex items-center gap-1">
+                  <Link2 size={11} className="text-purple-400" />
+                  <span>Synchronized Commercial Pipeline</span>
+                </span>
+                <span className="text-[9px] text-emerald-400 font-semibold">Auto-Sync Active</span>
+              </div>
+              {renderDocumentChain(paymentModalRecord, true)}
+            </div>
+
             <form onSubmit={handleSubmitPayment} className="space-y-3.5">
               <div>
                 <label className="block text-xs font-semibold text-zinc-300 mb-1">
@@ -1582,6 +2228,140 @@ export function AdvancePaymentsTrackerPage() {
               </div>
             </div>
 
+            {/* Commercial Document Pipeline Linked Stages */}
+            <div className="p-3.5 rounded-xl bg-[#09090B] border border-[#27272A] space-y-2.5">
+              <div className="text-xs font-bold text-zinc-300 uppercase tracking-wider flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <Link2 size={13} className="text-purple-400" />
+                  <span>Commercial Document Pipeline</span>
+                </span>
+                <span className="text-[10px] text-zinc-500 font-normal">Click to inspect</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {/* Quotation */}
+                <div className="p-2 rounded-lg bg-[#18181B] border border-[#27272A] space-y-1">
+                  <div className="text-[10px] text-zinc-500 uppercase font-bold flex items-center justify-between">
+                    <span>1. Quotation</span>
+                    {detailsModalRecord.linkedDocuments?.quotation?.status && (
+                      <span className="text-indigo-400 font-mono text-[9px]">
+                        {detailsModalRecord.linkedDocuments.quotation.status}
+                      </span>
+                    )}
+                  </div>
+                  {detailsModalRecord.linkedDocuments?.quotation ? (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleInspectQuote(
+                          detailsModalRecord.linkedDocuments.quotation!.id ||
+                          detailsModalRecord.linkedDocuments.quotation!.quoteNumber
+                        )
+                      }
+                      className="text-xs font-bold text-indigo-300 hover:text-indigo-200 flex items-center gap-1 truncate w-full text-left"
+                    >
+                      <FileText size={12} className="flex-shrink-0" />
+                      <span className="truncate">{detailsModalRecord.linkedDocuments.quotation.quoteNumber}</span>
+                    </button>
+                  ) : (
+                    <span className="text-[11px] text-zinc-600 italic">Not Linked</span>
+                  )}
+                </div>
+
+                {/* PO */}
+                <div className="p-2 rounded-lg bg-[#18181B] border border-[#27272A] space-y-1">
+                  <div className="text-[10px] text-zinc-500 uppercase font-bold flex items-center justify-between">
+                    <span>2. Purchase Order</span>
+                    {detailsModalRecord.linkedDocuments?.po?.status && (
+                      <span className="text-amber-400 font-mono text-[9px]">
+                        {detailsModalRecord.linkedDocuments.po.status}
+                      </span>
+                    )}
+                  </div>
+                  {detailsModalRecord.linkedDocuments?.po ? (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleInspectPo(
+                          detailsModalRecord.linkedDocuments.po!.id ||
+                          detailsModalRecord.linkedDocuments.po!.poSubmissionId ||
+                          detailsModalRecord.linkedDocuments.po!.customerPoNumber ||
+                          detailsModalRecord.linkedDocuments.po!.poNumber
+                        )
+                      }
+                      className="text-xs font-bold text-amber-300 hover:text-amber-200 flex items-center gap-1 truncate w-full text-left"
+                    >
+                      <Layers size={12} className="flex-shrink-0" />
+                      <span className="truncate">
+                        {detailsModalRecord.linkedDocuments.po.customerPoNumber ||
+                          detailsModalRecord.linkedDocuments.po.poNumber ||
+                          'PO Attached'}
+                      </span>
+                    </button>
+                  ) : (
+                    <span className="text-[11px] text-zinc-600 italic">Not Linked</span>
+                  )}
+                </div>
+
+                {/* PI */}
+                <div className="p-2 rounded-lg bg-[#18181B] border border-[#27272A] space-y-1">
+                  <div className="text-[10px] text-zinc-500 uppercase font-bold flex items-center justify-between">
+                    <span>3. Proforma</span>
+                    {detailsModalRecord.linkedDocuments?.pi?.status && (
+                      <span className="text-purple-400 font-mono text-[9px]">
+                        {detailsModalRecord.linkedDocuments.pi.status}
+                      </span>
+                    )}
+                  </div>
+                  {detailsModalRecord.linkedDocuments?.pi ? (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleInspectPi(
+                          detailsModalRecord.linkedDocuments.pi!.id ||
+                          detailsModalRecord.linkedDocuments.pi!.piNumber
+                        )
+                      }
+                      className="text-xs font-bold text-purple-300 hover:text-purple-200 flex items-center gap-1 truncate w-full text-left"
+                    >
+                      <FileCheck size={12} className="flex-shrink-0" />
+                      <span className="truncate">{detailsModalRecord.linkedDocuments.pi.piNumber}</span>
+                    </button>
+                  ) : (
+                    <span className="text-[11px] text-zinc-600 italic">Not Linked</span>
+                  )}
+                </div>
+
+                {/* B2B Order */}
+                <div className="p-2 rounded-lg bg-[#18181B] border border-[#27272A] space-y-1">
+                  <div className="text-[10px] text-zinc-500 uppercase font-bold flex items-center justify-between">
+                    <span>4. B2B Order</span>
+                    {detailsModalRecord.linkedDocuments?.b2bOrder?.status && (
+                      <span className="text-emerald-400 font-mono text-[9px]">
+                        {detailsModalRecord.linkedDocuments.b2bOrder.status}
+                      </span>
+                    )}
+                  </div>
+                  {detailsModalRecord.linkedDocuments?.b2bOrder ? (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleInspectB2bOrder(
+                          detailsModalRecord.linkedDocuments.b2bOrder!.id ||
+                          detailsModalRecord.linkedDocuments.b2bOrder!.orderNumber
+                        )
+                      }
+                      className="text-xs font-bold text-emerald-300 hover:text-emerald-200 flex items-center gap-1 truncate w-full text-left"
+                    >
+                      <ShoppingBag size={12} className="flex-shrink-0" />
+                      <span className="truncate">{detailsModalRecord.linkedDocuments.b2bOrder.orderNumber}</span>
+                    </button>
+                  ) : (
+                    <span className="text-[11px] text-zinc-600 italic">Not Linked</span>
+                  )}
+                </div>
+              </div>
+            </div>
+
             {/* Quick Action Link for Proformas */}
             {detailsModalRecord.sourceType === 'PROFORMA_INVOICE' && (
               <button
@@ -1687,6 +2467,419 @@ export function AdvancePaymentsTrackerPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ─── QUOTATION QUICK INSPECTOR MODAL ────────────────────────────── */}
+      {inspectingQuoteId && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-2xl bg-[#18181B] border border-[#27272A] rounded-2xl p-5 sm:p-6 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-[#27272A] pb-3">
+              <div className="flex items-center gap-2.5 text-indigo-400">
+                <FileText size={20} />
+                <div>
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    <span>Quotation Inspector</span>
+                    <span className="font-mono text-xs px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                      {quoteDetail?.quoteNumber || inspectingQuoteId}
+                    </span>
+                  </h3>
+                  <div className="text-xs text-zinc-400">Upstream commercial pricing & approved line items</div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setInspectingQuoteId(null);
+                  setQuoteDetail(null);
+                }}
+                className="p-1 rounded-lg hover:bg-[#27272A] text-zinc-400 hover:text-white"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {loadingQuoteDetail ? (
+              <div className="py-12 text-center text-zinc-400 flex flex-col items-center justify-center gap-2">
+                <RefreshCw size={22} className="animate-spin text-indigo-500" />
+                <span className="text-xs">Fetching quotation dossier...</span>
+              </div>
+            ) : quoteDetail ? (
+              <div className="space-y-4">
+                {/* Meta details */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 p-3 rounded-xl bg-[#09090B] border border-[#27272A] text-xs">
+                  <div>
+                    <span className="text-zinc-500 text-[10px] uppercase block">Client / Buyer</span>
+                    <span className="font-bold text-white">{quoteDetail.companyName || `${quoteDetail.firstName} ${quoteDetail.lastName}`}</span>
+                  </div>
+                  <div>
+                    <span className="text-zinc-500 text-[10px] uppercase block">Reference / Project</span>
+                    <span className="font-medium text-zinc-300">{quoteDetail.projectName || quoteDetail.referenceNo || 'N/A'}</span>
+                  </div>
+                  <div>
+                    <span className="text-zinc-500 text-[10px] uppercase block">GSTIN</span>
+                    <span className="font-mono text-zinc-300">{quoteDetail.gstNo || 'Unregistered'}</span>
+                  </div>
+                  <div>
+                    <span className="text-zinc-500 text-[10px] uppercase block">Quotation Status</span>
+                    <span className="font-bold text-indigo-400">{quoteDetail.status}</span>
+                  </div>
+                </div>
+
+                {/* Line items table */}
+                {quoteDetail.items && quoteDetail.items.length > 0 && (
+                  <div className="border border-[#27272A] rounded-xl overflow-hidden">
+                    <div className="px-3 py-2 bg-[#09090B] text-zinc-400 text-[11px] font-bold uppercase tracking-wider border-b border-[#27272A]">
+                      Approved Line Items ({quoteDetail.items.length})
+                    </div>
+                    <div className="max-h-48 overflow-y-auto">
+                      <table className="w-full text-left text-xs text-zinc-300">
+                        <thead className="bg-[#18181B] text-zinc-500 text-[10px] uppercase border-b border-[#27272A]">
+                          <tr>
+                            <th className="py-2 px-3">Item Description</th>
+                            <th className="py-2 px-3 text-right">Qty</th>
+                            <th className="py-2 px-3 text-right">Rate</th>
+                            <th className="py-2 px-3 text-right">Amount</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[#27272A]">
+                          {quoteDetail.items.map((item, idx) => (
+                            <tr key={item.id || idx}>
+                              <td className="py-2 px-3 font-medium text-white">
+                                {item.productNameSnapshot || item.product?.name || 'Product'}
+                              </td>
+                              <td className="py-2 px-3 text-right font-mono text-zinc-400">
+                                {item.quantity} {item.unit}
+                              </td>
+                              <td className="py-2 px-3 text-right font-mono text-zinc-400">
+                                ₹{Number(item.rate).toLocaleString('en-IN')}
+                              </td>
+                              <td className="py-2 px-3 text-right font-bold text-white font-mono">
+                                ₹{Number(item.amount).toLocaleString('en-IN')}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Financial Summary */}
+                <div className="p-3 rounded-xl bg-[#09090B] border border-[#27272A] flex items-center justify-between text-xs">
+                  <div>
+                    <span className="text-zinc-500 text-[11px]">Subtotal: </span>
+                    <span className="text-zinc-300 font-mono">₹{Number(quoteDetail.subtotal || 0).toLocaleString('en-IN')}</span>
+                    <span className="mx-2 text-zinc-600">•</span>
+                    <span className="text-zinc-500 text-[11px]">Tax: </span>
+                    <span className="text-zinc-300 font-mono">₹{Number(quoteDetail.taxTotal || quoteDetail.gstAmount || 0).toLocaleString('en-IN')}</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-zinc-400 text-xs">Grand Total: </span>
+                    <span className="text-base font-black text-indigo-400 font-mono">
+                      ₹{Number(quoteDetail.grandTotal || 0).toLocaleString('en-IN')}
+                    </span>
+                  </div>
+                </div>
+
+                {quoteDetail.digitalSignature && (
+                  <div className="p-2.5 rounded-xl bg-emerald-950/30 border border-emerald-800/40 text-emerald-300 text-xs flex items-center gap-2">
+                    <ShieldCheck size={16} className="text-emerald-400 flex-shrink-0" />
+                    <span>Digitally Signed by <strong>{quoteDetail.signedBy || 'Authorized Signatory'}</strong> on {new Date(quoteDetail.signedAt || quoteDetail.updatedAt).toLocaleDateString('en-IN')}</span>
+                  </div>
+                )}
+
+                <div className="flex justify-end gap-2 pt-2 border-t border-[#27272A]">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setInspectingQuoteId(null);
+                      setQuoteDetail(null);
+                    }}
+                    className="px-4 py-2 rounded-xl bg-[#27272A] hover:bg-[#3F3F46] text-zinc-300 text-xs font-bold"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="py-8 text-center text-zinc-500 text-xs">No quotation record found for this identifier.</div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ─── PURCHASE ORDER QUICK INSPECTOR MODAL ────────────────────────────── */}
+      {inspectingPoId && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-2xl bg-[#18181B] border border-[#27272A] rounded-2xl p-5 sm:p-6 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-[#27272A] pb-3">
+              <div className="flex items-center gap-2.5 text-amber-400">
+                <Layers size={20} />
+                <div>
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    <span>Purchase Order Inspector</span>
+                    <span className="font-mono text-xs px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                      {poDetail?.customerPoNumber || poDetail?.poSubmissionId || inspectingPoId}
+                    </span>
+                  </h3>
+                  <div className="text-xs text-zinc-400">Customer purchase commitment and uploaded PO files</div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setInspectingPoId(null);
+                  setPoDetail(null);
+                }}
+                className="p-1 rounded-lg hover:bg-[#27272A] text-zinc-400 hover:text-white"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {loadingPoDetail ? (
+              <div className="py-12 text-center text-zinc-400 flex flex-col items-center justify-center gap-2">
+                <RefreshCw size={22} className="animate-spin text-amber-500" />
+                <span className="text-xs">Fetching PO submission & attachments...</span>
+              </div>
+            ) : poDetail ? (
+              <div className="space-y-4">
+                {/* Meta details */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 p-3 rounded-xl bg-[#09090B] border border-[#27272A] text-xs">
+                  <div>
+                    <span className="text-zinc-500 text-[10px] uppercase block">Customer / Organization</span>
+                    <span className="font-bold text-white">{poDetail.companyName || poDetail.customerName || 'N/A'}</span>
+                  </div>
+                  <div>
+                    <span className="text-zinc-500 text-[10px] uppercase block">Customer PO #</span>
+                    <span className="font-mono font-bold text-amber-300">{poDetail.customerPoNumber || 'Attached in file'}</span>
+                  </div>
+                  <div>
+                    <span className="text-zinc-500 text-[10px] uppercase block">Contact Email / Phone</span>
+                    <span className="text-zinc-300">{poDetail.customerEmail || poDetail.customerPhone || 'N/A'}</span>
+                  </div>
+                  <div>
+                    <span className="text-zinc-500 text-[10px] uppercase block">PO Status</span>
+                    <span className="font-bold text-amber-400">{poDetail.status}</span>
+                  </div>
+                </div>
+
+                {/* Email Subject / Message preview */}
+                <div className="p-3 rounded-xl bg-[#09090B] border border-[#27272A] space-y-1.5 text-xs">
+                  <div className="font-bold text-zinc-300 flex items-center gap-1.5">
+                    <Mail size={13} className="text-amber-400" />
+                    <span>{poDetail.subject || 'Purchase Order Submission'}</span>
+                  </div>
+                  {poDetail.previewText && (
+                    <p className="text-zinc-400 text-[11px] line-clamp-3 italic">
+                      "{poDetail.previewText}"
+                    </p>
+                  )}
+                  <div className="text-[10px] text-zinc-500">
+                    Received: {new Date(poDetail.receivedAt || poDetail.createdAt).toLocaleString('en-IN')} • Source: {poDetail.source}
+                  </div>
+                </div>
+
+                {/* Attachments Section */}
+                {poDetail.attachments && poDetail.attachments.length > 0 && (
+                  <div className="p-3 rounded-xl bg-[#09090B] border border-[#27272A] space-y-2">
+                    <div className="text-xs font-bold text-zinc-300 uppercase tracking-wider flex items-center gap-1.5">
+                      <ExternalLink size={13} className="text-amber-400" />
+                      <span>PO Attachments & Invoices ({poDetail.attachments.length})</span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {poDetail.attachments.map((att) => (
+                        <a
+                          key={att.id}
+                          href={att.storageUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="p-2.5 rounded-lg bg-[#18181B] hover:bg-[#27272A] border border-[#3F3F46] flex items-center justify-between text-xs text-zinc-200 transition-colors group"
+                        >
+                          <div className="truncate mr-2">
+                            <span className="font-semibold block truncate group-hover:text-amber-300">{att.fileName}</span>
+                            <span className="text-[10px] text-zinc-500">{(att.fileSize / 1024).toFixed(1)} KB</span>
+                          </div>
+                          <Download size={14} className="text-zinc-400 group-hover:text-amber-400 flex-shrink-0" />
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex justify-end gap-2 pt-2 border-t border-[#27272A]">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setInspectingPoId(null);
+                      setPoDetail(null);
+                    }}
+                    className="px-4 py-2 rounded-xl bg-[#27272A] hover:bg-[#3F3F46] text-zinc-300 text-xs font-bold"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="py-8 text-center text-zinc-500 text-xs">No PO record found for this identifier.</div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ─── B2B ORDER QUICK INSPECTOR MODAL ────────────────────────────── */}
+      {inspectingB2bOrderId && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-2xl bg-[#18181B] border border-[#27272A] rounded-2xl p-5 sm:p-6 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-[#27272A] pb-3">
+              <div className="flex items-center gap-2.5 text-emerald-400">
+                <ShoppingBag size={20} />
+                <div>
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    <span>B2B Wholesale Order Inspector</span>
+                    <span className="font-mono text-xs px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                      {b2bOrderDetail?.orderNumber || inspectingB2bOrderId}
+                    </span>
+                  </h3>
+                  <div className="text-xs text-zinc-400">Downstream fulfillment, warehouse branch, and payment ledger</div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setInspectingB2bOrderId(null);
+                  setB2bOrderDetail(null);
+                }}
+                className="p-1 rounded-lg hover:bg-[#27272A] text-zinc-400 hover:text-white"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {loadingB2bOrderDetail ? (
+              <div className="py-12 text-center text-zinc-400 flex flex-col items-center justify-center gap-2">
+                <RefreshCw size={22} className="animate-spin text-emerald-500" />
+                <span className="text-xs">Fetching B2B order fulfillment dossier...</span>
+              </div>
+            ) : b2bOrderDetail ? (
+              <div className="space-y-4">
+                {/* Meta details */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 p-3 rounded-xl bg-[#09090B] border border-[#27272A] text-xs">
+                  <div>
+                    <span className="text-zinc-500 text-[10px] uppercase block">Customer / Account</span>
+                    <span className="font-bold text-white">{b2bOrderDetail.customer?.companyName || (b2bOrderDetail.customer ? `${b2bOrderDetail.customer.firstName} ${b2bOrderDetail.customer.lastName}`.trim() : 'B2B Client')}</span>
+                  </div>
+                  <div>
+                    <span className="text-zinc-500 text-[10px] uppercase block">Fulfillment Branch</span>
+                    <span className="font-medium text-zinc-300">{b2bOrderDetail.branch?.name || 'Primary Warehouse'}</span>
+                  </div>
+                  <div>
+                    <span className="text-zinc-500 text-[10px] uppercase block">Payment Status</span>
+                    <span className={`font-bold uppercase ${b2bOrderDetail.paymentStatus === 'PAID' ? 'text-emerald-400' : 'text-amber-400'}`}>
+                      {b2bOrderDetail.paymentStatus || 'PENDING'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-zinc-500 text-[10px] uppercase block">Order Status</span>
+                    <span className="font-bold text-purple-400">{b2bOrderDetail.status}</span>
+                  </div>
+                </div>
+
+                {/* Upstream links pill row */}
+                <div className="flex items-center gap-2 flex-wrap text-xs bg-[#09090B] p-2.5 rounded-xl border border-[#27272A]">
+                  <span className="text-zinc-500 text-[11px]">Commercial Chain:</span>
+                  {b2bOrderDetail.sourceQuotation && (
+                    <span className="px-2 py-0.5 rounded bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 text-[11px] font-mono">
+                      QT: {b2bOrderDetail.sourceQuotation.quoteNumber}
+                    </span>
+                  )}
+                  {b2bOrderDetail.sourcePo && (
+                    <span className="px-2 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30 text-[11px] font-mono">
+                      PO: {b2bOrderDetail.sourcePo.customerPoNumber || b2bOrderDetail.sourcePo.poSubmissionId}
+                    </span>
+                  )}
+                  {b2bOrderDetail.sourcePi && (
+                    <span className="px-2 py-0.5 rounded bg-purple-500/15 text-purple-300 border border-purple-500/30 text-[11px] font-mono">
+                      PI: {b2bOrderDetail.sourcePi.piNumber}
+                    </span>
+                  )}
+                </div>
+
+                {/* Items table */}
+                {b2bOrderDetail.items && b2bOrderDetail.items.length > 0 && (
+                  <div className="border border-[#27272A] rounded-xl overflow-hidden">
+                    <div className="px-3 py-2 bg-[#09090B] text-zinc-400 text-[11px] font-bold uppercase tracking-wider border-b border-[#27272A]">
+                      Fulfillment Items ({b2bOrderDetail.items.length})
+                    </div>
+                    <div className="max-h-48 overflow-y-auto">
+                      <table className="w-full text-left text-xs text-zinc-300">
+                        <thead className="bg-[#18181B] text-zinc-500 text-[10px] uppercase border-b border-[#27272A]">
+                          <tr>
+                            <th className="py-2 px-3">Product / SKU</th>
+                            <th className="py-2 px-3 text-right">Qty</th>
+                            <th className="py-2 px-3 text-right">Unit Price</th>
+                            <th className="py-2 px-3 text-right">Total</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[#27272A]">
+                          {b2bOrderDetail.items.map((item, idx) => (
+                            <tr key={item.id || idx}>
+                              <td className="py-2 px-3">
+                                <div className="font-medium text-white">{item.product?.name || item.sku}</div>
+                                <div className="text-[10px] text-zinc-500 font-mono">SKU: {item.sku}</div>
+                              </td>
+                              <td className="py-2 px-3 text-right font-mono text-zinc-400">
+                                {item.quantity}
+                              </td>
+                              <td className="py-2 px-3 text-right font-mono text-zinc-400">
+                                ₹{Number(item.unitPrice).toLocaleString('en-IN')}
+                              </td>
+                              <td className="py-2 px-3 text-right font-bold text-white font-mono">
+                                ₹{Number(item.lineTotal || (Number(item.unitPrice) * Number(item.quantity))).toLocaleString('en-IN')}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Financial Summary */}
+                <div className="p-3 rounded-xl bg-[#09090B] border border-[#27272A] flex items-center justify-between text-xs">
+                  <div>
+                    <span className="text-zinc-500 text-[11px]">Total Paid: </span>
+                    <span className="text-emerald-400 font-mono font-bold">₹{Number(b2bOrderDetail.paidAmount || 0).toLocaleString('en-IN')}</span>
+                    <span className="mx-2 text-zinc-600">•</span>
+                    <span className="text-zinc-500 text-[11px]">Balance Due: </span>
+                    <span className="text-rose-400 font-mono font-bold">₹{Number(b2bOrderDetail.dueAmount || 0).toLocaleString('en-IN')}</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-zinc-400 text-xs">Grand Total: </span>
+                    <span className="text-base font-black text-emerald-400 font-mono">
+                      ₹{Number(b2bOrderDetail.grandTotal || 0).toLocaleString('en-IN')}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2 border-t border-[#27272A]">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setInspectingB2bOrderId(null);
+                      setB2bOrderDetail(null);
+                    }}
+                    className="px-4 py-2 rounded-xl bg-[#27272A] hover:bg-[#3F3F46] text-zinc-300 text-xs font-bold"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="py-8 text-center text-zinc-500 text-xs">No B2B order record found for this identifier.</div>
+            )}
           </div>
         </div>
       )}
