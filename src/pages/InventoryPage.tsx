@@ -65,8 +65,9 @@ import { TransferModal } from '../components/inventory/TransferModal';
 import { AdjustmentModal } from '../components/inventory/AdjustmentModal';
 import { BranchModal } from '../components/inventory/BranchModal';
 import { QuickStockModal } from '../components/inventory/QuickStockModal';
+import { PurchaseOrderListTab } from '../components/inventory/PurchaseOrderListTab';
 
-type TabType = 'stock' | 'purchases' | 'transfers' | 'movements' | 'suppliers' | 'branches' | 'reports';
+type TabType = 'stock' | 'purchase-orders' | 'purchases' | 'transfers' | 'movements' | 'suppliers' | 'branches' | 'reports';
 type ReportHorizon = 'day' | 'week' | 'month' | 'year' | 'range';
 
 interface TabCacheItem<T> {
@@ -486,6 +487,25 @@ export const InventoryPage: React.FC = () => {
     setLowStockOnly(false);
     setSearchQuery('');
   };
+
+  const catalogProductItems = useMemo<ProductItem[]>(() => {
+    const map = new Map<string, ProductItem>();
+    inventoryList.forEach((inv) => {
+      if (inv.product && !map.has(inv.product.id)) {
+        map.set(inv.product.id, {
+          id: inv.product.id,
+          name: inv.product.name,
+          sku: inv.product.sku,
+          price: inv.product.price,
+          salePrice: inv.product.salePrice,
+          thumbnail: inv.product.thumbnail,
+          status: inv.product.status,
+          category: inv.product.category,
+        } as any);
+      }
+    });
+    return Array.from(map.values());
+  }, [inventoryList]);
 
   // ─── 4. Deletion Cascade & Auto-Delete from Product Listing ─────────────────
   const handleConfirmDelete = async () => {
@@ -935,6 +955,7 @@ export const InventoryPage: React.FC = () => {
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 scrollbar-none text-xs">
           {[
             { id: 'stock', label: 'Stock Matrix', icon: Boxes, badge: inventoryList.length },
+            { id: 'purchase-orders', label: 'Purchase Orders (PO)', icon: FileText },
             { id: 'purchases', label: 'Procurement (Stock-In)', icon: ShoppingBag },
             { id: 'transfers', label: 'Inter-Branch Transfers', icon: ArrowRightLeft, pulse: metrics.pendingTransfersCount },
             { id: 'movements', label: 'Stock Ledger Audit', icon: History },
@@ -1570,6 +1591,18 @@ export const InventoryPage: React.FC = () => {
         </div>
       )}
 
+      {/* ─── TAB: PURCHASE ORDERS (PO) ────────────────────────────────────────── */}
+      {activeTab === 'purchase-orders' && (
+        <PurchaseOrderListTab
+          suppliers={suppliers}
+          branches={branches}
+          products={catalogProductItems}
+          preSelectedSupplierId={purchaseSupplierFilter !== 'ALL' ? purchaseSupplierFilter : undefined}
+          onShowSuccess={(msg) => showToast(msg, 'success')}
+          onShowError={(msg) => showToast(msg, 'error')}
+        />
+      )}
+
       {/* ─── TAB 2: PURCHASES (STOCK-IN) ────────────────────────────────────── */}
       {activeTab === 'purchases' && (
         <div className="bg-white dark:bg-[#18181B] rounded-2xl border border-slate-200 dark:border-[#27272A] shadow-sm overflow-hidden">
@@ -1938,6 +1971,17 @@ export const InventoryPage: React.FC = () => {
                       </td>
                       <td className="py-3 px-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={() => {
+                              setPurchaseSupplierFilter(s.id);
+                              setActiveTab('purchase-orders');
+                            }}
+                            className="flex items-center gap-1 px-2.5 py-1 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 rounded-lg text-[10px] font-bold border border-indigo-200 dark:border-indigo-500/30 transition shadow-sm"
+                            title="Issue Purchase Order for this Supplier"
+                          >
+                            <FileText className="w-3 h-3" />
+                            <span>Issue PO</span>
+                          </button>
                           <button
                             onClick={() => {
                               setEditingSupplier(s);
