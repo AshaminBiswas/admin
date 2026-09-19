@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   Coins,
   LayoutDashboard,
+  Boxes,
   Receipt,
   Wallet,
   Landmark,
@@ -43,6 +44,7 @@ import {
 } from "recharts";
 import { useAdminAuth } from "../../context/AdminAuthContext";
 import { upApi } from "../../api/upApi";
+import { UPInventoryHub } from "./components/UPInventoryHub";
 import type {
   UPExpense,
   UPCategory,
@@ -52,7 +54,7 @@ import type {
   UPDashboardData,
 } from "../../types/admin";
 
-type UPTab = "dashboard" | "ledger" | "cash" | "reports" | "access" | "categories";
+type UPTab = "dashboard" | "inventory" | "ledger" | "cash" | "reports" | "access" | "categories";
 
 export function UPPage() {
   const { adminUser, setCurrentView } = useAdminAuth();
@@ -646,7 +648,7 @@ export function UPPage() {
             </span>
           </div>
           <p className="text-xs text-zinc-400">
-            Private Factory Daily Cash Expense Ledger & Petty Cash Command Center
+            Private Factory Operations, Inventory & Financial Command Center
           </p>
         </div>
 
@@ -721,6 +723,18 @@ export function UPPage() {
           }`}
         >
           <LayoutDashboard size={15} /> Dashboard
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab("inventory")}
+          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
+            activeTab === "inventory"
+              ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20"
+              : "text-zinc-400 hover:text-white hover:bg-[#27272A]"
+          }`}
+        >
+          <Boxes size={15} /> Factory Inventory
         </button>
 
         <button
@@ -956,6 +970,17 @@ export function UPPage() {
             </>
           ) : null}
         </div>
+      )}
+
+      {/* ═══════════════════════════════════════════════════════════════════════ */}
+      {/* TAB: FACTORY INVENTORY                                                  */}
+      {/* ═══════════════════════════════════════════════════════════════════════ */}
+      {activeTab === "inventory" && (
+        <UPInventoryHub
+          isSuperAdmin={isSuperAdmin}
+          onShowSuccess={(msg) => setSuccessMessage(msg)}
+          onShowError={(msg) => setErrorMessage(msg)}
+        />
       )}
 
       {/* ═══════════════════════════════════════════════════════════════════════ */}

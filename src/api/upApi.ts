@@ -209,4 +209,366 @@ export const upApi = {
 
     return `${API_BASE_URL}/up/reports/export?${query.toString()}`;
   },
+
+  // ─── UP Factory Floor Inventory & Operations ───────────────────────────────────
+
+  getInventoryDashboard: async (branchId?: string) => {
+    const q = branchId ? `?branchId=${encodeURIComponent(branchId)}` : '';
+    return fetchAdminApi<UPInventoryDashboardData>(`/up/inventory/dashboard${q}`);
+  },
+
+  searchSKU: async (query: string, branchId?: string) => {
+    const params = new URLSearchParams({ q: query });
+    if (branchId) params.append('branchId', branchId);
+    return fetchAdminApi<UPSkuSearchResult[]>(`/up/inventory/search?${params.toString()}`);
+  },
+
+  listStock: async (params?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    branchId?: string;
+    category?: string;
+    stockStatus?: string;
+    itemType?: string;
+  }) => {
+    const q = new URLSearchParams();
+    if (params?.page) q.append('page', String(params.page));
+    if (params?.limit) q.append('limit', String(params.limit));
+    if (params?.search) q.append('search', params.search);
+    if (params?.branchId) q.append('branchId', params.branchId);
+    if (params?.category) q.append('category', params.category);
+    if (params?.stockStatus) q.append('stockStatus', params.stockStatus);
+    if (params?.itemType) q.append('itemType', params.itemType);
+
+    return fetchAdminApi<{
+      data: UPStockItem[];
+      pagination: {
+        page: number;
+        limit: number;
+        total: number;
+        totalPages: number;
+      };
+    }>(`/up/inventory/stock?${q.toString()}`);
+  },
+
+  receiveMaterial: async (data: {
+    productId: string;
+    branchId: string;
+    quantity: number;
+    unitCost?: number;
+    supplierName?: string;
+    invoiceNumber?: string;
+    notes?: string;
+  }) => {
+    return fetchAdminApi<{ success: boolean; quantityReceived: number }>('/up/inventory/receive', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  issueMaterial: async (data: {
+    productId: string;
+    branchId: string;
+    quantity: number;
+    productionOrderId?: string;
+    notes?: string;
+  }) => {
+    return fetchAdminApi<{ success: boolean; quantityIssued: number }>('/up/inventory/issue', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  transferStock: async (data: {
+    productId: string;
+    fromBranchId: string;
+    toBranchId: string;
+    quantity: number;
+    notes?: string;
+  }) => {
+    return fetchAdminApi<{ success: boolean; transferred: number }>('/up/inventory/transfer', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  recordDamage: async (data: {
+    productId: string;
+    branchId: string;
+    quantity: number;
+    reason: string;
+    photoUrl?: string;
+    actionTaken?: string;
+    notes?: string;
+  }) => {
+    return fetchAdminApi<{ success: boolean; ticketNumber: string; quantity: number }>('/up/inventory/damage', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  recordScrap: async (data: {
+    materialName: string;
+    productId?: string;
+    productionOrderId?: string;
+    branchId: string;
+    quantity: number;
+    unit?: string;
+    reason: string;
+    estimatedLossPaise?: number;
+    recoveredValuePaise?: number;
+  }) => {
+    return fetchAdminApi<{ success: boolean; scrapNumber: string; quantity: number }>('/up/inventory/scrap', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  listBoms: async () => {
+    return fetchAdminApi<UPBom[]>('/up/inventory/bom');
+  },
+
+  getBom: async (id: string) => {
+    return fetchAdminApi<UPBom>(`/up/inventory/bom/${id}`);
+  },
+
+  createBom: async (data: {
+    name: string;
+    productId: string;
+    sku?: string;
+    version?: string;
+    notes?: string;
+    items: Array<{
+      rawMaterialId: string;
+      rawMaterialSku?: string;
+      rawMaterialName?: string;
+      quantityRequired: number;
+      unit?: string;
+      wastePercentage?: number;
+      notes?: string;
+    }>;
+  }) => {
+    return fetchAdminApi<{ success: boolean; id: string }>('/up/inventory/bom', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  listProductionOrders: async (params?: { branchId?: string; status?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.branchId) q.append('branchId', params.branchId);
+    if (params?.status) q.append('status', params.status);
+    return fetchAdminApi<UPProductionOrder[]>(`/up/inventory/production?${q.toString()}`);
+  },
+
+  createProductionOrder: async (data: {
+    productId: string;
+    bomId?: string;
+    branchId: string;
+    plannedQuantity: number;
+    notes?: string;
+  }) => {
+    return fetchAdminApi<{ id: string; orderNumber: string }>('/up/inventory/production', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  startProductionOrder: async (id: string) => {
+    return fetchAdminApi<{ success: boolean }>(`/up/inventory/production/${id}/start`, {
+      method: 'POST',
+    });
+  },
+
+  completeProductionOrder: async (id: string, data: { producedQuantity: number; rejectedQuantity?: number; notes?: string }) => {
+    return fetchAdminApi<{ success: boolean; producedQuantity: number; orderNumber: string }>(
+      `/up/inventory/production/${id}/complete`,
+      {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }
+    );
+  },
+
+  listPhysicalCounts: async (branchId?: string) => {
+    const q = branchId ? `?branchId=${encodeURIComponent(branchId)}` : '';
+    return fetchAdminApi<UPPhysicalCount[]>(`/up/inventory/physical-counts${q}`);
+  },
+
+  createPhysicalCount: async (data: {
+    branchId: string;
+    notes?: string;
+    items: Array<{
+      productId: string;
+      sku: string;
+      name: string;
+      systemQty: number;
+      countedQty: number;
+      notes?: string;
+    }>;
+  }) => {
+    return fetchAdminApi<{ success: boolean; countNumber: string; totalItemsCounted: number; totalVariance: number }>(
+      '/up/inventory/physical-counts',
+      {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }
+    );
+  },
+
+  getInventoryReports: async (params?: { branchId?: string; startDate?: string; endDate?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.branchId) q.append('branchId', params.branchId);
+    if (params?.startDate) q.append('startDate', params.startDate);
+    if (params?.endDate) q.append('endDate', params.endDate);
+    return fetchAdminApi<UPInventoryReports>(`/up/inventory/reports?${q.toString()}`);
+  },
 };
+
+// ─── UP Inventory Types ───────────────────────────────────────────────────────
+
+export interface UPInventoryDashboardData {
+  branchId?: string;
+  branchName: string;
+  totalSku: number;
+  totalStockUnits: number;
+  estimatedValuation: number;
+  lowStockCount: number;
+  outOfStockCount: number;
+  productionOrders: {
+    inProgress: number;
+    draft: number;
+    completed: number;
+  };
+  todayFloorMetrics: {
+    damagedUnits: number;
+    scrapQty: number;
+    scrapLossRupees: number;
+  };
+  recentMovements: Array<{
+    id: string;
+    type: string;
+    quantity: number;
+    previousQty: number;
+    newQty: number;
+    notes?: string;
+    createdAt: string;
+    productName?: string;
+    sku?: string;
+  }>;
+}
+
+export interface UPSkuSearchResult {
+  id: string;
+  name: string;
+  sku: string;
+  price: number;
+  salesPrice?: number;
+  finish?: string;
+  colour?: string;
+  dimensions?: any;
+  categoryName?: string;
+  onHand: number;
+  reservedQuantity: number;
+  availableQuantity: number;
+  reorderLevel: number;
+  status: 'IN_STOCK' | 'LOW_STOCK' | 'OUT_OF_STOCK';
+}
+
+export interface UPStockItem {
+  id: string;
+  name: string;
+  sku: string;
+  price: number;
+  salesPrice?: number;
+  finish?: string;
+  colour?: string;
+  dimensions?: any;
+  categoryName?: string;
+  onHand: number;
+  reservedQuantity: number;
+  availableQuantity: number;
+  reorderLevel: number;
+  status: 'IN_STOCK' | 'LOW_STOCK' | 'OUT_OF_STOCK';
+  itemType: 'ALL' | 'RAW_MATERIAL' | 'FINISHED_GOOD';
+}
+
+export interface UPBom {
+  id: string;
+  name: string;
+  productId: string;
+  sku?: string;
+  version: string;
+  isActive: boolean;
+  notes?: string;
+  createdAt: string;
+  productName?: string;
+  productStock?: number;
+  categoryName?: string;
+  itemCount?: number;
+  items?: Array<{
+    id: string;
+    rawMaterialId: string;
+    rawMaterialSku?: string;
+    rawMaterialName?: string;
+    quantityRequired: number;
+    unit: string;
+    wastePercentage: number;
+    notes?: string;
+    currentStock?: number;
+  }>;
+}
+
+export interface UPProductionOrder {
+  id: string;
+  orderNumber: string;
+  bomId?: string;
+  productId: string;
+  branchId: string;
+  plannedQuantity: number;
+  producedQuantity: number;
+  rejectedQuantity: number;
+  status: 'DRAFT' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
+  startedAt?: string;
+  completedAt?: string;
+  notes?: string;
+  createdAt: string;
+  productName?: string;
+  productSku?: string;
+  bomName?: string;
+  branchName?: string;
+}
+
+export interface UPPhysicalCount {
+  id: string;
+  countNumber: string;
+  branchId: string;
+  status: string;
+  totalItemsCounted: number;
+  totalVarianceUnits: number;
+  notes?: string;
+  performedBy: string;
+  createdAt: string;
+  branchName?: string;
+}
+
+export interface UPInventoryReports {
+  movementBreakdown: Array<{
+    type: string;
+    count: number;
+    totalUnits: number;
+  }>;
+  damagedSummary: Array<{
+    reason: string;
+    count: number;
+    totalUnits: number;
+  }>;
+  scrapSummary: Array<{
+    materialName: string;
+    count: number;
+    totalQuantity: number;
+    totalLossRupees: number;
+  }>;
+}
+
