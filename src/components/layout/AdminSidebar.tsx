@@ -43,6 +43,7 @@ import {
   BadgeCheck,
   Wallet,
   ScanLine,
+  Factory,
   X,
 } from "lucide-react";
 import { useAdminAuth } from "../../context/AdminAuthContext";
@@ -202,6 +203,7 @@ export function AdminSidebar({
     // Catalog & Stock
     { id: "barcode", label: "Barcode & Scanner", category: "Catalog & Stock", icon: <ScanLine size={18} />, badge: "SCAN" },
     { id: "products", label: "Products Catalog", category: "Catalog & Stock", icon: <Package size={18} />, badge: "5" },
+    { id: "inventory", label: "Multi-Branch Stock", category: "Catalog & Stock", icon: <Boxes size={18} />, badge: "STOCK" },
     { id: "categories", label: "Categories", category: "Catalog & Stock", icon: <FolderTree size={18} /> },
     { id: "materials", label: "Materials Master", category: "Catalog & Stock", icon: <Sparkles size={18} /> },
     { id: "variants", label: "Variants & SKUs", category: "Catalog & Stock", icon: <Sliders size={18} /> },
@@ -221,7 +223,10 @@ export function AdminSidebar({
     // Sales & Fulfillment
     { id: "orders", label: "Orders", category: "Sales & Fulfillment", icon: <ShoppingCart size={18} />, badge: "4" },
     { id: "expenses", label: "Cash Expenses", category: "Sales & Fulfillment", icon: <Wallet size={18} />, badge: "CASH" },
-    ...(hasUpAccess ? [{ id: "up" as AdminView, label: "UP", category: "Sales & Fulfillment", icon: <Coins size={18} /> }] : []),
+    ...(hasUpAccess ? [
+      { id: "up" as AdminView, label: "UP", category: "Sales & Fulfillment", icon: <Coins size={18} /> },
+      { id: "up-inventory" as AdminView, label: "UP Factory Inventory", category: "Sales & Fulfillment", icon: <Factory size={18} />, badge: "FACTORY" },
+    ] : []),
     { id: "installer-payments", label: "Installer Payments", category: "Sales & Fulfillment", icon: <Wrench size={18} />, badge: "PAY" },
     { id: "checkouts", label: "Checkout Sessions", category: "Sales & Fulfillment", icon: <CreditCard size={18} /> },
     { id: "cart", label: "Shopping Carts", category: "Sales & Fulfillment", icon: <ShoppingBag size={18} /> },

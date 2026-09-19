@@ -59,6 +59,7 @@ const CreateInstallerBillPage = lazyWithRetry(() => import("../../pages/CreateIn
 const EmployeeManagementPage = lazyWithRetry(() => import("../../pages/EmployeeManagementPage").then((m) => ({ default: m.EmployeeManagementPage })));
 const ExpensesPage = lazyWithRetry(() => import("../../pages/ExpensesPage").then((m) => ({ default: m.ExpensesPage })));
 const UPPage = lazyWithRetry(() => import("../../pages/up/UPPage").then((m) => ({ default: m.UPPage })));
+const UPInventoryPage = lazyWithRetry(() => import("../../pages/up/UPInventoryPage").then((m) => ({ default: m.UPInventoryPage })));
 const B2BOrdersPage = lazyWithRetry(() => import("../../pages/B2BOrdersPage").then((m) => ({ default: m.B2BOrdersPage })));
 const CreateB2BOrderPage = lazyWithRetry(() => import("../../pages/CreateB2BOrderPage").then((m) => ({ default: m.CreateB2BOrderPage })));
 import { AICopilot } from "../ai/AICopilot";
@@ -277,7 +278,9 @@ export function AdminLayout() {
       case "cash-expenses":
         return <ExpensesPage />;
       case "up":
-        return <UPPage />;
+        return <UPPage onNavigateInventory={() => setCurrentView("up-inventory")} />;
+      case "up-inventory":
+        return <UPInventoryPage onBack={() => setCurrentView("up")} />;
       case "checkouts":
         return (
           <ModelManagementPage

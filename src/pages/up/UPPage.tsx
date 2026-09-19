@@ -56,7 +56,11 @@ import type {
 
 type UPTab = "dashboard" | "inventory" | "ledger" | "cash" | "reports" | "access" | "categories";
 
-export function UPPage() {
+interface UPPageProps {
+  onNavigateInventory?: () => void;
+}
+
+export function UPPage({ onNavigateInventory }: UPPageProps = {}) {
   const { adminUser, setCurrentView } = useAdminAuth();
 
   // ─── Core Access State ───────────────────────────────────────────────────────
@@ -727,7 +731,13 @@ export function UPPage() {
 
         <button
           type="button"
-          onClick={() => setActiveTab("inventory")}
+          onClick={() => {
+            if (onNavigateInventory) {
+              onNavigateInventory();
+            } else {
+              setActiveTab("inventory");
+            }
+          }}
           className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
             activeTab === "inventory"
               ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20"

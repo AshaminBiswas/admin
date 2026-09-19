@@ -424,6 +424,82 @@ export const upApi = {
     if (params?.endDate) q.append('endDate', params.endDate);
     return fetchAdminApi<UPInventoryReports>(`/up/inventory/reports?${q.toString()}`);
   },
+
+  createProduct: async (data: {
+    name: string;
+    sku: string;
+    barcode?: string;
+    productType?: 'FINISHED_GOOD' | 'RAW_MATERIAL';
+    categoryName?: string;
+    finish?: string;
+    colour?: string;
+    dimensions?: string;
+    unitOfMeasure?: string;
+    unitCost?: number;
+    transferPrice?: number;
+    initialStock?: number;
+    reorderLevel?: number;
+    description?: string;
+  }) => {
+    return fetchAdminApi<{
+      id: string;
+      name: string;
+      sku: string;
+      productType: string;
+      stock: number;
+      unitCost: number;
+      transferPrice: number;
+      categoryId: string;
+    }>('/up/inventory/products', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  supplyToPrc: async (data: {
+    destinationBranchId?: string;
+    destinationBranchName?: string;
+    items: Array<{
+      productId: string;
+      sku: string;
+      name: string;
+      quantity: number;
+      transferPrice?: number;
+    }>;
+    transportMode?: string;
+    vehicleNumber?: string;
+    driverName?: string;
+    driverPhone?: string;
+    notes?: string;
+  }) => {
+    return fetchAdminApi<{
+      success: boolean;
+      dispatchId: string;
+      challanNumber: string;
+      destinationBranchName: string;
+      totalUnits: number;
+      totalTransferValue: number;
+      itemsCount: number;
+    }>('/up/inventory/supply-prc', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  listPrcDispatches: async (params?: { page?: number; limit?: number }) => {
+    const q = new URLSearchParams();
+    if (params?.page) q.append('page', String(params.page));
+    if (params?.limit) q.append('limit', String(params.limit));
+    return fetchAdminApi<{
+      data: any[];
+      pagination: {
+        page: number;
+        limit: number;
+        total: number;
+        totalPages: number;
+      };
+    }>(`/up/inventory/dispatches?${q.toString()}`);
+  },
 };
 
 // ─── UP Inventory Types ───────────────────────────────────────────────────────

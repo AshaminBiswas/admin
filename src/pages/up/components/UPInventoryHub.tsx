@@ -30,6 +30,11 @@ import {
   Flame,
   Building2,
   Calendar,
+  Truck,
+  Factory,
+  FileText,
+  Send,
+  IndianRupee,
 } from 'lucide-react';
 import { upApi } from '../../../api/upApi';
 import type {
@@ -52,14 +57,12 @@ interface UPInventoryHubProps {
 type InvSubTab =
   | 'overview'
   | 'stock'
-  | 'raw-materials'
   | 'finished-goods'
+  | 'raw-materials'
+  | 'prc-dispatches'
   | 'movements'
   | 'bom'
   | 'production'
-  | 'transfers'
-  | 'damaged'
-  | 'scrap'
   | 'physical-counts'
   | 'reports';
 
@@ -111,7 +114,6 @@ export function UPInventoryHub({ isSuperAdmin, onShowSuccess, onShowError }: UPI
   // ─── Modals State ───────────────────────────────────────────────────────────
   const [isReceiveModalOpen, setIsReceiveModalOpen] = useState(false);
   const [isIssueModalOpen, setIsIssueModalOpen] = useState(false);
-  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
   const [isDamageModalOpen, setIsDamageModalOpen] = useState(false);
   const [isScrapModalOpen, setIsScrapModalOpen] = useState(false);
   const [isCountModalOpen, setIsCountModalOpen] = useState(false);
@@ -139,13 +141,45 @@ export function UPInventoryHub({ isSuperAdmin, onShowSuccess, onShowError }: UPI
   const [issueNotes, setIssueNotes] = useState('');
   const [savingIssue, setSavingIssue] = useState(false);
 
-  // Transfer Form
-  const [transferProductId, setTransferProductId] = useState('');
-  const [transferFromBranch, setTransferFromBranch] = useState('');
-  const [transferToBranch, setTransferToBranch] = useState('');
-  const [transferQuantity, setTransferQuantity] = useState('');
-  const [transferNotes, setTransferNotes] = useState('');
-  const [savingTransfer, setSavingTransfer] = useState(false);
+  // Add Factory Product Form (Finished Goods & Raw Materials)
+  const [isAddProductModalOpen, setIsAddProductModalOpen] = useState(false);
+  const [newProdName, setNewProdName] = useState('');
+  const [newProdSku, setNewProdSku] = useState('');
+  const [newProdBarcode, setNewProdBarcode] = useState('');
+  const [newProdType, setNewProdType] = useState<'FINISHED_GOOD' | 'RAW_MATERIAL'>('FINISHED_GOOD');
+  const [newProdCategory, setNewProdCategory] = useState('');
+  const [newProdFinish, setNewProdFinish] = useState('SS');
+  const [newProdColour, setNewProdColour] = useState('');
+  const [newProdDimensions, setNewProdDimensions] = useState('');
+  const [newProdUnit, setNewProdUnit] = useState('PCS');
+  const [newProdCost, setNewProdCost] = useState('');
+  const [newProdTransferPrice, setNewProdTransferPrice] = useState('');
+  const [newProdInitialStock, setNewProdInitialStock] = useState('0');
+  const [newProdReorder, setNewProdReorder] = useState('10');
+  const [newProdDesc, setNewProdDesc] = useState('');
+  const [savingNewProduct, setSavingNewProduct] = useState(false);
+
+  // Supply / Dispatch to PRC Hardware Form (Vendor Operations)
+  const [isSupplyPrcModalOpen, setIsSupplyPrcModalOpen] = useState(false);
+  const [supplyProductId, setSupplyProductId] = useState('');
+  const [supplyProductSku, setSupplyProductSku] = useState('');
+  const [supplyProductName, setSupplyProductName] = useState('');
+  const [supplyQuantity, setSupplyQuantity] = useState('');
+  const [supplyRate, setSupplyRate] = useState('');
+  const [supplyDestinationBranch, setSupplyDestinationBranch] = useState('');
+  const [supplyTransportMode, setSupplyTransportMode] = useState('DIRECT_LOGISTICS');
+  const [supplyVehicleNo, setSupplyVehicleNo] = useState('');
+  const [supplyDriverName, setSupplyDriverName] = useState('');
+  const [supplyDriverPhone, setSupplyDriverPhone] = useState('');
+  const [supplyNotes, setSupplyNotes] = useState('');
+  const [savingSupplyPrc, setSavingSupplyPrc] = useState(false);
+
+  // PRC Dispatches Ledger State
+  const [prcDispatches, setPrcDispatches] = useState<any[]>([]);
+  const [loadingDispatches, setLoadingDispatches] = useState(false);
+  const [dispatchPage, setDispatchPage] = useState(1);
+  const [dispatchTotalPages, setDispatchTotalPages] = useState(1);
+  const [selectedDispatch, setSelectedDispatch] = useState<any | null>(null);
 
   // Damage Form
   const [dmgProductId, setDmgProductId] = useState('');
@@ -204,10 +238,7 @@ export function UPInventoryHub({ isSuperAdmin, onShowSuccess, onShowError }: UPI
         setBranches(brList);
         if (brList.length > 0) {
           setSelectedBranchId(brList[0].id);
-          setTransferFromBranch(brList[0].id);
-          if (brList.length > 1) {
-            setTransferToBranch(brList[1].id);
-          }
+          setSupplyDestinationBranch(brList[0].id);
         }
 
         const prodRes = await fetchAdminApi<any>('/products?limit=250');
@@ -389,6 +420,12 @@ export function UPInventoryHub({ isSuperAdmin, onShowSuccess, onShowError }: UPI
     }
   }, [subTab, selectedBranchId]);
 
+  useEffect(() => {
+    if (subTab === 'prc-dispatches') {
+      fetchPrcDispatches();
+    }
+  }, [subTab, dispatchPage]);
+
   // ─── Modal Action Triggers ──────────────────────────────────────────────────
   const openReceiveModal = (prod?: { id: string; name: string; sku: string }) => {
     if (prod) {
@@ -416,18 +453,6 @@ export function UPInventoryHub({ isSuperAdmin, onShowSuccess, onShowError }: UPI
     setIssueProdOrderId('');
     setIssueNotes('');
     setIsIssueModalOpen(true);
-  };
-
-  const openTransferModal = (prod?: { id: string; name: string; sku: string }) => {
-    if (prod) {
-      setTransferProductId(prod.id);
-      setActiveActionProduct(prod);
-    } else {
-      setActiveActionProduct(null);
-    }
-    setTransferQuantity('');
-    setTransferNotes('');
-    setIsTransferModalOpen(true);
   };
 
   const openDamageModal = (prod?: { id: string; name: string; sku: string }) => {
@@ -507,34 +532,145 @@ export function UPInventoryHub({ isSuperAdmin, onShowSuccess, onShowError }: UPI
     }
   };
 
-  const handleTransferSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!transferProductId) return onShowError('Please select a product');
-    if (transferFromBranch === transferToBranch) return onShowError('Source and destination cannot be identical');
-    const qty = parseInt(transferQuantity, 10);
-    if (isNaN(qty) || qty <= 0) return onShowError('Quantity must be greater than 0');
+  const openAddProductModal = (type: 'FINISHED_GOOD' | 'RAW_MATERIAL' = 'FINISHED_GOOD') => {
+    setNewProdType(type);
+    setNewProdName('');
+    setNewProdSku('');
+    setNewProdBarcode('');
+    setNewProdCategory(type === 'RAW_MATERIAL' ? 'Raw Materials' : 'Hardware');
+    setNewProdFinish('SS');
+    setNewProdColour('');
+    setNewProdDimensions('');
+    setNewProdUnit(type === 'RAW_MATERIAL' ? 'KG' : 'PCS');
+    setNewProdCost('');
+    setNewProdTransferPrice('');
+    setNewProdInitialStock('0');
+    setNewProdReorder('10');
+    setNewProdDesc('');
+    setIsAddProductModalOpen(true);
+  };
 
-    setSavingTransfer(true);
+  const handleAddProductSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newProdName.trim()) return onShowError('Product name is required');
+    if (!newProdSku.trim()) return onShowError('SKU is required');
+
+    setSavingNewProduct(true);
     try {
-      const res = await upApi.transferStock({
-        productId: transferProductId,
-        fromBranchId: transferFromBranch,
-        toBranchId: transferToBranch,
-        quantity: qty,
-        notes: transferNotes.trim() || undefined,
+      const res = await upApi.createProduct({
+        name: newProdName.trim(),
+        sku: newProdSku.trim().toUpperCase(),
+        barcode: newProdBarcode.trim() || undefined,
+        productType: newProdType,
+        categoryName: newProdCategory.trim() || undefined,
+        finish: newProdFinish.trim() || undefined,
+        colour: newProdColour.trim() || undefined,
+        dimensions: newProdDimensions.trim() || undefined,
+        unitOfMeasure: newProdUnit.trim() || undefined,
+        unitCost: parseFloat(newProdCost) || 0,
+        transferPrice: parseFloat(newProdTransferPrice) || parseFloat(newProdCost) || 0,
+        initialStock: parseInt(newProdInitialStock, 10) || 0,
+        reorderLevel: parseInt(newProdReorder, 10) || 10,
+        description: newProdDesc.trim() || undefined,
       });
+
       if (res.success) {
-        onShowSuccess(`Transferred ${qty} units between facilities ✓`);
-        setIsTransferModalOpen(false);
+        onShowSuccess(`Factory Product "${newProdName}" (${newProdSku.toUpperCase()}) registered successfully ✓`);
+        setIsAddProductModalOpen(false);
         fetchDashboard();
-        if (subTab === 'stock') fetchStock();
+        fetchStock();
       } else {
         throw new Error(res.error?.message);
       }
     } catch (err: any) {
-      onShowError(err?.message || 'Failed to transfer stock');
+      onShowError(err?.message || 'Failed to create factory product');
     } finally {
-      setSavingTransfer(false);
+      setSavingNewProduct(false);
+    }
+  };
+
+  const openSupplyPrcModal = (item?: UPStockItem | any) => {
+    if (item) {
+      setSupplyProductId(item.id);
+      setSupplyProductSku(item.sku);
+      setSupplyProductName(item.name);
+      setSupplyRate(String(item.salesPrice || item.price || ''));
+    } else if (stockItems.length > 0) {
+      const first = stockItems.find((s) => s.itemType === 'FINISHED_GOOD') || stockItems[0];
+      setSupplyProductId(first.id);
+      setSupplyProductSku(first.sku);
+      setSupplyProductName(first.name);
+      setSupplyRate(String(first.salesPrice || first.price || ''));
+    }
+    setSupplyQuantity('');
+    if (branches.length > 0 && !supplyDestinationBranch) {
+      setSupplyDestinationBranch(branches[0].id);
+    }
+    setSupplyTransportMode('DIRECT_LOGISTICS');
+    setSupplyVehicleNo('');
+    setSupplyDriverName('');
+    setSupplyDriverPhone('');
+    setSupplyNotes('');
+    setIsSupplyPrcModalOpen(true);
+  };
+
+  const handleSupplyPrcSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!supplyProductId) return onShowError('Please select a product to supply');
+    const qty = parseInt(supplyQuantity, 10);
+    if (isNaN(qty) || qty <= 0) return onShowError('Dispatch quantity must be greater than 0');
+
+    const destBranch = branches.find((b) => b.id === supplyDestinationBranch);
+
+    setSavingSupplyPrc(true);
+    try {
+      const res = await upApi.supplyToPrc({
+        destinationBranchId: supplyDestinationBranch || undefined,
+        destinationBranchName: destBranch?.name || 'PRC Central Depot',
+        items: [
+          {
+            productId: supplyProductId,
+            sku: supplyProductSku,
+            name: supplyProductName,
+            quantity: qty,
+            transferPrice: parseFloat(supplyRate) || 0,
+          },
+        ],
+        transportMode: supplyTransportMode,
+        vehicleNumber: supplyVehicleNo.trim() || undefined,
+        driverName: supplyDriverName.trim() || undefined,
+        driverPhone: supplyDriverPhone.trim() || undefined,
+        notes: supplyNotes.trim() || undefined,
+      });
+
+      if (res.success) {
+        onShowSuccess(`Dispatched ${qty} units to PRC Hardware (${destBranch?.name || 'Central Depot'})! Challan #${res.data?.challanNumber} ✓`);
+        setIsSupplyPrcModalOpen(false);
+        fetchDashboard();
+        fetchStock();
+        if (subTab === 'prc-dispatches') fetchPrcDispatches();
+      } else {
+        throw new Error(res.error?.message);
+      }
+    } catch (err: any) {
+      onShowError(err?.message || 'Failed to dispatch stock to PRC Hardware');
+    } finally {
+      setSavingSupplyPrc(false);
+    }
+  };
+
+  const fetchPrcDispatches = async () => {
+    setLoadingDispatches(true);
+    try {
+      const res = await upApi.listPrcDispatches({ page: dispatchPage, limit: 20 });
+      if (res.success && res.data) {
+        setPrcDispatches(res.data.data || []);
+        setDispatchTotalPages(res.data.pagination?.totalPages || 1);
+      }
+    } catch (err: any) {
+      console.warn('Failed to load dispatches:', err);
+    } finally {
+      setLoadingDispatches(false);
     }
   };
 
@@ -752,62 +888,77 @@ export function UPInventoryHub({ isSuperAdmin, onShowSuccess, onShowError }: UPI
 
   return (
     <div className="space-y-6">
-      {/* ─── Facility Selector & Sub-Navigation Header ───────────────────────── */}
+      {/* ─── UP Factory Identity & Floor Actions Header ───────────────────────── */}
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 bg-[#18181B] p-4 rounded-2xl border border-[#27272A] shadow-md">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
-            <Building2 size={14} className="text-indigo-400" /> Facility:
-          </span>
-          <select
-            value={selectedBranchId}
-            onChange={(e) => setSelectedBranchId(e.target.value)}
-            className="bg-[#27272A] text-white text-xs font-bold px-3 py-1.5 rounded-xl border border-zinc-700 focus:border-indigo-500 outline-none"
-          >
-            {branches.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.name} ({b.code})
-              </option>
-            ))}
-          </select>
-          <span className="text-[10px] text-zinc-400">All movements are real-time & ledger verified</span>
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400 flex-shrink-0">
+            <Factory size={20} />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-extrabold text-sm text-white">UP Manufacturing Plant</span>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 uppercase tracking-wider">
+                Vendor to PRC Hardware
+              </span>
+            </div>
+            <span className="text-[11px] text-zinc-400">Single Central Factory Facility • Production & Dispatches to PRC Depots</span>
+          </div>
         </div>
 
         {/* 1-Tap Mobile Floor Action Buttons */}
         <div className="flex items-center gap-1.5 flex-wrap w-full md:w-auto">
           <button
             type="button"
+            onClick={() => openAddProductModal()}
+            className="flex-1 md:flex-initial px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-sm flex items-center justify-center gap-1.5 active:scale-95 transition-all"
+            title="Register Finished Good or Raw Material"
+          >
+            <Plus size={14} /> Add Product
+          </button>
+
+          <button
+            type="button"
+            onClick={() => openSupplyPrcModal()}
+            className="flex-1 md:flex-initial px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-sm flex items-center justify-center gap-1.5 active:scale-95 transition-all"
+            title="Dispatch Finished Stock to PRC Hardware Depots"
+          >
+            <Truck size={14} /> Supply to PRC
+          </button>
+
+          <button
+            type="button"
             onClick={() => openReceiveModal()}
-            className="flex-1 md:flex-initial px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-sm flex items-center justify-center gap-1 active:scale-95 transition-all"
+            className="flex-1 md:flex-initial px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 hover:text-white font-bold text-xs border border-zinc-700 shadow-sm flex items-center justify-center gap-1 active:scale-95 transition-all"
             title="Receive Raw Materials or Stock"
           >
-            <ArrowDownLeft size={14} /> Receive
+            <ArrowDownLeft size={14} className="text-emerald-400" /> Receive
           </button>
 
           <button
             type="button"
-            onClick={() => openIssueModal()}
-            className="flex-1 md:flex-initial px-3 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs shadow-sm flex items-center justify-center gap-1 active:scale-95 transition-all"
-            title="Issue to Shopfloor Assembly"
+            onClick={() => setIsCreateProdOrderModalOpen(true)}
+            className="flex-1 md:flex-initial px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 hover:text-white font-bold text-xs border border-zinc-700 shadow-sm flex items-center justify-center gap-1 active:scale-95 transition-all"
+            title="Create Production Work Order"
           >
-            <ArrowUpRight size={14} /> Issue
+            <Clock size={14} className="text-amber-400" /> Work Order
           </button>
 
           <button
             type="button"
-            onClick={() => openTransferModal()}
-            className="flex-1 md:flex-initial px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-sm flex items-center justify-center gap-1 active:scale-95 transition-all"
-            title="Transfer to Another Facility"
+            onClick={() => setIsCreateBomModalOpen(true)}
+            className="px-2.5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white font-bold text-xs border border-zinc-700 flex items-center gap-1 active:scale-95 transition-all"
+            title="Define Bill of Materials"
           >
-            <ArrowRightLeft size={14} /> Transfer
+            <Wrench size={14} className="text-indigo-400" /> BOM
           </button>
 
           <button
             type="button"
             onClick={() => openDamageModal()}
-            className="flex-1 md:flex-initial px-3 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs shadow-sm flex items-center justify-center gap-1 active:scale-95 transition-all"
+            className="px-2.5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white font-bold text-xs border border-zinc-700 flex items-center gap-1 active:scale-95 transition-all"
             title="Report Defective / Damaged Item"
           >
-            <AlertTriangle size={14} /> Damage
+            <AlertTriangle size={14} className="text-rose-400" /> Damage
           </button>
 
           <button
@@ -940,10 +1091,10 @@ export function UPInventoryHub({ isSuperAdmin, onShowSuccess, onShowError }: UPI
                     </button>
                     <button
                       type="button"
-                      onClick={() => openTransferModal(item)}
-                      className="flex-1 py-1 rounded bg-blue-600/20 hover:bg-blue-600 text-blue-400 hover:text-white text-[10px] font-bold transition-all text-center"
+                      onClick={() => openSupplyPrcModal(item)}
+                      className="flex-1 py-1 rounded bg-indigo-600/20 hover:bg-indigo-600 text-indigo-300 hover:text-white text-[10px] font-bold transition-all text-center flex items-center justify-center gap-0.5"
                     >
-                      ⇄ Move
+                      <Truck size={11} /> Supply
                     </button>
                     <button
                       type="button"
@@ -965,8 +1116,9 @@ export function UPInventoryHub({ isSuperAdmin, onShowSuccess, onShowError }: UPI
         {[
           { id: 'overview', label: 'Dashboard', icon: Boxes },
           { id: 'stock', label: 'All Stock', icon: Package },
+          { id: 'finished-goods', label: 'Finished Goods (PRC Supply)', icon: Sparkles },
           { id: 'raw-materials', label: 'Raw Materials', icon: Layers },
-          { id: 'finished-goods', label: 'Finished Goods', icon: Sparkles },
+          { id: 'prc-dispatches', label: 'PRC Dispatches', icon: Truck },
           { id: 'movements', label: 'Stock Movements', icon: ArrowRightLeft },
           { id: 'bom', label: 'BOM Master', icon: Wrench },
           { id: 'production', label: 'Production & WIP', icon: Clock },
@@ -1300,6 +1452,14 @@ export function UPInventoryHub({ isSuperAdmin, onShowSuccess, onShowError }: UPI
                         <div className="flex items-center justify-end gap-1">
                           <button
                             type="button"
+                            onClick={() => openSupplyPrcModal(item)}
+                            className="px-2 py-1 rounded bg-indigo-600/25 hover:bg-indigo-600 text-indigo-300 hover:text-white text-[10px] font-bold transition-all flex items-center gap-1"
+                            title="Supply / Dispatch to PRC Hardware"
+                          >
+                            <Truck size={11} /> Supply
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => openReceiveModal(item)}
                             className="px-2 py-1 rounded bg-emerald-600/20 hover:bg-emerald-600 text-emerald-400 hover:text-white text-[10px] font-bold transition-all"
                             title="Receive units"
@@ -1381,6 +1541,13 @@ export function UPInventoryHub({ isSuperAdmin, onShowSuccess, onShowError }: UPI
                 <div className="flex items-center gap-1 pt-1 border-t border-zinc-800">
                   <button
                     type="button"
+                    onClick={() => openSupplyPrcModal(item)}
+                    className="flex-1 py-1.5 rounded bg-indigo-600/25 hover:bg-indigo-600 text-indigo-300 hover:text-white text-[10px] font-bold flex items-center justify-center gap-1"
+                  >
+                    <Truck size={11} /> Supply
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => openReceiveModal(item)}
                     className="flex-1 py-1.5 rounded bg-emerald-600/20 hover:bg-emerald-600 text-emerald-400 hover:text-white text-[10px] font-bold"
                   >
@@ -1392,13 +1559,6 @@ export function UPInventoryHub({ isSuperAdmin, onShowSuccess, onShowError }: UPI
                     className="flex-1 py-1.5 rounded bg-amber-600/20 hover:bg-amber-600 text-amber-400 hover:text-white text-[10px] font-bold"
                   >
                     Issue
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => openTransferModal(item)}
-                    className="flex-1 py-1.5 rounded bg-blue-600/20 hover:bg-blue-600 text-blue-400 hover:text-white text-[10px] font-bold"
-                  >
-                    Transfer
                   </button>
                   <button
                     type="button"
@@ -1436,6 +1596,172 @@ export function UPInventoryHub({ isSuperAdmin, onShowSuccess, onShowError }: UPI
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ─── TAB CONTENT: PRC HARDWARE DISPATCHES (VENDOR SUPPLY) ─────────────── */}
+      {subTab === 'prc-dispatches' && (
+        <div className="space-y-4 animate-fadeIn">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-[#18181B] p-4 rounded-2xl border border-[#27272A]">
+            <div>
+              <h3 className="text-xs font-bold text-white flex items-center gap-2">
+                <Truck size={16} className="text-indigo-400" /> Outward Supply Dispatches to PRC Hardware
+              </h3>
+              <p className="text-[10px] text-zinc-400">
+                Official delivery challans and outward stock transfers issued from UP Factory to PRC distribution depots
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => openSupplyPrcModal()}
+              className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all active:scale-95"
+            >
+              <Truck size={14} /> + New PRC Dispatch
+            </button>
+          </div>
+
+          <div className="bg-[#18181B] rounded-2xl border border-[#27272A] overflow-hidden shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-[#27272A]/50 text-zinc-400 uppercase tracking-wider text-[10px] font-bold border-b border-[#27272A]">
+                  <tr>
+                    <th className="py-3 px-4">Challan #</th>
+                    <th className="py-3 px-3">Date</th>
+                    <th className="py-3 px-3">Destination Branch</th>
+                    <th className="py-3 px-3">Transport / Vehicle</th>
+                    <th className="py-3 px-3 text-center">Items / Units</th>
+                    <th className="py-3 px-3 text-right">Transfer Value</th>
+                    <th className="py-3 px-3 text-center">Status</th>
+                    <th className="py-3 px-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#27272A]">
+                  {loadingDispatches ? (
+                    <tr>
+                      <td colSpan={8} className="py-8 text-center text-zinc-500">
+                        <RefreshCw className="animate-spin inline mr-2 text-indigo-400" size={16} /> Loading dispatch history...
+                      </td>
+                    </tr>
+                  ) : prcDispatches.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="py-12 text-center text-zinc-500">
+                        <Truck size={28} className="mx-auto text-zinc-600 mb-2 opacity-50" />
+                        <div>No outward dispatches recorded yet to PRC Hardware.</div>
+                        <p className="text-[10px] text-zinc-600 mt-1">Click &quot;New PRC Dispatch&quot; to issue delivery challans.</p>
+                      </td>
+                    </tr>
+                  ) : (
+                    prcDispatches.map((d: any) => (
+                      <tr key={d.id} className="hover:bg-zinc-800/40 transition-colors">
+                        <td className="py-3 px-4">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedDispatch(d)}
+                            className="font-mono font-bold text-indigo-400 hover:underline hover:text-indigo-300"
+                          >
+                            {d.challanNumber}
+                          </button>
+                        </td>
+                        <td className="py-3 px-3 text-zinc-400">
+                          {new Date(d.createdAt).toLocaleDateString('en-IN', {
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric',
+                          })}
+                        </td>
+                        <td className="py-3 px-3">
+                          <div className="font-semibold text-white">{d.destinationBranchName || 'PRC Central Depot'}</div>
+                        </td>
+                        <td className="py-3 px-3 text-zinc-300">
+                          <div className="font-medium text-[11px]">{d.transportMode || 'DIRECT_LOGISTICS'}</div>
+                          {d.vehicleNumber && (
+                            <div className="font-mono text-[10px] text-zinc-400">Veh: {d.vehicleNumber}</div>
+                          )}
+                        </td>
+                        <td className="py-3 px-3 text-center">
+                          <span className="font-mono font-bold text-emerald-400">{d.totalUnits} units</span>
+                          <span className="text-[10px] text-zinc-500 block">
+                            ({Array.isArray(d.items) ? d.items.length : 1} items)
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 text-right font-mono font-bold text-amber-400">
+                          ₹{(d.totalTransferValue || 0).toLocaleString('en-IN')}
+                        </td>
+                        <td className="py-3 px-3 text-center">
+                          <span className="text-[9.5px] font-bold px-2 py-0.5 rounded-full bg-emerald-950/60 text-emerald-400 border border-emerald-500/20">
+                            {d.status || 'DISPATCHED'}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedDispatch(d)}
+                            className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 hover:text-white text-[11px] font-bold transition-all inline-flex items-center gap-1"
+                          >
+                            <FileText size={12} /> Challan
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Touch Cards View (360px+) */}
+            <div className="sm:hidden divide-y divide-[#27272A]">
+              {prcDispatches.map((d: any) => (
+                <div key={d.id} className="p-3.5 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono font-bold text-xs text-indigo-400">{d.challanNumber}</span>
+                    <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-emerald-950/60 text-emerald-400">
+                      {d.status || 'DISPATCHED'}
+                    </span>
+                  </div>
+                  <div className="text-xs font-bold text-white">{d.destinationBranchName || 'PRC Central Depot'}</div>
+                  <div className="flex items-center justify-between text-[11px] text-zinc-400">
+                    <span>{d.totalUnits} units</span>
+                    <span className="font-mono font-bold text-amber-400">₹{(d.totalTransferValue || 0).toLocaleString('en-IN')}</span>
+                  </div>
+                  <div className="pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedDispatch(d)}
+                      className="w-full py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-bold text-xs flex items-center justify-center gap-1"
+                    >
+                      <FileText size={12} /> View Challan
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Pagination */}
+            {dispatchTotalPages > 1 && (
+              <div className="flex items-center justify-between p-3 border-t border-[#27272A] text-xs text-zinc-400">
+                <span>Page {dispatchPage} of {dispatchTotalPages}</span>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    disabled={dispatchPage <= 1}
+                    onClick={() => setDispatchPage((p) => Math.max(1, p - 1))}
+                    className="px-3 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40"
+                  >
+                    Prev
+                  </button>
+                  <button
+                    type="button"
+                    disabled={dispatchPage >= dispatchTotalPages}
+                    onClick={() => setDispatchPage((p) => p + 1)}
+                    className="px-3 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -1963,101 +2289,612 @@ export function UPInventoryHub({ isSuperAdmin, onShowSuccess, onShowError }: UPI
         </div>
       )}
 
-      {/* ─── MODAL 3: TRANSFER STOCK ─────────────────────────────────────────── */}
-      {isTransferModalOpen && (
+      {/* ─── MODAL 3: ADD FACTORY PRODUCT (FINISHED GOODS & RAW MATERIALS) ─── */}
+      {isAddProductModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
-          <div className="bg-[#18181B] w-full max-w-md rounded-2xl border border-[#27272A] shadow-2xl p-5 space-y-4 animate-scaleUp">
+          <div className="bg-[#18181B] w-full max-w-lg rounded-2xl border border-[#27272A] shadow-2xl p-5 space-y-4 animate-scaleUp max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-[#27272A] pb-3">
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <ArrowRightLeft size={16} className="text-blue-400" /> Inter-Facility Stock Transfer
+                <Plus size={16} className="text-emerald-400" /> Register Factory Product / Raw Material
               </h3>
-              <button onClick={() => setIsTransferModalOpen(false)} className="text-zinc-400 hover:text-white">
+              <button onClick={() => setIsAddProductModalOpen(false)} className="text-zinc-400 hover:text-white">
                 <X size={16} />
               </button>
             </div>
 
-            <form onSubmit={handleTransferSubmit} className="space-y-3">
+            <form onSubmit={handleAddProductSubmit} className="space-y-3">
+              {/* Product Type Toggle */}
               <div>
-                <label className="text-[11px] font-bold text-zinc-300 block mb-1">Hardware Product</label>
-                <select
-                  value={transferProductId}
-                  onChange={(e) => setTransferProductId(e.target.value)}
-                  className="w-full bg-[#09090B] text-white text-xs p-2.5 rounded-xl border border-zinc-700 outline-none"
-                  required
-                >
-                  <option value="">-- Choose Product --</option>
-                  {catalogProducts.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.sku} — {p.name}
-                    </option>
-                  ))}
-                </select>
+                <label className="text-[11px] font-bold text-zinc-300 block mb-1">Product Classification</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewProdType('FINISHED_GOOD');
+                      if (newProdCategory === 'Raw Materials') setNewProdCategory('Hardware');
+                    }}
+                    className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all text-left flex items-center gap-2 ${
+                      newProdType === 'FINISHED_GOOD'
+                        ? 'bg-emerald-950/60 border-emerald-500/50 text-emerald-300'
+                        : 'bg-[#09090B] border-zinc-800 text-zinc-400 hover:text-white'
+                    }`}
+                  >
+                    <Sparkles size={14} className="text-emerald-400" />
+                    <div>
+                      <div>Finished Good</div>
+                      <div className="text-[9px] text-zinc-400 font-normal">Supplied to PRC Hardware</div>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewProdType('RAW_MATERIAL');
+                      setNewProdCategory('Raw Materials');
+                    }}
+                    className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all text-left flex items-center gap-2 ${
+                      newProdType === 'RAW_MATERIAL'
+                        ? 'bg-amber-950/60 border-amber-500/50 text-amber-300'
+                        : 'bg-[#09090B] border-zinc-800 text-zinc-400 hover:text-white'
+                    }`}
+                  >
+                    <Layers size={14} className="text-amber-400" />
+                    <div>
+                      <div>Raw Material</div>
+                      <div className="text-[9px] text-zinc-400 font-normal">Factory BOM Assembly</div>
+                    </div>
+                  </button>
+                </div>
               </div>
 
+              {/* Name & SKU */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[11px] font-bold text-zinc-300 block mb-1">
+                    Product / Material Name <span className="text-rose-400">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Mortise Handle Rose 200mm"
+                    value={newProdName}
+                    onChange={(e) => setNewProdName(e.target.value)}
+                    className="w-full bg-[#09090B] text-white text-xs p-2.5 rounded-xl border border-zinc-700 outline-none focus:border-emerald-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-zinc-300 block mb-1">
+                    SKU Code <span className="text-rose-400">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. MH-SS-200"
+                    value={newProdSku}
+                    onChange={(e) => setNewProdSku(e.target.value.toUpperCase())}
+                    className="w-full bg-[#09090B] text-white text-xs font-mono p-2.5 rounded-xl border border-zinc-700 outline-none focus:border-emerald-500"
+                  />
+                </div>
+              </div>
+
+              {/* Barcode & Category */}
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-[11px] font-bold text-zinc-300 block mb-1">From Facility</label>
-                  <select
-                    value={transferFromBranch}
-                    onChange={(e) => setTransferFromBranch(e.target.value)}
+                  <label className="text-[11px] font-bold text-zinc-300 block mb-1">Barcode / EAN</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 8901234567890"
+                    value={newProdBarcode}
+                    onChange={(e) => setNewProdBarcode(e.target.value)}
+                    className="w-full bg-[#09090B] text-white text-xs font-mono p-2.5 rounded-xl border border-zinc-700 outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-zinc-300 block mb-1">Category</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Handles, Hinges, Raw Steel"
+                    value={newProdCategory}
+                    onChange={(e) => setNewProdCategory(e.target.value)}
                     className="w-full bg-[#09090B] text-white text-xs p-2.5 rounded-xl border border-zinc-700 outline-none"
-                    required
+                  />
+                </div>
+              </div>
+
+              {/* Finish, Colour & Unit */}
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className="text-[11px] font-bold text-zinc-300 block mb-1">Finish</label>
+                  <select
+                    value={newProdFinish}
+                    onChange={(e) => setNewProdFinish(e.target.value)}
+                    className="w-full bg-[#09090B] text-white text-xs p-2 rounded-xl border border-zinc-700 outline-none"
                   >
-                    {branches.map((b) => (
-                      <option key={b.id} value={b.id}>
-                        {b.name}
-                      </option>
-                    ))}
+                    <option value="SS">SS (Stainless)</option>
+                    <option value="Matt Black">Matt Black</option>
+                    <option value="Brass">Brass</option>
+                    <option value="Antique Bronze">Antique Bronze</option>
+                    <option value="Gold PVD">Gold PVD</option>
+                    <option value="Rose Gold">Rose Gold</option>
+                    <option value="Chrome">Chrome</option>
+                    <option value="Raw">Raw / Unfinished</option>
                   </select>
                 </div>
+
                 <div>
-                  <label className="text-[11px] font-bold text-zinc-300 block mb-1">To Facility</label>
+                  <label className="text-[11px] font-bold text-zinc-300 block mb-1">Colour</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Silver, Black"
+                    value={newProdColour}
+                    onChange={(e) => setNewProdColour(e.target.value)}
+                    className="w-full bg-[#09090B] text-white text-xs p-2 rounded-xl border border-zinc-700 outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-zinc-300 block mb-1">Unit of Measure</label>
                   <select
-                    value={transferToBranch}
-                    onChange={(e) => setTransferToBranch(e.target.value)}
-                    className="w-full bg-[#09090B] text-white text-xs p-2.5 rounded-xl border border-zinc-700 outline-none"
-                    required
+                    value={newProdUnit}
+                    onChange={(e) => setNewProdUnit(e.target.value)}
+                    className="w-full bg-[#09090B] text-white text-xs p-2 rounded-xl border border-zinc-700 outline-none font-mono"
                   >
-                    {branches.map((b) => (
-                      <option key={b.id} value={b.id}>
-                        {b.name}
-                      </option>
-                    ))}
+                    <option value="PCS">PCS</option>
+                    <option value="PAIR">PAIR</option>
+                    <option value="SET">SET</option>
+                    <option value="KG">KG</option>
+                    <option value="MTR">MTR</option>
+                    <option value="SHEET">SHEET</option>
+                    <option value="BOX">BOX</option>
                   </select>
                 </div>
               </div>
 
+              {/* Dimensions */}
               <div>
-                <label className="text-[11px] font-bold text-zinc-300 block mb-1">Transfer Units</label>
+                <label className="text-[11px] font-bold text-zinc-300 block mb-1">Dimensions / Technical Specs</label>
                 <input
-                  type="number"
-                  inputMode="decimal"
-                  min="1"
-                  required
-                  placeholder="e.g. 50"
-                  value={transferQuantity}
-                  onChange={(e) => setTransferQuantity(e.target.value)}
-                  className="w-full bg-[#09090B] text-white text-sm font-mono p-2.5 rounded-xl border border-zinc-700 outline-none"
+                  type="text"
+                  placeholder="e.g. 200mm x 50mm x 12mm"
+                  value={newProdDimensions}
+                  onChange={(e) => setNewProdDimensions(e.target.value)}
+                  className="w-full bg-[#09090B] text-white text-xs p-2.5 rounded-xl border border-zinc-700 outline-none"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#27272A]">
+              {/* Financials & Stock */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-black/40 p-2.5 rounded-xl border border-zinc-800">
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-400 block mb-0.5">Unit Cost (₹)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={newProdCost}
+                    onChange={(e) => setNewProdCost(e.target.value)}
+                    className="w-full bg-[#18181B] text-white text-xs font-mono p-2 rounded-lg border border-zinc-700 outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold text-indigo-400 block mb-0.5">PRC Price (₹)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={newProdTransferPrice}
+                    onChange={(e) => setNewProdTransferPrice(e.target.value)}
+                    className="w-full bg-[#18181B] text-white text-xs font-mono p-2 rounded-lg border border-zinc-700 outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold text-emerald-400 block mb-0.5">Initial Stock</label>
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="0"
+                    value={newProdInitialStock}
+                    onChange={(e) => setNewProdInitialStock(e.target.value)}
+                    className="w-full bg-[#18181B] text-white text-xs font-mono p-2 rounded-lg border border-zinc-700 outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold text-amber-400 block mb-0.5">Reorder Min</label>
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="10"
+                    value={newProdReorder}
+                    onChange={(e) => setNewProdReorder(e.target.value)}
+                    className="w-full bg-[#18181B] text-white text-xs font-mono p-2 rounded-lg border border-zinc-700 outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* Description */}
+              <div>
+                <label className="text-[11px] font-bold text-zinc-300 block mb-1">Notes / Description</label>
+                <textarea
+                  rows={2}
+                  placeholder="Manufacturing specifications, alloy grade, or vendor notes..."
+                  value={newProdDesc}
+                  onChange={(e) => setNewProdDesc(e.target.value)}
+                  className="w-full bg-[#09090B] text-white text-xs p-2.5 rounded-xl border border-zinc-700 outline-none"
+                />
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-[#27272A]">
                 <button
                   type="button"
-                  onClick={() => setIsTransferModalOpen(false)}
-                  className="px-4 py-2 rounded-xl bg-zinc-800 text-zinc-300 text-xs font-bold"
+                  onClick={() => setIsAddProductModalOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-zinc-800 text-zinc-300 text-xs font-bold hover:bg-zinc-700"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={savingTransfer}
-                  className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold disabled:opacity-50"
+                  disabled={savingNewProduct}
+                  className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold disabled:opacity-50 flex items-center gap-1.5 shadow-sm"
                 >
-                  {savingTransfer ? 'Moving...' : 'Transfer Units ⇄'}
+                  {savingNewProduct ? 'Registering...' : 'Register Product ✓'}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ─── MODAL: SUPPLY / DISPATCH TO PRC HARDWARE (VENDOR SHIPMENT) ───────── */}
+      {isSupplyPrcModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-[#18181B] w-full max-w-lg rounded-2xl border border-[#27272A] shadow-2xl p-5 space-y-4 animate-scaleUp max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-[#27272A] pb-3">
+              <div>
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <Truck size={16} className="text-indigo-400" /> Dispatch to PRC Hardware Depots
+                </h3>
+                <p className="text-[10px] text-zinc-400">UP Factory Vendor Outward Supply • Auto-Generates Delivery Challan</p>
+              </div>
+              <button onClick={() => setIsSupplyPrcModalOpen(false)} className="text-zinc-400 hover:text-white">
+                <X size={16} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSupplyPrcSubmit} className="space-y-3">
+              {/* Product Selection */}
+              <div>
+                <label className="text-[11px] font-bold text-zinc-300 block mb-1">Finished Hardware Item to Supply</label>
+                <select
+                  value={supplyProductId}
+                  onChange={(e) => {
+                    const chosen = catalogProducts.find((p) => p.id === e.target.value) || stockItems.find((s) => s.id === e.target.value);
+                    if (chosen) {
+                      setSupplyProductId(chosen.id);
+                      setSupplyProductSku(chosen.sku);
+                      setSupplyProductName(chosen.name);
+                      setSupplyRate(String(chosen.salesPrice || chosen.price || chosen.unitCost || ''));
+                    }
+                  }}
+                  className="w-full bg-[#09090B] text-white text-xs p-2.5 rounded-xl border border-zinc-700 outline-none focus:border-indigo-500"
+                  required
+                >
+                  <option value="">-- Select Product --</option>
+                  {stockItems.length > 0
+                    ? stockItems.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          [{s.sku}] {s.name} ({s.onHand} units on floor)
+                        </option>
+                      ))
+                    : catalogProducts.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          [{p.sku}] {p.name}
+                        </option>
+                      ))}
+                </select>
+              </div>
+
+              {/* Quantity & Transfer Rate */}
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[11px] font-bold text-zinc-300 block mb-1">Dispatch Quantity (Units)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    required
+                    placeholder="e.g. 100"
+                    value={supplyQuantity}
+                    onChange={(e) => setSupplyQuantity(e.target.value)}
+                    className="w-full bg-[#09090B] text-white text-sm font-mono p-2.5 rounded-xl border border-zinc-700 outline-none focus:border-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-zinc-300 block mb-1">Billing / Transfer Rate (₹)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="Unit Rate"
+                    value={supplyRate}
+                    onChange={(e) => setSupplyRate(e.target.value)}
+                    className="w-full bg-[#09090B] text-white text-xs font-mono p-2.5 rounded-xl border border-zinc-700 outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* Total Estimated Value Callout */}
+              <div className="flex items-center justify-between p-3 rounded-xl bg-indigo-950/40 border border-indigo-500/30">
+                <span className="text-xs text-indigo-300 font-semibold">Total Challan Value:</span>
+                <span className="font-mono font-black text-indigo-300 text-sm">
+                  ₹{((parseInt(supplyQuantity, 10) || 0) * (parseFloat(supplyRate) || 0)).toLocaleString('en-IN')}
+                </span>
+              </div>
+
+              {/* Destination PRC Branch */}
+              <div>
+                <label className="text-[11px] font-bold text-zinc-300 block mb-1">
+                  Destination PRC Hardware Branch / Depot <span className="text-rose-400">*</span>
+                </label>
+                <select
+                  value={supplyDestinationBranch}
+                  onChange={(e) => setSupplyDestinationBranch(e.target.value)}
+                  className="w-full bg-[#09090B] text-white text-xs p-2.5 rounded-xl border border-zinc-700 outline-none focus:border-indigo-500"
+                  required
+                >
+                  <option value="">-- Choose Destination Branch --</option>
+                  {branches.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.name} {b.city ? `(${b.city})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Logistics & Vehicle */}
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[11px] font-bold text-zinc-300 block mb-1">Transport Mode</label>
+                  <select
+                    value={supplyTransportMode}
+                    onChange={(e) => setSupplyTransportMode(e.target.value)}
+                    className="w-full bg-[#09090B] text-white text-xs p-2.5 rounded-xl border border-zinc-700 outline-none"
+                  >
+                    <option value="DIRECT_LOGISTICS">Direct Factory Logistics</option>
+                    <option value="TEMPO_TRANSPORT">Tempo / Tata Ace</option>
+                    <option value="TRUCK_CONTAINER">Heavy Truck / Container</option>
+                    <option value="COURIER_CARGO">Express Cargo / Courier</option>
+                    <option value="SELF_PICKUP">PRC Self-Pickup</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-zinc-300 block mb-1">Vehicle Number</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. UP 16 BT 4421"
+                    value={supplyVehicleNo}
+                    onChange={(e) => setSupplyVehicleNo(e.target.value.toUpperCase())}
+                    className="w-full bg-[#09090B] text-white text-xs font-mono p-2.5 rounded-xl border border-zinc-700 outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* Driver Details */}
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[11px] font-bold text-zinc-300 block mb-1">Driver Name</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Ramesh Kumar"
+                    value={supplyDriverName}
+                    onChange={(e) => setSupplyDriverName(e.target.value)}
+                    className="w-full bg-[#09090B] text-white text-xs p-2.5 rounded-xl border border-zinc-700 outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-zinc-300 block mb-1">Driver Contact #</label>
+                  <input
+                    type="tel"
+                    placeholder="e.g. +91 9876543210"
+                    value={supplyDriverPhone}
+                    onChange={(e) => setSupplyDriverPhone(e.target.value)}
+                    className="w-full bg-[#09090B] text-white text-xs p-2.5 rounded-xl border border-zinc-700 outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* Remarks */}
+              <div>
+                <label className="text-[11px] font-bold text-zinc-300 block mb-1">Dispatch Notes / Gate Pass Info</label>
+                <textarea
+                  rows={2}
+                  placeholder="Gate pass number, packaging carton counts, or special instructions..."
+                  value={supplyNotes}
+                  onChange={(e) => setSupplyNotes(e.target.value)}
+                  className="w-full bg-[#09090B] text-white text-xs p-2.5 rounded-xl border border-zinc-700 outline-none"
+                />
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-[#27272A]">
+                <button
+                  type="button"
+                  onClick={() => setIsSupplyPrcModalOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-zinc-800 text-zinc-300 text-xs font-bold hover:bg-zinc-700"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingSupplyPrc}
+                  className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold disabled:opacity-50 flex items-center gap-1.5 shadow-sm"
+                >
+                  {savingSupplyPrc ? 'Dispatching...' : 'Generate Challan & Dispatch 🚚'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ─── MODAL: DELIVERY CHALLAN DETAIL VIEW ─────────────────────────────── */}
+      {selectedDispatch && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-[#18181B] w-full max-w-2xl rounded-2xl border border-[#27272A] shadow-2xl p-6 space-y-5 animate-scaleUp max-h-[90vh] overflow-y-auto">
+            {/* Header */}
+            <div className="flex items-start justify-between border-b border-[#27272A] pb-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-base font-black text-indigo-400">
+                    Challan #{selectedDispatch.challanNumber}
+                  </span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-950/60 text-emerald-400 border border-emerald-500/20 uppercase">
+                    {selectedDispatch.status || 'DISPATCHED'}
+                  </span>
+                </div>
+                <p className="text-xs text-zinc-400 mt-1">
+                  Issued on{' '}
+                  {new Date(selectedDispatch.createdAt).toLocaleDateString('en-IN', {
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </p>
+              </div>
+              <button onClick={() => setSelectedDispatch(null)} className="text-zinc-400 hover:text-white p-1">
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Consignor & Consignee Row */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-black/40 p-4 rounded-xl border border-zinc-800 text-xs">
+              <div className="space-y-1">
+                <span className="text-[10px] font-bold uppercase text-zinc-400 tracking-wider">Consignor (Supplier)</span>
+                <div className="font-bold text-white">UP Manufacturing Plant</div>
+                <div className="text-[11px] text-zinc-400">Internal Manufacturing Vendor</div>
+                <div className="text-[11px] text-zinc-500">Dispatch Plant: Plant-1 (Central)</div>
+              </div>
+
+              <div className="space-y-1">
+                <span className="text-[10px] font-bold uppercase text-zinc-400 tracking-wider">Consignee (Destination)</span>
+                <div className="font-bold text-white">
+                  {selectedDispatch.destinationBranchName || 'PRC Hardware Central Depot'}
+                </div>
+                <div className="text-[11px] text-zinc-400">PRC Hardware Distribution Network</div>
+                <div className="text-[11px] text-emerald-400 font-medium">Stock Credited On-Hand ✓</div>
+              </div>
+            </div>
+
+            {/* Logistics Info */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 bg-[#27272A]/40 p-3 rounded-xl text-xs">
+              <div>
+                <span className="text-[10px] text-zinc-400 block">Transport Mode</span>
+                <span className="font-semibold text-white">{selectedDispatch.transportMode || 'DIRECT_LOGISTICS'}</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-zinc-400 block">Vehicle #</span>
+                <span className="font-mono font-bold text-white">{selectedDispatch.vehicleNumber || 'N/A'}</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-zinc-400 block">Driver Details</span>
+                <span className="text-white font-medium">
+                  {selectedDispatch.driverName || 'N/A'}{' '}
+                  {selectedDispatch.driverPhone && `(${selectedDispatch.driverPhone})`}
+                </span>
+              </div>
+            </div>
+
+            {/* Itemized Table */}
+            <div className="space-y-2">
+              <h4 className="text-xs font-bold text-white uppercase tracking-wider">Dispatched Hardware Items</h4>
+              <div className="rounded-xl border border-zinc-800 overflow-hidden">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-[#27272A]/60 text-zinc-400 uppercase text-[10px] font-bold">
+                    <tr>
+                      <th className="py-2.5 px-3">Item Details</th>
+                      <th className="py-2.5 px-3 text-right">Quantity</th>
+                      <th className="py-2.5 px-3 text-right">Rate (₹)</th>
+                      <th className="py-2.5 px-3 text-right">Amount (₹)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-800 bg-[#09090B]">
+                    {Array.isArray(selectedDispatch.items) && selectedDispatch.items.length > 0 ? (
+                      selectedDispatch.items.map((it: any, idx: number) => (
+                        <tr key={idx}>
+                          <td className="py-2.5 px-3">
+                            <div className="font-mono font-bold text-indigo-400">{it.sku}</div>
+                            <div className="text-white font-medium">{it.name}</div>
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-mono font-bold text-white">{it.quantity}</td>
+                          <td className="py-2.5 px-3 text-right font-mono text-zinc-300">
+                            ₹{(it.transferPrice || 0).toLocaleString('en-IN')}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-mono font-bold text-amber-400">
+                            ₹{((it.quantity || 0) * (it.transferPrice || 0)).toLocaleString('en-IN')}
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={4} className="py-3 px-3 text-center text-zinc-500">
+                          {selectedDispatch.totalUnits} units dispatched
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                  <tfoot className="bg-[#27272A]/40 font-bold border-t border-zinc-700">
+                    <tr>
+                      <td className="py-2.5 px-3 text-white">Total Dispatched</td>
+                      <td className="py-2.5 px-3 text-right font-mono text-emerald-400">
+                        {selectedDispatch.totalUnits} units
+                      </td>
+                      <td className="py-2.5 px-3"></td>
+                      <td className="py-2.5 px-3 text-right font-mono text-amber-400">
+                        ₹{(selectedDispatch.totalTransferValue || 0).toLocaleString('en-IN')}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+
+            {/* Notes */}
+            {selectedDispatch.notes && (
+              <div className="p-3 bg-black/30 rounded-xl border border-zinc-800 text-xs text-zinc-300">
+                <span className="font-bold text-zinc-400 block text-[10px] uppercase">Notes:</span>
+                {selectedDispatch.notes}
+              </div>
+            )}
+
+            {/* Modal Actions */}
+            <div className="flex items-center justify-between pt-3 border-t border-[#27272A]">
+              <span className="text-[11px] text-zinc-500 font-mono">
+                System Dispatched By: {selectedDispatch.dispatchedBy || 'Factory Supervisor'}
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="px-3.5 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold flex items-center gap-1.5"
+                >
+                  <FileText size={14} /> Print Challan
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedDispatch(null)}
+                  className="px-4 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

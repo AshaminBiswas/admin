@@ -335,7 +335,66 @@ export type AdminView =
   | 'create-b2b-order'
   | 'b2b-order-create'
   | 'b2b-customers'
-  | 'up';
+  | 'up'
+  | 'up-inventory';
+
+/* ─── UP Factory Inventory & PRC Supply Types ────────────────────────────── */
+
+export interface CreateUpProductInput {
+  name: string;
+  sku: string;
+  barcode?: string;
+  productType?: 'FINISHED_GOOD' | 'RAW_MATERIAL';
+  categoryName?: string;
+  finish?: string;
+  colour?: string;
+  dimensions?: string;
+  unitOfMeasure?: string;
+  unitCost?: number;
+  transferPrice?: number;
+  initialStock?: number;
+  reorderLevel?: number;
+  description?: string;
+}
+
+export interface SupplyPrcItemInput {
+  productId: string;
+  sku: string;
+  name: string;
+  quantity: number;
+  transferPrice?: number;
+}
+
+export interface SupplyPrcInput {
+  destinationBranchId?: string;
+  destinationBranchName?: string;
+  items: SupplyPrcItemInput[];
+  transportMode?: string;
+  vehicleNumber?: string;
+  driverName?: string;
+  driverPhone?: string;
+  notes?: string;
+}
+
+export interface PrcSupplyChallan {
+  id: string;
+  challanNumber: string;
+  destinationBranchId?: string;
+  destinationBranchName?: string;
+  items: SupplyPrcItemInput[];
+  totalItems: number;
+  totalUnits: number;
+  totalTransferValue: number;
+  status: 'DISPATCHED' | 'RECEIVED' | 'IN_TRANSIT';
+  transportMode?: string;
+  vehicleNumber?: string;
+  driverName?: string;
+  driverPhone?: string;
+  dispatchedBy?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
 
 /* ─── B2B Order Management Types ─────────────────────────────────────────── */
 
