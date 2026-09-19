@@ -63,7 +63,7 @@ const BarcodeSvg: React.FC<{
   width?: number;
   height?: number;
   displayValue?: boolean;
-}> = ({ value, className = '', width = 2, height = 50, displayValue = true }) => {
+}> = ({ value, className = '', width = 2, height = 50, displayValue = false }) => {
   const svgRef = useRef<SVGSVGElement | null>(null);
 
   useEffect(() => {
@@ -1307,7 +1307,7 @@ export const BarcodePage: React.FC = () => {
                         value={scanResult.product.sku}
                         width={1.6}
                         height={34}
-                        displayValue={true}
+                        displayValue={false}
                         className="max-w-[160px] h-auto"
                       />
                       <span className="text-[9px] font-mono text-slate-500 uppercase tracking-wider font-bold">
@@ -2017,35 +2017,23 @@ export const BarcodePage: React.FC = () => {
                       aspectRatio: labelSize === '80x40' ? '80/40' : '58/40',
                     }}
                   >
-                    {/* Top Row: Brand & Bold SKU + QR */}
-                    <div className="flex items-start justify-between gap-2 border-b-2 border-black pb-2">
-                      <div className="min-w-0 flex-1">
-                        <div className="text-[10px] font-black uppercase tracking-wider text-black/70">
-                          PACIFIC HARDWARE (PRC)
-                        </div>
-                        <div className="text-sm sm:text-base font-black font-mono tracking-tight text-black mt-1">
-                          SKU: {selectedStudioProduct.sku}
-                        </div>
+                    {/* Top Row: Brand & Bold SKU (Centered, QR Removed) */}
+                    <div className="border-b-2 border-black pb-2 text-center">
+                      <div className="text-[10px] font-black uppercase tracking-wider text-black/70">
+                        PACIFIC HARDWARE (PRC)
                       </div>
-
-                      {/* Scannable QR Code */}
-                      <img
-                        src={barcodeApi.getQrImageUrl(
-                          selectedStudioProduct.sku,
-                          `https://pacificrestroomcubicles.com/product/${selectedStudioProduct.slug || selectedStudioProduct.sku}`
-                        )}
-                        alt="QR Code"
-                        className="w-12 h-12 border border-black/60 p-0.5 shrink-0 bg-white"
-                      />
+                      <div className="text-sm sm:text-base font-black font-mono tracking-tight text-black mt-1">
+                        SKU: {selectedStudioProduct.sku}
+                      </div>
                     </div>
 
-                    {/* Bottom: Code-128 Linear Barcode (Vector SVG - 100% Crisp & Reliable) */}
+                    {/* Bottom: Code-128 Linear Barcode (Vector SVG - No SKU text below barcode) */}
                     <div className="mt-3 text-center flex items-center justify-center">
                       <BarcodeSvg
                         value={selectedStudioProduct.sku}
-                        width={labelSize === '80x40' ? 2.4 : 1.9}
-                        height={labelSize === '80x40' ? 52 : 44}
-                        displayValue={true}
+                        width={labelSize === '80x40' ? 2.5 : 2.0}
+                        height={labelSize === '80x40' ? 56 : 48}
+                        displayValue={false}
                         className="max-w-full h-auto mx-auto"
                       />
                     </div>
