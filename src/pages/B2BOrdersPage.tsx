@@ -28,7 +28,11 @@ import { b2bOrdersApi } from '../api/b2bOrdersApi';
 import { fetchAdminApi, inventoryApi } from '../api/adminApi';
 import { useAdminAuth } from '../context/AdminAuthContext';
 
-export function B2BOrdersPage() {
+export interface B2BOrdersPageProps {
+  onCreateOfflineOrder?: () => void;
+}
+
+export function B2BOrdersPage({ onCreateOfflineOrder }: B2BOrdersPageProps = {}) {
   const { adminUser } = useAdminAuth();
 
   // Primary State
@@ -37,6 +41,11 @@ export function B2BOrdersPage() {
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<string>('pending_approval');
   const [selectedBranchId, setSelectedBranchId] = useState<string>('ALL');
+  const [selectedSource, setSelectedSource] = useState<string>('ALL');
+  const [sourceCounts, setSourceCounts] = useState<Record<string, number>>({
+    customer_frontend: 0,
+    admin_created: 0,
+  });
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [branches, setBranches] = useState<{ id: string; name: string; code: string }[]>([]);
@@ -101,6 +110,7 @@ export function B2BOrdersPage() {
         status: activeTab,
         branchId: selectedBranchId,
         search: debouncedSearch,
+        source: selectedSource !== 'ALL' ? selectedSource : undefined,
       });
 
       if (res.success && res.data) {
@@ -115,6 +125,9 @@ export function B2BOrdersPage() {
         if (res.data.statusCounts) {
           setStatusCounts(res.data.statusCounts);
         }
+        if (res.data.sourceCounts) {
+          setSourceCounts(res.data.sourceCounts);
+        }
       } else {
         setError(res.error?.message || 'Failed to load B2B orders');
         setOrders([]);
@@ -125,7 +138,7 @@ export function B2BOrdersPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, pagination.limit, activeTab, selectedBranchId, debouncedSearch]);
+  }, [page, pagination.limit, activeTab, selectedBranchId, selectedSource, debouncedSearch]);
 
   useEffect(() => {
     loadOrders();
@@ -307,7 +320,13 @@ export function B2BOrdersPage() {
 
         <button
           type="button"
-          onClick={() => setIsCreateModalOpen(true)}
+          onClick={() => {
+            if (onCreateOfflineOrder) {
+              onCreateOfflineOrder();
+            } else {
+              setIsCreateModalOpen(true);
+            }
+          }}
           className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs sm:text-sm shadow-md shadow-emerald-900/30 transition-all flex-shrink-0"
         >
           <Plus size={16} />
@@ -335,7 +354,13 @@ export function B2BOrdersPage() {
 
       {/* 4 Metric KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <div className="p-4 rounded-2xl bg-[#18181B] border border-[#27272A] shadow-md flex items-center gap-3.5">
+        <div
+          onClick={() => {
+            setActiveTab('pending_approval');
+            setPage(1);
+          }}
+          className="cursor-pointer p-4 rounded-2xl bg-[#18181B] hover:border-amber-500/50 border border-[#27272A] shadow-md flex items-center gap-3.5 transition-all"
+        >
           <div className="p-3 rounded-xl bg-amber-500/15 text-amber-400 border border-amber-500/30">
             <Clock size={20} />
           </div>
@@ -346,7 +371,13 @@ export function B2BOrdersPage() {
           </div>
         </div>
 
-        <div className="p-4 rounded-2xl bg-[#18181B] border border-[#27272A] shadow-md flex items-center gap-3.5">
+        <div
+          onClick={() => {
+            setActiveTab('confirmed');
+            setPage(1);
+          }}
+          className="cursor-pointer p-4 rounded-2xl bg-[#18181B] hover:border-emerald-500/50 border border-[#27272A] shadow-md flex items-center gap-3.5 transition-all"
+        >
           <div className="p-3 rounded-xl bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
             <CheckCircle2 size={20} />
           </div>
@@ -359,31 +390,116 @@ export function B2BOrdersPage() {
           </div>
         </div>
 
-        <div className="p-4 rounded-2xl bg-[#18181B] border border-[#27272A] shadow-md flex items-center gap-3.5">
-          <div className="p-3 rounded-xl bg-teal-500/15 text-teal-400 border border-teal-500/30">
-            <ShieldCheck size={20} />
+        <div
+          onClick={() => {
+            setSelectedSource(selectedSource === 'customer_frontend' ? 'ALL' : 'customer_frontend');
+            setPage(1);
+          }}
+          className={`cursor-pointer p-4 rounded-2xl border shadow-md flex items-center gap-3.5 transition-all ${
+            selectedSource === 'customer_frontend'
+              ? 'bg-cyan-950/30 border-cyan-500/60 ring-1 ring-cyan-500/30'
+              : 'bg-[#18181B] border-[#27272A] hover:border-cyan-500/40'
+          }`}
+        >
+          <div className="p-3 rounded-xl bg-cyan-500/15 text-cyan-400 border border-cyan-500/30">
+            <ExternalLink size={20} />
           </div>
           <div>
-            <div className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Completed Orders</div>
-            <div className="text-xl sm:text-2xl font-black text-teal-400">{statusCounts.completed || 0}</div>
-            <div className="text-[11px] text-zinc-500">Fulfilled & Closed</div>
+            <div className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Storefront (Online)</div>
+            <div className="text-xl sm:text-2xl font-black text-cyan-300">{sourceCounts.customer_frontend || 0}</div>
+            <div className="text-[11px] text-cyan-500/80 font-medium">Customer direct checkout</div>
           </div>
         </div>
 
-        <div className="p-4 rounded-2xl bg-[#18181B] border border-[#27272A] shadow-md flex items-center gap-3.5">
+        <div
+          onClick={() => {
+            setSelectedSource('ALL');
+            setActiveTab('ALL');
+            setPage(1);
+          }}
+          className="cursor-pointer p-4 rounded-2xl bg-[#18181B] hover:border-purple-500/40 border border-[#27272A] shadow-md flex items-center gap-3.5 transition-all"
+        >
           <div className="p-3 rounded-xl bg-purple-500/15 text-purple-400 border border-purple-500/30">
             <Warehouse size={20} />
           </div>
           <div>
-            <div className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Total Orders</div>
+            <div className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Total B2B Orders</div>
             <div className="text-xl sm:text-2xl font-black text-white">{pagination.total || 0}</div>
-            <div className="text-[11px] text-zinc-500">All registered facilities</div>
+            <div className="text-[11px] text-zinc-500">Offline: {sourceCounts.admin_created || 0} | Online: {sourceCounts.customer_frontend || 0}</div>
           </div>
         </div>
       </div>
 
       {/* Tabs & Filters Bar */}
       <div className="p-3 sm:p-4 rounded-2xl bg-[#18181B] border border-[#27272A] space-y-3 sm:space-y-4 shadow-md">
+        {/* Channel Source Filter Bar */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-[#27272A]">
+          <div className="flex items-center gap-1.5 p-1 bg-[#09090B] rounded-xl border border-[#27272A]">
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedSource('ALL');
+                setPage(1);
+              }}
+              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                selectedSource === 'ALL'
+                  ? 'bg-violet-600 text-white shadow'
+                  : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              All Channels ({pagination.total})
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedSource('customer_frontend');
+                setPage(1);
+              }}
+              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 ${
+                selectedSource === 'customer_frontend'
+                  ? 'bg-cyan-600 text-white shadow'
+                  : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              <span>🌐 Storefront (Online)</span>
+              <span className="px-1.5 py-0.2 rounded-full bg-black/25 text-[10px] font-black">
+                {sourceCounts.customer_frontend || 0}
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedSource('admin_created');
+                setPage(1);
+              }}
+              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 ${
+                selectedSource === 'admin_created'
+                  ? 'bg-purple-600 text-white shadow'
+                  : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              <span>🏢 Offline (Admin)</span>
+              <span className="px-1.5 py-0.2 rounded-full bg-black/25 text-[10px] font-black">
+                {sourceCounts.admin_created || 0}
+              </span>
+            </button>
+          </div>
+
+          <div className="text-[11px] text-zinc-400 hidden sm:block">
+            {selectedSource === 'customer_frontend' ? (
+              <span className="text-cyan-400 font-semibold flex items-center gap-1">
+                <span>🌐</span> Orders placed directly by registered B2B buyers via Storefront Cart & Quotes
+              </span>
+            ) : selectedSource === 'admin_created' ? (
+              <span className="text-purple-400 font-semibold flex items-center gap-1">
+                <span>🏢</span> Orders booked offline by Sales & Admin desk
+              </span>
+            ) : (
+              <span>Showing all orders across online and offline channels</span>
+            )}
+          </div>
+        </div>
+
         {/* Status Tab Pills */}
         <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto scrollbar-hide py-0.5">
           {[
@@ -501,18 +617,171 @@ export function B2BOrdersPage() {
           </div>
         ) : (
           <>
-            {/* Desktop Table View */}
-            <div className="overflow-x-auto">
+            {/* Mobile & Tablet Responsive Cards (Visible < lg) */}
+            <div className="block lg:hidden space-y-3.5">
+              {orders.map((o) => {
+                const isPending = o.status === 'pending_approval';
+                const isConfirmed = o.status === 'confirmed';
+
+                return (
+                  <div
+                    key={o.id}
+                    className="p-4 rounded-2xl bg-[#09090B] border border-[#27272A] hover:border-[#3F3F46] transition-all space-y-3 shadow-md"
+                  >
+                    {/* Header: Order # + Source Pill + Status Badge */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-extrabold text-white text-sm tracking-tight">{o.orderNumber}</span>
+                          {o.source === 'customer_frontend' ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
+                              🌐 Storefront (Online)
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-violet-500/15 text-violet-300 border border-violet-500/30">
+                              🏢 Offline (Admin)
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[11px] text-zinc-500 mt-0.5">
+                          {new Date(o.createdAt).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </div>
+                      </div>
+                      <div>{getStatusBadge(o.status)}</div>
+                    </div>
+
+                    {/* Customer Info Card */}
+                    <div className="p-2.5 rounded-xl bg-[#18181B] border border-[#27272A] space-y-1 text-xs">
+                      <div className="font-bold text-zinc-200">
+                        {o.customer?.companyName || `${o.customer?.firstName || ''} ${o.customer?.lastName || ''}`.trim() || 'Valued Buyer'}
+                      </div>
+                      <div className="text-[11px] text-zinc-400 flex flex-wrap items-center gap-2">
+                        {o.customer?.phone && <span>📞 {o.customer.phone}</span>}
+                        {o.customer?.email && <span>✉️ {o.customer.email}</span>}
+                      </div>
+                      {o.customer?.gstin && (
+                        <div className="inline-block mt-0.5 px-1.5 py-0.5 rounded bg-[#27272A] text-[10px] font-mono text-zinc-300">
+                          GSTIN: {o.customer.gstin}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Facility & Item Details */}
+                    <div className="flex items-center justify-between text-xs pt-1 border-t border-[#27272A]/70">
+                      <div className="flex items-center gap-1.5 text-zinc-400">
+                        <Warehouse size={13} className="text-violet-400" />
+                        <span className="font-semibold text-zinc-300">{o.branch?.name || o.branch?.code || 'Delhi HQ'}</span>
+                        <span>•</span>
+                        <span>{o.items?.length || 0} line(s)</span>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-black text-white text-base">₹{o.grandTotal.toLocaleString('en-IN')}</div>
+                        <div className="text-[10px] text-zinc-500">Incl. 18% GST</div>
+                      </div>
+                    </div>
+
+                    {/* Line Items Preview */}
+                    {o.items && o.items.length > 0 && (
+                      <div className="text-[11px] text-zinc-400 bg-black/30 px-2.5 py-1.5 rounded-lg border border-[#27272A]/40 truncate">
+                        <span className="font-semibold text-zinc-300">Items: </span>
+                        {o.items.map((i) => `${i.sku} (x${i.quantity})`).join(', ')}
+                      </div>
+                    )}
+
+                    {/* Mobile Action Controls */}
+                    <div className="flex flex-wrap items-center justify-end gap-2 pt-2 border-t border-[#27272A]">
+                      {isPending ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => setApprovingOrder(o)}
+                            className="flex-1 py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm"
+                          >
+                            <Check size={14} />
+                            <span>Approve Order</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setRejectingOrder(o)}
+                            className="py-2 px-3 rounded-xl bg-rose-500/20 text-rose-300 text-xs font-semibold flex items-center justify-center gap-1 border border-rose-500/30"
+                          >
+                            <X size={14} />
+                            <span>Reject</span>
+                          </button>
+                        </>
+                      ) : isConfirmed ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => handleAdvanceStatus(o, 'processing')}
+                            className="flex-1 py-2 px-3 rounded-xl bg-blue-600/20 text-blue-300 font-bold text-xs border border-blue-500/30 flex items-center justify-center gap-1"
+                          >
+                            <span>Fulfill</span>
+                            <ArrowRight size={13} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditingOrder(o)}
+                            className="p-2 rounded-xl bg-[#27272A] text-amber-300 text-xs"
+                            title="Edit"
+                          >
+                            <Edit3 size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setCancellingOrder(o)}
+                            className="p-2 rounded-xl bg-rose-500/10 text-rose-400 text-xs"
+                            title="Cancel"
+                          >
+                            <Ban size={14} />
+                          </button>
+                        </>
+                      ) : o.status === 'processing' ? (
+                        <button
+                          type="button"
+                          onClick={() => handleAdvanceStatus(o, 'ready')}
+                          className="flex-1 py-2 px-3 rounded-xl bg-purple-600/20 text-purple-300 font-bold text-xs border border-purple-500/30 flex items-center justify-center gap-1"
+                        >
+                          <span>Mark Ready</span>
+                          <ArrowRight size={13} />
+                        </button>
+                      ) : o.status === 'ready' ? (
+                        <button
+                          type="button"
+                          onClick={() => handleAdvanceStatus(o, 'completed')}
+                          className="flex-1 py-2 px-3 rounded-xl bg-teal-600/20 text-teal-300 font-bold text-xs border border-teal-500/30 flex items-center justify-center gap-1"
+                        >
+                          <span>Complete Order</span>
+                          <Check size={13} />
+                        </button>
+                      ) : null}
+
+                      <button
+                        type="button"
+                        onClick={() => handleOpenDossier(o.id)}
+                        className="py-2 px-3 rounded-xl bg-[#27272A] hover:bg-violet-600/20 text-zinc-300 font-semibold text-xs flex items-center justify-center gap-1"
+                      >
+                        <Eye size={14} />
+                        <span>Dossier</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Desktop Table View (Visible >= lg) */}
+            <div className="hidden lg:block overflow-x-auto">
               <table className="w-full text-left text-xs text-zinc-300">
                 <thead className="bg-[#09090B] text-zinc-400 uppercase text-[10px] font-black border-b border-[#27272A]">
                   <tr>
-                    <th className="py-3 px-3">Order Number</th>
-                    <th className="py-3 px-3">Customer / Company</th>
-                    <th className="py-3 px-3">Facility</th>
-                    <th className="py-3 px-3">Lines & Items</th>
-                    <th className="py-3 px-3">Grand Total</th>
-                    <th className="py-3 px-3">Status</th>
-                    <th className="py-3 px-3 text-right">Actions</th>
+                    <th className="py-3.5 px-3">Order Number & Channel</th>
+                    <th className="py-3.5 px-3">Customer / Company</th>
+                    <th className="py-3.5 px-3">Facility</th>
+                    <th className="py-3.5 px-3">Lines & Items</th>
+                    <th className="py-3.5 px-3">Grand Total</th>
+                    <th className="py-3.5 px-3">Status</th>
+                    <th className="py-3.5 px-3 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#27272A]">
@@ -527,10 +796,18 @@ export function B2BOrdersPage() {
                           <div className="font-bold text-white flex items-center gap-1.5">
                             <span>{o.orderNumber}</span>
                           </div>
-                          <div className="flex items-center gap-1 text-[11px] text-zinc-500 mt-0.5">
+                          <div className="flex items-center gap-1.5 text-[11px] text-zinc-500 mt-1">
                             <span>{new Date(o.createdAt).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
                             <span>•</span>
-                            <span className="capitalize">{o.source.replace('_', ' ')}</span>
+                            {o.source === 'customer_frontend' ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
+                                🌐 Storefront
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-violet-500/15 text-violet-300 border border-violet-500/30">
+                                🏢 Offline Admin
+                              </span>
+                            )}
                           </div>
                         </td>
 
@@ -539,11 +816,17 @@ export function B2BOrdersPage() {
                           <div className="font-bold text-zinc-200">
                             {o.customer?.companyName || `${o.customer?.firstName || ''} ${o.customer?.lastName || ''}`.trim() || 'Valued Buyer'}
                           </div>
-                          <div className="text-[11px] text-zinc-400 flex items-center gap-1.5 mt-0.5">
+                          <div className="text-[11px] text-zinc-400 flex flex-wrap items-center gap-1.5 mt-0.5">
                             <span>{o.customer?.email}</span>
+                            {o.customer?.phone && (
+                              <>
+                                <span>•</span>
+                                <span>{o.customer.phone}</span>
+                              </>
+                            )}
                             {o.customer?.gstin && (
                               <span className="px-1.5 py-0.2 rounded bg-[#27272A] text-[10px] text-zinc-300 font-mono">
-                                {o.customer.gstin}
+                                GST: {o.customer.gstin}
                               </span>
                             )}
                           </div>

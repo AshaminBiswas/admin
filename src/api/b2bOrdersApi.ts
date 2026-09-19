@@ -11,6 +11,7 @@ export interface B2BOrderListResponse {
     hasMore: boolean;
   };
   statusCounts: Record<string, number>;
+  sourceCounts?: Record<string, number>;
 }
 
 export const b2bOrdersApi = {
@@ -21,6 +22,7 @@ export const b2bOrdersApi = {
     branchId?: string;
     search?: string;
     customerId?: string;
+    source?: string;
   } = {}) => {
     const query = new URLSearchParams();
     if (params.page) query.set('page', params.page.toString());
@@ -29,6 +31,7 @@ export const b2bOrdersApi = {
     if (params.branchId && params.branchId !== 'ALL') query.set('branchId', params.branchId);
     if (params.search && params.search.trim()) query.set('search', params.search.trim());
     if (params.customerId) query.set('customerId', params.customerId);
+    if (params.source && params.source !== 'ALL') query.set('source', params.source);
 
     return fetchAdminApi<B2BOrderListResponse>(`/b2b-orders?${query.toString()}`);
   },

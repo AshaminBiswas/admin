@@ -59,6 +59,7 @@ const CreateInstallerBillPage = lazyWithRetry(() => import("../../pages/CreateIn
 const EmployeeManagementPage = lazyWithRetry(() => import("../../pages/EmployeeManagementPage").then((m) => ({ default: m.EmployeeManagementPage })));
 const ExpensesPage = lazyWithRetry(() => import("../../pages/ExpensesPage").then((m) => ({ default: m.ExpensesPage })));
 const B2BOrdersPage = lazyWithRetry(() => import("../../pages/B2BOrdersPage").then((m) => ({ default: m.B2BOrdersPage })));
+const CreateB2BOrderPage = lazyWithRetry(() => import("../../pages/CreateB2BOrderPage").then((m) => ({ default: m.CreateB2BOrderPage })));
 import { AICopilot } from "../ai/AICopilot";
 
 function ViewLoadingSkeleton() {
@@ -222,7 +223,15 @@ export function AdminLayout() {
           />
         );
       case "b2b-orders":
-        return <B2BOrdersPage />;
+        return <B2BOrdersPage onCreateOfflineOrder={() => setCurrentView("create-b2b-order")} />;
+      case "create-b2b-order":
+      case "b2b-order-create":
+        return (
+          <CreateB2BOrderPage
+            onBack={() => setCurrentView("b2b-orders")}
+            onOrderCreated={() => setCurrentView("b2b-orders")}
+          />
+        );
       case "po-management":
         return (
           <POManagementPage

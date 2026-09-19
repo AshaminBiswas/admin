@@ -88,6 +88,11 @@ export function AdminHeader({ isCollapsed, onToggleCollapse, onToggleMobile }: A
       case "roles": return "Roles & Permissions (RBAC)";
       case "users": return "Retail Customers & Users Management";
       case "b2b-customers": return "B2B Enterprise Customers Directory";
+      case "b2b-orders": return "B2B Wholesale Order Management";
+      case "create-b2b-order":
+      case "b2b-order-create": return "Create Offline B2B Wholesale Order";
+      case "advance-payments":
+      case "payment-tracking": return "B2B Payments & Receivables";
       case "products": return "Hardware Products & SKU Catalog";
       case "orders": return "Customer Orders & B2B Fulfillment Control";
       case "quotes": return "B2B Bulk Price Quotations & Approvals";
