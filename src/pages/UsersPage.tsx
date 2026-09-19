@@ -113,12 +113,13 @@ export function UsersPageSkeleton() {
 
 /* ─── Main Users Page Component ──────────────────────────────────────────────── */
 
-interface UsersPageProps {
+export interface UsersPageProps {
+  filterMode?: "ALL" | "B2B_ONLY" | "B2C_ONLY";
   onNavigateB2BPricing?: (customerId?: string) => void;
   onViewCustomer?: (customerId: string) => void;
 }
 
-export function UsersPage({ onNavigateB2BPricing, onViewCustomer }: UsersPageProps) {
+export function UsersPage({ filterMode = "ALL", onNavigateB2BPricing, onViewCustomer }: UsersPageProps) {
   const { adminUser } = useAdminAuth();
   const rawRole = adminUser?.role as any;
   const roleSlug = typeof rawRole === "object" && rawRole !== null
@@ -131,7 +132,17 @@ export function UsersPage({ onNavigateB2BPricing, onViewCustomer }: UsersPagePro
   const [isLoading, setIsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
-  const [accountFilter, setAccountFilter] = useState("ALL");
+  const [accountFilter, setAccountFilter] = useState<string>(() => {
+    if (filterMode === "B2B_ONLY") return "B2B";
+    if (filterMode === "B2C_ONLY") return "B2C";
+    return "ALL";
+  });
+
+  useEffect(() => {
+    if (filterMode === "B2B_ONLY") setAccountFilter("B2B");
+    else if (filterMode === "B2C_ONLY") setAccountFilter("B2C");
+    else setAccountFilter("ALL");
+  }, [filterMode]);
 
   // Pagination
   const [page, setPage] = useState(1);
@@ -216,7 +227,7 @@ export function UsersPage({ onNavigateB2BPricing, onViewCustomer }: UsersPagePro
     setPhone("");
     setCompanyName("");
     setGstin("");
-    setAccountType("B2C");
+    setAccountType(filterMode === "B2B_ONLY" ? "B2B" : "B2C");
     setStatus("ACTIVE");
     setRoleId(roles[0]?.id || "");
     setShowCreateModal(true);
@@ -305,24 +316,60 @@ export function UsersPage({ onNavigateB2BPricing, onViewCustomer }: UsersPagePro
     loadData();
   }, [loadData]);
 
+  const isB2BUser = useCallback((u: any): boolean => {
+    if (!u) return false;
+    const hasCompany = Boolean(u.companyName && String(u.companyName).trim().length > 0);
+    const hasGstin = Boolean(u.gstin && String(u.gstin).trim().length > 0);
+    const roleSlug = typeof u.role === "object" && u.role !== null
+      ? (u.role.slug || u.role.name || "")
+      : String(u.role || "");
+    const cleanRole = String(roleSlug).toLowerCase().replace(/[-_]/g, "");
+    const isB2bRole = ["b2bbuyer", "b2bcustomer", "enterprise", "wholesale", "commercial"].includes(cleanRole);
+    return hasCompany || hasGstin || isB2bRole;
+  }, []);
+
   // Compute Metrics
   const metrics = useMemo(() => {
     const total = totalCount || users.length;
-    const b2b = users.filter((u) => u.companyName || u.gstin || u.role?.slug === "b2b_buyer").length;
-    const b2c = users.filter((u) => !u.companyName && !u.gstin).length;
+    const b2bUsers = users.filter(isB2BUser);
+    const b2cUsers = users.filter((u) => !isB2BUser(u));
+
+    const b2b = b2bUsers.length;
+    const b2bActive = b2bUsers.filter((u) => u.status === "ACTIVE").length;
+    const b2bGstinVerified = b2bUsers.filter((u) => u.gstin && u.gstin.trim()).length;
+    const b2bInactive = b2bUsers.filter((u) => u.status === "INACTIVE" || u.status === "SUSPENDED").length;
+
+    const b2c = b2cUsers.length;
+    const b2cActive = b2cUsers.filter((u) => u.status === "ACTIVE").length;
+    const b2cPhoneVerified = b2cUsers.filter((u) => u.phone && u.phone.trim()).length;
+    const b2cInactive = b2cUsers.filter((u) => u.status === "INACTIVE" || u.status === "SUSPENDED").length;
+
     const inactive = users.filter((u) => u.status === "INACTIVE" || u.status === "SUSPENDED").length;
-    return { total, b2b, b2c, inactive };
-  }, [users, totalCount]);
+    return {
+      total,
+      b2b,
+      b2bActive,
+      b2bGstinVerified,
+      b2bInactive,
+      b2c,
+      b2cActive,
+      b2cPhoneVerified,
+      b2cInactive,
+      inactive,
+    };
+  }, [users, totalCount, isB2BUser]);
 
   // Filtered Users
   const filteredUsers = useMemo(() => {
     return users.filter((user) => {
-      const isB2B = Boolean(user.companyName || user.gstin || user.role?.slug === "b2b_buyer");
+      const isB2B = isB2BUser(user);
+      if (filterMode === "B2B_ONLY" && !isB2B) return false;
+      if (filterMode === "B2C_ONLY" && isB2B) return false;
       if (accountFilter === "B2B" && !isB2B) return false;
       if (accountFilter === "B2C" && isB2B) return false;
       return true;
     });
-  }, [users, accountFilter]);
+  }, [users, filterMode, accountFilter, isB2BUser]);
 
   // Create User
   const handleCreateUser = async (e: React.FormEvent) => {
@@ -467,9 +514,9 @@ export function UsersPage({ onNavigateB2BPricing, onViewCustomer }: UsersPagePro
 
   // Export CSV
   const handleExportCSV = async () => {
-    if (users.length === 0) return;
+    if (filteredUsers.length === 0) return;
     const headers = ["ID", "Name", "Email", "Phone", "Company", "GSTIN", "Role", "Status", "Created At"];
-    const rows = users.map((u) => [
+    const rows = filteredUsers.map((u) => [
       `"${u.id}"`,
       `"${u.firstName || ""} ${u.lastName || ""}"`,
       `"${u.email || ""}"`,
@@ -481,11 +528,12 @@ export function UsersPage({ onNavigateB2BPricing, onViewCustomer }: UsersPagePro
       `"${u.createdAt ? new Date(u.createdAt).toISOString() : ""}"`,
     ]);
 
+    const prefix = filterMode === "B2B_ONLY" ? "PRC_B2B_Enterprises" : filterMode === "B2C_ONLY" ? "PRC_Retail_Customers" : "PRC_Accounts";
     const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `PRC_Accounts_Export_${new Date().toISOString().split("T")[0]}.csv`);
+    link.setAttribute("download", `${prefix}_Export_${new Date().toISOString().split("T")[0]}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -516,19 +564,27 @@ export function UsersPage({ onNavigateB2BPricing, onViewCustomer }: UsersPagePro
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#27272A] pb-4">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-tr-xl rounded-bl-xl bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-[#A855F7]">
-            <Users size={20} />
+            {filterMode === "B2B_ONLY" ? <Building2 size={20} /> : <Users size={20} />}
           </div>
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-xl font-bold text-[#FAFAFA]">
-                Customer & B2B Buyer Accounts Hub
+                {filterMode === "B2B_ONLY"
+                  ? "B2B Enterprise Accounts Hub"
+                  : filterMode === "B2C_ONLY"
+                  ? "Retail Customers & Users Hub"
+                  : "Customer & B2B Buyer Accounts Hub"}
               </h1>
               <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-purple-500/20 text-[#A855F7] border border-purple-500/30">
-                CENTRAL DIRECTORY
+                {filterMode === "B2B_ONLY" ? "B2B DIRECTORY" : filterMode === "B2C_ONLY" ? "RETAIL DIRECTORY" : "CENTRAL DIRECTORY"}
               </span>
             </div>
             <p className="text-xs text-[#A1A1AA]">
-              Manage retail buyers, wholesale contractors, architectural firms, GSTIN registrations, and custom B2B rate cards.
+              {filterMode === "B2B_ONLY"
+                ? "Manage wholesale contractors, architectural firms, corporate accounts, GSTIN registrations, and custom B2B rate cards."
+                : filterMode === "B2C_ONLY"
+                ? "Manage direct retail consumers, storefront customer accounts, order histories, and verified credentials."
+                : "Manage retail buyers, wholesale contractors, architectural firms, GSTIN registrations, and custom B2B rate cards."}
             </p>
           </div>
         </div>
@@ -540,7 +596,7 @@ export function UsersPage({ onNavigateB2BPricing, onViewCustomer }: UsersPagePro
             className="bg-[#8B5CF6] hover:bg-[#7C3AED] text-white font-bold text-xs px-4 py-2 rounded-tr-xl rounded-bl-xl transition-all shadow-sm flex items-center gap-2"
           >
             <UserPlus size={15} />
-            <span>Create New Account</span>
+            <span>{filterMode === "B2B_ONLY" ? "Register B2B Account" : "Create New Account"}</span>
           </button>
 
           <AsyncActionButton
@@ -566,75 +622,210 @@ export function UsersPage({ onNavigateB2BPricing, onViewCustomer }: UsersPagePro
       </div>
 
       {/* ─── 4 Interactive KPI Cards ─── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <button
-          type="button"
-          onClick={() => { setAccountFilter("ALL"); setStatusFilter("ALL"); }}
-          className={`p-3.5 rounded-tr-xl rounded-bl-xl bg-[#18181B] border transition-all text-left space-y-1 group ${
-            accountFilter === "ALL" && statusFilter === "ALL"
-              ? "border-[#8B5CF6] shadow-lg shadow-[#8B5CF6]/10 ring-1 ring-[#8B5CF6]"
-              : "border-[#27272A] hover:border-[#3F3F46]"
-          }`}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] uppercase font-bold text-[#A1A1AA] tracking-wider">Total Accounts</span>
-            <Users size={14} className="text-[#A1A1AA] group-hover:text-[#FAFAFA]" />
-          </div>
-          <p className="text-xl font-black font-mono text-[#FAFAFA]">{metrics.total}</p>
-          <span className="text-[10px] text-[#71717A] block">All customer profiles</span>
-        </button>
+      {filterMode === "B2B_ONLY" ? (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <button
+            type="button"
+            onClick={() => setStatusFilter("ALL")}
+            className={`p-3.5 rounded-tr-xl rounded-bl-xl bg-[#18181B] border transition-all text-left space-y-1 group ${
+              statusFilter === "ALL"
+                ? "border-[#8B5CF6] shadow-lg shadow-[#8B5CF6]/10 ring-1 ring-[#8B5CF6]"
+                : "border-[#27272A] hover:border-[#3F3F46]"
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] uppercase font-bold text-[#A855F7] tracking-wider">B2B Enterprises</span>
+              <Building2 size={14} className="text-[#A855F7]" />
+            </div>
+            <p className="text-xl font-black font-mono text-[#A855F7]">{metrics.b2b}</p>
+            <span className="text-[10px] text-[#71717A] block">Corporate accounts</span>
+          </button>
 
-        <button
-          type="button"
-          onClick={() => { setAccountFilter("B2B"); setStatusFilter("ALL"); }}
-          className={`p-3.5 rounded-tr-xl rounded-bl-xl bg-[#18181B] border transition-all text-left space-y-1 group ${
-            accountFilter === "B2B"
-              ? "border-purple-500 shadow-lg shadow-purple-500/10 ring-1 ring-purple-500"
-              : "border-[#27272A] hover:border-purple-500/40"
-          }`}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] uppercase font-bold text-[#A855F7] tracking-wider">B2B Enterprises</span>
-            <Building2 size={14} className="text-[#A855F7]" />
-          </div>
-          <p className="text-xl font-black font-mono text-[#A855F7]">{metrics.b2b}</p>
-          <span className="text-[10px] text-[#71717A] block">Corporate & GSTIN accounts</span>
-        </button>
+          <button
+            type="button"
+            onClick={() => setStatusFilter("ACTIVE")}
+            className={`p-3.5 rounded-tr-xl rounded-bl-xl bg-[#18181B] border transition-all text-left space-y-1 group ${
+              statusFilter === "ACTIVE"
+                ? "border-emerald-500 shadow-lg shadow-emerald-500/10 ring-1 ring-emerald-500"
+                : "border-[#27272A] hover:border-emerald-500/40"
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] uppercase font-bold text-emerald-400 tracking-wider">Active Corporate</span>
+              <CheckCircle2 size={14} className="text-emerald-400" />
+            </div>
+            <p className="text-xl font-black font-mono text-emerald-400">{metrics.b2bActive}</p>
+            <span className="text-[10px] text-[#71717A] block">Operational buyers</span>
+          </button>
 
-        <button
-          type="button"
-          onClick={() => { setAccountFilter("B2C"); setStatusFilter("ALL"); }}
-          className={`p-3.5 rounded-tr-xl rounded-bl-xl bg-[#18181B] border transition-all text-left space-y-1 group ${
-            accountFilter === "B2C"
-              ? "border-emerald-500 shadow-lg shadow-emerald-500/10 ring-1 ring-emerald-500"
-              : "border-[#27272A] hover:border-emerald-500/40"
-          }`}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] uppercase font-bold text-emerald-400 tracking-wider">Retail Consumers</span>
-            <CheckCircle2 size={14} className="text-emerald-400" />
-          </div>
-          <p className="text-xl font-black font-mono text-emerald-400">{metrics.b2c}</p>
-          <span className="text-[10px] text-[#71717A] block">Direct individual buyers</span>
-        </button>
+          <button
+            type="button"
+            onClick={() => setStatusFilter("ALL")}
+            className="p-3.5 rounded-tr-xl rounded-bl-xl bg-[#18181B] border border-[#27272A] hover:border-purple-500/40 transition-all text-left space-y-1 group"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] uppercase font-bold text-purple-400 tracking-wider">Verified GSTINs</span>
+              <Receipt size={14} className="text-purple-400" />
+            </div>
+            <p className="text-xl font-black font-mono text-purple-400">{metrics.b2bGstinVerified}</p>
+            <span className="text-[10px] text-[#71717A] block">Tax compliant entities</span>
+          </button>
 
-        <button
-          type="button"
-          onClick={() => { setAccountFilter("ALL"); setStatusFilter("INACTIVE"); }}
-          className={`p-3.5 rounded-tr-xl rounded-bl-xl bg-[#18181B] border transition-all text-left space-y-1 group ${
-            statusFilter === "INACTIVE"
-              ? "border-rose-500 shadow-lg shadow-rose-500/10 ring-1 ring-rose-500"
-              : "border-[#27272A] hover:border-rose-500/40"
-          }`}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] uppercase font-bold text-rose-400 tracking-wider">Suspended / Inactive</span>
-            <AlertCircle size={14} className="text-rose-400" />
-          </div>
-          <p className="text-xl font-black font-mono text-rose-400">{metrics.inactive}</p>
-          <span className="text-[10px] text-[#71717A] block">Restricted logins</span>
-        </button>
-      </div>
+          <button
+            type="button"
+            onClick={() => setStatusFilter("INACTIVE")}
+            className={`p-3.5 rounded-tr-xl rounded-bl-xl bg-[#18181B] border transition-all text-left space-y-1 group ${
+              statusFilter === "INACTIVE"
+                ? "border-rose-500 shadow-lg shadow-rose-500/10 ring-1 ring-rose-500"
+                : "border-[#27272A] hover:border-rose-500/40"
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] uppercase font-bold text-rose-400 tracking-wider">Suspended / Inactive</span>
+              <AlertCircle size={14} className="text-rose-400" />
+            </div>
+            <p className="text-xl font-black font-mono text-rose-400">{metrics.b2bInactive}</p>
+            <span className="text-[10px] text-[#71717A] block">Restricted logins</span>
+          </button>
+        </div>
+      ) : filterMode === "B2C_ONLY" ? (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <button
+            type="button"
+            onClick={() => setStatusFilter("ALL")}
+            className={`p-3.5 rounded-tr-xl rounded-bl-xl bg-[#18181B] border transition-all text-left space-y-1 group ${
+              statusFilter === "ALL"
+                ? "border-[#8B5CF6] shadow-lg shadow-[#8B5CF6]/10 ring-1 ring-[#8B5CF6]"
+                : "border-[#27272A] hover:border-[#3F3F46]"
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] uppercase font-bold text-[#A1A1AA] tracking-wider">Retail Consumers</span>
+              <Users size={14} className="text-[#A1A1AA]" />
+            </div>
+            <p className="text-xl font-black font-mono text-[#FAFAFA]">{metrics.b2c}</p>
+            <span className="text-[10px] text-[#71717A] block">Individual buyer profiles</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setStatusFilter("ACTIVE")}
+            className={`p-3.5 rounded-tr-xl rounded-bl-xl bg-[#18181B] border transition-all text-left space-y-1 group ${
+              statusFilter === "ACTIVE"
+                ? "border-emerald-500 shadow-lg shadow-emerald-500/10 ring-1 ring-emerald-500"
+                : "border-[#27272A] hover:border-emerald-500/40"
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] uppercase font-bold text-emerald-400 tracking-wider">Active Consumers</span>
+              <CheckCircle2 size={14} className="text-emerald-400" />
+            </div>
+            <p className="text-xl font-black font-mono text-emerald-400">{metrics.b2cActive}</p>
+            <span className="text-[10px] text-[#71717A] block">Verified buyers</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setStatusFilter("ALL")}
+            className="p-3.5 rounded-tr-xl rounded-bl-xl bg-[#18181B] border border-[#27272A] hover:border-emerald-500/40 transition-all text-left space-y-1 group"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] uppercase font-bold text-emerald-400 tracking-wider">Phone Verified</span>
+              <Phone size={14} className="text-emerald-400" />
+            </div>
+            <p className="text-xl font-black font-mono text-emerald-400">{metrics.b2cPhoneVerified}</p>
+            <span className="text-[10px] text-[#71717A] block">Mobile verified profiles</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setStatusFilter("INACTIVE")}
+            className={`p-3.5 rounded-tr-xl rounded-bl-xl bg-[#18181B] border transition-all text-left space-y-1 group ${
+              statusFilter === "INACTIVE"
+                ? "border-rose-500 shadow-lg shadow-rose-500/10 ring-1 ring-rose-500"
+                : "border-[#27272A] hover:border-rose-500/40"
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] uppercase font-bold text-rose-400 tracking-wider">Suspended / Inactive</span>
+              <AlertCircle size={14} className="text-rose-400" />
+            </div>
+            <p className="text-xl font-black font-mono text-rose-400">{metrics.b2cInactive}</p>
+            <span className="text-[10px] text-[#71717A] block">Restricted logins</span>
+          </button>
+        </div>
+      ) : (
+        /* Default ALL Mode Cards */
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <button
+            type="button"
+            onClick={() => { setAccountFilter("ALL"); setStatusFilter("ALL"); }}
+            className={`p-3.5 rounded-tr-xl rounded-bl-xl bg-[#18181B] border transition-all text-left space-y-1 group ${
+              accountFilter === "ALL" && statusFilter === "ALL"
+                ? "border-[#8B5CF6] shadow-lg shadow-[#8B5CF6]/10 ring-1 ring-[#8B5CF6]"
+                : "border-[#27272A] hover:border-[#3F3F46]"
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] uppercase font-bold text-[#A1A1AA] tracking-wider">Total Accounts</span>
+              <Users size={14} className="text-[#A1A1AA] group-hover:text-[#FAFAFA]" />
+            </div>
+            <p className="text-xl font-black font-mono text-[#FAFAFA]">{metrics.total}</p>
+            <span className="text-[10px] text-[#71717A] block">All customer profiles</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => { setAccountFilter("B2B"); setStatusFilter("ALL"); }}
+            className={`p-3.5 rounded-tr-xl rounded-bl-xl bg-[#18181B] border transition-all text-left space-y-1 group ${
+              accountFilter === "B2B"
+                ? "border-purple-500 shadow-lg shadow-purple-500/10 ring-1 ring-purple-500"
+                : "border-[#27272A] hover:border-purple-500/40"
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] uppercase font-bold text-[#A855F7] tracking-wider">B2B Enterprises</span>
+              <Building2 size={14} className="text-[#A855F7]" />
+            </div>
+            <p className="text-xl font-black font-mono text-[#A855F7]">{metrics.b2b}</p>
+            <span className="text-[10px] text-[#71717A] block">Corporate & GSTIN accounts</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => { setAccountFilter("B2C"); setStatusFilter("ALL"); }}
+            className={`p-3.5 rounded-tr-xl rounded-bl-xl bg-[#18181B] border transition-all text-left space-y-1 group ${
+              accountFilter === "B2C"
+                ? "border-emerald-500 shadow-lg shadow-emerald-500/10 ring-1 ring-emerald-500"
+                : "border-[#27272A] hover:border-emerald-500/40"
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] uppercase font-bold text-emerald-400 tracking-wider">Retail Consumers</span>
+              <CheckCircle2 size={14} className="text-emerald-400" />
+            </div>
+            <p className="text-xl font-black font-mono text-emerald-400">{metrics.b2c}</p>
+            <span className="text-[10px] text-[#71717A] block">Direct individual buyers</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => { setAccountFilter("ALL"); setStatusFilter("INACTIVE"); }}
+            className={`p-3.5 rounded-tr-xl rounded-bl-xl bg-[#18181B] border transition-all text-left space-y-1 group ${
+              statusFilter === "INACTIVE"
+                ? "border-rose-500 shadow-lg shadow-rose-500/10 ring-1 ring-rose-500"
+                : "border-[#27272A] hover:border-rose-500/40"
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] uppercase font-bold text-rose-400 tracking-wider">Suspended / Inactive</span>
+              <AlertCircle size={14} className="text-rose-400" />
+            </div>
+            <p className="text-xl font-black font-mono text-rose-400">{metrics.inactive}</p>
+            <span className="text-[10px] text-[#71717A] block">Restricted logins</span>
+          </button>
+        </div>
+      )}
 
       {/* Notifications */}
       {feedback && (
@@ -653,26 +844,38 @@ export function UsersPage({ onNavigateB2BPricing, onViewCustomer }: UsersPagePro
       {/* ─── Search & Filter Toolbar ─── */}
       <div className="p-4 rounded-tr-2xl rounded-bl-2xl bg-[#18181B] border border-[#27272A] space-y-3 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap gap-1 bg-[#09090B] p-1 rounded-xl border border-[#27272A]">
-            {[
-              { id: "ALL", label: "All Accounts" },
-              { id: "B2B", label: "B2B Enterprises" },
-              { id: "B2C", label: "Retail Consumers" },
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setAccountFilter(tab.id)}
-                className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-all ${
-                  accountFilter === tab.id
-                    ? "bg-[#8B5CF6] text-white shadow"
-                    : "text-[#A1A1AA] hover:text-[#FAFAFA]"
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
+          {filterMode === "ALL" ? (
+            <div className="flex flex-wrap gap-1 bg-[#09090B] p-1 rounded-xl border border-[#27272A]">
+              {[
+                { id: "ALL", label: "All Accounts" },
+                { id: "B2B", label: "B2B Enterprises" },
+                { id: "B2C", label: "Retail Consumers" },
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setAccountFilter(tab.id)}
+                  className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-all ${
+                    accountFilter === tab.id
+                      ? "bg-[#8B5CF6] text-white shadow"
+                      : "text-[#A1A1AA] hover:text-[#FAFAFA]"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-[#FAFAFA] flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#09090B] border border-[#27272A]">
+                {filterMode === "B2B_ONLY" ? <Building2 size={13} className="text-[#A855F7]" /> : <Users size={13} className="text-emerald-400" />}
+                {filterMode === "B2B_ONLY" ? "Enterprise Directory" : "Retail Directory"}
+                <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded-full bg-purple-500/20 text-[#A855F7]">
+                  {filteredUsers.length}
+                </span>
+              </span>
+            </div>
+          )}
 
           <div className="flex items-center gap-2">
             {["ALL", "ACTIVE", "INACTIVE"].map((st) => (

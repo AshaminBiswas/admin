@@ -5,6 +5,7 @@ import { useAdminAuth } from "../../context/AdminAuthContext";
 import { RefreshCw, LayoutDashboard, ShoppingCart, Package, FileText, Menu, ScanLine } from "lucide-react";
 import { lazyWithRetry } from "../../utils/lazyWithRetry";
 import { ViewErrorBoundary } from "../common/ViewErrorBoundary";
+import type { AdminView } from "../../types/admin";
 
 // ─── Code-Split Admin Views with Dynamic lazyWithRetry() Imports ─────────────
 
@@ -101,6 +102,7 @@ export function AdminLayout() {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [b2bTargetCustomerId, setB2bTargetCustomerId] = useState<string | undefined>();
+  const [previousCustomerView, setPreviousCustomerView] = useState<AdminView>("users");
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | undefined>(() => {
     if (typeof window !== "undefined") {
       return localStorage.getItem("prc_admin_selected_customer_id") || undefined;
@@ -201,6 +203,24 @@ export function AdminLayout() {
         );
 
       // 3. B2B & Commercial
+      case "b2b-customers":
+        return (
+          <UsersPage
+            filterMode="B2B_ONLY"
+            onNavigateB2BPricing={(custId) => {
+              setB2bTargetCustomerId(custId);
+              setCurrentView("b2b-pricing");
+            }}
+            onViewCustomer={(custId) => {
+              setSelectedCustomerId(custId);
+              setPreviousCustomerView("b2b-customers");
+              if (typeof window !== "undefined") {
+                localStorage.setItem("prc_admin_selected_customer_id", custId);
+              }
+              setCurrentView("user-detail");
+            }}
+          />
+        );
       case "b2b-orders":
         return <B2BOrdersPage />;
       case "po-management":
@@ -279,12 +299,14 @@ export function AdminLayout() {
       case "users":
         return (
           <UsersPage
+            filterMode="B2C_ONLY"
             onNavigateB2BPricing={(custId) => {
               setB2bTargetCustomerId(custId);
               setCurrentView("b2b-pricing");
             }}
             onViewCustomer={(custId) => {
               setSelectedCustomerId(custId);
+              setPreviousCustomerView("users");
               if (typeof window !== "undefined") {
                 localStorage.setItem("prc_admin_selected_customer_id", custId);
               }
@@ -297,7 +319,7 @@ export function AdminLayout() {
         return (
           <CustomerDossierPage
             userId={selectedCustomerId}
-            onBack={() => setCurrentView("users")}
+            onBack={() => setCurrentView(previousCustomerView || "users")}
             onNavigateB2BPricing={(custId) => {
               setB2bTargetCustomerId(custId);
               setCurrentView("b2b-pricing");
@@ -308,7 +330,7 @@ export function AdminLayout() {
         return (
           <B2BPricingPage
             initialCustomerId={b2bTargetCustomerId}
-            onNavigateUsers={() => setCurrentView("users")}
+            onNavigateUsers={() => setCurrentView("b2b-customers")}
           />
         );
       case "roles":

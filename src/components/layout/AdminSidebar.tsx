@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   LayoutDashboard,
   Building2,
@@ -47,6 +47,7 @@ import {
 } from "lucide-react";
 import { useAdminAuth } from "../../context/AdminAuthContext";
 import { AdminView } from "../../types/admin";
+import { API_BASE_URL, getAdminToken, fetchAdminApi, usersApi } from "../../api/adminApi";
 
 interface NavItem {
   id: AdminView;
@@ -71,6 +72,110 @@ export function AdminSidebar({
 }: AdminSidebarProps) {
   const { currentView, setCurrentView } = useAdminAuth();
   const [navSearch, setNavSearch] = useState("");
+  const [liveCounts, setLiveCounts] = useState<Record<string, number>>({});
+
+  // Live Notification Counter for B2B & Commercial Modules
+  useEffect(() => {
+    let isMounted = true;
+    const token = getAdminToken();
+    if (!token) return;
+
+    const fetchLiveCounts = async () => {
+      try {
+        const counts: Record<string, number> = {};
+
+        // 1. PO Management: New or Pending Review Submissions
+        try {
+          const poRes = await fetchAdminApi<any>("/po-management/metrics");
+          if (poRes.success && poRes.data) {
+            const count = (poRes.data.newCount || 0) + (poRes.data.pendingReview || 0);
+            if (count > 0) counts["po-management"] = count;
+          }
+        } catch (_) {}
+
+        // 2. B2B Quotes: Pending or Under Review Quotes
+        try {
+          const quoteRes = await fetchAdminApi<any>("/quotes?limit=1");
+          if (quoteRes.success && quoteRes.data?.metrics) {
+            const count = (quoteRes.data.metrics.pending || 0) + (quoteRes.data.metrics.underReview || 0);
+            if (count > 0) counts["quotes"] = count;
+          }
+        } catch (_) {}
+
+        // 3. B2B Orders: Pending Approval Orders
+        try {
+          const ordRes = await fetchAdminApi<any>("/b2b-orders?limit=1");
+          if (ordRes.success && ordRes.data?.statusCounts) {
+            const count = (ordRes.data.statusCounts["PENDING_APPROVAL"] || 0) + (ordRes.data.statusCounts["SUBMITTED"] || 0);
+            if (count > 0) counts["b2b-orders"] = count;
+          }
+        } catch (_) {}
+
+        // 4. Proforma Invoices: Sent / Active Invoices Awaiting Payment
+        try {
+          const piRes = await fetchAdminApi<any>("/proforma-invoices?limit=1");
+          if (piRes.success && piRes.data?.metrics) {
+            const count = (piRes.data.metrics.sent || 0) + (piRes.data.metrics.draft || 0);
+            if (count > 0) counts["proforma-invoices"] = count;
+          }
+        } catch (_) {}
+
+        // 5. B2B Customers: Registered Commercial Accounts Directory
+        try {
+          const usersRes = await usersApi.list({ type: "customer", limit: 100 });
+          if (usersRes?.success && usersRes.data) {
+            const items = Array.isArray(usersRes.data) ? usersRes.data : usersRes.data.items || usersRes.data.users || [];
+            const b2bCount = items.filter((u: any) => {
+              const roleSlug = typeof u.role === "object" && u.role !== null ? u.role.slug || u.role.name : u.role;
+              const cleanRole = String(roleSlug || "").toLowerCase().replace(/[-_]/g, "");
+              return Boolean(
+                (u.companyName && String(u.companyName).trim()) ||
+                (u.gstin && String(u.gstin).trim()) ||
+                ["b2bbuyer", "b2bcustomer", "enterprise", "commercial"].includes(cleanRole)
+              );
+            }).length;
+            if (b2bCount > 0) counts["b2b-customers"] = b2bCount;
+          }
+        } catch (_) {}
+
+        if (isMounted) {
+          setLiveCounts(counts);
+        }
+      } catch (_) {}
+    };
+
+    fetchLiveCounts();
+    const interval = setInterval(fetchLiveCounts, 30000);
+
+    // Live Server-Sent Events (SSE) stream listener for real-time reactivity
+    let es: EventSource | null = null;
+    try {
+      const sseUrl = `${API_BASE_URL}/events/stream?token=${encodeURIComponent(token)}`;
+      es = new EventSource(sseUrl);
+      es.onmessage = (event) => {
+        try {
+          const payload = JSON.parse(event.data);
+          const type = String(payload?.type || "");
+          if (
+            type.startsWith("po.") ||
+            type.startsWith("quote.") ||
+            type.startsWith("order.") ||
+            type.startsWith("proforma.") ||
+            type.startsWith("user.") ||
+            type.startsWith("b2b.")
+          ) {
+            fetchLiveCounts();
+          }
+        } catch (_) {}
+      };
+    } catch (_) {}
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+      if (es) es.close();
+    };
+  }, []);
 
   const ALL_NAV_ITEMS: NavItem[] = [
     // Core & Intelligence
@@ -89,14 +194,15 @@ export function AdminSidebar({
     { id: "allocation", label: "Stock Allocation", category: "Catalog & Stock", icon: <Layers size={18} /> },
     { id: "upload", label: "Media Uploads", category: "Catalog & Stock", icon: <Upload size={18} /> },
 
-    // B2B & Commercial
-    { id: "b2b-orders", label: "B2B Orders", category: "B2B & Commercial", icon: <Boxes size={18} />, badge: "B2B" },
-    { id: "po-management", label: "PO Management", category: "B2B & Commercial", icon: <Inbox size={18} />, badge: "PO" },
-    { id: "proforma-invoices", label: "Proforma Invoices (PI)", category: "B2B & Commercial", icon: <FileCheck size={18} />, badge: "PI" },
-    { id: "advance-payments", label: "B2B Payments & Receivables", category: "B2B & Commercial", icon: <Landmark size={18} />, badge: "LEDGER" },
-    { id: "qr-validator", label: "QR & Document Validator", category: "B2B & Commercial", icon: <QrCode size={18} />, badge: "VERIFY" },
-    { id: "quotes", label: "B2B Quotes", category: "B2B & Commercial", icon: <FileText size={18} />, badge: "2" },
-    { id: "b2b-pricing", label: "B2B Custom Pricing", category: "B2B & Commercial", icon: <Coins size={18} />, badge: "B2B" },
+    // B2B & Commercial (No static tags; live notification indicators only)
+    { id: "b2b-customers", label: "B2B Customers", category: "B2B & Commercial", icon: <Building2 size={18} /> },
+    { id: "b2b-orders", label: "B2B Orders", category: "B2B & Commercial", icon: <Boxes size={18} /> },
+    { id: "po-management", label: "PO Management", category: "B2B & Commercial", icon: <Inbox size={18} /> },
+    { id: "proforma-invoices", label: "Proforma Invoices (PI)", category: "B2B & Commercial", icon: <FileCheck size={18} /> },
+    { id: "advance-payments", label: "B2B Payments & Receivables", category: "B2B & Commercial", icon: <Landmark size={18} /> },
+    { id: "qr-validator", label: "QR & Document Validator", category: "B2B & Commercial", icon: <QrCode size={18} /> },
+    { id: "quotes", label: "B2B Quotes", category: "B2B & Commercial", icon: <FileText size={18} /> },
+    { id: "b2b-pricing", label: "B2B Custom Pricing", category: "B2B & Commercial", icon: <Coins size={18} /> },
 
     // Sales & Fulfillment
     { id: "orders", label: "Orders", category: "Sales & Fulfillment", icon: <ShoppingCart size={18} />, badge: "4" },
@@ -226,6 +332,8 @@ export function AdminSidebar({
                   currentView === item.id ||
                   (item.id === "variants" && currentView === "varients") ||
                   (item.id === "varients" && currentView === "variants");
+                const isB2B = item.category === "B2B & Commercial";
+                const liveCount = isB2B ? liveCounts[item.id] : undefined;
 
                 return (
                   <div key={item.id} className="flex flex-col">
@@ -248,7 +356,26 @@ export function AdminSidebar({
                         {!isCollapsed && <span className="truncate">{item.label}</span>}
                       </div>
 
-                      {!isCollapsed && item.badge && (
+                      {/* B2B Live Notification Badge */}
+                      {isB2B && liveCount && liveCount > 0 ? (
+                        !isCollapsed ? (
+                          <span
+                            className={`inline-flex items-center gap-1.5 text-[10px] font-bold px-2 py-0.5 rounded-full transition-all shadow-xs ${
+                              isActive
+                                ? "bg-white text-slate-900 shadow-sm font-extrabold"
+                                : "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25"
+                            }`}
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                            {liveCount > 99 ? "99+" : liveCount}
+                          </span>
+                        ) : (
+                          <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-[#18181B] animate-pulse" />
+                        )
+                      ) : null}
+
+                      {/* Standard Static Badges for other non-B2B categories */}
+                      {!isCollapsed && !isB2B && item.badge && (
                         <span
                           className={`text-[9px] font-bold px-1.5 py-0.2 rounded-full ${
                             isActive

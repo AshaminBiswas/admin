@@ -331,7 +331,8 @@ export type AdminView =
   | 'employee-management'
   | 'expenses'
   | 'cash-expenses'
-  | 'b2b-orders';
+  | 'b2b-orders'
+  | 'b2b-customers';
 
 /* ─── B2B Order Management Types ─────────────────────────────────────────── */
 

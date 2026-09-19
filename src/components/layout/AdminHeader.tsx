@@ -86,7 +86,8 @@ export function AdminHeader({ isCollapsed, onToggleCollapse, onToggleMobile }: A
       case "reports": return "Financial Reports & Table Data Exports";
       case "admins": return "Executive Admin Users & Role Assignment";
       case "roles": return "Roles & Permissions (RBAC)";
-      case "users": return "Customers & Users Management";
+      case "users": return "Retail Customers & Users Management";
+      case "b2b-customers": return "B2B Enterprise Customers Directory";
       case "products": return "Hardware Products & SKU Catalog";
       case "orders": return "Customer Orders & B2B Fulfillment Control";
       case "quotes": return "B2B Bulk Price Quotations & Approvals";
