@@ -576,7 +576,7 @@ The Storefront was architected and optimized for native app-like responsiveness 
             - Full CRUD and lifecycle transitions: `GET /api/v1/proforma-invoices`, `POST /api/v1/proforma-invoices`, `GET /:id`, `PATCH /:id`, `DELETE /:id`, `POST /:id/sign`, `POST /:id/send-email`, `GET /:id/pdf`, `GET /customer/my-pis` (for B2B customer portal).
             - **Cryptographic QR Code & Verification Engine**: `GET /api/v1/proforma-invoices/verify/:token` (public endpoint), generating high-resolution HMAC-SHA256 digital authenticity verification records and QR code images (`qrcode` library) embedded directly into the generated PDF and UI views.
           - **Dedicated Admin Console Hub (`/proforma-invoices`)**:
-            - Accessible from the Admin sidebar under **Sales & Fulfillment** with route `id: "proforma-invoices"`.
+            - Accessible from the Admin sidebar under **B2B & Commercial** with route `id: "proforma-invoices"`.
             - Features high-level commercial KPIs (Total PIs Issued, Total Proforma Value ₹, Expected Advance Deposits, Active Documents), status filters (`ALL`, `SENT`, `DRAFT`, `CONVERTED`, `EXPIRED`), and dual-facility origin filters.
             - **Parallel B2B Custom Pricing Integration**: Product selection search and inputs are locked by default until a customer is chosen. Upon selecting a B2B customer, the system immediately fetches the pre-negotiated customer contract pricing matrix via `b2bPricingApi.getCustomerPricingMatrix()`, displaying custom contract prices with `🎯 B2B CUSTOM PRICE` badges and catalog prices in strikethrough.
           - **Customer Storefront B2B Profile Portal (`ProfilePage.tsx`, `CustomerProformaViewPage.tsx`)**:

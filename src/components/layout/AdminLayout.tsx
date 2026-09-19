@@ -200,9 +200,7 @@ export function AdminLayout() {
           />
         );
 
-      // 3. Sales & Fulfillment
-      case "orders":
-        return <OrdersPage />;
+      // 3. B2B & Commercial
       case "b2b-orders":
         return <B2BOrdersPage />;
       case "po-management":
@@ -228,6 +226,16 @@ export function AdminLayout() {
       case "proforma-create":
       case "proforma-detail":
         return <ProformaInvoicesPage />;
+      case "advance-payments":
+      case "payment-tracking":
+        return <AdvancePaymentsTrackerPage />;
+      case "qr-validator":
+      case "document-validator":
+        return <QRDocumentValidatorPage />;
+
+      // 4. Sales & Fulfillment
+      case "orders":
+        return <OrdersPage />;
       case "installer-payments":
         return <InstallerPaymentsPage onNewBill={() => setCurrentView("create-installer-bill")} />;
       case "create-installer-bill":
@@ -238,12 +246,6 @@ export function AdminLayout() {
       case "expenses":
       case "cash-expenses":
         return <ExpensesPage />;
-      case "advance-payments":
-      case "payment-tracking":
-        return <AdvancePaymentsTrackerPage />;
-      case "qr-validator":
-      case "document-validator":
-        return <QRDocumentValidatorPage />;
       case "checkouts":
         return (
           <ModelManagementPage
