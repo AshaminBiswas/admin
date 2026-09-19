@@ -20,6 +20,14 @@ import type {
   ListAttendanceResponse,
 } from '../types/employee';
 
+function assertSuccess<T>(res: any, defaultMessage = 'Request failed'): T {
+  if (!res || res.success === false) {
+    const errorMsg = res?.error?.message || res?.message || defaultMessage;
+    throw new Error(errorMsg);
+  }
+  return (res.data !== undefined ? res.data : res) as T;
+}
+
 export const employeeService = {
   // ─── Master Data ────────────────────────────────────────────────────────────
   async listEmployees(params: {
@@ -40,7 +48,14 @@ export const employeeService = {
 
     const qStr = query.toString();
     const res = await fetchAdminApi<any>(`/employees${qStr ? `?${qStr}` : ''}`);
-    return res?.data || res || { items: [], pagination: { total: 0, page: 1, limit: 50, totalPages: 1 } };
+    if (res && res.success === false) {
+      throw new Error(res.error?.message || res.message || 'Failed to load employees');
+    }
+    const data = res?.data || res;
+    return {
+      items: Array.isArray(data?.items) ? data.items : Array.isArray(data) ? data : [],
+      pagination: data?.pagination || { total: data?.items?.length || 0, page: 1, limit: 100, totalPages: 1 },
+    };
   },
 
   async createEmployee(payload: CreateEmployeePayload): Promise<Employee> {
@@ -48,12 +63,12 @@ export const employeeService = {
       method: 'POST',
       body: JSON.stringify(payload),
     });
-    return res?.data || res;
+    return assertSuccess<Employee>(res, 'Failed to create employee');
   },
 
   async getEmployee(id: string): Promise<Employee> {
     const res = await fetchAdminApi<any>(`/employees/detail/${encodeURIComponent(id)}`);
-    return res?.data || res;
+    return assertSuccess<Employee>(res, 'Failed to load employee details');
   },
 
   async updateEmployee(id: string, payload: UpdateEmployeePayload): Promise<Employee> {
@@ -61,14 +76,14 @@ export const employeeService = {
       method: 'PUT',
       body: JSON.stringify(payload),
     });
-    return res?.data || res;
+    return assertSuccess<Employee>(res, 'Failed to update employee');
   },
 
   async deactivateEmployee(id: string): Promise<Employee> {
     const res = await fetchAdminApi<any>(`/employees/detail/${encodeURIComponent(id)}`, {
       method: 'DELETE',
     });
-    return res?.data || res;
+    return assertSuccess<Employee>(res, 'Failed to deactivate employee');
   },
 
   // ─── Attendance ─────────────────────────────────────────────────────────────
@@ -79,6 +94,9 @@ export const employeeService = {
     if (params.employeeId) query.append('employeeId', params.employeeId);
 
     const res = await fetchAdminApi<any>(`/employees/attendance?${query.toString()}`);
+    if (res && res.success === false) {
+      throw new Error(res.error?.message || res.message || 'Failed to load attendance records');
+    }
     return res?.data || res || { month: params.month, year: params.year, totalDays: 30, records: [] };
   },
 
@@ -87,7 +105,7 @@ export const employeeService = {
       method: 'POST',
       body: JSON.stringify(payload),
     });
-    return res?.data || res;
+    return assertSuccess<EmployeeAttendance>(res, 'Failed to record attendance');
   },
 
   async batchRecordAttendance(payload: BatchAttendancePayload): Promise<{ updatedCount: number; records: EmployeeAttendance[] }> {
@@ -95,7 +113,7 @@ export const employeeService = {
       method: 'POST',
       body: JSON.stringify(payload),
     });
-    return res?.data || res;
+    return assertSuccess<{ updatedCount: number; records: EmployeeAttendance[] }>(res, 'Failed to batch record attendance');
   },
 
   async deleteAttendance(params: { employeeId: string; date: string }): Promise<any> {
@@ -105,7 +123,7 @@ export const employeeService = {
     const res = await fetchAdminApi<any>(`/employees/attendance?${query.toString()}`, {
       method: 'DELETE',
     });
-    return res?.data || res;
+    return assertSuccess<any>(res, 'Failed to delete attendance record');
   },
 
   // ─── Leave Ledger ───────────────────────────────────────────────────────────
@@ -156,7 +174,7 @@ export const employeeService = {
       method: 'POST',
       body: JSON.stringify(payload),
     });
-    return res?.data || res;
+    return assertSuccess<EmployeeAdvance>(res, 'Failed to record advance');
   },
 
   async updateAdvance(id: string, payload: UpdateAdvancePayload): Promise<EmployeeAdvance> {
@@ -164,14 +182,14 @@ export const employeeService = {
       method: 'PUT',
       body: JSON.stringify(payload),
     });
-    return res?.data || res;
+    return assertSuccess<EmployeeAdvance>(res, 'Failed to update advance');
   },
 
   async deleteAdvance(id: string): Promise<any> {
     const res = await fetchAdminApi<any>(`/employees/advances/${encodeURIComponent(id)}`, {
       method: 'DELETE',
     });
-    return res?.data || res;
+    return assertSuccess<any>(res, 'Failed to delete advance');
   },
 
   // ─── Deductions ─────────────────────────────────────────────────────────────
@@ -189,6 +207,9 @@ export const employeeService = {
 
     const qStr = query.toString();
     const res = await fetchAdminApi<any>(`/employees/deductions${qStr ? `?${qStr}` : ''}`);
+    if (res && res.success === false) {
+      throw new Error(res.error?.message || res.message || 'Failed to load deductions');
+    }
     return Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [];
   },
 
@@ -197,7 +218,7 @@ export const employeeService = {
       method: 'POST',
       body: JSON.stringify(payload),
     });
-    return res?.data || res;
+    return assertSuccess<EmployeeDeduction>(res, 'Failed to record deduction');
   },
 
   async updateDeduction(id: string, payload: UpdateDeductionPayload): Promise<EmployeeDeduction> {
@@ -205,14 +226,14 @@ export const employeeService = {
       method: 'PUT',
       body: JSON.stringify(payload),
     });
-    return res?.data || res;
+    return assertSuccess<EmployeeDeduction>(res, 'Failed to update deduction');
   },
 
   async deleteDeduction(id: string): Promise<any> {
     const res = await fetchAdminApi<any>(`/employees/deductions/${encodeURIComponent(id)}`, {
       method: 'DELETE',
     });
-    return res?.data || res;
+    return assertSuccess<any>(res, 'Failed to delete deduction');
   },
 
   // ─── Payroll Engine ─────────────────────────────────────────────────────────
@@ -221,6 +242,9 @@ export const employeeService = {
       method: 'POST',
       body: JSON.stringify(payload),
     });
+    if (res && res.success === false) {
+      throw new Error(res.error?.message || res.message || 'Failed to calculate payroll');
+    }
     return Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [];
   },
 
@@ -232,6 +256,9 @@ export const employeeService = {
     if (params.status) query.append('status', params.status);
 
     const res = await fetchAdminApi<any>(`/employees/payroll?${query.toString()}`);
+    if (res && res.success === false) {
+      throw new Error(res.error?.message || res.message || 'Failed to load payroll records');
+    }
     return Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [];
   },
 
@@ -239,14 +266,14 @@ export const employeeService = {
     const res = await fetchAdminApi<any>(`/employees/payroll/${encodeURIComponent(id)}/finalize`, {
       method: 'POST',
     });
-    return res?.data || res;
+    return assertSuccess<EmployeePayrollRun>(res, 'Failed to finalize payroll');
   },
 
   async revertPayrollToDraft(id: string): Promise<EmployeePayrollRun> {
     const res = await fetchAdminApi<any>(`/employees/payroll/${encodeURIComponent(id)}/revert-draft`, {
       method: 'POST',
     });
-    return res?.data || res;
+    return assertSuccess<EmployeePayrollRun>(res, 'Failed to revert payroll to draft');
   },
 
   async markPayrollPaid(id: string, payload: MarkPayrollPaidPayload): Promise<EmployeePayrollRun> {
@@ -254,7 +281,7 @@ export const employeeService = {
       method: 'POST',
       body: JSON.stringify(payload),
     });
-    return res?.data || res;
+    return assertSuccess<EmployeePayrollRun>(res, 'Failed to mark payroll as paid');
   },
 
   async downloadPayslipPdf(id: string, filename?: string): Promise<void> {

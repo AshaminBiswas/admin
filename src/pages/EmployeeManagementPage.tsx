@@ -145,7 +145,7 @@ export function EmployeeManagementPage() {
   const [isCalculatingPayroll, setIsCalculatingPayroll] = useState(false);
 
   // Worker Hub State
-  const [workerSubTab, setWorkerSubTab] = useState<'attendance' | 'advances' | 'payroll'>('attendance');
+  const [workerSubTab, setWorkerSubTab] = useState<'directory' | 'attendance' | 'advances' | 'payroll'>('directory');
   const [workerSearchQuery, setWorkerSearchQuery] = useState('');
   const [workerAttendanceFilter, setWorkerAttendanceFilter] = useState<'WORKERS' | 'ALL'>('WORKERS');
   const [workerAdvancesFilter, setWorkerAdvancesFilter] = useState<'ALL' | 'WORKERS'>('ALL');
@@ -328,8 +328,21 @@ export function EmployeeManagementPage() {
         des.includes('carpenter') ||
         des.includes('helper') ||
         des.includes('technician') ||
+        des.includes('welder') ||
+        des.includes('packer') ||
+        des.includes('driver') ||
+        des.includes('labor') ||
+        des.includes('labour') ||
+        des.includes('electrician') ||
+        des.includes('fitter') ||
+        des.includes('loader') ||
+        des.includes('support') ||
         dept.includes('operations') ||
-        dept.includes('installation')
+        dept.includes('installation') ||
+        dept.includes('workshop') ||
+        dept.includes('factory') ||
+        dept.includes('production') ||
+        dept.includes('site')
       );
     });
   }, [employees]);
@@ -343,7 +356,6 @@ export function EmployeeManagementPage() {
     const padDay = String(selectedAttendanceDay).padStart(2, '0');
     const padMonth = String(selectedMonth).padStart(2, '0');
     const targetDateStr = `${selectedYear}-${padMonth}-${padDay}`;
-
     const presentWorkersCount = attendanceRecords.filter((r) => {
       const rDate = new Date(r.date).toISOString().slice(0, 10);
       return (
@@ -376,17 +388,32 @@ export function EmployeeManagementPage() {
   // ─── Handlers ───────────────────────────────────────────────────────────────
   const handleSaveEmployee = async (formData: any) => {
     try {
+      let savedEmployee: Employee;
       if (editingEmployee) {
-        await employeeService.updateEmployee(editingEmployee.id, formData);
-        showFeedback('success', 'Employee updated successfully');
+        savedEmployee = await employeeService.updateEmployee(editingEmployee.id, formData);
+        showFeedback('success', `Employee "${savedEmployee?.name || 'Staff'}" updated successfully`);
+        setEmployees((prev) => prev.map((e) => (e.id === savedEmployee.id ? { ...e, ...savedEmployee } : e)));
       } else {
-        await employeeService.createEmployee(formData);
-        showFeedback('success', 'Employee added successfully');
+        savedEmployee = await employeeService.createEmployee(formData);
+        showFeedback(
+          'success',
+          `Worker / Employee "${savedEmployee?.name || 'Staff'}" (${savedEmployee?.employeeId || ''}) added successfully!`
+        );
+        // Optimistically prepend to employees list immediately
+        if (savedEmployee && savedEmployee.id) {
+          setEmployees((prev) => [savedEmployee, ...prev.filter((e) => e.id !== savedEmployee.id)]);
+        }
       }
       setIsAddEmployeeModalOpen(false);
       setEditingEmployee(null);
-      fetchEmployees();
+      // Reset search query and filters so newly created employee is immediately visible
+      setSearchQuery('');
+      setSelectedDepartment('All Departments');
+      setSelectedDesignation('All Designations');
+      setStatusFilter('ALL');
+      await fetchEmployees();
     } catch (err: any) {
+      // Keep modal open so user doesn't lose their form values, and display the exact error
       showFeedback('error', err?.message || 'Failed to save employee');
     }
   };
@@ -1243,10 +1270,11 @@ export function EmployeeManagementPage() {
           {/* Sub-Tabs Selector */}
           <div className="flex items-center gap-2 border-b border-[#27272A] pb-2 overflow-x-auto no-scrollbar">
             {[
-              { id: 'attendance', label: '1. Worker Attendance Matrix', icon: <Calendar size={15} /> },
+              { id: 'directory', label: '1. Worker Directory', icon: <Users size={15} />, badge: workerEmployees.length },
+              { id: 'attendance', label: '2. Worker Attendance Matrix', icon: <Calendar size={15} /> },
               {
                 id: 'advances',
-                label: '2. Worker Advances & Recovery',
+                label: '3. Worker Advances & Recovery',
                 icon: <DollarSign size={15} />,
                 badge: advancesList.filter((a) =>
                   workerEmployees.some((w) => w.id === a.employeeId)
@@ -1254,7 +1282,7 @@ export function EmployeeManagementPage() {
               },
               {
                 id: 'payroll',
-                label: '3. Worker Monthly Payroll Runs',
+                label: '4. Worker Monthly Payroll Runs',
                 icon: <FileText size={15} />,
                 badge: payrollRuns.filter((p) =>
                   workerEmployees.some((w) => w.id === p.employeeId)
@@ -1281,6 +1309,143 @@ export function EmployeeManagementPage() {
               </button>
             ))}
           </div>
+
+          {/* ── SUB-VIEW 0: WORKER DIRECTORY ─────────────────────────────────── */}
+          {workerSubTab === 'directory' && (
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3 bg-[#18181B] p-3.5 rounded-2xl border border-[#27272A]">
+                <div className="relative flex-1 min-w-[240px]">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#71717A]" />
+                  <input
+                    type="text"
+                    placeholder="Search worker by name, ID (PPSE...), phone, or designation..."
+                    value={workerSearchQuery}
+                    onChange={(e) => setWorkerSearchQuery(e.target.value)}
+                    className="w-full bg-[#09090B] border border-[#27272A] text-xs text-[#FAFAFA] rounded-xl pl-8 pr-3 py-2 focus:outline-none focus:border-amber-500 placeholder:text-[#71717A]"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-[#71717A]">
+                    Showing{' '}
+                    {
+                      workerEmployees.filter(
+                        (e) =>
+                          !workerSearchQuery ||
+                          e.name.toLowerCase().includes(workerSearchQuery.toLowerCase()) ||
+                          e.employeeId.toLowerCase().includes(workerSearchQuery.toLowerCase()) ||
+                          e.phone.includes(workerSearchQuery) ||
+                          (e.designation || '').toLowerCase().includes(workerSearchQuery.toLowerCase())
+                      ).length
+                    }{' '}
+                    of {workerEmployees.length} Workers
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingEmployee(null);
+                      setModalDesignation('Workers');
+                      setIsAddEmployeeModalOpen(true);
+                    }}
+                    className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold rounded-xl transition flex items-center gap-1.5 shadow-md"
+                  >
+                    <Plus size={13} />
+                    <span>Add Worker</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Workers Table */}
+              <div className="bg-[#18181B] border border-[#27272A] rounded-2xl overflow-hidden shadow-xl">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead className="bg-[#09090B] text-[#71717A] text-xs uppercase tracking-wider border-b border-[#27272A]">
+                      <tr>
+                        <th className="px-4 py-3.5">Worker ID</th>
+                        <th className="px-4 py-3.5">Name & Contact</th>
+                        <th className="px-4 py-3.5">Designation / Dept</th>
+                        <th className="px-4 py-3.5">Joining Date</th>
+                        <th className="px-4 py-3.5">Monthly / Wage</th>
+                        <th className="px-4 py-3.5">Govt ID</th>
+                        <th className="px-4 py-3.5">Status</th>
+                        <th className="px-4 py-3.5 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#27272A]">
+                      {workerEmployees.length === 0 ? (
+                        <tr>
+                          <td colSpan={8} className="px-4 py-12 text-center text-[#71717A]">
+                            No workers registered yet. Click &quot;Add Worker&quot; above to register workshop staff.
+                          </td>
+                        </tr>
+                      ) : (
+                        workerEmployees
+                          .filter(
+                            (e) =>
+                              !workerSearchQuery ||
+                              e.name.toLowerCase().includes(workerSearchQuery.toLowerCase()) ||
+                              e.employeeId.toLowerCase().includes(workerSearchQuery.toLowerCase()) ||
+                              e.phone.includes(workerSearchQuery) ||
+                              (e.designation || '').toLowerCase().includes(workerSearchQuery.toLowerCase())
+                          )
+                          .map((worker) => (
+                            <tr key={worker.id} className="hover:bg-[#27272A]/40 transition">
+                              <td className="px-4 py-3.5 font-mono text-xs font-semibold text-amber-400">
+                                {worker.employeeId}
+                              </td>
+                              <td className="px-4 py-3.5">
+                                <div className="font-medium text-[#FAFAFA]">{worker.name}</div>
+                                <div className="text-xs text-[#71717A]">
+                                  {worker.phone}
+                                  {worker.email && !worker.email.includes('@internal.prc') ? ` • ${worker.email}` : ''}
+                                </div>
+                              </td>
+                              <td className="px-4 py-3.5">
+                                <span className="text-xs px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 font-medium">
+                                  {worker.designation}
+                                </span>
+                                <div className="text-xs text-[#71717A] mt-0.5">{worker.department}</div>
+                              </td>
+                              <td className="px-4 py-3.5 text-xs text-[#A1A1AA]">
+                                {worker.joiningDate ? new Date(worker.joiningDate).toLocaleDateString('en-IN') : '—'}
+                              </td>
+                              <td className="px-4 py-3.5 text-xs font-mono font-medium text-[#FAFAFA]">
+                                {Number(worker.monthlyCtc) > 0 ? formatINR(worker.monthlyCtc) : 'Daily-wage / Variable'}
+                              </td>
+                              <td className="px-4 py-3.5 text-xs font-mono text-[#71717A]">
+                                {worker.governmentIdType}: {worker.governmentIdNumber}
+                              </td>
+                              <td className="px-4 py-3.5">
+                                <span
+                                  className={`px-2 py-0.5 text-xs rounded-full border ${
+                                    worker.status === 'ACTIVE'
+                                      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                      : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                                  }`}
+                                >
+                                  {worker.status}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3.5 text-right">
+                                <button
+                                  onClick={() => {
+                                    setEditingEmployee(worker);
+                                    setIsAddEmployeeModalOpen(true);
+                                  }}
+                                  className="p-1.5 text-[#A1A1AA] hover:text-amber-400 transition"
+                                  title="Edit Worker Details"
+                                >
+                                  <Edit2 size={15} />
+                                </button>
+                              </td>
+                            </tr>
+                          ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* ── SUB-VIEW 1: WORKER ATTENDANCE MATRIX ─────────────────────────── */}
           {workerSubTab === 'attendance' && (
@@ -2649,22 +2814,27 @@ export function EmployeeManagementPage() {
                 const rawBankName = ((formData.get('bankName') as string) || '').trim();
                 const rawBankHolder = ((formData.get('bankAccountHolder') as string) || '').trim();
 
+                const rawEmail = ((formData.get('email') as string) || '').trim().toLowerCase();
+                const rawPhone = ((formData.get('phone') as string) || '').replace(/[\s-]/g, '').trim();
+                const rawGovId = ((formData.get('governmentIdNumber') as string) || '').replace(/[\s-]/g, '').trim().toUpperCase();
+                const rawAddress = ((formData.get('address') as string) || '').trim();
+
                 const computedDesignation =
                   (modalDesignation === 'OTHER' ? customDesignation : modalDesignation).trim() || 'Workers';
 
                 const payload = {
                   name: (formData.get('name') as string).trim(),
-                  email: (formData.get('email') as string).trim().toLowerCase(),
-                  phone: (formData.get('phone') as string).trim(),
-                  address: (formData.get('address') as string).trim(),
-                  governmentIdType: formData.get('governmentIdType') as GovernmentIdType,
-                  governmentIdNumber: (formData.get('governmentIdNumber') as string).trim().toUpperCase(),
+                  email: rawEmail && rawEmail !== 'none' && rawEmail !== 'na' && rawEmail !== 'nil' ? rawEmail : undefined,
+                  phone: rawPhone,
+                  address: rawAddress || 'N/A',
+                  governmentIdType: (formData.get('governmentIdType') as GovernmentIdType) || 'AADHAAR',
+                  governmentIdNumber: rawGovId || 'PENDING',
                   bankAccountNumber: rawBankAcct || undefined,
                   bankIfsc: rawBankIfsc || undefined,
                   bankName: rawBankName || undefined,
                   bankAccountHolder: rawBankHolder || undefined,
                   designation: computedDesignation,
-                  department: (formData.get('department') as string).trim(),
+                  department: (formData.get('department') as string).trim() || 'Operations',
                   responsibilities: ((formData.get('responsibilities') as string) || '').trim() || undefined,
                   monthlyCtc: Number(formData.get('monthlyCtc') || 0),
                   joiningDate: formData.get('joiningDate') as string,
@@ -2687,15 +2857,24 @@ export function EmployeeManagementPage() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-[#A1A1AA] mb-1">Email Address *</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-semibold text-[#A1A1AA]">Email Address</label>
+                    <span className="text-[10px] text-amber-400 font-medium">Optional for workers</span>
+                  </div>
                   <input
                     type="email"
                     name="email"
-                    required
-                    defaultValue={editingEmployee?.email || ''}
-                    placeholder="payslips will be sent here"
+                    defaultValue={
+                      editingEmployee?.email && !editingEmployee.email.includes('@internal.prc')
+                        ? editingEmployee.email
+                        : ''
+                    }
+                    placeholder="e.g. worker@example.com (or leave blank)"
                     className="w-full px-3 py-2 bg-[#09090B] border border-[#27272A] rounded-xl text-[#FAFAFA] focus:outline-none focus:border-amber-500"
                   />
+                  <p className="text-[10px] text-[#71717A] mt-1">
+                    Leave blank if worker has no email (system generates auto-ID email).
+                  </p>
                 </div>
 
                 <div>
@@ -2825,13 +3004,12 @@ export function EmployeeManagementPage() {
 
               {/* Address */}
               <div>
-                <label className="block text-xs font-semibold text-[#A1A1AA] mb-1">Residential Address *</label>
+                <label className="block text-xs font-semibold text-[#A1A1AA] mb-1">Residential / Site Address</label>
                 <textarea
                   name="address"
-                  required
                   rows={2}
                   defaultValue={editingEmployee?.address || ''}
-                  placeholder="Street, City, State, PIN"
+                  placeholder="Street, City, State, or workshop location"
                   className="w-full px-3 py-2 bg-[#09090B] border border-[#27272A] rounded-xl text-[#FAFAFA] focus:outline-none focus:border-amber-500 text-xs"
                 />
               </div>
@@ -2843,7 +3021,7 @@ export function EmployeeManagementPage() {
                 </span>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs text-[#71717A] mb-1">ID Type *</label>
+                    <label className="block text-xs text-[#71717A] mb-1">ID Type</label>
                     <select
                       name="governmentIdType"
                       defaultValue={editingEmployee?.governmentIdType || 'AADHAAR'}
@@ -2855,12 +3033,14 @@ export function EmployeeManagementPage() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs text-[#71717A] mb-1">ID Number *</label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs text-[#71717A]">ID Number</label>
+                      <span className="text-[10px] text-zinc-500">Spaces auto-removed</span>
+                    </div>
                     <input
                       name="governmentIdNumber"
-                      required
                       defaultValue={editingEmployee?.governmentIdNumber || ''}
-                      placeholder="e.g. 123456789012"
+                      placeholder="e.g. 1234 5678 9012 or PENDING"
                       className="w-full px-3 py-2 bg-[#18181B] border border-[#27272A] rounded-xl text-[#FAFAFA] focus:outline-none focus:border-amber-500 text-xs font-mono"
                     />
                   </div>
