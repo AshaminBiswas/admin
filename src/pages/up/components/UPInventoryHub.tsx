@@ -1154,7 +1154,7 @@ export function UPInventoryHub({ isSuperAdmin, onShowSuccess, onShowError }: UPI
             <div className="bg-[#18181B] p-4 rounded-2xl border border-[#27272A] shadow-sm space-y-1">
               <span className="text-[10px] font-bold uppercase text-zinc-400 tracking-wider">Total SKUs</span>
               <div className="text-2xl font-black text-white font-mono">
-                {dashboardData?.totalSku.toLocaleString() || '0'}
+                {(dashboardData?.totalSku ?? 0).toLocaleString()}
               </div>
               <span className="text-[10px] text-zinc-400">Master Catalog Hardware</span>
             </div>
@@ -1162,7 +1162,7 @@ export function UPInventoryHub({ isSuperAdmin, onShowSuccess, onShowError }: UPI
             <div className="bg-[#18181B] p-4 rounded-2xl border border-[#27272A] shadow-sm space-y-1">
               <span className="text-[10px] font-bold uppercase text-zinc-400 tracking-wider">Floor Stock Units</span>
               <div className="text-2xl font-black text-emerald-400 font-mono">
-                {dashboardData?.totalStockUnits.toLocaleString() || '0'}
+                {(dashboardData?.totalStockUnits ?? 0).toLocaleString()}
               </div>
               <span className="text-[10px] text-emerald-400/80">Available Physical Units</span>
             </div>
@@ -1267,10 +1267,10 @@ export function UPInventoryHub({ isSuperAdmin, onShowSuccess, onShowError }: UPI
               <div className="p-3 bg-orange-950/20 rounded-xl border border-orange-500/20 flex items-center justify-between">
                 <div>
                   <div className="text-xl font-black text-orange-400 font-mono">
-                    {dashboardData?.todayFloorMetrics.scrapQty || 0} kg
+                    {dashboardData?.todayFloorMetrics?.scrapQty || 0} kg
                   </div>
                   <div className="text-[10px] text-zinc-400">
-                    Est. Loss: ₹{(dashboardData?.todayFloorMetrics.scrapLossRupees || 0).toLocaleString()}
+                    Est. Loss: ₹{(dashboardData?.todayFloorMetrics?.scrapLossRupees ?? 0).toLocaleString()}
                   </div>
                 </div>
                 <Flame size={24} className="text-orange-500/40" />
@@ -2070,7 +2070,7 @@ export function UPInventoryHub({ isSuperAdmin, onShowSuccess, onShowError }: UPI
                   <div key={m.type} className="flex items-center justify-between text-xs p-2.5 rounded-xl bg-black/30">
                     <span className="font-mono text-zinc-300 font-semibold">{m.type}</span>
                     <div className="text-right">
-                      <span className="font-mono font-bold text-white">{m.totalUnits.toLocaleString()} units</span>
+                      <span className="font-mono font-bold text-white">{(m.totalUnits ?? 0).toLocaleString()} units</span>
                       <span className="text-[10px] text-zinc-500 ml-2">({m.count} txns)</span>
                     </div>
                   </div>
@@ -2091,7 +2091,7 @@ export function UPInventoryHub({ isSuperAdmin, onShowSuccess, onShowError }: UPI
                       <div className="text-[10px] text-zinc-400">{s.totalQuantity} kg scrapped</div>
                     </div>
                     <div className="text-right font-mono font-bold text-orange-400">
-                      ₹{s.totalLossRupees.toLocaleString('en-IN')}
+                      ₹{(s.totalLossRupees ?? 0).toLocaleString('en-IN')}
                     </div>
                   </div>
                 ))}

@@ -239,8 +239,10 @@ export async function fetchAdminApi<T = any>(
 async function executeFetchAdminApi<T = any>(
   endpoint: string,
   options: RequestInit = {},
-  isRetry = false
+  retryAttempt: boolean | number = 0
 ): Promise<{ success: boolean; data?: T; message?: string; error?: any; [key: string]: any }> {
+  const attempt = typeof retryAttempt === "number" ? retryAttempt : (retryAttempt ? 1 : 0);
+  const MAX_RETRIES = 2;
   const cleanEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
   let url = `${API_BASE_URL}${cleanEndpoint}`;
   const token = getAdminToken();
@@ -279,18 +281,19 @@ async function executeFetchAdminApi<T = any>(
     let response = await fetch(url, { ...options, headers, signal: options.signal || controller.signal });
     clearTimeout(timeoutId);
 
-    // Auto-retry once on transient 502/503/504 gateway responses caused by Render container spin-up
-    if (!response.ok && (response.status === 502 || response.status === 503 || response.status === 504) && !isRetry) {
-      console.info(`[PRC Admin API] Server spinning up (HTTP ${response.status}) on ${cleanEndpoint}. Auto-retrying in 5s...`);
-      await new Promise((r) => setTimeout(r, 5000));
-      return executeFetchAdminApi<T>(endpoint, options, true);
+    // Auto-retry on transient 502/503/504 gateway responses caused by Render container spin-up
+    if (!response.ok && (response.status === 502 || response.status === 503 || response.status === 504) && attempt < MAX_RETRIES) {
+      const delayMs = attempt === 0 ? 4000 : 7000;
+      console.info(`[PRC Admin API] Server spinning up (HTTP ${response.status}) on ${cleanEndpoint}. Auto-retrying (${attempt + 1}/${MAX_RETRIES}) in ${delayMs / 1000}s...`);
+      await new Promise((r) => setTimeout(r, delayMs));
+      return executeFetchAdminApi<T>(endpoint, options, attempt + 1);
     }
 
     // Reactive refresh on 401/403 (token expired mid-session)
     if (
       !response.ok &&
       (response.status === 401 || response.status === 403) &&
-      !isRetry &&
+      attempt === 0 &&
       !isAuthEndpoint
     ) {
       const storedRefreshToken = getAdminRefreshToken();
@@ -383,11 +386,12 @@ async function executeFetchAdminApi<T = any>(
       String(error.message || "").toLowerCase().includes("fetch") ||
       String(error.message || "").toLowerCase().includes("network");
 
-    // If request timed out or hit cold-start network drop, auto-retry once because the server is likely waking up
-    if ((isTimeout || isNetworkOrFetchError) && !isRetry) {
-      console.info(`[PRC Admin API] Server wake-up / transient error on ${cleanEndpoint}. Auto-retrying in 5s...`);
-      await new Promise((r) => setTimeout(r, 5000));
-      return executeFetchAdminApi<T>(endpoint, options, true);
+    // If request timed out or hit cold-start network drop, auto-retry because the server is likely waking up
+    if ((isTimeout || isNetworkOrFetchError) && attempt < MAX_RETRIES) {
+      const delayMs = attempt === 0 ? 4000 : 7000;
+      console.info(`[PRC Admin API] Server wake-up / transient error on ${cleanEndpoint}. Auto-retrying (${attempt + 1}/${MAX_RETRIES}) in ${delayMs / 1000}s...`);
+      await new Promise((r) => setTimeout(r, delayMs));
+      return executeFetchAdminApi<T>(endpoint, options, attempt + 1);
     }
 
     return {

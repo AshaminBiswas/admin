@@ -60,6 +60,11 @@ interface UPPageProps {
   onNavigateInventory?: () => void;
 }
 
+const formatInr = (val: number | null | undefined, options?: Intl.NumberFormatOptions): string => {
+  if (val === null || val === undefined || isNaN(Number(val))) return "0";
+  return Number(val).toLocaleString("en-IN", options);
+};
+
 export function UPPage({ onNavigateInventory }: UPPageProps = {}) {
   const { adminUser, setCurrentView } = useAdminAuth();
 
@@ -849,27 +854,27 @@ export function UPPage({ onNavigateInventory }: UPPageProps = {}) {
                 <div className="p-4 sm:p-5 rounded-2xl bg-[#18181B] border border-[#27272A] space-y-1">
                   <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Current Month Spend</span>
                   <div className="text-xl sm:text-2xl font-black text-white">
-                    ₹{dashboardData.kpis.currentMonthTotal.toLocaleString("en-IN")}
+                    ₹{formatInr(dashboardData.kpis?.currentMonthTotal)}
                   </div>
                   <span className="text-[10px] text-zinc-500 block">
-                    Prev Month: ₹{dashboardData.kpis.previousMonthTotal.toLocaleString("en-IN")}
+                    Prev Month: ₹{formatInr(dashboardData.kpis?.previousMonthTotal)}
                   </span>
                 </div>
 
                 <div className="p-4 sm:p-5 rounded-2xl bg-[#18181B] border border-[#27272A] space-y-1">
                   <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Today's Spend</span>
                   <div className="text-xl sm:text-2xl font-black text-emerald-400">
-                    ₹{dashboardData.kpis.todayTotal.toLocaleString("en-IN")}
+                    ₹{formatInr(dashboardData.kpis?.todayTotal)}
                   </div>
                   <span className="text-[10px] text-zinc-500 block">
-                    Daily Average: ₹{dashboardData.kpis.averageDailyExpense.toLocaleString("en-IN")}
+                    Daily Average: ₹{formatInr(dashboardData.kpis?.averageDailyExpense)}
                   </span>
                 </div>
 
                 <div className="p-4 sm:p-5 rounded-2xl bg-[#18181B] border border-[#27272A] space-y-1">
                   <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Verified Amount</span>
                   <div className="text-xl sm:text-2xl font-black text-indigo-400">
-                    ₹{dashboardData.kpis.verifiedTotal.toLocaleString("en-IN")}
+                    ₹{formatInr(dashboardData.kpis?.verifiedTotal)}
                   </div>
                   <span className="text-[10px] text-zinc-500 block">Super Admin Approved</span>
                 </div>
@@ -877,10 +882,10 @@ export function UPPage({ onNavigateInventory }: UPPageProps = {}) {
                 <div className="p-4 sm:p-5 rounded-2xl bg-[#18181B] border border-[#27272A] space-y-1">
                   <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Unverified Amount</span>
                   <div className="text-xl sm:text-2xl font-black text-amber-400">
-                    ₹{dashboardData.kpis.unverifiedTotal.toLocaleString("en-IN")}
+                    ₹{formatInr(dashboardData.kpis?.unverifiedTotal)}
                   </div>
                   <span className="text-[10px] text-zinc-500 block">
-                    {dashboardData.kpis.transactionCount} Total Transactions
+                    {dashboardData.kpis?.transactionCount || 0} Total Transactions
                   </span>
                 </div>
               </div>
@@ -891,23 +896,23 @@ export function UPPage({ onNavigateInventory }: UPPageProps = {}) {
                 <div className="lg:col-span-1 p-5 rounded-2xl bg-[#18181B] border border-[#27272A] space-y-4">
                   <div className="flex items-center justify-between border-b border-[#27272A] pb-3">
                     <h3 className="text-xs font-bold text-white uppercase tracking-wider">Category Breakdown</h3>
-                    <span className="text-[10px] text-zinc-400">Top: {dashboardData.kpis.topCategory}</span>
+                    <span className="text-[10px] text-zinc-400">Top: {dashboardData.kpis?.topCategory || 'None'}</span>
                   </div>
 
                   <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
-                    {dashboardData.categoryBreakdown.map((cat) => (
+                    {(dashboardData.categoryBreakdown || []).map((cat) => (
                       <div key={cat.id} className="space-y-1.5">
                         <div className="flex items-center justify-between text-xs">
                           <span className="font-semibold text-zinc-200 truncate">{cat.name}</span>
                           <div className="flex items-center gap-2">
-                            <span className="font-mono font-bold text-white">₹{cat.total.toLocaleString("en-IN")}</span>
-                            <span className="text-[10px] text-zinc-400">({cat.percentage}%)</span>
+                            <span className="font-mono font-bold text-white">₹{formatInr(cat.total)}</span>
+                            <span className="text-[10px] text-zinc-400">({cat.percentage ?? 0}%)</span>
                           </div>
                         </div>
                         <div className="w-full h-1.5 rounded-full bg-zinc-800 overflow-hidden">
                           <div
                             className="h-full bg-indigo-500 rounded-full transition-all duration-500"
-                            style={{ width: `${Math.min(100, cat.percentage)}%` }}
+                            style={{ width: `${Math.min(100, cat.percentage || 0)}%` }}
                           />
                         </div>
                       </div>
@@ -920,7 +925,7 @@ export function UPPage({ onNavigateInventory }: UPPageProps = {}) {
                   <div className="flex items-center justify-between border-b border-[#27272A] pb-3">
                     <h3 className="text-xs font-bold text-white uppercase tracking-wider">30-Day Expense Velocity</h3>
                     <span className="text-[10px] text-zinc-400">
-                      Peak: ₹{dashboardData.kpis.highestExpense.toLocaleString("en-IN")}
+                      Peak: ₹{formatInr(dashboardData.kpis?.highestExpense)}
                     </span>
                   </div>
 
@@ -961,7 +966,7 @@ export function UPPage({ onNavigateInventory }: UPPageProps = {}) {
                               fontSize: "11px",
                               color: "#fff",
                             }}
-                            formatter={(v: any) => [`₹${Number(v).toLocaleString("en-IN")}`, "Spend"]}
+                            formatter={(v: any) => [`₹${formatInr(v)}`, "Spend"]}
                           />
                           <Area
                             type="monotone"
@@ -1074,7 +1079,7 @@ export function UPPage({ onNavigateInventory }: UPPageProps = {}) {
               <span>
                 Found <strong className="text-white">{expenseTotal}</strong> records totaling{" "}
                 <strong className="text-indigo-400 font-mono font-bold">
-                  ₹{expenseTotalAmount.toLocaleString("en-IN")}
+                  ₹{formatInr(expenseTotalAmount)}
                 </strong>
               </span>
               {(filterSearch || filterStartDate || filterEndDate || filterCategory || filterVerified !== "all") && (
@@ -1133,7 +1138,7 @@ export function UPPage({ onNavigateInventory }: UPPageProps = {}) {
                       </div>
                       <div className="text-right">
                         <span className="text-sm font-black text-white font-mono">
-                          ₹{exp.amount.toLocaleString("en-IN")}
+                          ₹{formatInr(exp.amount)}
                         </span>
                         <div>
                           {exp.verified ? (
@@ -1246,7 +1251,7 @@ export function UPPage({ onNavigateInventory }: UPPageProps = {}) {
                         <td className="py-3 px-4 font-bold text-white max-w-xs truncate">{exp.paidTo}</td>
                         <td className="py-3 px-4 text-zinc-400 max-w-xs truncate">{exp.note || "—"}</td>
                         <td className="py-3 px-4 text-right font-mono font-black text-white whitespace-nowrap">
-                          ₹{exp.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                          ₹{formatInr(exp.amount, { minimumFractionDigits: 2 })}
                         </td>
                         <td className="py-3 px-4 text-center whitespace-nowrap">
                           {exp.verified ? (
@@ -1412,7 +1417,7 @@ export function UPPage({ onNavigateInventory }: UPPageProps = {}) {
                   <div className="p-4 rounded-xl bg-[#09090B] border border-[#27272A] space-y-1">
                     <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">2. Today's Cash Spend</span>
                     <div className="text-lg font-black text-rose-400">
-                      - ₹{cashStatus.cashExpenses.toLocaleString("en-IN")}
+                      - ₹{formatInr(cashStatus.cashExpenses)}
                     </div>
                     <span className="text-[9px] text-zinc-500 block">Sum of recorded cash entries</span>
                   </div>
@@ -1420,7 +1425,7 @@ export function UPPage({ onNavigateInventory }: UPPageProps = {}) {
                   <div className="p-4 rounded-xl bg-[#09090B] border border-[#27272A] space-y-1">
                     <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">3. Expected Closing</span>
                     <div className="text-lg font-black text-indigo-400">
-                      ₹{cashStatus.expectedClosingBalance.toLocaleString("en-IN")}
+                      ₹{formatInr(cashStatus.expectedClosingBalance)}
                     </div>
                     <span className="text-[9px] text-zinc-500 block">Opening - Today's Expenses</span>
                   </div>
@@ -1440,7 +1445,7 @@ export function UPPage({ onNavigateInventory }: UPPageProps = {}) {
                 </div>
 
                 {/* Variance Alert Pill */}
-                {cashStatus.difference !== null && (
+                {cashStatus.difference !== null && cashStatus.difference !== undefined && (
                   <div
                     className={`p-3.5 rounded-xl border text-xs flex items-center justify-between gap-3 ${
                       cashStatus.difference === 0
@@ -1453,13 +1458,13 @@ export function UPPage({ onNavigateInventory }: UPPageProps = {}) {
                       <span className="font-bold">
                         {cashStatus.difference === 0
                           ? "Reconciliation Matched: Exactly ₹0 variance between physical cash and expenses"
-                          : `Reconciliation Variance: ₹${Math.abs(cashStatus.difference).toLocaleString("en-IN")} ${
+                          : `Reconciliation Variance: ₹${formatInr(Math.abs(cashStatus.difference))} ${
                               cashStatus.difference > 0 ? "Surplus (Excess Cash)" : "Shortage (Missing Cash)"
                             }`}
                       </span>
                     </div>
                     <span className="text-[10px] font-mono font-bold bg-zinc-900/60 px-2 py-0.5 rounded">
-                      Diff: ₹{cashStatus.difference.toLocaleString("en-IN")}
+                      Diff: ₹{formatInr(cashStatus.difference)}
                     </span>
                   </div>
                 )}
@@ -1535,25 +1540,27 @@ export function UPPage({ onNavigateInventory }: UPPageProps = {}) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#27272A]">
-                  {cashDaysHistory.map((d) => (
-                    <tr key={d.id || d.cashDate} className="hover:bg-zinc-800/30">
-                      <td className="py-2.5 px-3 font-mono text-zinc-200">{d.cashDate}</td>
-                      <td className="py-2.5 px-3 text-right font-mono text-white">₹{d.openingBalance.toLocaleString("en-IN")}</td>
-                      <td className="py-2.5 px-3 text-right font-mono text-rose-400">-₹{d.cashExpenses.toLocaleString("en-IN")}</td>
-                      <td className="py-2.5 px-3 text-right font-mono text-indigo-400">₹{d.expectedClosingBalance.toLocaleString("en-IN")}</td>
-                      <td className="py-2.5 px-3 text-right font-mono text-white">
-                        {d.actualClosing !== null ? `₹${d.actualClosing.toLocaleString("en-IN")}` : "—"}
-                      </td>
-                      <td className="py-2.5 px-3 text-right font-mono font-bold">
-                        {d.difference !== null ? (
-                          <span className={d.difference === 0 ? "text-emerald-400" : "text-amber-400"}>
-                            ₹{d.difference.toLocaleString("en-IN")}
-                          </span>
-                        ) : (
-                          "—"
-                        )}
-                      </td>
-                      <td className="py-2.5 px-3 text-center">
+                  {cashDaysHistory.map((d) => {
+                    const actual = d.actualClosing !== null && d.actualClosing !== undefined ? d.actualClosing : (d as any).closingBalance;
+                    return (
+                      <tr key={d.id || d.cashDate} className="hover:bg-zinc-800/30">
+                        <td className="py-2.5 px-3 font-mono text-zinc-200">{d.cashDate}</td>
+                        <td className="py-2.5 px-3 text-right font-mono text-white">₹{formatInr(d.openingBalance)}</td>
+                        <td className="py-2.5 px-3 text-right font-mono text-rose-400">-₹{formatInr(d.cashExpenses)}</td>
+                        <td className="py-2.5 px-3 text-right font-mono text-indigo-400">₹{formatInr(d.expectedClosingBalance)}</td>
+                        <td className="py-2.5 px-3 text-right font-mono text-white">
+                          {actual !== null && actual !== undefined ? `₹${formatInr(actual)}` : "—"}
+                        </td>
+                        <td className="py-2.5 px-3 text-right font-mono font-bold">
+                          {d.difference !== null && d.difference !== undefined ? (
+                            <span className={d.difference === 0 ? "text-emerald-400" : "text-amber-400"}>
+                              ₹{formatInr(d.difference)}
+                            </span>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+                        <td className="py-2.5 px-3 text-center">
                         {d.closed ? (
                           <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                             Locked
@@ -1565,7 +1572,8 @@ export function UPPage({ onNavigateInventory }: UPPageProps = {}) {
                         )}
                       </td>
                     </tr>
-                  ))}
+                  );
+                })}
                 </tbody>
               </table>
             </div>
@@ -1913,7 +1921,7 @@ export function UPPage({ onNavigateInventory }: UPPageProps = {}) {
               <div className="flex items-center justify-between">
                 <span className="font-bold text-white">{selectedExpense.paidTo}</span>
                 <span className="font-mono font-black text-indigo-400">
-                  ₹{selectedExpense.amount.toLocaleString("en-IN")}
+                  ₹{formatInr(selectedExpense.amount)}
                 </span>
               </div>
               <div className="text-[11px] text-zinc-400 flex items-center justify-between">
@@ -1937,7 +1945,7 @@ export function UPPage({ onNavigateInventory }: UPPageProps = {}) {
                     <div className="flex items-center justify-between">
                       <span className="font-bold text-white">{log.action}</span>
                       <span className="text-[10px] text-zinc-500 font-mono">
-                        {new Date(log.createdAt).toLocaleString()}
+                        {log.createdAt ? new Date(log.createdAt).toLocaleString() : '—'}
                       </span>
                     </div>
                     <div className="text-[10px] text-zinc-400">
