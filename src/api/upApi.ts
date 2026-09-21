@@ -37,6 +37,47 @@ export const upApi = {
     return fetchAdminApi<UPDashboardData>(`/up/dashboard?${params.toString()}`);
   },
 
+  exportReport: async (params?: {
+    startDate?: string;
+    endDate?: string;
+    categoryId?: string;
+    paymentMode?: string;
+    verified?: string;
+    search?: string;
+  }) => {
+    const sp = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([k, v]) => {
+        if (v !== undefined && v !== null && v !== '') {
+          sp.set(k, String(v));
+        }
+      });
+    }
+    const token = getAdminToken();
+    const res = await fetch(`${API_BASE_URL}/up/reports/export?${sp.toString()}`, {
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    });
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}));
+      throw new Error(errJson.message || 'Failed to export UP expenses report');
+    }
+    const blob = await res.blob();
+    const disposition = res.headers.get('Content-Disposition') || '';
+    const match = disposition.match(/filename="?([^"]+)"?/);
+    const filename = match ? match[1] : `UP_Expenses_Export_${Date.now()}.xlsx`;
+
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  },
+
   listExpenses: async (params?: {
     page?: number;
     limit?: number;

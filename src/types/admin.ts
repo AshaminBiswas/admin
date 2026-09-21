@@ -1735,11 +1735,15 @@ export interface UPDashboardData {
     currentMonthTotal: number;
     todayTotal: number;
     previousMonthTotal: number;
+    previousPeriodTotal?: number;
     verifiedTotal: number;
     unverifiedTotal: number;
     rangeTotal: number;
     transactionCount: number;
     highestExpense: number;
+    highestExpenseDate?: string | null;
+    highestExpensePaidTo?: string | null;
+    highestExpenseCategory?: string | null;
     averageDailyExpense: number;
     topCategory: string;
   };
@@ -1755,10 +1759,22 @@ export interface UPDashboardData {
     total: number;
     count: number;
   }[];
+  topExpenses?: {
+    id: string;
+    amount: number;
+    expenseDate: string;
+    paidTo: string;
+    note?: string | null;
+    paymentMode: string;
+    verified: boolean;
+    categoryName: string;
+  }[];
   range: {
     type: string;
     startDate: string;
     endDate: string;
+    diffDays?: number;
   };
 }
+
 

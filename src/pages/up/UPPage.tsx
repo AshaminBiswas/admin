@@ -32,6 +32,11 @@ import {
   ChevronRight,
   X,
   ExternalLink,
+  Sparkles,
+  Printer,
+  FileSpreadsheet,
+  CalendarRange,
+  TrendingUp,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -45,7 +50,7 @@ import {
 import { useAdminAuth } from "../../context/AdminAuthContext";
 import { upApi } from "../../api/upApi";
 import { expensesApi } from "../../api/expensesApi";
-import { UPInventoryHub } from "./components/UPInventoryHub";
+import { UPPresentationModal } from "./components/UPPresentationModal";
 import type {
   UPExpense,
   UPCategory,
@@ -56,7 +61,7 @@ import type {
   ExpenseFloatTopUp,
 } from "../../types/admin";
 
-type UPTab = "dashboard" | "inventory" | "ledger" | "cash" | "reports" | "access" | "categories";
+type UPTab = "dashboard" | "ledger" | "cash" | "reports" | "access" | "categories";
 
 interface UPPageProps {
   onNavigateInventory?: () => void;
@@ -83,9 +88,83 @@ export function UPPage({ onNavigateInventory }: UPPageProps = {}) {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   // ─── Dashboard State ────────────────────────────────────────────────────────
-  const [dashboardRange, setDashboardRange] = useState<string>("month");
+  type RangeFilterMode = "this_month" | "select_month" | "custom" | "today" | "year";
+  const [rangeFilterMode, setRangeFilterMode] = useState<RangeFilterMode>("this_month");
+  const [selectedMonth, setSelectedMonth] = useState<string>(() => {
+    const d = new Date();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    return `${d.getFullYear()}-${m}`;
+  });
+  const [customStartDate, setCustomStartDate] = useState<string>("");
+  const [customEndDate, setCustomEndDate] = useState<string>("");
+  const [isPresentationModalOpen, setIsPresentationModalOpen] = useState(false);
   const [dashboardData, setDashboardData] = useState<UPDashboardData | null>(null);
   const [loadingDashboard, setLoadingDashboard] = useState(false);
+
+  const handlePrevMonth = () => {
+    const [yStr, mStr] = selectedMonth.split("-");
+    let y = parseInt(yStr, 10);
+    let m = parseInt(mStr, 10) - 1;
+    if (m < 1) {
+      m = 12;
+      y -= 1;
+    }
+    setSelectedMonth(`${y}-${String(m).padStart(2, "0")}`);
+  };
+
+  const handleNextMonth = () => {
+    const [yStr, mStr] = selectedMonth.split("-");
+    let y = parseInt(yStr, 10);
+    let m = parseInt(mStr, 10) + 1;
+    if (m > 12) {
+      m = 1;
+      y += 1;
+    }
+    setSelectedMonth(`${y}-${String(m).padStart(2, "0")}`);
+  };
+
+  const formatMonthName = (mStr: string) => {
+    if (!mStr || !mStr.includes("-")) return mStr;
+    const [y, m] = mStr.split("-");
+    const d = new Date(parseInt(y, 10), parseInt(m, 10) - 1, 1);
+    return d.toLocaleString("en-IN", { month: "long", year: "numeric" });
+  };
+
+  const currentPeriodLabel = useMemo(() => {
+    if (rangeFilterMode === "this_month") {
+      const d = new Date();
+      return d.toLocaleString("en-IN", { month: "long", year: "numeric" });
+    }
+    if (rangeFilterMode === "select_month") {
+      return formatMonthName(selectedMonth);
+    }
+    if (rangeFilterMode === "custom") {
+      if (customStartDate && customEndDate) {
+        return `${customStartDate} to ${customEndDate}`;
+      }
+      if (customStartDate) return `From ${customStartDate}`;
+      return "Custom Date Range";
+    }
+    if (rangeFilterMode === "today") return "Today";
+    if (rangeFilterMode === "year") {
+      return `${new Date().getFullYear()} (Annual)`;
+    }
+    return "Selected Period";
+  }, [rangeFilterMode, selectedMonth, customStartDate, customEndDate]);
+
+  const handleExportDashboardExcel = async () => {
+    try {
+      const sDate = dashboardData?.range?.startDate;
+      const eDate = dashboardData?.range?.endDate;
+      await upApi.exportReport({
+        startDate: sDate,
+        endDate: eDate,
+      });
+      setSuccessMessage("UP expense spreadsheet downloaded successfully");
+    } catch (err: any) {
+      setErrorMessage(err?.message || "Failed to export UP expenses");
+    }
+  };
 
   // ─── Ledger & Expenses State ────────────────────────────────────────────────
   const [expenses, setExpenses] = useState<UPExpense[]>([]);
@@ -223,7 +302,26 @@ export function UPPage({ onNavigateInventory }: UPPageProps = {}) {
   const fetchDashboardData = async () => {
     setLoadingDashboard(true);
     try {
-      const res = await upApi.getDashboard(dashboardRange);
+      let rParam = "month";
+      let sDate: string | undefined = undefined;
+      let eDate: string | undefined = undefined;
+
+      if (rangeFilterMode === "this_month") {
+        rParam = "month";
+      } else if (rangeFilterMode === "select_month") {
+        rParam = "month";
+        sDate = selectedMonth;
+      } else if (rangeFilterMode === "custom") {
+        rParam = "custom";
+        sDate = customStartDate || undefined;
+        eDate = customEndDate || undefined;
+      } else if (rangeFilterMode === "today") {
+        rParam = "today";
+      } else if (rangeFilterMode === "year") {
+        rParam = "year";
+      }
+
+      const res = await upApi.getDashboard(rParam, sDate, eDate);
       if (res.success && res.data) {
         setDashboardData(res.data);
       }
@@ -238,7 +336,7 @@ export function UPPage({ onNavigateInventory }: UPPageProps = {}) {
     if (hasAccess && activeTab === "dashboard") {
       fetchDashboardData();
     }
-  }, [hasAccess, activeTab, dashboardRange]);
+  }, [hasAccess, activeTab, rangeFilterMode, selectedMonth, customStartDate, customEndDate]);
 
   // ─── 4. Fetch Ledger Expenses ───────────────────────────────────────────────
   const fetchExpensesList = async () => {
@@ -756,24 +854,6 @@ export function UPPage({ onNavigateInventory }: UPPageProps = {}) {
 
         <button
           type="button"
-          onClick={() => {
-            if (onNavigateInventory) {
-              onNavigateInventory();
-            } else {
-              setActiveTab("inventory");
-            }
-          }}
-          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
-            activeTab === "inventory"
-              ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20"
-              : "text-zinc-400 hover:text-white hover:bg-[#27272A]"
-          }`}
-        >
-          <Boxes size={15} /> Factory Inventory
-        </button>
-
-        <button
-          type="button"
           onClick={() => setActiveTab("ledger")}
           className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
             activeTab === "ledger"
@@ -842,25 +922,198 @@ export function UPPage({ onNavigateInventory }: UPPageProps = {}) {
       {/* ═══════════════════════════════════════════════════════════════════════ */}
       {activeTab === "dashboard" && (
         <div className="space-y-6">
-          {/* Time Range Filter Bar */}
-          <div className="flex items-center justify-between gap-3 bg-[#18181B] p-3 rounded-xl border border-[#27272A]">
-            <span className="text-xs font-bold text-zinc-400">Analysis Horizon:</span>
-            <div className="flex items-center gap-1">
-              {(["today", "month", "year"] as const).map((r) => (
+          {/* Enhanced Analysis Horizon & Date Range Filter Bar */}
+          <div className="bg-[#18181B] p-4 rounded-2xl border border-[#27272A] space-y-3.5 shadow-md">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-xs font-bold text-zinc-400 mr-1 flex items-center gap-1.5">
+                  <CalendarRange size={14} className="text-indigo-400" /> Horizon:
+                </span>
+
                 <button
-                  key={r}
                   type="button"
-                  onClick={() => setDashboardRange(r)}
-                  className={`px-3 py-1 rounded-lg text-xs font-bold capitalize transition-all ${
-                    dashboardRange === r
-                      ? "bg-indigo-600 text-white shadow-sm"
+                  onClick={() => setRangeFilterMode("this_month")}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                    rangeFilterMode === "this_month"
+                      ? "bg-indigo-600 text-white shadow-sm shadow-indigo-600/20"
                       : "text-zinc-400 hover:text-white hover:bg-[#27272A]"
                   }`}
                 >
-                  {r === "month" ? "This Month" : r === "year" ? "This Year" : "Today"}
+                  This Month
                 </button>
-              ))}
+
+                <button
+                  type="button"
+                  onClick={() => setRangeFilterMode("select_month")}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                    rangeFilterMode === "select_month"
+                      ? "bg-indigo-600 text-white shadow-sm shadow-indigo-600/20"
+                      : "text-zinc-400 hover:text-white hover:bg-[#27272A]"
+                  }`}
+                >
+                  <Calendar size={13} /> Select Month
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setRangeFilterMode("custom")}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                    rangeFilterMode === "custom"
+                      ? "bg-indigo-600 text-white shadow-sm shadow-indigo-600/20"
+                      : "text-zinc-400 hover:text-white hover:bg-[#27272A]"
+                  }`}
+                >
+                  <Filter size={13} /> Custom Range
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setRangeFilterMode("today")}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                    rangeFilterMode === "today"
+                      ? "bg-indigo-600 text-white shadow-sm shadow-indigo-600/20"
+                      : "text-zinc-400 hover:text-white hover:bg-[#27272A]"
+                  }`}
+                >
+                  Today
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setRangeFilterMode("year")}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                    rangeFilterMode === "year"
+                      ? "bg-indigo-600 text-white shadow-sm shadow-indigo-600/20"
+                      : "text-zinc-400 hover:text-white hover:bg-[#27272A]"
+                  }`}
+                >
+                  This Year
+                </button>
+              </div>
+
+              {/* Action Buttons: Presentation Report & Raw Excel */}
+              <div className="flex items-center gap-2 self-end lg:self-auto">
+                <button
+                  type="button"
+                  onClick={() => setIsPresentationModalOpen(true)}
+                  className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white text-xs font-bold transition-all shadow-md shadow-indigo-600/25 flex items-center gap-1.5"
+                >
+                  <Sparkles size={14} className="text-amber-300 animate-pulse" /> Presentation Report
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleExportDashboardExcel}
+                  className="px-3 py-1.5 rounded-xl bg-[#27272A] hover:bg-[#3F3F46] text-zinc-300 hover:text-white text-xs font-semibold transition-all flex items-center gap-1.5"
+                  title="Download Itemized Excel Ledger for Active Range"
+                >
+                  <FileSpreadsheet size={14} /> Export Excel
+                </button>
+              </div>
             </div>
+
+            {/* Contextual Second Row: Month Stepper or Custom Date Inputs */}
+            {rangeFilterMode === "select_month" && (
+              <div className="pt-3 border-t border-[#27272A] flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-zinc-400 font-medium">Active Month:</span>
+                  <div className="flex items-center bg-[#09090B] border border-[#27272A] rounded-xl overflow-hidden p-0.5">
+                    <button
+                      type="button"
+                      onClick={handlePrevMonth}
+                      className="p-1.5 text-zinc-400 hover:text-white hover:bg-[#27272A] rounded-lg transition-all"
+                      title="Previous Month"
+                    >
+                      <ChevronLeft size={14} />
+                    </button>
+
+                    <div className="px-3 py-1 text-xs font-bold text-white font-mono flex items-center gap-2">
+                      <Calendar size={13} className="text-indigo-400" />
+                      <span>{formatMonthName(selectedMonth)}</span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleNextMonth}
+                      className="p-1.5 text-zinc-400 hover:text-white hover:bg-[#27272A] rounded-lg transition-all"
+                      title="Next Month"
+                    >
+                      <ChevronRight size={14} />
+                    </button>
+                  </div>
+
+                  <input
+                    type="month"
+                    value={selectedMonth}
+                    onChange={(e) => {
+                      if (e.target.value) setSelectedMonth(e.target.value);
+                    }}
+                    className="px-2.5 py-1.5 rounded-xl bg-[#09090B] border border-[#27272A] text-xs text-white focus:outline-none focus:border-indigo-500 cursor-pointer"
+                  />
+                </div>
+
+                <div className="text-[11px] text-zinc-400">
+                  Viewing velocity trend and category distribution for <strong className="text-white">{formatMonthName(selectedMonth)}</strong>
+                </div>
+              </div>
+            )}
+
+            {rangeFilterMode === "custom" && (
+              <div className="pt-3 border-t border-[#27272A] flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-zinc-400">From:</span>
+                    <input
+                      type="date"
+                      value={customStartDate}
+                      onChange={(e) => setCustomStartDate(e.target.value)}
+                      className="px-3 py-1.5 rounded-xl bg-[#09090B] border border-[#27272A] text-xs text-white focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-zinc-400">To:</span>
+                    <input
+                      type="date"
+                      value={customEndDate}
+                      onChange={(e) => setCustomEndDate(e.target.value)}
+                      className="px-3 py-1.5 rounded-xl bg-[#09090B] border border-[#27272A] text-xs text-white focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const now = new Date();
+                        const past7 = new Date(now.getTime() - 7 * 86400000);
+                        setCustomStartDate(past7.toISOString().split("T")[0]);
+                        setCustomEndDate(now.toISOString().split("T")[0]);
+                      }}
+                      className="px-2 py-1 rounded-lg bg-[#27272A] hover:bg-[#3F3F46] text-[11px] text-zinc-300 font-semibold"
+                    >
+                      Last 7D
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const now = new Date();
+                        const past30 = new Date(now.getTime() - 30 * 86400000);
+                        setCustomStartDate(past30.toISOString().split("T")[0]);
+                        setCustomEndDate(now.toISOString().split("T")[0]);
+                      }}
+                      className="px-2 py-1 rounded-lg bg-[#27272A] hover:bg-[#3F3F46] text-[11px] text-zinc-300 font-semibold"
+                    >
+                      Last 30D
+                    </button>
+                  </div>
+                </div>
+
+                <div className="text-[11px] text-zinc-400">
+                  Custom interval: <strong className="text-white">{currentPeriodLabel}</strong>
+                </div>
+              </div>
+            )}
           </div>
 
           {loadingDashboard ? (
@@ -872,36 +1125,46 @@ export function UPPage({ onNavigateInventory }: UPPageProps = {}) {
               {/* Primary Metric Deck */}
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                 <div className="p-4 sm:p-5 rounded-2xl bg-[#18181B] border border-[#27272A] space-y-1">
-                  <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Current Month Spend</span>
-                  <div className="text-xl sm:text-2xl font-black text-white">
-                    ₹{formatInr(dashboardData.kpis?.currentMonthTotal)}
+                  <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
+                    {rangeFilterMode === "this_month"
+                      ? "Current Month Spend"
+                      : rangeFilterMode === "select_month"
+                      ? `${formatMonthName(selectedMonth)} Spend`
+                      : "Selected Period Spend"}
+                  </span>
+                  <div className="text-xl sm:text-2xl font-black text-indigo-400 font-mono">
+                    ₹{formatInr(dashboardData.kpis?.rangeTotal)}
                   </div>
-                  <span className="text-[10px] text-zinc-500 block">
-                    Prev Month: ₹{formatInr(dashboardData.kpis?.previousMonthTotal)}
+                  <span className="text-[10px] text-zinc-500 block truncate">
+                    Prev Period: ₹{formatInr(dashboardData.kpis?.previousPeriodTotal ?? dashboardData.kpis?.previousMonthTotal)}
                   </span>
                 </div>
 
                 <div className="p-4 sm:p-5 rounded-2xl bg-[#18181B] border border-[#27272A] space-y-1">
-                  <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Today's Spend</span>
-                  <div className="text-xl sm:text-2xl font-black text-emerald-400">
-                    ₹{formatInr(dashboardData.kpis?.todayTotal)}
+                  <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
+                    Peak Single Spend
+                  </span>
+                  <div className="text-xl sm:text-2xl font-black text-white font-mono">
+                    ₹{formatInr(dashboardData.kpis?.highestExpense)}
                   </div>
-                  <span className="text-[10px] text-zinc-500 block">
-                    Daily Average: ₹{formatInr(dashboardData.kpis?.averageDailyExpense)}
+                  <span className="text-[10px] text-zinc-400 block truncate">
+                    {dashboardData.kpis?.highestExpenseDate
+                      ? `${dashboardData.kpis.highestExpenseDate} • ${dashboardData.kpis.highestExpensePaidTo || ""}`
+                      : `Daily Avg: ₹${formatInr(dashboardData.kpis?.averageDailyExpense)}`}
                   </span>
                 </div>
 
                 <div className="p-4 sm:p-5 rounded-2xl bg-[#18181B] border border-[#27272A] space-y-1">
-                  <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Verified Amount</span>
-                  <div className="text-xl sm:text-2xl font-black text-indigo-400">
+                  <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Verified Spend</span>
+                  <div className="text-xl sm:text-2xl font-black text-emerald-400 font-mono">
                     ₹{formatInr(dashboardData.kpis?.verifiedTotal)}
                   </div>
                   <span className="text-[10px] text-zinc-500 block">Super Admin Approved</span>
                 </div>
 
                 <div className="p-4 sm:p-5 rounded-2xl bg-[#18181B] border border-[#27272A] space-y-1">
-                  <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Unverified Amount</span>
-                  <div className="text-xl sm:text-2xl font-black text-amber-400">
+                  <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Unverified Exposure</span>
+                  <div className="text-xl sm:text-2xl font-black text-amber-400 font-mono">
                     ₹{formatInr(dashboardData.kpis?.unverifiedTotal)}
                   </div>
                   <span className="text-[10px] text-zinc-500 block">
@@ -915,44 +1178,67 @@ export function UPPage({ onNavigateInventory }: UPPageProps = {}) {
                 {/* Category Breakdown Card */}
                 <div className="lg:col-span-1 p-5 rounded-2xl bg-[#18181B] border border-[#27272A] space-y-4">
                   <div className="flex items-center justify-between border-b border-[#27272A] pb-3">
-                    <h3 className="text-xs font-bold text-white uppercase tracking-wider">Category Breakdown</h3>
-                    <span className="text-[10px] text-zinc-400">Top: {dashboardData.kpis?.topCategory || 'None'}</span>
+                    <div>
+                      <h3 className="text-xs font-bold text-white uppercase tracking-wider">Category Breakdown</h3>
+                      <p className="text-[10px] text-zinc-500 mt-0.5">Budget allocation in {currentPeriodLabel}</p>
+                    </div>
+                    <span className="px-2 py-0.5 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 text-[10px] font-mono font-bold">
+                      Top: {dashboardData.kpis?.topCategory || 'None'}
+                    </span>
                   </div>
 
                   <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
-                    {(dashboardData.categoryBreakdown || []).map((cat) => (
-                      <div key={cat.id} className="space-y-1.5">
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="font-semibold text-zinc-200 truncate">{cat.name}</span>
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono font-bold text-white">₹{formatInr(cat.total)}</span>
-                            <span className="text-[10px] text-zinc-400">({cat.percentage ?? 0}%)</span>
+                    {(dashboardData.categoryBreakdown || []).length === 0 ? (
+                      <div className="py-8 text-center text-xs text-zinc-500">
+                        No category expenses recorded in this period.
+                      </div>
+                    ) : (
+                      dashboardData.categoryBreakdown.map((cat) => (
+                        <div key={cat.id} className="space-y-1.5">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="font-semibold text-zinc-200 truncate">{cat.name}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono font-bold text-white">₹{formatInr(cat.total)}</span>
+                              <span className="text-[10px] text-zinc-400">({cat.percentage ?? 0}%)</span>
+                            </div>
+                          </div>
+                          <div className="w-full h-1.5 rounded-full bg-zinc-800 overflow-hidden">
+                            <div
+                              className="h-full bg-indigo-500 rounded-full transition-all duration-500"
+                              style={{ width: `${Math.min(100, cat.percentage || 0)}%` }}
+                            />
                           </div>
                         </div>
-                        <div className="w-full h-1.5 rounded-full bg-zinc-800 overflow-hidden">
-                          <div
-                            className="h-full bg-indigo-500 rounded-full transition-all duration-500"
-                            style={{ width: `${Math.min(100, cat.percentage || 0)}%` }}
-                          />
-                        </div>
-                      </div>
-                    ))}
+                      ))
+                    )}
                   </div>
                 </div>
 
-                {/* 30-Day Trend Chart */}
+                {/* Dynamic Expense Velocity Trend Chart */}
                 <div className="lg:col-span-2 p-5 rounded-2xl bg-[#18181B] border border-[#27272A] space-y-4">
                   <div className="flex items-center justify-between border-b border-[#27272A] pb-3">
-                    <h3 className="text-xs font-bold text-white uppercase tracking-wider">30-Day Expense Velocity</h3>
-                    <span className="text-[10px] text-zinc-400">
-                      Peak: ₹{formatInr(dashboardData.kpis?.highestExpense)}
-                    </span>
+                    <div>
+                      <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                        <TrendingUp size={15} className="text-indigo-400" />
+                        Expense Velocity — {currentPeriodLabel}
+                      </h3>
+                      <p className="text-[10px] text-zinc-500 mt-0.5">
+                        Daily spending pattern & burn rate across active horizon
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <span className="px-2.5 py-1 rounded-lg bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 text-[11px] font-mono font-bold">
+                        Peak: ₹{formatInr(dashboardData.kpis?.highestExpense)}
+                        {dashboardData.kpis?.highestExpenseDate ? ` (${dashboardData.kpis.highestExpenseDate.slice(5)})` : ""}
+                      </span>
+                    </div>
                   </div>
 
                   <div className="h-72 w-full">
                     {dashboardData.trend.length === 0 ? (
                       <div className="h-full flex items-center justify-center text-xs text-zinc-500">
-                        No expense velocity data recorded in the last 30 days.
+                        No expense velocity data recorded for {currentPeriodLabel}.
                       </div>
                     ) : (
                       <ResponsiveContainer width="100%" height="100%">
@@ -1005,17 +1291,6 @@ export function UPPage({ onNavigateInventory }: UPPageProps = {}) {
             </>
           ) : null}
         </div>
-      )}
-
-      {/* ═══════════════════════════════════════════════════════════════════════ */}
-      {/* TAB: FACTORY INVENTORY                                                  */}
-      {/* ═══════════════════════════════════════════════════════════════════════ */}
-      {activeTab === "inventory" && (
-        <UPInventoryHub
-          isSuperAdmin={isSuperAdmin}
-          onShowSuccess={(msg) => setSuccessMessage(msg)}
-          onShowError={(msg) => setErrorMessage(msg)}
-        />
       )}
 
       {/* ═══════════════════════════════════════════════════════════════════════ */}
@@ -2149,6 +2424,18 @@ export function UPPage({ onNavigateInventory }: UPPageProps = {}) {
           </div>
         </div>
       )}
+
+      {/* ═══════════════════════════════════════════════════════════════════════ */}
+      {/* MODAL: PRESENTATION ANALYTICS REPORT (WITH GRAPHS & VISUALS)            */}
+      {/* ═══════════════════════════════════════════════════════════════════════ */}
+      <UPPresentationModal
+        isOpen={isPresentationModalOpen}
+        onClose={() => setIsPresentationModalOpen(false)}
+        dashboardData={dashboardData}
+        periodLabel={currentPeriodLabel}
+        adminName={adminUser ? `${adminUser.firstName || ""} ${adminUser.lastName || ""}`.trim() || adminUser.email : "Authorized Admin"}
+        onExportExcel={handleExportDashboardExcel}
+      />
     </div>
   );
 }
