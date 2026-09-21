@@ -4,6 +4,7 @@ import {
   Download,
   X,
   FileSpreadsheet,
+  FileText,
   CheckCircle2,
   Clock,
   TrendingUp,
@@ -31,6 +32,7 @@ interface UPPresentationModalProps {
   periodLabel: string;
   adminName?: string;
   onExportExcel?: () => void;
+  onDownloadCategoryPdf?: () => void;
 }
 
 const formatInr = (val: number | null | undefined): string => {
@@ -45,6 +47,7 @@ export function UPPresentationModal({
   periodLabel,
   adminName,
   onExportExcel,
+  onDownloadCategoryPdf,
 }: UPPresentationModalProps) {
   const printableRef = useRef<HTMLDivElement>(null);
 
@@ -335,6 +338,17 @@ export function UPPresentationModal({
             >
               <Printer size={14} /> Print / Save PDF
             </button>
+
+            {onDownloadCategoryPdf && (
+              <button
+                type="button"
+                onClick={onDownloadCategoryPdf}
+                className="px-3.5 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold transition-all shadow-md shadow-purple-600/20 flex items-center gap-1.5"
+                title="Download official Category-wise & Month-wise Multi-page PDF Report"
+              >
+                <FileText size={14} /> Multi-Page PDF
+              </button>
+            )}
 
             <button
               type="button"

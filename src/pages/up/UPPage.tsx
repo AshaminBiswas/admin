@@ -166,6 +166,65 @@ export function UPPage({ onNavigateInventory }: UPPageProps = {}) {
     }
   };
 
+  // ─── PDF Report Generation State & Handler ──────────────────────────────────
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [reportMode, setReportMode] = useState<"month" | "custom">("month");
+  const [reportMonth, setReportMonth] = useState<string>(() => {
+    const d = new Date();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    return `${d.getFullYear()}-${m}`;
+  });
+  const [reportStartDate, setReportStartDate] = useState<string>("");
+  const [reportEndDate, setReportEndDate] = useState<string>("");
+  const [reportCategory, setReportCategory] = useState<string>("");
+  const [reportStatus, setReportStatus] = useState<string>("all");
+
+  const handleDownloadCategoryPdf = async (customParams?: {
+    month?: string;
+    startDate?: string;
+    endDate?: string;
+    categoryId?: string;
+    verified?: string;
+  }) => {
+    try {
+      setDownloadingPdf(true);
+      let sDate = customParams?.startDate;
+      let eDate = customParams?.endDate;
+      let month = customParams?.month;
+      let categoryId = customParams?.categoryId;
+      let verified = customParams?.verified;
+
+      if (!sDate && !eDate && !month) {
+        if (rangeFilterMode === "select_month") {
+          month = selectedMonth;
+        } else if (rangeFilterMode === "custom") {
+          sDate = customStartDate || dashboardData?.range?.startDate;
+          eDate = customEndDate || dashboardData?.range?.endDate;
+        } else if (rangeFilterMode === "this_month") {
+          const d = new Date();
+          const m = String(d.getMonth() + 1).padStart(2, "0");
+          month = `${d.getFullYear()}-${m}`;
+        } else {
+          sDate = dashboardData?.range?.startDate;
+          eDate = dashboardData?.range?.endDate;
+        }
+      }
+
+      await upApi.downloadCategoryPdfReport({
+        startDate: sDate,
+        endDate: eDate,
+        month: month,
+        categoryId: categoryId,
+        verified: verified && verified !== "all" ? verified : undefined,
+      });
+      setSuccessMessage("Category-wise & month-wise multi-page expense PDF downloaded successfully");
+    } catch (err: any) {
+      setErrorMessage(err?.message || "Failed to download Category PDF report");
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
+
   // ─── Ledger & Expenses State ────────────────────────────────────────────────
   const [expenses, setExpenses] = useState<UPExpense[]>([]);
   const [loadingExpenses, setLoadingExpenses] = useState(false);
@@ -991,8 +1050,19 @@ export function UPPage({ onNavigateInventory }: UPPageProps = {}) {
                 </button>
               </div>
 
-              {/* Action Buttons: Presentation Report & Raw Excel */}
+              {/* Action Buttons: Category Multi-Page PDF, Presentation Report & Raw Excel */}
               <div className="flex items-center gap-2 self-end lg:self-auto">
+                <button
+                  type="button"
+                  onClick={() => handleDownloadCategoryPdf()}
+                  disabled={downloadingPdf}
+                  className="px-3.5 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white text-xs font-bold transition-all shadow-md shadow-purple-600/25 flex items-center gap-1.5 cursor-pointer"
+                  title="Download Month-wise & Category-wise itemized Multi-page PDF Report"
+                >
+                  <FileText size={14} className={downloadingPdf ? "animate-spin" : ""} />
+                  <span>{downloadingPdf ? "Generating..." : "Category PDF"}</span>
+                </button>
+
                 <button
                   type="button"
                   onClick={() => setIsPresentationModalOpen(true)}
@@ -1959,6 +2029,262 @@ export function UPPage({ onNavigateInventory }: UPPageProps = {}) {
       )}
 
       {/* ═══════════════════════════════════════════════════════════════════════ */}
+      {/* TAB 4: REPORTS & BI INTELLIGENCE                                        */}
+      {/* ═══════════════════════════════════════════════════════════════════════ */}
+      {activeTab === "reports" && (
+        <div className="space-y-6">
+          {/* Header Banner */}
+          <div className="p-5 sm:p-6 rounded-2xl bg-[#18181B] border border-[#27272A] space-y-2 shadow-md">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <BarChart3 size={20} className="text-indigo-400" />
+                  <h3 className="text-sm sm:text-base font-bold text-white uppercase tracking-wider">
+                    Factory Financial Reports & Business Intelligence
+                  </h3>
+                </div>
+                <p className="text-xs text-zinc-400 max-w-2xl">
+                  Download official multi-page audit reports, view executive visual presentations with analytics charts, or export raw transaction spreadsheets for company bookkeeping.
+                </p>
+              </div>
+
+              <span className="px-3 py-1 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 text-xs font-mono font-bold whitespace-nowrap">
+                Audit Grade • Multi-Page PDF
+              </span>
+            </div>
+          </div>
+
+          {/* REPORT CARD 1: Category-Wise & Month-Wise Multi-Page PDF (Hero Feature) */}
+          <div className="p-5 sm:p-6 rounded-2xl bg-gradient-to-br from-[#18181B] to-[#1e1b4b]/40 border border-indigo-500/30 space-y-5 shadow-xl relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/5 rounded-full blur-3xl pointer-events-none" />
+
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-[#27272A] pb-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 shadow-inner">
+                    <FileText size={18} />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2">
+                      Category-Wise & Month-Wise Expense Audit Report (Multi-Page PDF)
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                        Official Multi-Page
+                      </span>
+                    </h4>
+                    <p className="text-xs text-zinc-400">
+                      Single consolidated PDF document spanning multiple pages: Page 1 Executive Summary Matrix & KPI Deck, followed by itemized category ledgers and formal 3-tier authorized signatures.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Filter Configuration for PDF */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 bg-[#09090B]/60 p-4 rounded-xl border border-[#27272A]">
+              {/* Filter Mode */}
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">
+                  Report Period Scope
+                </label>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setReportMode("month")}
+                    className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all ${
+                      reportMode === "month"
+                        ? "bg-purple-600 text-white shadow-sm"
+                        : "bg-[#18181B] text-zinc-400 hover:text-white"
+                    }`}
+                  >
+                    Specific Month
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setReportMode("custom")}
+                    className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all ${
+                      reportMode === "custom"
+                        ? "bg-purple-600 text-white shadow-sm"
+                        : "bg-[#18181B] text-zinc-400 hover:text-white"
+                    }`}
+                  >
+                    Custom Dates
+                  </button>
+                </div>
+              </div>
+
+              {/* Month or Custom Date Inputs */}
+              {reportMode === "month" ? (
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">
+                    Target Expense Month
+                  </label>
+                  <input
+                    type="month"
+                    value={reportMonth}
+                    onChange={(e) => {
+                      if (e.target.value) setReportMonth(e.target.value);
+                    }}
+                    className="w-full px-3 py-1.5 rounded-lg bg-[#18181B] border border-[#27272A] text-xs text-white focus:outline-none focus:border-purple-500 font-mono"
+                  />
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">
+                    Start & End Date
+                  </label>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <input
+                      type="date"
+                      value={reportStartDate}
+                      onChange={(e) => setReportStartDate(e.target.value)}
+                      className="px-2 py-1.5 rounded-lg bg-[#18181B] border border-[#27272A] text-[11px] text-white focus:outline-none focus:border-purple-500 font-mono"
+                    />
+                    <input
+                      type="date"
+                      value={reportEndDate}
+                      onChange={(e) => setReportEndDate(e.target.value)}
+                      className="px-2 py-1.5 rounded-lg bg-[#18181B] border border-[#27272A] text-[11px] text-white focus:outline-none focus:border-purple-500 font-mono"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Category Filter */}
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">
+                  Category Focus
+                </label>
+                <select
+                  value={reportCategory}
+                  onChange={(e) => setReportCategory(e.target.value)}
+                  className="w-full px-3 py-1.5 rounded-lg bg-[#18181B] border border-[#27272A] text-xs text-white focus:outline-none focus:border-purple-500"
+                >
+                  <option value="">All Categories (Consolidated)</option>
+                  {categories.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Audit Status Filter */}
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">
+                  Audit Verification Status
+                </label>
+                <select
+                  value={reportStatus}
+                  onChange={(e) => setReportStatus(e.target.value)}
+                  className="w-full px-3 py-1.5 rounded-lg bg-[#18181B] border border-[#27272A] text-xs text-white focus:outline-none focus:border-purple-500"
+                >
+                  <option value="all">All Vouchers (Verified + Pending)</option>
+                  <option value="true">Verified Only</option>
+                  <option value="false">Pending Audit Only</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Action Download Trigger */}
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+              <div className="text-xs text-zinc-400 flex items-center gap-2">
+                <CheckCircle2 size={15} className="text-emerald-400 flex-shrink-0" />
+                <span>
+                  Generates downloadable file:{" "}
+                  <code className="text-purple-300 font-mono">
+                    UP_Category_Expense_Report_{reportMode === "month" ? reportMonth : "Custom"}.pdf
+                  </code>
+                </span>
+              </div>
+
+              <button
+                type="button"
+                disabled={downloadingPdf}
+                onClick={() =>
+                  handleDownloadCategoryPdf({
+                    month: reportMode === "month" ? reportMonth : undefined,
+                    startDate: reportMode === "custom" ? reportStartDate : undefined,
+                    endDate: reportMode === "custom" ? reportEndDate : undefined,
+                    categoryId: reportCategory || undefined,
+                    verified: reportStatus !== "all" ? reportStatus : undefined,
+                  })
+                }
+                className="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-black text-xs transition-all shadow-lg shadow-purple-600/30 flex items-center gap-2 cursor-pointer"
+              >
+                <FileText size={16} className={downloadingPdf ? "animate-spin" : ""} />
+                {downloadingPdf ? "Generating PDF Document..." : "Download Multi-Page PDF Report"}
+              </button>
+            </div>
+          </div>
+
+          {/* REPORT CARDS 2 & 3 Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Card 2: Presentation Visual Deck */}
+            <div className="p-5 rounded-2xl bg-[#18181B] border border-[#27272A] space-y-4 shadow-sm flex flex-col justify-between">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
+                    <Sparkles size={16} />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-white uppercase tracking-wider">
+                      Executive Presentation Visual Deck
+                    </h4>
+                    <span className="text-[10px] text-zinc-400 font-mono">Interactive Modal • HTML Export • Print</span>
+                  </div>
+                </div>
+                <p className="text-xs text-zinc-400 leading-relaxed">
+                  High-fidelity visual report featuring dynamic expense velocity curves, category allocation share bars, top 10 single spend cards, and factory manager sign-off seals.
+                </p>
+              </div>
+
+              <div className="pt-3 border-t border-[#27272A] flex items-center justify-between gap-2">
+                <span className="text-[11px] text-zinc-500">Period: {currentPeriodLabel}</span>
+                <button
+                  type="button"
+                  onClick={() => setIsPresentationModalOpen(true)}
+                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition-all shadow-md shadow-indigo-600/20 flex items-center gap-1.5"
+                >
+                  <Sparkles size={14} className="text-amber-300 animate-pulse" /> Launch Presentation Deck
+                </button>
+              </div>
+            </div>
+
+            {/* Card 3: Raw Transaction Ledger Excel */}
+            <div className="p-5 rounded-2xl bg-[#18181B] border border-[#27272A] space-y-4 shadow-sm flex flex-col justify-between">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+                    <FileSpreadsheet size={16} />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-white uppercase tracking-wider">
+                      Raw Ledger Spreadsheet (.xlsx)
+                    </h4>
+                    <span className="text-[10px] text-zinc-400 font-mono">Microsoft Excel • CSV • Google Sheets</span>
+                  </div>
+                </div>
+                <p className="text-xs text-zinc-400 leading-relaxed">
+                  Download raw transactional voucher rows with voucher IDs, dates, vendor names, notes, payment channels, and audit timestamps for custom accounting workflows.
+                </p>
+              </div>
+
+              <div className="pt-3 border-t border-[#27272A] flex items-center justify-between gap-2">
+                <span className="text-[11px] text-zinc-500">Active Horizon Range</span>
+                <button
+                  type="button"
+                  onClick={handleExportDashboardExcel}
+                  className="px-4 py-2 rounded-xl bg-[#27272A] hover:bg-[#3F3F46] text-zinc-200 hover:text-white font-bold text-xs transition-all border border-[#3F3F46] flex items-center gap-1.5"
+                >
+                  <Download size={14} /> Export Excel Ledger
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════════════════════════════════════════════════════════════════ */}
       {/* TAB 5: ACCESS MANAGEMENT (SUPER ADMIN ONLY)                             */}
       {/* ═══════════════════════════════════════════════════════════════════════ */}
       {activeTab === "access" && isSuperAdmin && (
@@ -2435,6 +2761,7 @@ export function UPPage({ onNavigateInventory }: UPPageProps = {}) {
         periodLabel={currentPeriodLabel}
         adminName={adminUser ? `${adminUser.firstName || ""} ${adminUser.lastName || ""}`.trim() || adminUser.email : "Authorized Admin"}
         onExportExcel={handleExportDashboardExcel}
+        onDownloadCategoryPdf={() => handleDownloadCategoryPdf()}
       />
     </div>
   );

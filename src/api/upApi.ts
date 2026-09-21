@@ -78,6 +78,48 @@ export const upApi = {
     document.body.removeChild(a);
   },
 
+  downloadCategoryPdfReport: async (params?: {
+    month?: string;
+    startDate?: string;
+    endDate?: string;
+    categoryId?: string;
+    paymentMode?: string;
+    verified?: string;
+    search?: string;
+  }) => {
+    const sp = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([k, v]) => {
+        if (v !== undefined && v !== null && v !== '') {
+          sp.set(k, String(v));
+        }
+      });
+    }
+    const token = getAdminToken();
+    const res = await fetch(`${API_BASE_URL}/up/reports/category-pdf?${sp.toString()}`, {
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    });
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}));
+      throw new Error(errJson.message || 'Failed to download Category PDF report');
+    }
+    const blob = await res.blob();
+    const disposition = res.headers.get('Content-Disposition') || '';
+    const match = disposition.match(/filename="?([^"]+)"?/);
+    const filename = match ? match[1] : `UP_Category_Expense_Report_${Date.now()}.pdf`;
+
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  },
+
   listExpenses: async (params?: {
     page?: number;
     limit?: number;
