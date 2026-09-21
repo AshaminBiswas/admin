@@ -529,7 +529,31 @@ export const InventoryPage: React.FC = () => {
         );
         setTotalItems((prev) => Math.max(0, prev - 1));
 
-        // 2. Close any open dossiers or modal edits
+        // 2. Evict permanently from localStorage cache snapshot
+        try {
+          const cachedSnap = localStorage.getItem('prc_cached_inventory_snapshot');
+          if (cachedSnap) {
+            const parsed = JSON.parse(cachedSnap);
+            if (Array.isArray(parsed)) {
+              const updated = parsed.filter(
+                (item: any) =>
+                  item.id !== id &&
+                  item.productId !== id &&
+                  item.productId !== effectiveProdId &&
+                  `inv-${item.productId}` !== id &&
+                  item.id !== `inv-${id}`
+              );
+              localStorage.setItem('prc_cached_inventory_snapshot', JSON.stringify(updated));
+            }
+          }
+        } catch (e) {
+          console.warn('[Inventory] Failed to evict deleted item from localStorage snapshot:', e);
+        }
+
+        // 3. Invalidate all in-memory tab caches to prevent stale data re-render
+        tabCacheRef.current = {};
+
+        // 4. Close any open dossiers or modal edits
         if (selectedDossierProductId === id || selectedDossierProductId === effectiveProdId) {
           setSelectedDossierProductId(null);
           setIsDossierModalOpen(false);
@@ -541,33 +565,37 @@ export const InventoryPage: React.FC = () => {
           setEditingStockItem(null);
         }
 
-        // 3. Trigger backend delete: writes off inventory and soft-deletes product from catalog
+        // 5. Trigger backend permanent delete
         await inventoryApi.deleteInventoryItem(id);
 
-        // 4. Broadcast deletion to Admin Products Page and Storefront tabs
+        // 6. Broadcast deletion to Admin Products Page and Storefront tabs
         syncProductUpdate({ id: effectiveProdId, sku: name }, 'DELETE');
 
-        showToast(`SKU '${name}' removed from stock list and auto-deleted from product catalog`, 'success');
+        showToast(`SKU '${name}' permanently deleted from database and stock list`, 'success');
       } else if (type === 'purchase') {
         setPurchasesList((prev) => prev.filter((p) => p.id !== id));
         setTotalItems((prev) => Math.max(0, prev - 1));
         if (selectedPurchase?.id === id) setSelectedPurchase(null);
+        tabCacheRef.current = {};
         await inventoryApi.deletePurchase(id, true);
         showToast(`Purchase order '${name}' voided and inventory rolled back`, 'success');
       } else if (type === 'transfer') {
         setTransfersList((prev) => prev.filter((t) => t.id !== id));
         setTotalItems((prev) => Math.max(0, prev - 1));
         if (selectedTransfer?.id === id) setSelectedTransfer(null);
+        tabCacheRef.current = {};
         await inventoryApi.deleteStockTransfer(id);
         showToast(`Transfer '${name}' deleted successfully`, 'success');
       } else if (type === 'supplier') {
         setSuppliers((prev) => prev.filter((s) => s.id !== id));
         if (editingSupplier?.id === id) setEditingSupplier(null);
+        tabCacheRef.current = {};
         await inventoryApi.deleteSupplier(id);
         showToast(`Supplier '${name}' deactivated successfully`, 'success');
         loadReferenceData();
       } else if (type === 'branch') {
         setBranches((prev) => prev.filter((b) => b.id !== id));
+        tabCacheRef.current = {};
         await inventoryApi.deleteBranch(id);
         showToast(`Facility '${name}' deactivated successfully`, 'success');
         loadReferenceData();
@@ -2486,7 +2514,7 @@ export const InventoryPage: React.FC = () => {
             <p className="text-xs text-slate-600 dark:text-[#A1A1AA] leading-relaxed">
               Are you sure you want to remove <strong className="text-slate-900 dark:text-[#FAFAFA] font-bold">"{deleteConfirmation.name}"</strong>?
               {deleteConfirmation.type === 'inventory' &&
-                ' Deleting this SKU will write off all warehouse stocks across facilities and automatically delete this product from the product listing page and storefront catalog.'}
+                ' This action will permanently delete this SKU and its warehouse stock from the database. It will be removed permanently from the inventory list and product catalog.'}
               {deleteConfirmation.type === 'purchase' &&
                 ' Voiding this purchase will automatically roll back received inventory units and log audit adjustments.'}
             </p>
