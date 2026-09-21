@@ -1693,6 +1693,7 @@ export interface UPCashDay {
   cashDate: string;
   openingBalance: number;
   cashExpenses: number;
+  floatReceived?: number;
   expectedClosingBalance: number;
   actualClosing: number | null;
   difference: number | null;

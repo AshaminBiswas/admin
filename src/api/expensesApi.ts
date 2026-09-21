@@ -513,7 +513,7 @@ export const expensesApi = {
         const mapped = list.map((b: any) => ({
           id: b.id,
           name: b.name,
-          code: b.code || (b.name?.toLowerCase().includes('kol') ? 'KOL' : 'DEL'),
+          code: b.code || (b.name?.toLowerCase().includes('kol') ? 'KOL' : (b.name?.toLowerCase().includes('up') || b.id === 'b3000000-0000-0000-0000-000000000003') ? 'UP' : 'DEL'),
         }));
         try {
           localStorage.setItem(BRANCHES_CACHE_KEY, JSON.stringify(mapped));
@@ -528,6 +528,7 @@ export const expensesApi = {
     return [
       { id: 'b1000000-0000-0000-0000-000000000001', name: 'Delhi HQ', code: 'DEL' },
       { id: 'b2000000-0000-0000-0000-000000000002', name: 'Kolkata Branch', code: 'KOL' },
+      { id: 'b3000000-0000-0000-0000-000000000003', name: 'UP Factory', code: 'UP' },
     ];
   },
 

@@ -44,6 +44,7 @@ import {
 } from "recharts";
 import { useAdminAuth } from "../../context/AdminAuthContext";
 import { upApi } from "../../api/upApi";
+import { expensesApi } from "../../api/expensesApi";
 import { UPInventoryHub } from "./components/UPInventoryHub";
 import type {
   UPExpense,
@@ -52,6 +53,7 @@ import type {
   UPAuditRecord,
   UPAccessUser,
   UPDashboardData,
+  ExpenseFloatTopUp,
 } from "../../types/admin";
 
 type UPTab = "dashboard" | "inventory" | "ledger" | "cash" | "reports" | "access" | "categories";
@@ -135,6 +137,8 @@ export function UPPage({ onNavigateInventory }: UPPageProps = {}) {
   const [loadingCash, setLoadingCash] = useState(false);
   const [isReconciling, setIsReconciling] = useState(false);
   const [cashDaysHistory, setCashDaysHistory] = useState<UPCashDay[]>([]);
+  const [upFloatHistory, setUpFloatHistory] = useState<ExpenseFloatTopUp[]>([]);
+  const [loadingUpFloat, setLoadingUpFloat] = useState(false);
 
   // ─── Allow-List Access Management State ──────────────────────────────────────
   const [accessUsers, setAccessUsers] = useState<UPAccessUser[]>([]);
@@ -305,9 +309,25 @@ export function UPPage({ onNavigateInventory }: UPPageProps = {}) {
     }
   };
 
+  const fetchUpFloatHistory = async () => {
+    setLoadingUpFloat(true);
+    try {
+      const res = await expensesApi.getFloatTopUps({
+        branchId: "b3000000-0000-0000-0000-000000000003",
+        limit: 50,
+      });
+      setUpFloatHistory(res?.records || []);
+    } catch (err: any) {
+      console.warn("Failed to fetch UP float history:", err);
+    } finally {
+      setLoadingUpFloat(false);
+    }
+  };
+
   useEffect(() => {
     if (hasAccess && activeTab === "cash") {
       fetchCashDayStatus();
+      fetchUpFloatHistory();
     }
   }, [hasAccess, activeTab, cashDate]);
 
@@ -1400,8 +1420,8 @@ export function UPPage({ onNavigateInventory }: UPPageProps = {}) {
               </div>
             ) : cashStatus ? (
               <div className="space-y-6">
-                {/* 4 Calculation Balance Cards */}
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                {/* 5 Calculation Balance Cards */}
+                <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
                   <div className="p-4 rounded-xl bg-[#09090B] border border-[#27272A] space-y-1">
                     <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">1. Opening Balance</span>
                     <input
@@ -1423,15 +1443,23 @@ export function UPPage({ onNavigateInventory }: UPPageProps = {}) {
                   </div>
 
                   <div className="p-4 rounded-xl bg-[#09090B] border border-[#27272A] space-y-1">
-                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">3. Expected Closing</span>
-                    <div className="text-lg font-black text-indigo-400">
-                      ₹{formatInr(cashStatus.expectedClosingBalance)}
+                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">3. Float from HQ</span>
+                    <div className="text-lg font-black text-emerald-400">
+                      + ₹{formatInr(cashStatus.floatReceived || 0)}
                     </div>
-                    <span className="text-[9px] text-zinc-500 block">Opening - Today's Expenses</span>
+                    <span className="text-[9px] text-zinc-500 block">HQ infusions on this date</span>
                   </div>
 
                   <div className="p-4 rounded-xl bg-[#09090B] border border-[#27272A] space-y-1">
-                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">4. Actual Closing Cash</span>
+                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">4. Expected Closing</span>
+                    <div className="text-lg font-black text-indigo-400">
+                      ₹{formatInr(cashStatus.expectedClosingBalance)}
+                    </div>
+                    <span className="text-[9px] text-zinc-500 block">Opening + Float - Expenses</span>
+                  </div>
+
+                  <div className="p-4 rounded-xl bg-[#09090B] border border-[#27272A] space-y-1">
+                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">5. Actual Closing Cash</span>
                     <input
                       type="number"
                       disabled={cashStatus.closed}
@@ -1523,6 +1551,76 @@ export function UPPage({ onNavigateInventory }: UPPageProps = {}) {
             ) : null}
           </div>
 
+          {/* Cash Float Inflows Received from HQ */}
+          <div className="p-5 sm:p-6 rounded-2xl bg-[#18181B] border border-[#27272A] space-y-4 shadow-md">
+            <div className="flex items-center justify-between pb-3 border-b border-[#27272A]">
+              <div className="space-y-0.5">
+                <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                  <Coins size={16} className="text-emerald-400" />
+                  <span>Cash Float Received from HQ (Money Given to UP)</span>
+                </h3>
+                <p className="text-xs text-zinc-400">
+                  All money given to UP Factory recorded in the central expense management register
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={fetchUpFloatHistory}
+                className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition cursor-pointer"
+                title="Refresh Float History"
+              >
+                <RefreshCw size={14} className={loadingUpFloat ? "animate-spin" : ""} />
+              </button>
+            </div>
+
+            {loadingUpFloat ? (
+              <div className="py-8 text-center text-xs text-zinc-500 animate-pulse">Loading cash float infusions…</div>
+            ) : upFloatHistory.length === 0 ? (
+              <div className="py-8 text-center text-xs text-zinc-500">
+                No cash float transfers received from HQ yet.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead className="bg-[#09090B] text-zinc-400 uppercase font-semibold border-b border-[#27272A]">
+                    <tr>
+                      <th className="py-2.5 px-3">Date</th>
+                      <th className="py-2.5 px-3 text-right">Inflow Amount</th>
+                      <th className="py-2.5 px-3">Source / Channel</th>
+                      <th className="py-2.5 px-3">Reference / UTR</th>
+                      <th className="py-2.5 px-3">Notes</th>
+                      <th className="py-2.5 px-3">Dispatched By</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#27272A]">
+                    {upFloatHistory.map((f) => (
+                      <tr key={f.id} className="hover:bg-[#27272A]/40 transition">
+                        <td className="py-2.5 px-3 text-zinc-300 whitespace-nowrap">
+                          {f.date ? new Date(f.date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—"}
+                        </td>
+                        <td className="py-2.5 px-3 text-right font-black text-emerald-400 whitespace-nowrap">
+                          + ₹{formatInr(Number(f.amount || 0) / 100)}
+                        </td>
+                        <td className="py-2.5 px-3 text-white font-medium whitespace-nowrap">
+                          {f.source}
+                        </td>
+                        <td className="py-2.5 px-3 text-zinc-400 font-mono text-[11px] whitespace-nowrap">
+                          {f.referenceNo || "—"}
+                        </td>
+                        <td className="py-2.5 px-3 text-zinc-400 max-w-[240px] truncate" title={f.notes || ""}>
+                          {f.notes || "—"}
+                        </td>
+                        <td className="py-2.5 px-3 text-zinc-400 whitespace-nowrap">
+                          {f.addedBy ? `${f.addedBy.firstName || ""} ${f.addedBy.lastName || ""}`.trim() || f.addedBy.email : "HQ Admin"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
           {/* Historical Cash Days Log */}
           <div className="p-5 rounded-2xl bg-[#18181B] border border-[#27272A] space-y-3">
             <h4 className="text-xs font-bold text-white uppercase tracking-wider">Past Petty Cash Reconciliations</h4>
@@ -1532,6 +1630,7 @@ export function UPPage({ onNavigateInventory }: UPPageProps = {}) {
                   <tr className="border-b border-[#27272A] text-[10px] font-bold text-zinc-400 uppercase">
                     <th className="py-2.5 px-3">Date</th>
                     <th className="py-2.5 px-3 text-right">Opening</th>
+                    <th className="py-2.5 px-3 text-right">Float In</th>
                     <th className="py-2.5 px-3 text-right">Expenses</th>
                     <th className="py-2.5 px-3 text-right">Expected</th>
                     <th className="py-2.5 px-3 text-right">Actual</th>
@@ -1546,6 +1645,9 @@ export function UPPage({ onNavigateInventory }: UPPageProps = {}) {
                       <tr key={d.id || d.cashDate} className="hover:bg-zinc-800/30">
                         <td className="py-2.5 px-3 font-mono text-zinc-200">{d.cashDate}</td>
                         <td className="py-2.5 px-3 text-right font-mono text-white">₹{formatInr(d.openingBalance)}</td>
+                        <td className="py-2.5 px-3 text-right font-mono text-emerald-400">
+                          {d.floatReceived ? `+₹${formatInr(d.floatReceived)}` : "—"}
+                        </td>
                         <td className="py-2.5 px-3 text-right font-mono text-rose-400">-₹{formatInr(d.cashExpenses)}</td>
                         <td className="py-2.5 px-3 text-right font-mono text-indigo-400">₹{formatInr(d.expectedClosingBalance)}</td>
                         <td className="py-2.5 px-3 text-right font-mono text-white">
