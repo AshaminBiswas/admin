@@ -49,8 +49,6 @@ const ProductDossierPage = lazyWithRetry(() => import("../../pages/ProductDossie
 const BarcodePage = lazyWithRetry(() => import("../../pages/BarcodePage").then((m) => ({ default: m.BarcodePage })));
 const GSTInvoiceHub = lazyWithRetry(() => import("../../pages/GSTInvoiceHub"));
 const ProjectsPage = lazyWithRetry(() => import("../../pages/ProjectsPage").then((m) => ({ default: m.ProjectsPage })));
-const POManagementPage = lazyWithRetry(() => import("../../pages/POManagementPage").then((m) => ({ default: m.POManagementPage })));
-const PODetailPage = lazyWithRetry(() => import("../../pages/PODetailPage").then((m) => ({ default: m.PODetailPage })));
 const ProformaInvoicesPage = lazyWithRetry(() => import("../../pages/ProformaInvoicesPage").then((m) => ({ default: m.ProformaInvoicesPage })));
 const AdvancePaymentsTrackerPage = lazyWithRetry(() => import("../../pages/proforma/AdvancePaymentsTrackerPage").then((m) => ({ default: m.AdvancePaymentsTrackerPage })));
 const QRDocumentValidatorPage = lazyWithRetry(() => import("../../pages/QRDocumentValidatorPage").then((m) => ({ default: m.QRDocumentValidatorPage })));
@@ -235,24 +233,8 @@ export function AdminLayout() {
           />
         );
       case "po-management":
-        return (
-          <POManagementPage
-            onViewPo={(poId) => {
-              setSelectedPoId(poId);
-              if (typeof window !== "undefined") {
-                localStorage.setItem("prc_admin_selected_po_id", poId);
-              }
-              setCurrentView("po-detail");
-            }}
-          />
-        );
       case "po-detail":
-        return (
-          <PODetailPage
-            poId={selectedPoId}
-            onBack={() => setCurrentView("po-management")}
-          />
-        );
+        return <B2BOrdersPage onCreateOfflineOrder={() => setCurrentView("create-b2b-order")} />;
       case "proforma-invoices":
       case "proforma-create":
       case "proforma-detail":

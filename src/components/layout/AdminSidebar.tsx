@@ -87,14 +87,6 @@ export function AdminSidebar({
       try {
         const counts: Record<string, number> = {};
 
-        // 1. PO Management: New or Pending Review Submissions
-        try {
-          const poRes = await fetchAdminApi<any>("/po-management/metrics");
-          if (poRes.success && poRes.data) {
-            const count = (poRes.data.newCount || 0) + (poRes.data.pendingReview || 0);
-            if (count > 0) counts["po-management"] = count;
-          }
-        } catch (_) {}
 
         // 2. B2B Quotes: Pending or Under Review Quotes
         try {
@@ -213,7 +205,6 @@ export function AdminSidebar({
     // B2B & Commercial (No static tags; live notification indicators only)
     { id: "b2b-customers", label: "B2B Customers", category: "B2B & Commercial", icon: <Building2 size={18} /> },
     { id: "b2b-orders", label: "B2B Orders", category: "B2B & Commercial", icon: <Boxes size={18} /> },
-    { id: "po-management", label: "PO Management", category: "B2B & Commercial", icon: <Inbox size={18} /> },
     { id: "proforma-invoices", label: "Proforma Invoices (PI)", category: "B2B & Commercial", icon: <FileCheck size={18} /> },
     { id: "advance-payments", label: "B2B Payments & Receivables", category: "B2B & Commercial", icon: <Landmark size={18} /> },
     { id: "qr-validator", label: "QR & Document Validator", category: "B2B & Commercial", icon: <QrCode size={18} /> },
