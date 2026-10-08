@@ -1,6 +1,6 @@
 export type GovernmentIdType = 'AADHAAR' | 'PAN' | 'VOTER_ID';
 export type EmployeeStatus = 'ACTIVE' | 'INACTIVE' | 'TERMINATED';
-export type AttendanceStatus = 'PRESENT' | 'DOUBLE_DUTY' | 'CL' | 'EL' | 'UL' | 'HALF_DAY' | 'LEAVE';
+export type AttendanceStatus = 'PRESENT' | 'DOUBLE_DUTY' | 'CL' | 'EL' | 'UL' | 'HALF_DAY' | 'LEAVE' | 'HOLIDAY';
 export type PayrollStatus = 'DRAFT' | 'FINALIZED' | 'PAID';
 export type LeaveType = 'CL' | 'EL';
 export type LeaveTransactionType = 'ACCRUAL' | 'USAGE' | 'ADJUSTMENT';
@@ -124,6 +124,7 @@ export interface EmployeePayrollRun {
   elDays: number | string;
   halfDays: number | string;
   unpaidDays: number | string;
+  holidayDays?: number | string;
   paidDays: number | string;
   overtimeHours: number | string;
   overtimeRate: number | string;

@@ -95,6 +95,7 @@ const ATTENDANCE_STATUS_LABELS: Record<AttendanceStatus, { label: string; color:
   EL: { label: 'EL (Earned)', color: '#8B5CF6', bg: 'bg-purple-500/10 text-purple-400 border-purple-500/20' },
   HALF_DAY: { label: 'Half Day', color: '#F59E0B', bg: 'bg-amber-500/10 text-amber-400 border-amber-500/20' },
   UL: { label: 'UL (Unpaid)', color: '#EF4444', bg: 'bg-rose-500/10 text-rose-400 border-rose-500/20' },
+  HOLIDAY: { label: 'Holiday (Paid)', color: '#818CF8', bg: 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30' },
   LEAVE: { label: 'Leave', color: '#DC2626', bg: 'bg-red-500/10 text-red-400 border-red-500/20' },
 };
 
@@ -692,6 +693,108 @@ export function EmployeeManagementPage() {
       triggerPayrollSync();
     } catch (err: any) {
       showFeedback('error', err?.message || 'Failed to batch mark worker attendance');
+      fetchAttendance();
+    }
+  };
+
+  const handleMarkAllHolidayForDay = async (day: number) => {
+    const padDay = String(day).padStart(2, '0');
+    const padMonth = String(selectedMonth).padStart(2, '0');
+    const dateStr = `${selectedYear}-${padMonth}-${padDay}`;
+    const activeStaff = employees.filter((e) => e.status === 'ACTIVE');
+    const isSunday = new Date(selectedYear, selectedMonth - 1, day).getDay() === 0;
+
+    if (!confirm(`Mark all ${activeStaff.length} active employees as HOLIDAY (Paid) for ${dateStr}?`)) return;
+
+    // 1. Optimistic 0ms UI update for all active staff
+    setAttendanceRecords((prev) => {
+      const copy = [...prev];
+      activeStaff.forEach((emp) => {
+        const idx = copy.findIndex(
+          (r) => r.employeeId === emp.id && new Date(r.date).toISOString().slice(0, 10) === dateStr
+        );
+        if (idx >= 0) {
+          copy[idx] = { ...copy[idx], status: 'HOLIDAY' };
+        } else {
+          copy.push({
+            id: 'temp-' + emp.id + '-' + Date.now(),
+            employeeId: emp.id,
+            date: dateStr,
+            status: 'HOLIDAY',
+            isSunday,
+            isSundayOverride: false,
+            overtimeHours: 0,
+          });
+        }
+      });
+      return copy;
+    });
+
+    showFeedback('success', `Marked all ${activeStaff.length} active employees as HOLIDAY`);
+
+    // 2. Parallelized background batch update
+    try {
+      await employeeService.batchRecordAttendance({
+        date: dateStr,
+        records: activeStaff.map((e) => ({
+          employeeId: e.id,
+          status: 'HOLIDAY',
+        })),
+      });
+      triggerPayrollSync();
+    } catch (err: any) {
+      showFeedback('error', err?.message || 'Failed to batch mark holiday attendance');
+      fetchAttendance();
+    }
+  };
+
+  const handleMarkAllWorkersHolidayForDay = async (day: number) => {
+    const padDay = String(day).padStart(2, '0');
+    const padMonth = String(selectedMonth).padStart(2, '0');
+    const dateStr = `${selectedYear}-${padMonth}-${padDay}`;
+    const activeWorkers = workerEmployees.filter((e) => e.status === 'ACTIVE');
+    const isSunday = new Date(selectedYear, selectedMonth - 1, day).getDay() === 0;
+
+    if (!confirm(`Mark all ${activeWorkers.length} active WORKERS as HOLIDAY (Paid) for ${dateStr}?`)) return;
+
+    // 1. Optimistic 0ms UI update for all active workers
+    setAttendanceRecords((prev) => {
+      const copy = [...prev];
+      activeWorkers.forEach((emp) => {
+        const idx = copy.findIndex(
+          (r) => r.employeeId === emp.id && new Date(r.date).toISOString().slice(0, 10) === dateStr
+        );
+        if (idx >= 0) {
+          copy[idx] = { ...copy[idx], status: 'HOLIDAY' };
+        } else {
+          copy.push({
+            id: 'temp-' + emp.id + '-' + Date.now(),
+            employeeId: emp.id,
+            date: dateStr,
+            status: 'HOLIDAY',
+            isSunday,
+            isSundayOverride: false,
+            overtimeHours: 0,
+          });
+        }
+      });
+      return copy;
+    });
+
+    showFeedback('success', `Marked all ${activeWorkers.length} active workers as HOLIDAY`);
+
+    // 2. Parallelized background batch update
+    try {
+      await employeeService.batchRecordAttendance({
+        date: dateStr,
+        records: activeWorkers.map((e) => ({
+          employeeId: e.id,
+          status: 'HOLIDAY',
+        })),
+      });
+      triggerPayrollSync();
+    } catch (err: any) {
+      showFeedback('error', err?.message || 'Failed to batch mark worker holiday attendance');
       fetchAttendance();
     }
   };
@@ -1508,6 +1611,16 @@ export function EmployeeManagementPage() {
                     <Check size={14} />
                     <span>Mark All Workers Present (Day {selectedAttendanceDay})</span>
                   </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleMarkAllWorkersHolidayForDay(selectedAttendanceDay)}
+                    className="px-3.5 py-1.5 bg-[#09090B] hover:bg-[#27272A] text-indigo-400 text-xs font-semibold rounded-xl border border-indigo-500/30 transition flex items-center gap-1.5 shadow-sm"
+                    title={`Mark all active workers as Holiday for Day ${selectedAttendanceDay}`}
+                  >
+                    <Calendar size={14} />
+                    <span>Mark Holiday (Day {selectedAttendanceDay})</span>
+                  </button>
                 </div>
 
                 <div className="relative min-w-[220px]">
@@ -1565,6 +1678,7 @@ export function EmployeeManagementPage() {
                           const monthPresent = workerMonthRecords.filter((r) => r.status === 'PRESENT').length;
                           const monthDoubleDuty = workerMonthRecords.filter((r) => r.status === 'DOUBLE_DUTY').length;
                           const monthHalf = workerMonthRecords.filter((r) => r.status === 'HALF_DAY').length;
+                          const monthHoliday = workerMonthRecords.filter((r) => r.status === 'HOLIDAY').length;
                           const monthOtHours = workerMonthRecords.reduce(
                             (sum, r) => sum + Number(r.overtimeHours || 0),
                             0
@@ -1608,7 +1722,7 @@ export function EmployeeManagementPage() {
 
                               <td className="px-4 py-3.5">
                                 <div className="flex flex-wrap items-center gap-1">
-                                  {(['PRESENT', 'DOUBLE_DUTY', 'HALF_DAY', 'UL', 'CL'] as AttendanceStatus[]).map((st) => (
+                                  {(['PRESENT', 'DOUBLE_DUTY', 'HALF_DAY', 'UL', 'CL', 'HOLIDAY'] as AttendanceStatus[]).map((st) => (
                                     <button
                                       key={st}
                                       type="button"
@@ -1618,9 +1732,9 @@ export function EmployeeManagementPage() {
                                           ? ATTENDANCE_STATUS_LABELS[st].bg + ' font-bold shadow-sm'
                                           : 'bg-[#09090B] text-[#A1A1AA] border-[#27272A] hover:bg-[#27272A] hover:text-[#FAFAFA]'
                                       }`}
-                                      title={st === 'DOUBLE_DUTY' ? 'Mark as Double Duty (2x Shifts)' : `Mark as ${st}`}
+                                      title={st === 'DOUBLE_DUTY' ? 'Mark as Double Duty (2x Shifts)' : st === 'HOLIDAY' ? 'Mark as Holiday (Paid)' : `Mark as ${st}`}
                                     >
-                                      {st === 'PRESENT' ? 'P' : st === 'DOUBLE_DUTY' ? 'DD' : st === 'HALF_DAY' ? 'HD' : st === 'UL' ? 'UL' : 'CL'}
+                                      {st === 'PRESENT' ? 'P' : st === 'DOUBLE_DUTY' ? 'DD' : st === 'HALF_DAY' ? 'HD' : st === 'UL' ? 'UL' : st === 'HOLIDAY' ? 'HOL' : 'CL'}
                                     </button>
                                   ))}
                                 </div>
@@ -1664,7 +1778,7 @@ export function EmployeeManagementPage() {
 
                               <td className="px-4 py-3.5 text-xs text-[#A1A1AA]">
                                 <div className="font-medium text-[#FAFAFA]">
-                                  {monthPresent} P {monthDoubleDuty > 0 && <span className="text-cyan-400 font-semibold">| {monthDoubleDuty} DD</span>} | {monthHalf} Half
+                                  {monthPresent} P {monthDoubleDuty > 0 && <span className="text-cyan-400 font-semibold">| {monthDoubleDuty} DD</span>} | {monthHalf} Half {monthHoliday > 0 && <span className="text-indigo-400 font-semibold">| {monthHoliday} Hol</span>}
                                 </div>
                                 <div className="text-[11px] text-emerald-400">
                                   {monthOtHours > 0 ? `+${monthOtHours} hrs OT` : '0 OT hrs'}
@@ -1908,7 +2022,7 @@ export function EmployeeManagementPage() {
                                   {run.paidDays} / {run.payableDays} Days
                                 </div>
                                 <div className="text-[11px] text-[#71717A]">
-                                  P: {run.presentDays} | Half: {run.halfDays} | Sun: {run.approvedSundays}
+                                  P: {run.presentDays} | Half: {run.halfDays} {Number(run.holidayDays || 0) > 0 && <span className="text-indigo-400">| Hol: {run.holidayDays}</span>} | Sun: {run.approvedSundays}
                                 </div>
                               </td>
 
@@ -2080,6 +2194,24 @@ export function EmployeeManagementPage() {
                     : `Mark All Present (Day ${selectedAttendanceDay})`}
                 </span>
               </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  workerAttendanceFilter === 'WORKERS'
+                    ? handleMarkAllWorkersHolidayForDay(selectedAttendanceDay)
+                    : handleMarkAllHolidayForDay(selectedAttendanceDay)
+                }
+                className="px-3 py-1.5 bg-[#09090B] hover:bg-[#27272A] text-indigo-400 text-xs font-semibold rounded-xl border border-indigo-500/30 transition flex items-center gap-1.5"
+                title={`Mark all ${workerAttendanceFilter === 'WORKERS' ? 'workers' : 'employees'} as Holiday for Day ${selectedAttendanceDay}`}
+              >
+                <Calendar size={14} />
+                <span>
+                  {workerAttendanceFilter === 'WORKERS'
+                    ? `Mark Workers Holiday (Day ${selectedAttendanceDay})`
+                    : `Mark All Holiday (Day ${selectedAttendanceDay})`}
+                </span>
+              </button>
             </div>
 
             <div className="text-xs text-[#71717A]">
@@ -2147,7 +2279,7 @@ export function EmployeeManagementPage() {
                           </td>
                           <td className="px-4 py-3.5">
                             <div className="flex flex-wrap items-center gap-1">
-                              {(['PRESENT', 'DOUBLE_DUTY', 'CL', 'EL', 'HALF_DAY', 'UL'] as AttendanceStatus[]).map((st) => (
+                              {(['PRESENT', 'DOUBLE_DUTY', 'CL', 'EL', 'HALF_DAY', 'UL', 'HOLIDAY'] as AttendanceStatus[]).map((st) => (
                                 <button
                                   key={st}
                                   type="button"
@@ -2157,9 +2289,9 @@ export function EmployeeManagementPage() {
                                       ? ATTENDANCE_STATUS_LABELS[st].bg + ' font-semibold shadow-sm'
                                       : 'bg-[#09090B] text-[#A1A1AA] border-[#27272A] hover:bg-[#27272A] hover:text-[#FAFAFA]'
                                   }`}
-                                  title={st === 'DOUBLE_DUTY' ? 'Mark as Double Duty (2x Shifts)' : `Mark as ${st}`}
+                                  title={st === 'DOUBLE_DUTY' ? 'Mark as Double Duty (2x Shifts)' : st === 'HOLIDAY' ? 'Mark as Holiday (Paid)' : `Mark as ${st}`}
                                 >
-                                  {st === 'PRESENT' ? 'P' : st === 'DOUBLE_DUTY' ? 'DD' : st === 'HALF_DAY' ? 'HD' : st}
+                                  {st === 'PRESENT' ? 'P' : st === 'DOUBLE_DUTY' ? 'DD' : st === 'HALF_DAY' ? 'HD' : st === 'HOLIDAY' ? 'HOL' : st}
                                 </button>
                               ))}
                             </div>
@@ -2730,7 +2862,7 @@ export function EmployeeManagementPage() {
                             {run.paidDays} / {run.payableDays} Days
                           </div>
                           <div className="text-[11px] text-[#71717A]">
-                            P: {run.presentDays} | CL: {run.clDays} | EL: {run.elDays} | Half: {run.halfDays}
+                            P: {run.presentDays} | CL: {run.clDays} | EL: {run.elDays} {Number(run.holidayDays || 0) > 0 && <span className="text-indigo-400">| Hol: {run.holidayDays}</span>} | Half: {run.halfDays}
                           </div>
                         </td>
                         <td className="px-4 py-3.5 text-xs">
@@ -3816,6 +3948,7 @@ export function EmployeeManagementPage() {
                   <option value="EL">EL (Earned Leave)</option>
                   <option value="HALF_DAY">Half Day</option>
                   <option value="UL">UL (Unpaid Leave)</option>
+                  <option value="HOLIDAY">Holiday (Company / Public Holiday - Paid)</option>
                   <option value="LEAVE">Leave</option>
                 </select>
               </div>
