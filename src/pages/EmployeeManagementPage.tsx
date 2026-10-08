@@ -799,6 +799,24 @@ export function EmployeeManagementPage() {
     }
   };
 
+  const [isDownloadingAttendancePdf, setIsDownloadingAttendancePdf] = useState(false);
+
+  const handleDownloadMonthlyAttendancePdf = async (workerOnly = false) => {
+    try {
+      setIsDownloadingAttendancePdf(true);
+      await employeeService.downloadMonthlyAttendancePdf({
+        month: selectedMonth,
+        year: selectedYear,
+        workerOnly,
+      });
+      showFeedback('success', `Monthly attendance & payroll register PDF downloaded successfully!`);
+    } catch (err: any) {
+      showFeedback('error', err?.message || 'Failed to download monthly attendance PDF');
+    } finally {
+      setIsDownloadingAttendancePdf(false);
+    }
+  };
+
   const handleSaveEditedAttendance = async (formData: {
     status: AttendanceStatus;
     overtimeHours: number;
@@ -1621,6 +1639,21 @@ export function EmployeeManagementPage() {
                     <Calendar size={14} />
                     <span>Mark Holiday (Day {selectedAttendanceDay})</span>
                   </button>
+
+                  <button
+                    type="button"
+                    disabled={isDownloadingAttendancePdf}
+                    onClick={() => handleDownloadMonthlyAttendancePdf(true)}
+                    className="px-3.5 py-1.5 bg-[#09090B] hover:bg-[#27272A] text-amber-400 text-xs font-semibold rounded-xl border border-amber-500/30 transition flex items-center gap-1.5 shadow-sm disabled:opacity-50"
+                    title={`Download Month-Wise Attendance & Payroll Register PDF for Workers (${MONTHS[selectedMonth - 1]?.label} ${selectedYear})`}
+                  >
+                    {isDownloadingAttendancePdf ? (
+                      <RefreshCw size={14} className="animate-spin text-amber-400" />
+                    ) : (
+                      <Download size={14} />
+                    )}
+                    <span>Download Month PDF</span>
+                  </button>
                 </div>
 
                 <div className="relative min-w-[220px]">
@@ -2210,6 +2243,23 @@ export function EmployeeManagementPage() {
                   {workerAttendanceFilter === 'WORKERS'
                     ? `Mark Workers Holiday (Day ${selectedAttendanceDay})`
                     : `Mark All Holiday (Day ${selectedAttendanceDay})`}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                disabled={isDownloadingAttendancePdf}
+                onClick={() => handleDownloadMonthlyAttendancePdf(workerAttendanceFilter === 'WORKERS')}
+                className="px-3 py-1.5 bg-[#09090B] hover:bg-[#27272A] text-amber-400 text-xs font-semibold rounded-xl border border-amber-500/30 transition flex items-center gap-1.5 shadow-sm disabled:opacity-50"
+                title={`Download Month-Wise Master Attendance & Payroll Register PDF (${MONTHS[selectedMonth - 1]?.label} ${selectedYear})`}
+              >
+                {isDownloadingAttendancePdf ? (
+                  <RefreshCw size={14} className="animate-spin text-amber-400" />
+                ) : (
+                  <Download size={14} />
+                )}
+                <span>
+                  Download {MONTHS[selectedMonth - 1]?.label} Register PDF
                 </span>
               </button>
             </div>

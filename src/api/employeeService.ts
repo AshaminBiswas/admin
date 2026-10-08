@@ -126,6 +126,48 @@ export const employeeService = {
     return assertSuccess<any>(res, 'Failed to delete attendance record');
   },
 
+  async downloadMonthlyAttendancePdf(params: {
+    month: number;
+    year: number;
+    workerOnly?: boolean;
+    department?: string;
+    filename?: string;
+  }): Promise<void> {
+    const query = new URLSearchParams();
+    query.append('month', params.month.toString());
+    query.append('year', params.year.toString());
+    if (params.workerOnly) query.append('workerOnly', 'true');
+    if (params.department) query.append('department', params.department);
+
+    const token = getAdminToken() || localStorage.getItem('token') || '';
+    const response = await fetch(`${API_BASE_URL}/employees/attendance/monthly-report-pdf?${query.toString()}`, {
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    });
+
+    if (!response.ok) {
+      let errText = `HTTP ${response.status}`;
+      try {
+        const json = await response.json();
+        errText = json?.error?.message || json?.message || errText;
+      } catch {
+        // ignore json parse error
+      }
+      throw new Error(`Failed to download monthly attendance PDF: ${errText}`);
+    }
+
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = params.filename || `PRC_Attendance_Register_${params.month}_${params.year}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+  },
+
   // ─── Leave Ledger ───────────────────────────────────────────────────────────
   async accrueMonthlyLeave(payload: { month: number; year: number }): Promise<any> {
     const res = await fetchAdminApi<any>('/employees/leave/accrue-monthly', {
