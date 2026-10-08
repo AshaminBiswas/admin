@@ -1049,6 +1049,21 @@ export function EmployeeManagementPage() {
           </select>
 
           <button
+            type="button"
+            disabled={isDownloadingAttendancePdf}
+            onClick={() => handleDownloadMonthlyAttendancePdf(false)}
+            className="inline-flex items-center gap-1.5 px-3 py-2 bg-[#18181B] hover:bg-[#27272A] text-amber-400 border border-amber-500/30 text-xs font-semibold rounded-xl transition shadow-sm disabled:opacity-50"
+            title={`Download Master Attendance & Payroll Register PDF (${MONTHS[selectedMonth - 1]?.label} ${selectedYear})`}
+          >
+            {isDownloadingAttendancePdf ? (
+              <RefreshCw size={15} className="animate-spin text-amber-400" />
+            ) : (
+              <Download size={15} />
+            )}
+            <span>Download Register PDF</span>
+          </button>
+
+          <button
             onClick={() => {
               if (activeTab === 'directory') fetchEmployees();
               if (activeTab === 'attendance') fetchAttendance();
@@ -1989,15 +2004,32 @@ export function EmployeeManagementPage() {
                   </p>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={handleCalculatePayroll}
-                  disabled={isCalculatingPayroll}
-                  className="px-4 py-2 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 disabled:opacity-50 text-white text-xs font-semibold rounded-xl shadow-lg transition flex items-center gap-2"
-                >
-                  {isCalculatingPayroll ? <RefreshCw className="animate-spin" size={15} /> : <TrendingUp size={15} />}
-                  <span>{isCalculatingPayroll ? 'Calculating Wages...' : 'Calculate Worker Payroll'}</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={isDownloadingAttendancePdf}
+                    onClick={() => handleDownloadMonthlyAttendancePdf(true)}
+                    className="px-3.5 py-2 bg-[#09090B] hover:bg-[#27272A] text-amber-400 text-xs font-semibold rounded-xl border border-amber-500/30 transition flex items-center gap-1.5 shadow-sm disabled:opacity-50"
+                    title={`Download Month-Wise Worker Attendance & Payroll Register PDF (${MONTHS[selectedMonth - 1]?.label} ${selectedYear})`}
+                  >
+                    {isDownloadingAttendancePdf ? (
+                      <RefreshCw size={14} className="animate-spin text-amber-400" />
+                    ) : (
+                      <Download size={14} />
+                    )}
+                    <span>Download Worker Register PDF</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleCalculatePayroll}
+                    disabled={isCalculatingPayroll}
+                    className="px-4 py-2 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 disabled:opacity-50 text-white text-xs font-semibold rounded-xl shadow-lg transition flex items-center gap-2"
+                  >
+                    {isCalculatingPayroll ? <RefreshCw className="animate-spin" size={15} /> : <TrendingUp size={15} />}
+                    <span>{isCalculatingPayroll ? 'Calculating Wages...' : 'Calculate Worker Payroll'}</span>
+                  </button>
+                </div>
               </div>
 
               {/* Worker Payroll Table */}
@@ -2851,6 +2883,21 @@ export function EmployeeManagementPage() {
                   </span>
                 </button>
               </div>
+
+              <button
+                type="button"
+                disabled={isDownloadingAttendancePdf}
+                onClick={() => handleDownloadMonthlyAttendancePdf(workerPayrollFilter === 'WORKERS')}
+                className="px-3.5 py-2 bg-[#09090B] hover:bg-[#27272A] text-amber-400 text-xs font-semibold rounded-xl border border-amber-500/30 transition flex items-center gap-1.5 shadow-sm disabled:opacity-50"
+                title={`Download Month-Wise Master Attendance & Payroll Register PDF (${MONTHS[selectedMonth - 1]?.label} ${selectedYear})`}
+              >
+                {isDownloadingAttendancePdf ? (
+                  <RefreshCw size={14} className="animate-spin text-amber-400" />
+                ) : (
+                  <Download size={14} />
+                )}
+                <span>Download Register PDF</span>
+              </button>
 
               <button
                 onClick={handleCalculatePayroll}
